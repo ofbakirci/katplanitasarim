@@ -42,7 +42,7 @@ function run(label, bina, kat, poly, specs){
   // her duvar yalnız aynı dairenin odaları arasında ve merdiven içermez
   const unitOf=new Map(); plan.unitObjs.forEach((u,k)=>u.rooms.forEach(g=>unitOf.set(g.id,k)));
   runs.forEach(rn=>{
-    if(unitOf.get(rn.a)===undefined||unitOf.get(rn.a)!==unitOf.get(rn.b)) F('duvar daire dışına taşıyor');
+    if(unitOf.get(rn.a)===undefined&&unitOf.get(rn.b)===undefined) F('duvar daire dışına taşıyor'); // dış (daire sınırı) duvarlar da sürüklenebilir: en az bir taraf daire odası
     if(plan.regions[rn.a].type==='merdiven'||plan.regions[rn.b].type==='merdiven') F('merdiven duvarı sürüklenebilir olmamalı');
   });
 
@@ -64,7 +64,7 @@ function run(label, bina, kat, poly, specs){
     const rn=runs[0], donor=plan.regions[rn.b];
     let g2=0; while(moveWallStep(rn,1) && g2++<200);
     if(donor.cells.length && donor.cells.length<4) F('donör 1 m² altına düştü: '+donor.cells.length);
-    if(!regConnected(donor)) F('donör sona itmede koptu');
+    if(donor.cells.length && !regConnected(donor)) F('donör sona itmede koptu'); // boş donör = yutuldu (meşru birleşme)
     integrity('sona itme sonrası');
   }
 
@@ -73,7 +73,7 @@ function run(label, bina, kat, poly, specs){
     const rn=plan.wallRuns[Math.floor(plan.wallRuns.length/3)];
     const srt=x=>x.slice().sort((p,q)=>p-q);
     const before={a:srt(plan.regions[rn.a].cells), b:srt(plan.regions[rn.b].cells)};
-    dragging={type:'wall', run:rn,
+    dragging={type:'wall', run:rn, snap:snapshotRegions(), // uygulamadaki mousedown ile birebir
       undo:{a:rn.a, b:rn.b, cellsA:plan.regions[rn.a].cells.slice(), cellsB:plan.regions[rn.b].cells.slice()}};
     let st=0, dir=1;
     while(st<3 && moveWallStep(rn,dir)) st++;
@@ -90,7 +90,7 @@ function run(label, bina, kat, poly, specs){
     }
     if(editHistory.length!==h0) F('geçmiş sayacı tutarsız');
     // hareketsiz drag geçmişe yazılMAmalı
-    dragging={type:'wall', run:rn,
+    dragging={type:'wall', run:rn, snap:snapshotRegions(),
       undo:{a:rn.a, b:rn.b, cellsA:plan.regions[rn.a].cells.slice(), cellsB:plan.regions[rn.b].cells.slice()}};
     finishDrag();
     if(editHistory.length!==h0) F('boş drag geçmişe yazıldı');

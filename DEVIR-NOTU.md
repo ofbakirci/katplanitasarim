@@ -2,10 +2,28 @@
 
 Yeni sohbete başlarken bu dosyayı ve `kat-plani-tasarim.html` dosyasını ekleyin.
 
+## SIRADAKİ İŞ (güncel: 2026-06-10, oturum v5)
+1. ~~Vaka diff'leri~~ TAMAMLANDI (md.18: `_s` ekli dosyalarla diff yapıldı, motor v22).
+   Kalan v22 artıkları:
+   a. **Derin blokta mutfak hâlâ içeride** (vaka-4): mutfak→cephe geçişi
+      `widthM/(fac.length+1)>=3.2` kapısına takılıyor; demiryolu (rail) çıkarımından
+      SONRA yeniden denenebilir (kullanıcı vaka-4'te yatakları derine dizip mutfağı
+      cepheye aldı). runChecks 'info' notu kullanıcıyı yönlendiriyor.
+   b. Antre inceltme hedefi doluluk (fill) bazlı olabilir: kullanıcı antreleri
+      1 m omurgaya indiriyor (vaka-2 D1 9,5×1, fill 1.0); slimAntres şekli değil
+      yalnız alanı kovalıyor.
+   c. EB. BANYO boyutu kararsız sinyal (kullanıcı 4→3 da yaptı 4→4,5 da) — dokunma.
+2. **Mevzuata otomatik uydurma** (bilinen sınır #5): "Mevzuata Uydur" düğmesi —
+   slimUnitAntre deseni genellenir, runChecks ihlal listesi altyapısı hazır.
+3. Eski-SVG çözümleyiciye balkon/parsel aktarımı (md.16'daki bilinen eksik).
+
 ## Ne bu?
 Tek dosyalık web uygulaması (`kat-plani-tasarim.html`). Türkiye mevzuatına göre şematik
-apartman/villa kat planı üretir. Kullanıcı bina sınırını çizer (0,5 m ızgara, dik açı
-kilidi), daire tiplerini girer (oda/salon/ebeveyn banyosu/açık mutfak/adet), "Yerleşimi
+apartman/villa kat planı üretir. Kullanıcı bina sınırını çizer (kenar açısı 15°'nin
+katlarına, uzunluk 0,5 m ızgaraya oturur), isteğe bağlı parsel sınırı çizer (bahçe
+alanı + TAKS + çekme mesafesi denetimi) ve dış duvarlara balkon ekler (vektörel
+katman; hücre motoruna girmez, daire tablosunda açık alan olarak listelenir),
+daire tiplerini girer (oda/salon/ebeveyn banyosu/açık mutfak/adet), "Yerleşimi
 Oluştur" der; motor koridor + çekirdek + daireleri yerleştirir, mevzuat panelinde denetler.
 
 ## Mimari (script içi akış)
@@ -48,10 +66,157 @@ Oluştur" der; motor koridor + çekirdek + daireleri yerleştirir, mevzuat panel
    `runChecks` + daire tablosu canlı yenilenir; `runChecks`e oda→antre (EB. BANYO→eb.
    yatak) komşuluk denetimi eklendi. Elle duvar değişiklikleri `generate()` (yeniden
    üretim veya ayırıcı sürükleme) ile sıfırlanır — bilinçli karar.
-10. **Geri Al katmanlı**: `editHistory` yığını duvar ve ayırıcı sürüklemelerini tutar
-   (`finishDrag` yazar, `undoEdit` geri alır); Geri Al önce bunları adım adım tüketir,
-   yığın boşalınca eski davranışa (planı boz / köşe sil) düşer. `generate()` duvar
-   girdilerini (bölge kimlikleri yeniden doğar), `resetCuts()` ayırıcı girdilerini siler.
+10. **Geri Al katmanlı**: `editHistory` yığını duvar/ayırıcı/oda düzenlemelerini tutar
+   (`finishDrag` ve oda işlemleri yazar, `undoEdit` geri alır); Geri Al önce bunları
+   adım adım tüketir, yığın boşalınca eski davranışa (planı boz / köşe sil) düşer.
+   `generate()` duvar VE oda girdilerini (bölge kimlikleri yeniden doğar),
+   `resetCuts()` ayırıcı girdilerini siler.
+11. **Oda ekle/sil** (`addRoom`/`removeRoom`, sağ tık menüsü `#roomMenu`): üretim
+   sonrası TEK dairede düzenleme. Silme: oda, aynı dairede en uzun ortak duvarlı
+   komşusuna katılır (purgeSlivers mantığı); antre, merdiven ve TEK salon silinemez.
+   Ekleme: ev sahibi odadan, antreye komşu tohumdan tip boyutlu pencere oyulur
+   (carveMissing mantığı; sığmazsa küçülür, donör ≥3 m² ve bağlantılı kalır, yoksa
+   iptal); ince ayar mevcut duvar sürüklemeyle. Her ikisi de daire `spec`inin
+   KOPYASINI günceller (oda±, salon±, mutfak sil→acik:true, EB. BANYO sil→
+   ensuite:false) — runChecks program raporu yanlış alarm vermez, kardeş daireler
+   etkilenmez. `editHistory`ye `{type:'room', op:'add'|'remove', ...}` yazılır.
+   EB. BANYO da menüde: yalnız yatak odasından oyulur (köşeden, antre koşulu aranmaz),
+   ev sahibi oda 'EB. YATAK ODASI'ya çevrilir + spec.ensuite=true (geri alınabilir).
+   EB. BANYO satırı artık HER odada görünür: yatak dışında pasif ("yatak odasına sağ
+   tıklayın"), dairede zaten varsa pasif ("zaten var"; addRoom'da da çift koruması var —
+   denetim/kapı eşleşmesi ada bağlı olduğundan daire başına tek EB. BANYO).
+   YENİ ODA TIK NOKTASINA OYULUR: addRoom(host,def,hint) — hint sağ tıklanan hücre;
+   tohum, adaylar (antre komşusu / eb'de tüm hücreler) içinden hint'e en yakını.
+   Pencere artık tohumu içeren TÜM konumlardan en çok hücre kapsayanı seçer (hint'li
+   yolda) — köşe tohumda sliver/false dönme hatası giderildi. Kullanıcı odayı sağa
+   dayamak istiyorsa odanın sağ tarafına sağ tıklar. Hintsiz çağrı (testler) eski
+   davranışta. Test: tests/oda-hint.js (13). NOT: tohum antre komşuluğuyla sınırlı
+   kaldığından (kapı şartı) hint ancak antre arayüzü boyunca kaydırır; arayüz 1-2
+   hücreyse yer değişmez — ince ayar yine duvar sürükleme.
+12. **Tek daire/kat** (`trySingleUnit`): apartman modunda kat başına 1 daire varsa bant
+   koridor İSRAFTIR (karşı kanat sahipsiz kalıp ORTAK DEPO'ya düşüyordu — 600 m² tabanda
+   261 m² depo!). Bunun yerine kompakt çekirdek (merdiven+asansör+teknik+yangın TEK
+   SIRADA, 3 m derinlik) cepheye yaslanır, önüne 1,5 m lobi; kalan TÜM alan tek daireye.
+   Yerleşim üst cepheden taranır (lobi daireye bakmalı — `facing`), olmazsa alt cephe;
+   hiç sığmazsa eski bant düzenine geri düşer. Ayırıcı tutamacı yok; ince ayar duvar
+   sürükleme + oda ekle/sil. İlgili düzeltme: `layoutUnit`te giriş şeridi artık
+   `kset` (koridora GERÇEKTEN komşu sütunlar) üstüne oturur — antre↔lobi kapısı
+   garanti; çok daireli düzende kset≈bset olduğundan davranış değişmez (harness aynı).
+
+13. **Antre inceltme** (`slimAntres`/`slimUnitAntre`, üretim sonunda otomatik + antre
+   sağ tık menüsünde "Antreyi kırp"): antre kolları odaların içine taşıyor, kör uç
+   bırakıyordu (32×16'da 19-22,5 m² antre). Fazla hücre şeritleri `moveWallStep`
+   adımlarıyla odalara geri verilir (önce mevzuat açığı olana, sonra salona).
+   Korumalar: antre bağlantılı + ≥3,5 m², hiçbir yer <1 m inceltilmez (`thinCells`:
+   her hücre 2×2 tam-antre blokta), oda→antre komşulukları korunur ve ASIL KAPI:
+   `runChecks` ihlal sayısı artamaz (kapı yeri/cephe/biçim/program... hepsi bununla
+   güvende; runChecks artık `out` dizisini DÖNDÜRÜR). Sonuç: 32×16'da antreler
+   19→5,5 / 22,5→10 m². L-daire girişi yapısal olarak ~%13,7'de kalabilir (banyo
+   yönü 0,5 m boğaz oluşturduğu için haklı reddedilir) — test eşiği %14.
+14. **Oda etiketi/takas/bölme/antre uzatma** (sağ tık menüsü, `RETYPE` listesi):
+   *Tipini değiştir* (`retypeRoom`): ad+tip değişir, spec KOPYASI güncellenir
+   (yatak↔oda sayısı, mutfak↔acik); tek salon ve EB. BANYO'lu EB. YATAK korunur
+   (`retypeGuard`). *Takas* (`swapRooms`): aynı dairede iki odanın ad/tipi yer
+   değiştirir, hücreler yerinde, spec değişmez. *Odayı böl* (`splitRoom`): bbox
+   ortasından dikine/enine; yeni parça NÖTR `ODA` tipiyle doğar (COLORS/TYPE_TR'ye
+   'oda' eklendi; denetimlerde piyes ölçüsü aranmaz), ince ayar duvar sürükleme,
+   adlandırma Tipini değiştir — "duvar birleşince kayboldu" sorununun geri yolu.
+   *Antreyi bu odaya uzat* (`extendAntreTo`, yalnız antreye komşu OLMAYAN odada
+   görünür): daire hücrelerinde Dijkstra (ıslak hacim pahalı), yol 1 m'ye
+   genişletilir; donör odalar bağlantılı+≥1 m² kalmazsa geri alınır. Antresiz
+   daireye menüden "+ ANTRE" (addRoom, u.antre atanır). Antre SİLİNEMEZ (giriş).
+   Geri Al: `retype`/`swap` yeni geçmiş tipleri; böl/+ANTRE `room/add` yolunu kullanır
+   (undo'da `u.antre` temizlenir); uzat/kırp `wallsnap`.
+
+15. **Motor v21 ayarı** (kullanıcının kat-plani-20→21 elle ince ayarından çıkarılan
+   kurallar; girdi: 40×12, 5 kat, 2+1 eb ×4):
+   *Ders #1 — ensuite sözü tutulur*: eski köşe-sabit EB. BANYO oyması L-odalarda 0-10
+   hücrelik kırpık üretip purgeSlivers'a yeniliyordu → 4 daireden 3'ü SESSİZCE
+   ensuite'siz kalıyordu. Yeni `carveCornerBath`: odada EN ÇOK hücre kapsayan cw×cw
+   pencere (skor: hücre×1000 − kalan-bbox − antre-cephesi×60; oda dikdörtgene yaklaşır,
+   kapı cephesi yenmez). `ensureEnsuite` onarım hattında (carveMissing sonrası) VE slim
+   sonrası ikinci tur: önce yatağa komşu KİLER dönüştürülür, olmadı en büyük yataktan
+   oyulur; başka ≥9 m² yatak varsa eb. yatak 6 m²'ye inebilir. purgeSlivers banyo eşiği
+   2,8 m²/1,2 m (2×1,5 eb. banyo meşru). runChecks'e "Eb. banyo" satırı eklendi
+   (yoksa bad). Kiler: ensuite istenen dairede eşik 110→130 m² (program > lüks).
+   *Ders #2 — komb plan (sığ bant)*: cepheye <2,5 m kalacaksa giriş sırası İPTAL;
+   antre koridor boyu 1,5 m OMURGA, ıslak hacimler dâhil tüm odalar omurgaya asılır
+   (orta odalar ≈derinlik−1,5, uç odalar tam derinlik). Omurga önce TAM genişlik atanır,
+   cephe odaları yerleşince uç sütunlar uç odalara geri verilir (kestirimli uç payı
+   orta odayı omurga dışına taşırıp kapısız bırakıyordu — salon erimesi). Çekirdek
+   gölgesi varsa EB. YATAK o uca (eb. banyo kapısız yaşayabilen tek oda olarak gölgeye
+   oyulur — kullanıcının yangın merdiveni arkası hamlesi), salon karşı uçta. `unit.comb`
+   işaretli dairede slimAntres tabanı max(6 m², %12) — omurga 3,5 m²'ye kemirilince
+   odalar köşe temasıyla şişiyordu. 10×2,5 salon / 7×2 mutfak şeritleri böyle öldü;
+   40×12 sığ bant artık v21 ile örtüşüyor (YATAK 3×3,5 birebir). Derin bantta (≥2,5 m
+   cephe payı) T-plan korunur — kullanıcı da v21'de korudu. *Ders #3*: giriş sırasına
+   yatak itilirse şerit derinliği min 2,5 m (2 m yatak yasadışıydı).
+16. **İçe/dışa aktarma** (`stateSnapshot`/`restoreState`/`importPlanText`): dışa
+   aktarılan SVG `<metadata id="kpState">` içinde TAM durumu taşır (girdiler + bölge
+   hücreleri + kapılar + komb işaretleri) → "SVG içe aktar" düğmesi / pencereye
+   sürükle-bırak, generate() ÇAĞIRMADAN birebir geri kurar — elle düzenlemeler böylece
+   KALICILAŞIR (bilinen sınır #1'in çözüm yolu). Durumsuz eski SVG'ler `importLegacySvg`
+   ile geometriden çözülür: 0,5 m hücre kareleri (renk→tip) + duvar çizgileri (bölge
+   ayrımı) + #faf8f3 kapı boşlukları (daire gruplama: kapı grafiği bileşenleri, ortak
+   alanlar hariç) + etiketler (BANYO/WC renk ayrımı, adlar; ölçü yazıları paint-order
+   ile elenir). Kapısız oda grubu en uzun ortak duvarlı komşu daireye katılır; spec'ler
+   odalardan çıkarılır, özdeşler adetle birleşir. kat-plani-20/21.svg gerçek dosyalarla
+   doğrulandı (21: 4 daire, oda alanları birebir, 0 ihlal). Sınırlar: eski SVG'den
+   balkon/parsel/ayırıcı taşınmaz; kat sayısı SVG'de yok → mevcut UI değeri kalır.
+17. **Vaka döngüsü** (`vakalar/vaka-1..5.svg`, durum gömülü): orta blok, geniş-sığ
+   (komb), L-şekil, derin blok (demiryolu), villa 5+1. Akış: kullanıcı içe aktarır →
+   elle ince ayar → SVG indir → elden geçmiş hâli AYNI ada `_s` EKİYLE kaydedilir
+   (ör. `vaka-1-orta-blok_s.svg`) → yeni sohbette `tests/diff-vaka.js` ile diff'lenir →
+   motor kuralı çıkarılır. İlk tur TAMAMLANDI (md.18, motor v22). 3-5'te bilinçli ihlal
+   var (ince ayar malzemesi: 3'te yatak penceresiz + eksik yatak, 4'te eksik yatak,
+   5'te villa programı — villa programı v22 orta sofayla büyük ölçüde çözüldü).
+   DİKKAT: `vakalar/*.svg` v21 motorunun çıktısıdır; v22 motoru aynı girdilerle FARKLI
+   (daha iyi) plan üretir — taban karşılaştırması için `tests/v22-test.js` kullanın,
+   vaka SVG'sini yeniden üretip üzerine yazmayın (diff malzemesi kaybolur).
+
+18. **Motor v22** (vakalar/vaka-1..5 vs *_s diff'lerinden; 2026-06-10 v5):
+   *Mutfak cepheye*: penceresiz mutfak doğalgaz alamaz (kullanıcı kuralı; motor 12
+   mutfaktan 10'unu içeride bırakmıştı, kullanıcı 13'ünden 11'ini cepheye taşıdı).
+   Genişlik yetiyorsa (`widthM/(fac.length+1)>=3.2`) mutfak giriş sırasından cephe
+   sırasına, salonun yanına (`mutToFac`). Mutfak cephedeyse giriş şeridi derinliğini
+   BANYO'nun ideal oranı belirler (kılçık banyo doğmasın); açık mutfak ESKİ yolda
+   (idealD=0) — değişince vaka-3 D3/D4 salon-antre komşuluğu kopuyordu. İçeride
+   kalan mutfağa runChecks 'info' notu. Hol artığı MUTFAĞA bağışlanmaz (L-mutfak).
+   *Cephe artığı önce yataklara*: cap'e kadar yatak/mutfak, KALAN salona (salon
+   42-50 m²'ye şişiyordu, kullanıcı 5 vakada da küçülttü). Salon yine son emici.
+   *WC→KİLER*: 3+ yatak + ensuite'li dairede ikinci tuvalet eb. banyodur; WC yerine
+   KİLER (kullanıcı vaka-1'de ikisinde de kılçık WC'yi silip kiler yaptı). kilerT
+   çift kiler üretmesin diye `!entry.some(KİLER)` korumalı.
+   *Villa ORTA SOFA* (`layoutVillaSofa`): villa artık tek yüklü T-plan değil —
+   derin (≥8 m) dikdörtgenimsi (doluluk ≥%85) tabanda antre ortada 1,5 m omurga +
+   batı ucundan güney cepheye 1 m giriş kolu (villa kapısı antrenin dışa bakan
+   kenarına çizilir, render satır ~2189); odalar K/G cephe bantlarına `assignCols`la
+   asılır, tip bazlı pratik genişlik payıyla en boş banda dağıtılır. 14×11 5+1:
+   eski 2/5 yatak → yeni 5/5 + eb. banyo, 0 ihlal; 6/7/8 istek → 6 (monotonik,
+   "yatak sildim daha az yerleşti" paradoksu öldü). Sığ/dar/L-villa eski yolda.
+   *+ANTRE koridora tohumlanır* (addRoom `newAntre`): yeni antrenin tohumu koridora
+   komşu hücreler, pencere skoru koridor temasına +300/hücre, cephe hücresine
+   −120 (vaka-3 D3: antre alttan eklenip pencereleri yiyordu; artık kullanıcı
+   alttan tıklasa bile antre üstte koridora yapışıyor, cepheye dokunmuyor).
+   *GERİ AL veri kaybı düzeltildi*: `applyUnitLayout` push'ladığı `ulayout` kaydını
+   `generate()` filtresi siliyordu → yığın boşalıp Geri Al planı yok ediyordu
+   (kullanıcı 3 saatlik elle çalışmasını kaybetti!). Şimdi: kayıt seçimden ÖNCE
+   `stateSnapshot()` taşır, filtre `'cut'||'ulayout'` korur, undo `restoreState`
+   ile elle düzenlemeler DAHİL birebir döner (kalan yığın korunur, fit:false).
+   Emniyet: yığın boşken Geri Al planı silmeden `confirm()` sorar.
+   *Alan/Çevre durum çubuğu*: restoreState ve importLegacySvg artık stArea/stPerim
+   günceller (içe aktarımda boş/bayat kalıyordu). stateSnapshot `unitLayout`u
+   KOPYALAR (referans sızıntısı ulayout undo'sunu bozuyordu).
+   Doğrulama: tests/ 5 paket yeşil (159 denetim); vaka taban ihlalleri: 1-2-5 → 0,
+   vaka-3 → 3 (2'si bilinçli + %54 mutfak biçimi, eşik %55'e 1 hücre), vaka-4 → 1
+   (bilinçli). *EB. BANYO köşeye* (kat-plani-22 dersi): carveCornerBath skoruna
+   duvar teması ödülü (+25/kenar; köşe kazanır, banyo oda ortasında ada kalmaz) ve
+   kılçık cezası (pencere ile oda bbox kenarı arasında 1 hücrelik şerit bırakan
+   konum −500; banyo üstünde 0,5 m bant yaşanmazdı) eklendi; n*1000 erken-atlama
+   kaldırıldı (bonus farkı 1 hücreyi aşabilir). Diff araçları DEPODA: tests/diff-vaka.js (`node tests/diff-vaka.js
+   vakalar/vaka-1-orta-blok` — orijinal vs _s), tests/v22-test.js (vaka girdisiyle
+   yeniden üret + mutfak cephesi ölç), tests/villa-test.js (sofa monotonluk),
+   tests/antre-test.js (+ANTRE koridor tohumu).
 
 ## Bilerek verilen kararlar
 - Salon "emici"dir: program alanı doldurmuyorsa artık alan salona gider (her alternatif
@@ -62,15 +227,47 @@ Oluştur" der; motor koridor + çekirdek + daireleri yerleştirir, mevzuat panel
 - Mutfak dar kenarı ≥2 m (≤45 m² dairede yasal 1,5 m'ye düşebilir).
 
 ## Bilinen sınırlar / sonraki adımlar
-1. ~~Oda duvarı sürükleme~~ TAMAMLANDI (md.9), Geri Al destekli (md.10). Eksik kalan:
-   elle değişiklikler yeniden üretimde kaybolur (kalıcılaştırma yok); duvar yalnız
-   kendi doğrultusunda kayar (L-duvar köşesi taşınamaz).
+1. ~~Oda duvarı sürükleme~~ TAMAMLANDI (md.9), Geri Al destekli (md.10).
+   ~~Elle değişiklikler yeniden üretimde kaybolur~~ ÇÖZÜLDÜ (md.16): SVG indir →
+   içe aktar döngüsü tam durumu saklar; generate() yine sıfırlar (bilinçli).
+   Eksik kalan: duvar yalnız kendi doğrultusunda kayar (L-duvar köşesi taşınamaz).
 2. Balkon ve ışıklık üretimi yok (ışıklık bilinçli kaldırıldı; iç banyo/WC havalandırması
    şaft notuyla geçiliyor).
 3. Çok egzotik taban şekilleri (artı/haç, çentikli) hâlâ "biçimsiz" bayrakları üretebilir.
 4. Tek tip kat: zemin/normal kat ayrımı, otopark, sığınak çizimi yok.
+5. **Mevzuata otomatik uydurma** (sıradaki büyük iş): kullanıcı elle yapıyor, motor da
+   yapabilir. Önerilen yol: slimUnitAntre desenini genelle — "Mevzuata Uydur" düğmesi,
+   `runChecks` ihlali kalan odalar için `moveWallStep` adımlarını dener, ihlal sayısı
+   azalan adımları kabul eder (kapı/erişim/biçim korumaları slim'dekiyle aynı; altyapı
+   hazır: runChecks artık ihlal listesi döndürüyor).
+6. `extendAntreTo` koridoru 2. hücreyi rastgele yandan alır — pürüzlü kenar bırakabilir;
+   ince ayar duvar sürüklemeye kalıyor.
+7. ~~Antre odalara taşıyor / şişiyor~~ TAMAMLANDI (md.13).
+8. ~~Oda etiketi değiştirme/takas, oda bölme, antre menü işlemleri~~ TAMAMLANDI (md.14).
+9. Bayat test düzeltmeleri: `wall-drag.js` artık uygulamadaki gibi `snap:` koyar, boş
+   (yutulmuş) donörü meşru sayar, dış sınır duvarlarını tanır. DİKKAT: çalışma ağacı
+   HEAD'den ilerideydi (commit'lenmemiş oturum işi) — taban karşılaştırması için
+   `git show HEAD:` DEĞİL, değişiklik öncesi çalışma kopyası kullanılmalı.
 
-## Test altyapısı (sohbet içinde kuruldu, dosyada değil)
+## Test altyapısı
+Ayrıntılı liste `tests/README.md`'de (v22 vaka/tanı araçları dâhil: diff-vaka.js,
+v22-test.js, villa-test.js, antre-test.js + beklenen taban ihlal sayıları).
+Kendi kendine yeten (doğrudan `node tests/<dosya>.js`) testler: `room-edit.js` (55),
+`antre-slim.js` (51: antre kompakt ≤ max(6 m², %14), ince çıkıntı yok, erişim, bütünlük),
+`etiket.js` (31: retype/swap/split/extendAntreTo + geri al + korumalar),
+`oda-hint.js` (13: hint'li/hintsiz addRoom, yön denetimi, EB. BANYO çift koruması),
+`import.js` (15: snapshot→restore gidiş-dönüş bölge imzası birebir + eski-SVG geometri
+çözümleyici; 2. bölüm `linkedom` ister, yoksa kendini atlar — `npm i linkedom`).
+DİKKAT (2026-06-10/2): bu makinede `/tmp/app.js` ve `/tmp/plan*.svg` başka kullanıcıya
+ait kilitli dosyalar — eski testleri koşarken yolları sed ile değiştirilen KOPYALAR
+kullanıldı (`sed s|/tmp/app.js|$HOME/app.js|`); testlerin kendisi değiştirilmedi.
+DİKKAT (2026-06-10): runChecks'te mutfak oran denetimi kaldırılırken açık kalan
+`if(...){` bloğu TÜM script'i SyntaxError'la kırıyordu (uygulama hiç açılmıyordu) —
+düzeltildi. Şüpheli bozulmada ilk bakılacak yer: script'i çekip `node --check`.
+Diğerleri `/tmp/app.js` ister (hazırlık komutu tests/README.md'de).
+`tests/room-edit.js` artık depoda ve kendi kendine yeter (`node tests/room-edit.js`):
+oda sil/ekle/geri al, bütünlük (hücre toplamı + cm tutarlılığı), spec kopyası,
+korumalar, villa senaryosu, EB. BANYO, tek daire/kat düzeni (5 ve 12 kat) — 55 denetim. Diğerleri sohbet içinde kurulmuştu:
 Node ile başsız test: HTML'den `<script>` çekilir, DOM stub'lanır, `generate()` çağrılır;
 senaryolar: 32×16 standart, 21×18 4×3+1, L-şekil, 48×27 derin blok, villa, stüdyolar.
 Denetimler: hücre bütünlüğü, her odanın antreye komşuluğu, banyosuz/salonsuz daire,

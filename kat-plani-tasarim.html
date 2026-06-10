@@ -24,19 +24,38 @@
   .row label{font-size:13px; flex:1;}
   select,input[type=number]{padding:5px 7px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff; color:var(--ink); width:90px;}
   input[type=checkbox]{width:15px; height:15px; accent-color:var(--acc);}
+  /* Stepper (custom +/- buttons) */
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none; margin:0;}
+  input[type=number]{-moz-appearance:textfield;}
+  .stepper{display:inline-flex; align-items:stretch; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; flex-shrink:0;}
+  .stepper button{width:32px; min-height:32px; padding:0; border:none; border-radius:0; background:#f3efe7; font-size:17px; font-weight:700; color:var(--acc); cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none;}
+  .stepper button:hover{background:var(--acc); color:#fff; border:none;}
+  .stepper button:active{filter:brightness(.92);}
+  .stepper input[type=number]{border:none; border-radius:0; width:46px; padding:0; text-align:center; font-size:13px; font-weight:600;}
+  .stepper input[type=number]:focus{outline:none; background:#fdf8f0;}
+  /* Toggle switch */
+  .switch{position:relative; width:38px; height:22px; flex-shrink:0; cursor:pointer;}
+  .switch input{position:absolute; inset:0; width:100%; height:100%; opacity:0; margin:0; cursor:pointer;}
+  .switch i{display:block; width:38px; height:22px; background:#ddd5c8; border-radius:11px; transition:background .15s; pointer-events:none;}
+  .switch i::after{content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; background:#fff; border-radius:50%; transition:left .15s; box-shadow:0 1px 2px rgba(0,0,0,.25);}
+  .switch input:checked + i{background:var(--acc);}
+  .switch input:checked + i::after{left:18px;}
   button{padding:7px 12px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:13px; cursor:pointer; color:var(--ink);}
   button:hover{border-color:var(--acc); color:var(--acc);}
   button.primary{background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600;}
   button.primary:hover{filter:brightness(1.08); color:#fff;}
   button.primary:disabled{opacity:.45; cursor:not-allowed;}
   button.small{padding:3px 8px; font-size:12px;}
-  .unitCard{border:1px solid var(--line); border-radius:8px; padding:9px 10px; margin-bottom:8px; background:#fbfaf7;}
-  .unitCard .head{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  .unitCard{border:1px solid var(--line); border-radius:10px; padding:11px 12px; margin-bottom:10px; background:#fbfaf7; box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  .unitCard .head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; padding-bottom:7px; border-bottom:1px dashed var(--line);}
   .unitCard .tag{font-weight:700; font-size:13px; color:var(--acc);}
-  .unitCard .grid{display:grid; grid-template-columns:1fr 1fr; gap:5px 10px;}
-  .unitCard .grid label{font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:6px;}
-  .unitCard input[type=number]{width:52px; padding:3px 5px;}
-  .unitCard .del{color:var(--bad); border:none; background:none; font-size:15px; cursor:pointer; line-height:1;}
+  .unitCard .frow{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; font-size:13px;}
+  .unitCard .frow:last-child{margin-bottom:0;}
+  .unitCard .frow small{color:var(--muted); font-size:11px;}
+  .unitCard .del{color:var(--bad); border:none; background:none; font-size:18px; cursor:pointer; line-height:1; padding:2px 6px; border-radius:6px;}
+  .unitCard .del:hover{background:#fdf2f0; border:none;}
+  #addUnit{width:100%; border-style:dashed; padding:8px; color:var(--muted);}
+  #addUnit:hover{color:var(--acc); border-color:var(--acc); border-style:dashed;}
   /* Checks */
   #checks{display:flex; flex-direction:column; gap:5px;}
   .chk{display:flex; gap:7px; font-size:12px; line-height:1.45; padding:6px 8px; border-radius:6px; background:#fbfaf7; border:1px solid var(--line);}
@@ -49,9 +68,33 @@
   svg.panning{cursor:grab;}
   #toolbar{position:absolute; top:10px; left:10px; display:flex; gap:6px; background:var(--panel); padding:6px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); flex-wrap:wrap; max-width:calc(100% - 20px);}
   #toolbar button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
+  #toolbar.collapsed button:not(#tbToggle){display:none;}
+  #tbToggle{font-weight:700; padding:7px 9px; color:var(--muted);}
   #status{position:absolute; bottom:10px; left:10px; right:10px; display:flex; gap:16px; background:var(--panel); padding:6px 12px; border-radius:8px; border:1px solid var(--line); font-size:12px; color:var(--muted); pointer-events:none; width:max-content;}
   #status b{color:var(--ink);}
-  #hint{position:absolute; top:60px; left:10px; font-size:12px; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px 10px; max-width:340px;}
+  #zoomCtl{position:absolute; bottom:10px; right:10px; z-index:6; display:flex; flex-direction:column; align-items:center; gap:6px; background:var(--panel); padding:8px 6px; border-radius:10px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.08); user-select:none;}
+  #zoomCtl button{width:26px; height:26px; border:1px solid var(--line); background:#fff; border-radius:7px; cursor:pointer; font-size:16px; line-height:1; color:var(--ink); display:flex; align-items:center; justify-content:center; padding:0;}
+  #zoomCtl button:hover{background:var(--bg); border-color:var(--acc); color:var(--acc);}
+  #zoomCtl input[type=range]{-webkit-appearance:slider-vertical; writing-mode:vertical-lr; direction:rtl; width:22px; height:120px; accent-color:var(--acc); cursor:pointer;}
+  #zoomLbl{font-size:11px; font-weight:700; color:var(--muted); font-variant-numeric:tabular-nums; min-width:34px; text-align:center;}
+  /* Onboarding stepper */
+  #onb{position:absolute; top:60px; left:10px; width:290px; background:var(--panel); border:1px solid var(--line); border-radius:10px; box-shadow:0 3px 12px rgba(0,0,0,.10); font-size:12px; overflow:hidden; z-index:6;}
+  #onb.collapsed{width:auto; box-shadow:0 2px 8px rgba(0,0,0,.06);}
+  #onb.collapsed #onbBody,#onb.collapsed #onbFoot,#onb.collapsed #onbHead span,#onb.collapsed #onbClose{display:none;}
+  #onb.collapsed #onbHead{padding:5px 8px; border-bottom:none; cursor:pointer;}
+  #onbHead{display:flex; align-items:center; gap:7px; padding:8px 11px; background:#fbfaf7; border-bottom:1px solid var(--line); font-weight:700; font-size:12.5px; user-select:none;}
+  #onbHead span{flex:1;}
+  #onbStep{font-weight:400; color:var(--muted); font-size:11px;}
+  #onbClose{border:none; background:none; cursor:pointer; color:var(--muted); font-size:15px; padding:0 2px; line-height:1;}
+  #onbClose:hover{color:var(--ink); border:none;}
+  #onbBody{padding:9px 12px 4px; line-height:1.5; color:var(--ink); min-height:72px;}
+  #onbBody b{color:var(--acc);}
+  #onbFoot{display:flex; align-items:center; gap:4px; padding:7px 11px 9px;}
+  #onbDots{flex:1; display:flex; gap:5px;}
+  #onbDots i{width:7px; height:7px; border-radius:50%; background:var(--line); cursor:pointer;}
+  #onbDots i.on{background:var(--acc);}
+  #onbFoot button{font-size:11.5px; padding:4px 10px;}
+  #onbNext{background:var(--ink); color:#fff; border-color:var(--ink);}
   .legend{display:flex; flex-wrap:wrap; gap:6px; font-size:11px;}
   .legend span{display:flex; align-items:center; gap:4px;}
   .legend i{width:11px; height:11px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,.15);}
@@ -73,6 +116,18 @@
   .utT tr{cursor:pointer;}
   .utT tr:hover{background:#f6efe8;}
   .utT td.num{text-align:right; white-space:nowrap; color:var(--muted);}
+  /* oda sağ tık menüsü */
+  #roomMenu{position:absolute; display:none; z-index:9; background:var(--panel); border:1px solid var(--line);
+    border-radius:9px; box-shadow:0 4px 14px rgba(0,0,0,.13); font-size:12.5px; min-width:185px; padding:4px 0; user-select:none;}
+  #roomMenu .mh{padding:5px 12px 3px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap;}
+  #roomMenu .mi{padding:6px 12px; cursor:pointer; white-space:nowrap;}
+  #roomMenu .mi:hover{background:#f6efe8; color:var(--acc);}
+  #roomMenu .mi.del{color:var(--bad);}
+  #roomMenu .mi.on{color:var(--acc); font-weight:600;}
+  #roomMenu .mi.dis{color:var(--muted); cursor:not-allowed;}
+  #roomMenu .mi.dis:hover{background:none; color:var(--muted);}
+  #roomMenu .note{padding:6px 12px; color:var(--bad); max-width:230px; white-space:normal;}
+  #roomMenu hr{border:none; border-top:1px solid var(--line); margin:4px 0;}
 </style>
 </head>
 <body>
@@ -102,6 +157,11 @@
         <button class="small" id="svgBtn" style="flex:1" disabled>SVG indir</button>
         <button class="small" id="pngBtn" style="flex:1" disabled>PNG indir</button>
       </div>
+      <div style="display:flex; gap:6px; margin-top:6px;">
+        <button class="small" id="impBtn" style="flex:1">SVG içe aktar</button>
+        <input type="file" id="impFile" accept=".svg,image/svg+xml,.json" style="display:none">
+      </div>
+      <div style="margin-top:4px; font-size:11px; color:#9c8e76; line-height:1.35">Bu araçtan indirilen SVG'ler plan durumunu içinde taşır: içe aktarınca elle düzenlemeler dâhil aynen geri gelir. Eski (durumsuz) SVG'ler geometriden çözümlenir.</div>
     </div>
     <div class="sec">
       <h2>Mevzuat Kontrolü</h2>
@@ -116,16 +176,31 @@
 <div id="canvasWrap">
   <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
   <div id="toolbar">
+    <button id="tbToggle" title="Araç çubuğunu daralt/genişlet">«</button>
     <button id="tDraw" class="active">✏️ Çiz</button>
+    <button id="tParcel">⬠ Parsel</button>
+    <button id="tBalk">▦ Balkon</button>
+    <button id="tDoor">🚪 Kapı</button>
     <button id="tPan">✋ Kaydır</button>
     <button id="tUndo">↩︎ Geri al</button>
     <button id="tClear">🗑 Temizle</button>
     <button id="tFit">⤢ Sığdır</button>
     <button id="tSample">▭ Örnek sınır</button>
   </div>
-  <div id="hint">Tıklayarak bina dış sınırını çizin (köşeler otomatik dik açıya oturur, 0,5 m ızgara). Başlangıç noktasına tıklayınca sınır kapanır. Plan üretildikten sonra daire ayırıcılarını (turuncu yuvarlak tutamaçlar) ve oda duvarlarını (kare tutamaçlar) sürükleyerek ince ayar yapabilirsiniz; mevzuat paneli her harekette canlı güncellenir. "Geri al" önce elle yapılan duvar/ayırıcı değişikliklerini adım adım geri alır. Not: "Yerleşimi Oluştur" veya ayırıcı sürükleme, elle yapılan oda duvarı değişikliklerini sıfırlar.</div>
+  <div id="onb">
+    <div id="onbHead">💡<span>Nasıl kullanılır? <em id="onbStep"></em></span><button id="onbClose" title="Kapat">×</button></div>
+    <div id="onbBody"></div>
+    <div id="onbFoot"><div id="onbDots"></div><button class="small" id="onbPrev">‹ Geri</button><button class="small" id="onbNext">İleri ›</button></div>
+  </div>
   <div id="status"><span>İmleç: <b id="stPos">–</b></span><span>Alan: <b id="stArea">–</b></span><span>Çevre: <b id="stPerim">–</b></span></div>
+  <div id="zoomCtl" title="Yakınlaştır / Uzaklaştır">
+    <button id="zIn" title="Yakınlaştır">+</button>
+    <input id="zRange" type="range" min="0" max="1000" value="500" aria-label="Yakınlık">
+    <button id="zOut" title="Uzaklaştır">−</button>
+    <span id="zoomLbl">100%</span>
+  </div>
   <div id="unitTable"><div id="utHead"><span>Daire Tablosu</span><button id="utToggle" title="Daralt/Genişlet">–</button></div><div id="utBody"></div></div>
+  <div id="roomMenu"></div>
 </div>
 </main>
 <script>
@@ -138,15 +213,16 @@ const REG = {
   banyo:{area:3.0, side:1.5}, wc:{area:1.2, side:1.0},
   koridorMin:1.20, merdivenMin:1.20,
   asansorYeriKat:3, asansorKat:4, ikiAsansorKat:11,
-  yanginYukseklik:21.5, kacisMesafe:30, siginakDaire:8, teknikOdaDaire:6
+  yanginYukseklik:21.5, kacisMesafe:30, siginakDaire:8, teknikOdaDaire:6,
+  cikmaMax:1.5, balkonMinD:1.2, taksMax:0.4, yanBahce:3.0
 };
 const COLORS = {
   salon:'#ffe7c2', yatak:'#d8e8f7', mutfak:'#ffd9cc', banyo:'#d4eee5', wc:'#d4eee5',
-  antre:'#f1ecdf', koridor:'#ece4d2', merdiven:'#fdf0b0', asansor:'#e6d9f6',
+  antre:'#f1ecdf', oda:'#e9e3f3', koridor:'#ece4d2', merdiven:'#fdf0b0', asansor:'#e6d9f6',
   teknik:'#dededa', yangin:'#f7cfc9'
 };
 const TYPE_TR = {salon:'Salon', yatak:'Yatak odası', mutfak:'Mutfak', banyo:'Banyo', wc:'WC',
-  antre:'Antre', koridor:'Ortak hol', merdiven:'Merdiven', asansor:'Asansör', teknik:'Teknik/Şaft', yangin:'Yangın merd.'};
+  antre:'Antre', oda:'Oda (nötr)', koridor:'Ortak hol', merdiven:'Merdiven', asansor:'Asansör', teknik:'Teknik/Şaft', yangin:'Yangın merd.'};
 
 /* ================= durum ================= */
 let pxPerM = 16, panX = 80, panY = 70;
@@ -156,10 +232,19 @@ let closed = false;
 let hoverP = null;
 let plan = null;              // üretilen plan
 let customCutsZ = null; // bölge başına ayırıcı konumları
+let unitLayout = {};    // daire başına iç düzen tercihi: k → 'auto'|'flat'|'rail'
 let dragging = null;          // {type:'pan'|'cut'|'wall', ...}
 let hoverWall = null;         // imleç altındaki sürüklenebilir oda duvarı
 let hoverRoomId = null;       // imleç altındaki oda (duvar ölçüsü vurgusu)
-let editHistory = [];         // elle düzenleme geçmişi: {type:'wall',a,b,cellsA,cellsB} | {type:'cut',cuts}
+let editHistory = [];         // elle düzenleme geçmişi: {type:'wall',a,b,cellsA,cellsB} | {type:'cut',cuts} | {type:'balk',prev}
+let parcelPts = [];           // parsel poligonu (opsiyonel; bahçe = parsel − bina)
+let parcelClosed = false;
+let balconies = [];           // {ei, t0, t1, depth}: pts[ei]→pts[ei+1] kenarında, dışa doğru
+let hoverBalk = null;         // balkon modu önizleme {ei,t0,t1,depth} | tutamaç vurgusu
+let doorOverrides = {};       // elle kapı yeri: key -> {h,x,y}; geçersizleşirse otomatiğe düşer
+let extraDoors = [];          // çift tıkla eklenen kapılar: {h,x,y}
+let doorHidden = {};          // çift tıkla silinen otomatik kapılar: key -> true
+let hoverDoor = null;         // kapı modunda imleç altındaki kapı kaydı
 
 const svg = document.getElementById('svg');
 const NS = 'http://www.w3.org/2000/svg';
@@ -194,31 +279,72 @@ function renderUnits(){
   unitSpecs.forEach((u,i)=>{
     const d=document.createElement('div'); d.className='unitCard';
     d.innerHTML = `<div class="head"><span class="tag">${unitTag(u)}</span>${(!villa&&unitSpecs.length>1)?`<button class="del" data-i="${i}" title="Sil">×</button>`:''}</div>
-      <div class="grid">
-      <label>Oda <input type="number" min="1" max="5" value="${u.oda}" data-i="${i}" data-k="oda"></label>
-      <label>Salon (0 = stüdyo) <input type="number" min="0" max="2" value="${u.salon}" data-i="${i}" data-k="salon"></label>
-      <label>Ebeveyn banyosu <input type="checkbox" ${u.ensuite?'checked':''} data-i="${i}" data-k="ensuite"></label>
-      <label>Açık mutfak <input type="checkbox" ${u.acik?'checked':''} data-i="${i}" data-k="acik"></label>
-      ${villa?'':`<label>Adet <input type="number" min="1" max="8" value="${u.adet}" data-i="${i}" data-k="adet"></label>`}
-      </div>`;
+      <div class="frow"><label>Oda</label><input type="number" min="1" max="5" value="${u.oda}" data-i="${i}" data-k="oda"></div>
+      <div class="frow"><label>Salon <small>(0 = stüdyo)</small></label><input type="number" min="0" max="2" value="${u.salon}" data-i="${i}" data-k="salon"></div>
+      <div class="frow"><label>Ebeveyn banyosu</label><span class="switch"><input type="checkbox" ${u.ensuite?'checked':''} data-i="${i}" data-k="ensuite"><i></i></span></div>
+      <div class="frow"><label>Açık mutfak</label><span class="switch"><input type="checkbox" ${u.acik?'checked':''} data-i="${i}" data-k="acik"><i></i></span></div>
+      ${villa?'':`<div class="frow"><label>Adet</label><input type="number" min="1" max="99" value="${u.adet}" data-i="${i}" data-k="adet"></div>`}`;
     box.appendChild(d);
   });
+  box.querySelectorAll('input[type=number]').forEach(makeStepper);
   box.querySelectorAll('input').forEach(inp=>inp.addEventListener('change',e=>{
     const i=+e.target.dataset.i, k=e.target.dataset.k;
     unitSpecs[i][k] = (k==='ensuite'||k==='acik') ? e.target.checked
       : k==='salon' ? Math.max(0,+e.target.value||0) : Math.max(1,+e.target.value||1);
-    renderUnits(); resetCuts(); if(plan) generate();
+    /* DEĞER değişiminde TÜM kartları yeniden kurMA: stepper'a basılıyken (pointerdown→change)
+       kartların innerHTML'i sıfırlanınca bastığın düğme DOM'dan koparılıyor ve bazı
+       tarayıcılarda olay/pointer sistemi kilitleniyordu — sonradan "+ Daire tipi ekle" ve
+       diğer tıklamalar yutuluyor, yalnız sayfa yenileme çözüyordu. Yapısal değişiklik yok;
+       yalnız ilgili kartın başlığını tazele. */
+    const card=e.target.closest('.unitCard'), tg=card&&card.querySelector('.tag');
+    if(tg) tg.textContent=unitTag(unitSpecs[i]);
+    resetCuts(); safeGen();
   }));
   box.querySelectorAll('.del').forEach(b=>b.addEventListener('click',e=>{
-    unitSpecs.splice(+e.target.dataset.i,1); renderUnits(); resetCuts(); if(plan) generate();
+    unitSpecs.splice(+e.target.dataset.i,1); renderUnits(); resetCuts(); safeGen();
   }));
 }
+/* UI kaynaklı yeniden üretim güvenli sarmalayıcı: generate() içinde beklenmeyen bir hata
+   olsa bile olay işleyicisi yarıda kalıp arayüzü bozmasın (konsola yaz, akış sürsün). */
+function safeGen(){ try{ if(plan) generate(); }catch(err){ console.error('generate() hata:', err); } }
 document.getElementById('addUnit').addEventListener('click',()=>{
   if(document.getElementById('binaTipi').value==='villa') return;
-  unitSpecs.push({oda:3, salon:1, ensuite:true, acik:false, adet:1}); renderUnits(); resetCuts(); if(plan) generate();
+  unitSpecs.push({oda:3, salon:1, ensuite:true, acik:false, adet:1}); renderUnits(); resetCuts(); safeGen();
 });
-document.getElementById('binaTipi').addEventListener('change',()=>{ renderUnits(); resetCuts(); if(plan) generate(); });
-['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ if(plan) generate(); }));
+document.getElementById('binaTipi').addEventListener('change',()=>{ renderUnits(); resetCuts(); safeGen(); });
+['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ safeGen(); }));
+['katSayisi','katYuk'].forEach(id=>makeStepper(document.getElementById(id)));
+
+/* Custom +/- stepper: wraps a number input with large, easy-to-click buttons.
+   Hold the button down to repeat. Dispatches 'change' so existing listeners fire. */
+function makeStepper(inp){
+  if(!inp || !inp.closest || !inp.parentNode || inp.closest('.stepper')) return;
+  const wrap=document.createElement('span'); wrap.className='stepper';
+  inp.parentNode.insertBefore(wrap, inp);
+  const mk=t=>{const b=document.createElement('button'); b.type='button'; b.tabIndex=-1; b.textContent=t; return b;};
+  const minus=mk('−'), plus=mk('+');
+  wrap.appendChild(minus); wrap.appendChild(inp); wrap.appendChild(plus);
+  const step=parseFloat(inp.step)||1;
+  const bump=dir=>{
+    const min=inp.min!==''?parseFloat(inp.min):-Infinity, max=inp.max!==''?parseFloat(inp.max):Infinity;
+    let v=(parseFloat(inp.value)||0)+dir*step;
+    v=Math.min(max, Math.max(min, Math.round(v*100)/100));
+    if(v===parseFloat(inp.value)) return;
+    inp.value=v;
+    inp.dispatchEvent(new Event('change',{bubbles:true}));
+  };
+  [[minus,-1],[plus,1]].forEach(([btn,dir])=>{
+    btn.addEventListener('pointerdown',e=>{
+      e.preventDefault(); bump(dir);
+      let rep=null;
+      const stop=()=>{ clearTimeout(hold); clearInterval(rep);
+        window.removeEventListener('pointerup',stop); window.removeEventListener('pointercancel',stop); window.removeEventListener('blur',stop); };
+      const hold=setTimeout(()=>{ rep=setInterval(()=>{ if(!btn.isConnected){ stop(); return; } bump(dir); },120); },450);
+      window.addEventListener('pointerup',stop); window.addEventListener('pointercancel',stop); window.addEventListener('blur',stop);
+      btn.addEventListener('pointerleave',stop,{once:true});
+    });
+  });
+}
 function resetCuts(){ customCutsZ=null; editHistory=editHistory.filter(e=>e.type!=='cut'); }
 
 /* ================= lejant ================= */
@@ -226,16 +352,88 @@ function resetCuts(){ customCutsZ=null; editHistory=editHistory.filter(e=>e.type
   for(const t in COLORS){ const s=document.createElement('span'); s.innerHTML=`<i style="background:${COLORS[t]}"></i>${TYPE_TR[t]}`; lg.appendChild(s);} })();
 
 /* ================= çizim etkileşimi ================= */
+function activePoly(){ return mode==='parcel'? {arr:parcelPts, cl:parcelClosed} : {arr:pts, cl:closed}; }
 function snapPoint(sx,sy){
   let x=snapG(S2Wx(sx)), y=snapG(S2Wy(sy));
-  if(mode==='draw' && pts.length && !closed){
-    const l=pts[pts.length-1];
-    if(Math.abs(x-l.x) >= Math.abs(y-l.y)) y=l.y; else x=l.x;   // dik açı kilidi
-    if(pts.length>=3){ const f=pts[0];
+  const A=activePoly();
+  if((mode==='draw'||mode==='parcel') && A.arr.length && !A.cl){
+    /* 15° açı kilidi: kenar açısı 15°'nin katına, uzunluk 0,5 m ızgaraya oturur */
+    const l=A.arr[A.arr.length-1], wx=S2Wx(sx), wy=S2Wy(sy);
+    const d=Math.hypot(wx-l.x, wy-l.y);
+    if(d>1e-9){
+      const step=Math.PI/12;
+      const a=Math.round(Math.atan2(wy-l.y, wx-l.x)/step)*step;
+      const L=Math.max(M, snapG(d));
+      x=Math.round((l.x+Math.cos(a)*L)*1000)/1000;
+      y=Math.round((l.y+Math.sin(a)*L)*1000)/1000;
+    }
+    if(A.arr.length>=3){ const f=A.arr[0];
       if(Math.hypot(x-f.x,y-f.y) < 0.7){ return {x:f.x,y:f.y,closing:true}; } }
   }
   return {x,y};
 }
+/* ================= balkon geometrisi ================= */
+function distSeg(px,py,ax,ay,bx,by){ const dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy;
+  let t=l2?((px-ax)*dx+(py-ay)*dy)/l2:0; t=Math.max(0,Math.min(1,t));
+  return Math.hypot(px-(ax+dx*t), py-(ay+dy*t)); }
+/* kenar tabanı: pts[ei]→pts[ei+1] birim vektörü u, DIŞA bakan normal n */
+function balkBase(ei){
+  const A=pts[ei], B=pts[(ei+1)%pts.length];
+  const L=Math.hypot(B.x-A.x,B.y-A.y);
+  const u={x:(B.x-A.x)/L, y:(B.y-A.y)/L};
+  let n={x:-u.y, y:u.x};
+  const mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+  if(pip(mx+n.x*0.05, my+n.y*0.05, pts)){ n={x:u.y,y:-u.x}; }
+  return {A,u,n,L};
+}
+function balkQuad(b){
+  const {A,u,n}=balkBase(b.ei);
+  const P=(t,d)=>({x:A.x+u.x*t+n.x*d, y:A.y+u.y*t+n.y*d});
+  return [P(b.t0,0), P(b.t1,0), P(b.t1,b.depth), P(b.t0,b.depth)];
+}
+const balkArea=b=>(b.t1-b.t0)*b.depth;
+/* balkonun ait olduğu daire: iç kenarın hemen içindeki hücre */
+function balkUnit(b){
+  if(!plan) return -1;
+  const {A,u,n}=balkBase(b.ei);
+  const t=(b.t0+b.t1)/2;
+  const x=A.x+u.x*t-n.x*0.3, y=A.y+u.y*t-n.y*0.3;
+  const c=Math.floor((x-plan.minX)/M), r=Math.floor((y-plan.minY)/M);
+  if(r<0||c<0||r>=plan.rows||c>=plan.cols) return -1;
+  const j=r*plan.cols+c;
+  if(!plan.inside[j]||plan.cm[j]<0) return -1;
+  return plan.regions[plan.cm[j]].unit;
+}
+/* imleç altındaki balkon tutamağı: dış kenar=derinlik, uçlar=uzunluk, içi=taşı/sil */
+function hitBalk(wx,wy){
+  for(let i=balconies.length-1;i>=0;i--){
+    const b=balconies[i], q=balkQuad(b), tol=Math.max(0.25, 6/pxPerM);
+    if(distSeg(wx,wy,q[3].x,q[3].y,q[2].x,q[2].y)<tol) return {b,i,part:'depth'};
+    if(distSeg(wx,wy,q[0].x,q[0].y,q[3].x,q[3].y)<tol) return {b,i,part:'t0'};
+    if(distSeg(wx,wy,q[1].x,q[1].y,q[2].x,q[2].y)<tol) return {b,i,part:'t1'};
+    if(pip(wx,wy,q)) return {b,i,part:'body'};
+  }
+  return null;
+}
+/* tıklanan noktaya en yakın dış kenara yeni balkon önerisi */
+function ghostBalk(wx,wy){
+  if(!closed) return null;
+  let best=null;
+  for(let ei=0;ei<pts.length;ei++){
+    const A=pts[ei], B=pts[(ei+1)%pts.length];
+    const d=distSeg(wx,wy,A.x,A.y,B.x,B.y);
+    if(d<1.2 && (!best||d<best.d)){
+      const {u,L}=balkBase(ei);
+      let t=(wx-A.x)*u.x+(wy-A.y)*u.y;
+      const half=Math.min(1.5, L/2);
+      let t0=snapG(Math.max(0, Math.min(t-half, L-2*half))), t1=Math.min(L, t0+2*half);
+      if(t1-t0>=1) best={d, balk:{ei, t0, t1:snapG(t1), depth:1.5}};
+    }
+  }
+  return best&&best.balk;
+}
+function balkSnapshot(){ return balconies.map(b=>({...b})); }
+function balkChecksRefresh(){ if(plan) runChecks(); if(plan) buildUnitTable(); }
 svg.addEventListener('mousemove',e=>{
   const r=svg.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
   document.getElementById('stPos').textContent = fmt(S2Wx(sx))+' , '+fmt(S2Wy(sy))+' m';
@@ -247,12 +445,52 @@ svg.addEventListener('mousemove',e=>{
       generate(true);
     }
     if(dragging.type==='wall'){ dragWallTo(sx,sy); }
+    if(dragging.type==='door'){
+      const wx=S2Wx(sx), wy=S2Wy(sy);
+      if(dragging.door.kind==='extra'){
+        const eg=edgeNear(wx,wy);
+        if(eg && extraDoors[dragging.door.i]){ extraDoors[dragging.door.i]=eg; render(); }
+      } else {
+        let best=null, bd=Infinity;
+        dragging.door.edges.forEach(e2=>{
+          const mx=e2.h? e2.x+0.45 : e2.x, my=e2.h? e2.y : e2.y+0.45;
+          const dd=(mx-wx)**2+(my-wy)**2;
+          if(dd<bd){ bd=dd; best=e2; }
+        });
+        if(best){ doorOverrides[dragging.door.key]={h:best.h,x:best.x,y:best.y}; render(); }
+      }
+    }
+    if(dragging.type==='balkD'){
+      const b=dragging.b, {A,n}=balkBase(b.ei);
+      const d=(S2Wx(sx)-A.x)*n.x+(S2Wy(sy)-A.y)*n.y;
+      b.depth=Math.max(0.5, Math.min(3, Math.round(d*10)/10)); render();
+    }
+    if(dragging.type==='balkT'){
+      const b=dragging.b, {A,u,L}=balkBase(b.ei);
+      const t=snapG((S2Wx(sx)-A.x)*u.x+(S2Wy(sy)-A.y)*u.y);
+      if(dragging.part==='t0') b.t0=Math.max(0, Math.min(t, b.t1-1));
+      else b.t1=Math.min(L, Math.max(t, b.t0+1));
+      render();
+    }
     return;
   }
-  if(mode==='draw' && !closed){ hoverP=snapPoint(sx,sy); render(); }
-  else if(plan && closed && mode!=='pan'){ // oda duvarı + oda ölçüsü vurgusu
-    const w=hitCutHandle(sx,sy)? null : hitWallRun(sx,sy);
-    svg.style.cursor = w? (w.horiz?'ns-resize':'ew-resize') : '';
+  if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)){ hoverP=snapPoint(sx,sy); render(); }
+  else if(mode==='balkon'){
+    const wx=S2Wx(sx), wy=S2Wy(sy);
+    const h=hitBalk(wx,wy);
+    hoverBalk = h? {hit:h} : {ghost:ghostBalk(wx,wy)};
+    svg.style.cursor = h? (h.part==='body'?'context-menu':'move') : (hoverBalk.ghost?'copy':'');
+    render();
+  }
+  else if(mode==='door'){
+    if(!plan) return;
+    const h=hitDoor(sx,sy);
+    svg.style.cursor = h? 'move' : '';
+    if((h?h.key:null)!==(hoverDoor?hoverDoor.key:null)){ hoverDoor=h; render(); }
+  }
+  else if(plan && closed && mode!=='parcel'){ // oda duvarı + oda ölçüsü vurgusu
+    const w=(mode==='pan')? null : (hitCutHandle(sx,sy)? null : hitWallRun(sx,sy));
+    if(mode!=='pan') svg.style.cursor = w? (w.horiz?'ns-resize':'ew-resize') : '';
     let hr=null;
     { const c=Math.floor((S2Wx(sx)-plan.minX)/M), r2=Math.floor((S2Wy(sy)-plan.minY)/M);
       if(r2>=0&&c>=0&&r2<plan.rows&&c<plan.cols){ const j=r2*plan.cols+c;
@@ -265,12 +503,37 @@ svg.addEventListener('mouseleave',()=>{
 svg.addEventListener('mousedown',e=>{
   const r=svg.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
   if(e.button===1 || mode==='pan'){ dragging={type:'pan',sx,sy,px:panX,py:panY}; e.preventDefault(); return; }
+  if(mode==='balkon'){
+    if(e.button!==0) return;
+    const wx=S2Wx(sx), wy=S2Wy(sy), h=hitBalk(wx,wy);
+    if(h){
+      if(h.part==='depth'){ dragging={type:'balkD', b:h.b, undo:balkSnapshot()}; }
+      else if(h.part==='t0'||h.part==='t1'){ dragging={type:'balkT', b:h.b, part:h.part, undo:balkSnapshot()}; }
+      e.preventDefault(); return;
+    }
+    const nb=ghostBalk(wx,wy);
+    if(nb){ editHistory.push({type:'balk', prev:balkSnapshot()}); balconies.push(nb);
+      hoverBalk=null; balkChecksRefresh(); render(); }
+    return;
+  }
+  if(mode==='door'){
+    if(e.button!==0 || !plan) return;
+    const h=hitDoor(sx,sy);
+    if(h){ dragging={type:'door', door:h, undo:doorSnapshot()}; e.preventDefault(); }
+    return;
+  }
+  if(mode==='parcel'){
+    if(parcelClosed || e.button!==0) return;
+    const p=snapPoint(sx,sy);
+    if(p.closing){ parcelClosed=true; hoverP=null; balkChecksRefresh(); render(); return; }
+    if(parcelPts.length && p.x===parcelPts[parcelPts.length-1].x && p.y===parcelPts[parcelPts.length-1].y) return;
+    parcelPts.push({x:p.x,y:p.y}); render(); return;
+  }
   if(plan && e.button===0){ // ayırıcı tutamacı? oda duvarı?
     const h=hitCutHandle(sx,sy);
     if(h){ h.undo=customCutsZ&&customCutsZ.map(a=>a?a.slice():null); dragging=h; return; }
     const wr=hitWallRun(sx,sy);
-    if(wr){ dragging={type:'wall', run:wr,
-        undo:{a:wr.a, b:wr.b, cellsA:plan.regions[wr.a].cells.slice(), cellsB:plan.regions[wr.b].cells.slice()}};
+    if(wr){ dragging={type:'wall', run:wr, snap:snapshotRegions()};
       hoverWall=wr; e.preventDefault(); return; }
   }
   if(mode!=='draw' || closed || e.button!==0) return;
@@ -278,6 +541,24 @@ svg.addEventListener('mousedown',e=>{
   if(p.closing){ finishPoly(); return; }
   if(pts.length && p.x===pts[pts.length-1].x && p.y===pts[pts.length-1].y) return;
   pts.push({x:p.x,y:p.y}); render();
+});
+/* kapı modu: çift tık — duvarda kapı ekle, mevcut kapıyı sil */
+svg.addEventListener('dblclick',e=>{
+  if(mode!=='door'||!plan) return;
+  e.preventDefault();
+  const rb=svg.getBoundingClientRect(), sx=e.clientX-rb.left, sy=e.clientY-rb.top;
+  const h=hitDoor(sx,sy);
+  if(h){ /* sil: ekstra kapı kalkar, otomatik kapı bastırılır */
+    editHistory.push({type:'door', prev:doorSnapshot()});
+    if(h.kind==='extra') extraDoors.splice(h.i,1);
+    else doorHidden[h.key]=true;
+    hoverDoor=null; runChecks(); render(); return;
+  }
+  const eg=edgeNear(S2Wx(sx),S2Wy(sy));
+  if(eg){
+    editHistory.push({type:'door', prev:doorSnapshot()});
+    extraDoors.push(eg); runChecks(); render();
+  }
 });
 window.addEventListener('mouseup',finishDrag);
 /* sürükleme biterken değişikliği geçmişe yaz (Geri Al için) */
@@ -287,28 +568,75 @@ function finishDrag(){
     generate(true); // not: generate duvar girdilerini geçmişten siler — cut girdisi SONRA yazılır
     if(dragging.undo && JSON.stringify(dragging.undo)!==JSON.stringify(customCutsZ))
       editHistory.push({type:'cut', cuts:dragging.undo});
-  } else if(dragging.type==='wall' && dragging.undo && plan){
-    const u=dragging.undo;
-    if(plan.regions[u.a].cells.length!==u.cellsA.length)
-      editHistory.push({type:'wall', a:u.a, b:u.b, cellsA:u.cellsA, cellsB:u.cellsB});
+  } else if(dragging.type==='wall' && dragging.snap && plan){
+    if(snapshotChanged(dragging.snap))
+      editHistory.push({type:'wallsnap', snap:dragging.snap});
+  } else if(dragging.type==='door' && dragging.undo){
+    if(JSON.stringify(dragging.undo)!==JSON.stringify(doorSnapshot()))
+      editHistory.push({type:'door', prev:dragging.undo});
+  } else if((dragging.type==='balkD'||dragging.type==='balkT') && dragging.undo){
+    if(JSON.stringify(dragging.undo)!==JSON.stringify(balkSnapshot()))
+      editHistory.push({type:'balk', prev:dragging.undo});
+    balkChecksRefresh();
   }
   dragging=null;
 }
 /* son elle düzenlemeyi geri al; geçmiş boşsa false döner (Geri Al eski davranışına düşer) */
 function undoEdit(){
   const e=editHistory.pop(); if(!e) return false;
-  if(e.type==='wall'){
-    if(!plan||!plan.regions[e.a]||!plan.regions[e.b]) return true; // bayat girdi: yut
-    const A=plan.regions[e.a], B=plan.regions[e.b];
-    A.cells=e.cellsA.slice(); B.cells=e.cellsB.slice();
-    A.cells.forEach(i=>plan.cm[i]=A.id); B.cells.forEach(i=>plan.cm[i]=B.id);
-    calcRegionMetrics(A, plan.cols, plan.minX, plan.minY);
-    calcRegionMetrics(B, plan.cols, plan.minX, plan.minY);
+  if(e.type==='balk'){
+    balconies=e.prev.map(b=>({...b}));
+    balkChecksRefresh(); render(); return true;
+  }
+  if(e.type==='door'){ doorRestore(e.prev); hoverDoor=null; if(plan) runChecks(); render(); return true; }
+  if(e.type==='wallsnap'){
+    if(!plan) return true;
+    restoreRegions(e.snap);
     hoverWall=null;
     plan.wallRuns=computeWallRuns();
     runChecks(); buildUnitTable(); render();
+  } else if(e.type==='room'){
+    if(!plan||!plan.unitObjs[e.unit]) return true; // bayat girdi: yut
+    const u=plan.unitObjs[e.unit], rm=new Set(e.cells);
+    if(e.op==='remove'){ // hücreler hedef odadan geri alınır, oda diriltilir
+      const tgt=plan.regions[e.tgt];
+      tgt.cells=tgt.cells.filter(i=>!rm.has(i));
+      e.reg.cells=e.cells.slice();
+      e.cells.forEach(i=>plan.cm[i]=e.reg.id);
+      u.rooms.splice(Math.min(e.roomsIdx,u.rooms.length),0,e.reg);
+      calcRegionMetrics(tgt, plan.cols, plan.minX, plan.minY);
+    } else { // 'add': oyulan hücreler ev sahibi odaya geri döner (oda bölme de bu yol)
+      const host=plan.regions[e.host];
+      if(e.hostName!==undefined) host.name=e.hostName;     // eb. banyo eklerken yapılan ad değişikliği
+      e.cells.forEach(i=>{ plan.cm[i]=host.id; host.cells.push(i); });
+      e.reg.cells=[];
+      u.rooms=u.rooms.filter(o=>o!==e.reg);
+      if(u.antre===e.reg) u.antre=null;                    // sonradan eklenen antre geri alındı
+      calcRegionMetrics(host, plan.cols, plan.minX, plan.minY);
+    }
+    calcRegionMetrics(e.reg, plan.cols, plan.minX, plan.minY);
+    u.spec=e.spec;
+    hoverWall=null; hoverRoomId=null;
+    plan.wallRuns=computeWallRuns();
+    runChecks(); buildUnitTable(); render();
+  } else if(e.type==='retype'){
+    if(plan&&plan.unitObjs[e.unit]){
+      e.reg.name=e.name; e.reg.type=e.rtype; plan.unitObjs[e.unit].spec=e.spec;
+      plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); }
+  } else if(e.type==='swap'){
+    if(plan){ const g1=plan.regions[e.a], g2=plan.regions[e.b];
+      if(g1&&g2){ const n=g1.name,t=g1.type; g1.name=g2.name; g1.type=g2.type; g2.name=n; g2.type=t; }
+      plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); }
   } else if(e.type==='cut'){
     customCutsZ=e.cuts; generate(true);
+  } else if(e.type==='ulayout'){
+    if(e.state){ // tam durum anlık görüntüsü: elle düzenlemeler dahil birebir geri döner
+      const keep=editHistory; // restoreState yığını sıfırlar; kalan geçmiş korunur
+      try{ restoreState(e.state, {fit:false}); }
+      catch(err){ unitLayout=Object.assign({}, e.prev); generate(true); }
+      editHistory=keep;
+      unitLayout=Object.assign({}, e.prev);
+    } else { unitLayout=Object.assign({}, e.prev); generate(true); }
   }
   return true;
 }
@@ -320,9 +648,7 @@ svg.addEventListener('wheel',e=>{
   panX = sx - wx*pxPerM; panY = sy - wy*pxPerM; render();
 },{passive:false});
 function finishPoly(){
-  if(pts.length<4) return;
-  const l=pts[pts.length-1], f=pts[0];
-  if(l.x!==f.x && l.y!==f.y) pts.push({x:l.x,y:f.y});
+  if(pts.length<3) return;
   closed=true; hoverP=null;
   document.getElementById('genBtn').disabled=false;
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
@@ -330,15 +656,58 @@ function finishPoly(){
   render();
 }
 /* araç çubuğu */
-const setMode=m=>{ mode=m;
-  document.getElementById('tDraw').classList.toggle('active',m==='draw');
-  document.getElementById('tPan').classList.toggle('active',m==='pan');
-  svg.classList.toggle('panning',m==='pan'); };
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null;
+  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tDoor','door'],['tPan','pan']])
+    document.getElementById(id).classList.toggle('active',m===mm);
+  svg.classList.toggle('panning',m==='pan'); render(); };
+document.getElementById('tbToggle').onclick=()=>{
+  const tb=document.getElementById('toolbar');
+  const off=tb.classList.toggle('collapsed');
+  document.getElementById('tbToggle').textContent=off?'»':'«';
+};
+/* ---- onboarding stepper ---- */
+(()=>{
+  const STEPS=[
+    {t:'Sınırı çizin', h:'<b>✏️ Çiz</b> aracıyla tıklayarak bina dış sınırını oluşturun; kenarlar 15°’ye ve 0,5 m ızgaraya oturur. Başlangıç noktasına tıklayınca sınır kapanır. Hızlı denemek için <b>▭ Örnek sınır</b>.'},
+    {t:'Parsel ve balkon', h:'<b>⬠ Parsel</b> ile arsa sınırını çizin; bahçe alanı, TAKS ve çekme mesafeleri hesaplanır. <b>▦ Balkon</b> aracında dış duvara tıklayıp balkon ekleyin (tutamaçlarla boyutlandırın, SAĞ TIK siler).'},
+    {t:'Yerleşimi oluşturun', h:'Sol panelden daire tiplerini ayarlayın ve <b>Yerleşimi Oluştur</b>’a basın. Mevzuat paneli her değişiklikte canlı güncellenir.'},
+    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
+    {t:'Kontrol ve dışa aktarım', h:'<b>↩︎ Geri al</b> elle yapılan değişiklikleri adım adım geri alır. Mevzuat kontrolleri yeşile dönünce <b>SVG / PNG indir</b> ile dışa aktarın.'}
+  ];
+  const onb=document.getElementById('onb'), body=document.getElementById('onbBody'),
+        dots=document.getElementById('onbDots'), step=document.getElementById('onbStep'),
+        prev=document.getElementById('onbPrev'), next=document.getElementById('onbNext');
+  let i=0;
+  dots.innerHTML=STEPS.map(()=>'<i></i>').join('');
+  const render=()=>{
+    body.innerHTML='<b>'+STEPS[i].t+'</b><br>'+STEPS[i].h;
+    step.textContent=(i+1)+'/'+STEPS.length;
+    [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));
+    prev.style.visibility=i?'visible':'hidden';
+    next.textContent=i===STEPS.length-1?'Bitti ✓':'İleri ›';
+  };
+  const close=()=>{onb.classList.add('collapsed'); try{localStorage.setItem('kpOnboardSeen','1');}catch(e){}};
+  prev.onclick=()=>{if(i>0){i--;render();}};
+  next.onclick=()=>{i<STEPS.length-1?(i++,render()):close();};
+  document.getElementById('onbClose').onclick=e=>{e.stopPropagation(); close();};
+  document.getElementById('onbHead').onclick=e=>{if(onb.classList.contains('collapsed')){onb.classList.remove('collapsed'); i=0; render();}};
+  [...dots.children].forEach((d,k)=>d.onclick=()=>{i=k;render();});
+  let seen=false; try{seen=!!localStorage.getItem('kpOnboardSeen');}catch(e){}
+  if(seen) onb.classList.add('collapsed');
+  render();
+})();
 document.getElementById('tDraw').onclick=()=>setMode('draw');
+document.getElementById('tParcel').onclick=()=>setMode('parcel');
+document.getElementById('tBalk').onclick=()=>setMode('balkon');
+document.getElementById('tDoor').onclick=()=>setMode('door');
 document.getElementById('tPan').onclick=()=>setMode('pan');
-document.getElementById('tUndo').onclick=()=>{ if(undoEdit()) return; // önce elle duvar/ayırıcı düzenlemeleri
-  if(closed){closed=false;plan=null;editHistory=[];document.getElementById('genBtn').disabled=true;document.getElementById('unitTable').style.display='none';} else pts.pop(); resetCuts(); render(); };
+document.getElementById('tUndo').onclick=()=>{
+  if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
+  if(undoEdit()) return; // önce elle duvar/ayırıcı/balkon düzenlemeleri
+  if(closed&&plan&&!confirm('Geri alınacak düzenleme kalmadı. Plan SİLİNİP çizim aşamasına dönülsün mü?')) return; // emniyet: saatlik emek tek tıkla gitmesin
+  if(closed){closed=false;plan=null;balconies=[];editHistory=[];document.getElementById('genBtn').disabled=true;document.getElementById('unitTable').style.display='none';} else pts.pop(); resetCuts(); render(); };
 document.getElementById('tClear').onclick=()=>{ pts=[];closed=false;plan=null;editHistory=[];resetCuts();
+  parcelPts=[];parcelClosed=false;balconies=[];hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;
   document.getElementById('genBtn').disabled=true; document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true;
   document.getElementById('unitTable').style.display='none';
   document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–'; render(); };
@@ -348,12 +717,34 @@ document.getElementById('tSample').onclick=()=>{ pts=[{x:0,y:0},{x:32,y:0},{x:32
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m'; };
 function fitView(){
-  if(!pts.length) return; const bb=bboxOf(pts);
+  const all=pts.concat(parcelPts);
+  if(!all.length) return; const bb=bboxOf(all);
   const r=svg.getBoundingClientRect();
   pxPerM=Math.min(80, Math.max(4, Math.min(r.width/(bb.maxX-bb.minX+6), r.height/(bb.maxY-bb.minY+6))));
   panX=(r.width-(bb.maxX-bb.minX)*pxPerM)/2 - bb.minX*pxPerM;
   panY=(r.height-(bb.maxY-bb.minY)*pxPerM)/2 - bb.minY*pxPerM; render();
 }
+/* ---- zoom kaydırıcısı (sağ alt) ---- */
+const ZMIN=4, ZMAX=80, ZBASE=16;                          // px/m: alt sınır, üst sınır, %100 referansı
+function zoomCenter(np){                                   // tuvalin merkezi etrafında yakınlaş/uzaklaş
+  const r=svg.getBoundingClientRect();
+  const cx=r.width/2, cy=r.height/2;
+  const wx=S2Wx(cx), wy=S2Wy(cy);
+  pxPerM=Math.min(ZMAX, Math.max(ZMIN, np));
+  panX=cx-wx*pxPerM; panY=cy-wy*pxPerM; render();
+}
+function updateZoomUI(){                                   // pxPerM her değiştiğinde kaydırıcıyı/etiketi eşitle (render() çağırır)
+  const R=document.getElementById('zRange'); if(!R) return;
+  R.value=Math.round(1000*Math.log(pxPerM/ZMIN)/Math.log(ZMAX/ZMIN));
+  document.getElementById('zoomLbl').textContent=Math.round(pxPerM/ZBASE*100)+'%';
+}
+(function(){
+  const R=document.getElementById('zRange');
+  R.addEventListener('input',()=>zoomCenter(ZMIN*Math.pow(ZMAX/ZMIN, R.value/1000)));
+  document.getElementById('zIn').onclick=()=>zoomCenter(pxPerM*1.2);
+  document.getElementById('zOut').onclick=()=>zoomCenter(pxPerM/1.2);
+  updateZoomUI();
+})();
 /* ================= plan üretimi ================= */
 document.getElementById('genBtn').addEventListener('click',()=>{ resetCuts(); generate(); fitView(); });
 
@@ -396,9 +787,49 @@ function generate(keepCuts){
 
   let corridorR0=-1, corridorR1=-1, stairs=[], unitObjs=[];
   const zoneUI=[];
-  if(!keepCuts) customCutsZ=null;
+  if(!keepCuts){ customCutsZ=null; unitLayout={}; }
 
-  if(!villa){
+  /* --- tek daire/kat (apartman): bant koridor İSRAF olur (karşı kanat sahipsiz kalıp
+         ORTAK DEPO'ya düşer). Bunun yerine kompakt çekirdek (merdiven+asansör+teknik
+         +yangın tek sırada) cepheye yaslanır, önüne 1,5 m lobi konur; dairenin
+         kalan TÜM taban alanı tek daireye verilir. Köşe bulunamazsa eski bant
+         düzenine geri düşülür (egzotik tabanlarda sağlamlık). --- */
+  const trySingleUnit=()=>{
+    const elems=[{nm:'MERDİVEN',tp:'merdiven',w:10,stair:true}];      // 5,0 × 3,0 m
+    for(let a=0;a<nAsansor;a++) elems.push({nm:asansorYeri?'ASANSÖR YERİ':'ASANSÖR',tp:'asansor',w:4});
+    if(teknikNeeded) elems.push({nm:'TEKNİK / ŞAFT',tp:'teknik',w:3});
+    if(fireStairNeeded) elems.push({nm:'YANGIN MERD.',tp:'yangin',w:5,stair:true});
+    const stH=6, lobH=3, coreW=elems.reduce((s,e)=>s+e.w,0), totH=stH+lobH;
+    let ins=0; inside.forEach(v=>ins+=v);
+    if(ins-totH*coreW<100) return false;                  // daireye en az 25 m² kalmalı
+    const claimAt=(r0,c0,north)=>{
+      const coreR = north? r0 : r0+lobH;
+      const lobR  = north? r0+stH : r0;
+      let c=c0;
+      elems.forEach(e=>{ const g=newReg(e.nm,e.tp);
+        claimRect(g,coreR,c,stH,e.w);
+        if(e.stair) stairs.push({r0:coreR,c0:c,h:stH,w:e.w});
+        c+=e.w; });
+      const hol=newReg('APARTMAN HOLÜ','koridor');
+      claimRect(hol,lobR,c0,lobH,coreW);
+      const rest=[]; for(let i=0;i<rows*cols;i++) if(inside[i]&&cm[i]===-1) rest.push(i);
+      unitObjs.push(layoutUnit(rest, expanded[0], north?'S':'N')); // daire lobinin diğer yanında
+      return true;
+    };
+    /* lobi daireye bakmalı: bloğun ilerisinde en az bir iç hücre olmalı (kapı verilebilsin) */
+    const facing=(r,c0)=>{ if(r<0||r>=rows) return false;
+      for(let c=c0;c<c0+coreW;c++) if(inside[r*cols+c]) return true; return false; };
+    /* önce üst cepheden (çekirdek üstte, giriş güneyden), olmazsa alt cepheden ara */
+    for(let r0=0;r0<=rows-totH;r0++) for(let c0=0;c0<=cols-coreW;c0++)
+      if(rectFree(r0,c0,totH,coreW)&&facing(r0+totH,c0)) return claimAt(r0,c0,true);
+    for(let r0=rows-totH;r0>=0;r0--) for(let c0=0;c0<=cols-coreW;c0++)
+      if(rectFree(r0,c0,totH,coreW)&&facing(r0-1,c0)) return claimAt(r0,c0,false);
+    return false;
+  };
+
+  if(!villa && perFloor===1 && trySingleUnit()){
+    customCutsZ=[]; // ayırıcı yok; ince ayar duvar sürükleme + oda ekle/sil ile
+  } else if(!villa){
     /* --- ortak hol: ana bant --- */
     let sumR=0,n=0; const colMin=new Array(cols).fill(1e9), colMax=new Array(cols).fill(-1e9);
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) if(inside[r*cols+c]){ sumR+=r;n++;
@@ -506,6 +937,36 @@ function generate(keepCuts){
       if(p){ stairs.push(p); coreRects.push(p); }
     }
 
+    /* --- kaçış mesafesi (BYKHY): holün her noktasından bir merdivene ≤ 30 m kalana
+           dek en uzak uca ek yangın merdiveni koy (uzun bloklarda tek çekirdek yetmez) --- */
+    if(kat>=2){
+      const stD=(r,c)=>{ let best=1e9; stairs.forEach(s=>{
+        best=Math.min(best,(Math.abs(s.c0+s.w/2-(c+0.5))+Math.abs(s.r0+s.h/2-(r+0.5)))*M); }); return best; };
+      const fH=7,fW=5;
+      for(let extra=0; extra<4; extra++){
+        let worst=0,wr=-1,wc2=-1;
+        hol.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols; const d=stD(r,c);
+          if(d>worst){worst=d;wr=r;wc2=c;} });
+        if(worst<=REG.kacisMesafe-3) break; // antre derinliği payı
+        /* hole komşu, en uzak noktaya en yakın boş dikdörtgen */
+        let best=null,bd=1e9;
+        for(let r0=0;r0<=rows-fH;r0++)for(let c0=0;c0<=cols-fW;c0++){
+          if(!rectFree(r0,c0,fH,fW)) continue;
+          let touch=false;
+          for(let c=c0;c<c0+fW&&!touch;c++) touch=(r0>0&&cm[(r0-1)*cols+c]===hol.id)||(r0+fH<rows&&cm[(r0+fH)*cols+c]===hol.id);
+          for(let r=r0;r<r0+fH&&!touch;r++) touch=(c0>0&&cm[r*cols+c0-1]===hol.id)||(c0+fW<cols&&cm[r*cols+c0+fW]===hol.id);
+          if(!touch) continue;
+          const d=Math.abs(r0+fH/2-wr)+Math.abs(c0+fW/2-wc2);
+          if(d<bd){bd=d;best={r0,c0};}
+        }
+        if(!best) break;
+        const yg=newReg('YANGIN MERD.','yangin');
+        claimRect(yg,best.r0,best.c0,fH,fW);
+        const p={r0:best.r0,c0:best.c0,h:fH,w:fW};
+        stairs.push(p); coreRects.push(p);
+      }
+    }
+
     /* --- çekirdek sırtını düzleştir: sığ elemanların (asansör/teknik) arkasındaki
            ölü cepler tesisat şaftı olur; ulaşılamaz alan kalmaz --- */
     const saft=newReg('ŞAFT','teknik');
@@ -546,14 +1007,22 @@ function generate(keepCuts){
     const order=[...expanded].sort((a,b)=>weight(b)-weight(a));
     const totW=order.reduce((s,u)=>s+weight(u),0);
     const totZA=zones.reduce((s,z)=>s+z.area,0)||1;
+    /* geometrik üst sınır: daire başına asgari cephe (salon 3 m + yatak 2,5 m yan yana
+       sığmalı) — dar bölgeye daire tıkıştırılınca 1,5 m'lik "oda" şeritleri doğuyordu */
+    const MIN_FRONT=5.5;
+    zones.forEach(z=>{ const horiz=z.side==='N'||z.side==='S';
+      const s=new Set(); z.cells.forEach(i=>s.add(horiz? i%cols : (i/cols)|0));
+      z.maxU=Math.max(1, Math.floor(s.size*M/MIN_FRONT)); });
     let rem=[...order];
     zones.forEach((z,zi)=>{ z.units=[];
       const target = zi===zones.length-1 ? Infinity : totW*z.area/totZA;
       let acc=0;
-      while(rem.length && (acc<target || !z.units.length)){
+      while(rem.length && z.units.length<z.maxU && (acc<target || !z.units.length)){
         if(zi<zones.length-1 && z.units.length && acc+weight(rem[0])>target*1.25) break;
         const u=rem.shift(); z.units.push(u); acc+=weight(u); }
     });
+    /* sığmayanlar: önce kapasitesi kalan bölgelere; yine kalan yerleştirilemez (denetimde raporlanır) */
+    if(rem.length) zones.forEach(z=>{ while(rem.length && z.units.length<z.maxU) z.units.push(rem.shift()); });
 
     /* --- her bölgeyi hole paralel şeritlere böl --- */
     if(!customCutsZ||customCutsZ.length!==zones.length) customCutsZ=zones.map(()=>null);
@@ -577,7 +1046,57 @@ function generate(keepCuts){
   } else {
     /* --- villa: tek daire tüm taban --- */
     const all=[]; for(let i=0;i<rows*cols;i++) if(inside[i]) all.push(i);
-    unitObjs.push(layoutUnit(all, unitSpecs[0], 'N', kat>1));
+    unitObjs.push(layoutVillaSofa(all, unitSpecs[0], kat>1) || layoutUnit(all, unitSpecs[0], 'N', kat>1));
+  }
+
+  /* v22 villa: ORTA SOFA (çift yüklü) — tek yüklü T-plan derin villada (11 m) yatakları
+     2,5 m'lik giriş şeridine itip yerleştiremiyordu ("7 yataktan 4 yerleşti" hatasının
+     kökü). Vaka-5 dersi: kullanıcı planı orta hollü (sofa 7,5×6,5) plana çevirdi.
+     Antre ortada 1,5 m yatay omurga + güney cepheye giriş kolu (villa kapısı antrenin
+     dışa bakan kenarına çizilir); odalar kuzey/güney cephe bantlarına asılır — her oda
+     hem pencere hem sofadan kapı alır. Sığmayan oda yine dürüstçe raporlanır. */
+  function layoutVillaSofa(cells, u, addStair){
+    let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+    cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+    const depth2=(r1-r0+1)*M, width2=(c1-c0+1)*M;
+    if(depth2<8||width2<8) return null; // sığ/dar villada tek yüklü T-plan daha doğru
+    const area=cells.length*M*M;
+    /* taban dikdörtgenden çok sapıyorsa (L-villa) eski yol: bant varsayımı bozulur */
+    if(area/(depth2*width2)<0.85) return null;
+    const unit={spec:u, rooms:[], antre:null};
+    const sr0=r0+Math.round((r1-r0+1)/2)-1, sr1=sr0+2; // 1,5 m omurga (orta)
+    const nBeds=Math.max(0,u.oda), hasEns=u.ensuite&&nBeds>0;
+    const bedCap=Math.max(20,area*0.12);
+    const S=[], N=[]; // güney (giriş cephesi): salon+mutfak+eb; kuzey: merdiven+banyo+yataklar
+    S.push({name:u.acik?'SALON + MUTFAK':'SALON',type:'salon',w:u.acik?26:20,ms:3.0});
+    if(!u.acik) S.push({name:'MUTFAK',type:'mutfak',w:8,ms:2.0,cap:Math.max(13,area*0.085)});
+    if(addStair) N.push({name:'MERDİVEN',type:'merdiven',w:7,ms:2.5,cap:14});
+    N.push({name:'BANYO',type:'banyo',w:4.5,ms:1.5,cap:Math.max(6.5,area*0.04)});
+    if(hasEns) S.push({name:'EB. YATAK ODASI',type:'yatak',w:15.5,ms:2.5,eb:true,cap:Math.max(26,area*0.15)});
+    /* düz yataklar: pratik genişlik payıyla (3,2 m) en boş banda — kapasite dolunca
+       yine de eklenir, assignCols kuyruk odayı boş bırakır (dürüst rapor) */
+    const capS=width2-1, capN=width2; // güneyden 1 m giriş kolu düşer
+    /* tip bazlı pratik genişlik payı: salon ezilmesin, banyo/mutfak şişmesin */
+    const wOf=r=> r.type==='salon'?4.5 : r.type==='mutfak'?2.0 : r.type==='banyo'?1.5
+                : r.type==='merdiven'?2.5 : r.eb?3.5 : 3.2;
+    let sW=S.reduce((s,r)=>s+wOf(r),0), nW=N.reduce((s,r)=>s+wOf(r),0);
+    for(let b=0;b<nBeds-(hasEns?1:0);b++){
+      const bd={name:'YATAK ODASI',type:'yatak',w:11,ms:2.5,cap:bedCap}, w=3.2;
+      if(capN-nW>=w && (capN-nW)>=(capS-sW)){ N.push(bd); nW+=w; }
+      else if(capS-sW>=w){ S.push(bd); sW+=w; }
+      else if(capN-nW>=w){ N.push(bd); nW+=w; }
+      else { (nW<=sW?N:S).push(bd); }
+    }
+    /* hücre bantları + giriş kolu (batı ucu, 1 m) */
+    const nC=[], sC=[], spC=[], armCols=new Set([c0,c0+1]);
+    cells.forEach(i=>{const r=(i/cols)|0;
+      if(r<sr0)nC.push(i); else if(r<=sr1)spC.push(i);
+      else (armCols.has(i%cols)? spC : sC).push(i); });
+    const an=newReg('ANTRE','antre',unitObjs.length); unit.rooms.push(an); unit.antre=an;
+    spC.forEach(i=>{ cm[i]=an.id; an.cells.push(i); });
+    assignCols(sC, S, unit);
+    assignCols(nC, N, unit);
+    return unit;
   }
 
   function splitZone(zoneCells, weights, custom, alOf, base){
@@ -600,14 +1119,81 @@ function generate(keepCuts){
         let bi=0,bd=1e9; bounds.forEach((b,j)=>{ const d=Math.abs(b-gb); if(d<bd){bd=d;bi=j;} });
         bounds[bi]=gb; });
       bounds.sort((a,b)=>a-b);
+      /* her daire asgari cepheyi (5,5 m) alsın — ince şerit daire kalmasın (iki yönlü garanti) */
+      const minC=Math.round(5.5/M);
+      for(let j=0;j<bounds.length;j++){
+        const lo=(j===0?als[0]:bounds[j-1])+minC;
+        if(bounds[j]<lo) bounds[j]=lo; }
+      for(let j=bounds.length-1;j>=0;j--){
+        const hi=(j===bounds.length-1? als[als.length-1]+1 : bounds[j+1])-minC;
+        if(bounds[j]>hi) bounds[j]=hi; }
     }
     zoneCells.forEach(i=>{ const a=alOf(i); let k=0; while(k<bounds.length&&a>=bounds[k])k++; parts[k].push(i); });
     return {parts, cuts: usedCustom? custom : bounds.map(b=>base+b*M)};
   }
 
   /* --- daire içi oda yerleşimi: T-plan, hole baktığı yöne duyarlı (N/S/E/W) --- */
+  /* eb. banyo penceresi: oda içinde EN ÇOK hücre kapsayan cw×cw kare aranır (köşe
+     tercihli). Köşe sabit kesim L-biçimli odalarda 0-10 hücrelik kırpık banyo üretip
+     purgeSlivers'a yem oluyordu → daire sessizce ensuite'siz kalıyordu (v20→v21
+     kullanıcı ince ayarı, ders #1). Banyo ≥3 m², oda bağlantılı ve ≥9 m² kalmalı. */
+  function carveCornerBath(unit, ebReg, cw){
+    if(!ebReg||ebReg.cells.length<=30) return false;
+    let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+    const set=new Set(ebReg.cells);
+    ebReg.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+    /* skor: kapsanan hücre (asıl) + kalan odanın bbox'u KÜÇÜLSÜN (L-odada banyo
+       ince kanattan/gölgeden oyulur, oda dikdörtgene yaklaşır — kullanıcının v21'de
+       eb. banyoyu yangın merdiveni gölgesine oyması) */
+    /* antre cephesi yenmez: pencere, odanın antreye değen hücrelerini kaplarsa
+       kapı teması <1 m'ye düşebilir (L-şekil testinde yakalandı) — hücre başına ceza */
+    const aid=unit.antre? unit.antre.id : -99;
+    const adjAntre=i=>{ const r=(i/cols)|0,c=i%cols;
+      return (r>0&&cm[i-cols]===aid)||(r<rows-1&&cm[i+cols]===aid)
+           ||(c>0&&cm[i-1]===aid)||(c<cols-1&&cm[i+1]===aid); };
+    let best=null,bs=-1e9;
+    for(let wr=r0;wr<=Math.max(r0,r1-cw+1);wr++) for(let wc=c0;wc<=Math.max(c0,c1-cw+1);wc++){
+      let n=0,door=0,wall=0;
+      for(let r=wr;r<wr+cw;r++) for(let c=wc;c<wc+cw;c++){ const i=r*cols+c;
+        if(set.has(i)){ n++; if(adjAntre(i)) door++;
+          /* duvar teması: oda DIŞINA bakan kenar — köşe konumları kazanır,
+             banyo oda ortasında ADA olarak kalmaz (kat-plani-22 dersi) */
+          if(r===0||!set.has(i-cols)) wall++;
+          if(r===rows-1||!set.has(i+cols)) wall++;
+          if(c===0||!set.has(i-1)) wall++;
+          if(c===cols-1||!set.has(i+1)) wall++; } }
+      let kr0=1e9,kr1=-1e9,kc0=1e9,kc1=-1e9,nk=0;
+      ebReg.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+        if(r>=wr&&r<wr+cw&&c>=wc&&c<wc+cw) return;
+        nk++; if(r<kr0)kr0=r; if(r>kr1)kr1=r; if(c<kc0)kc0=c; if(c>kc1)kc1=c; });
+      const kb=nk? (kr1-kr0+1)*(kc1-kc0+1) : 1e6;
+      /* kılçık cezası: pencere ile oda bbox kenarı arasında 1 hücrelik (0,5 m)
+         şerit bırakan konum — yaşanmaz artık üretir (banyo üstünde 0,5 m bant) */
+      let sliver=0;
+      [[wr-r0],[r1-(wr+cw-1)],[wc-c0],[c1-(wc+cw-1)]].forEach(([g])=>{ if(g===1) sliver++; });
+      const score=n*1000-kb-door*60+wall*25-sliver*500;
+      if(score>bs){ bs=score; best=[wr,wc]; } }
+    if(!best) return false;
+    const take=[],keep=[];
+    ebReg.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+      (r>=best[0]&&r<best[0]+cw&&c>=best[1]&&c<best[1]+cw? take:keep).push(i); });
+    /* dairede başka ≥9 m² yatak varsa eb. yatak 6 m²'ye inebilir (PAİY: tek piyes ≥9) */
+    const keepMin = unit.rooms.some(g=>g!==ebReg&&g.type==='yatak'&&g.cells.length>=36)? 24 : 36;
+    if(take.length<12||keep.length<keepMin) return false;
+    const s2=new Set(keep), seen=new Set([keep[0]]), st=[keep[0]];
+    while(st.length){ const i=st.pop(), r=(i/cols)|0, c=i%cols;
+      [r>0?i-cols:-1, r<rows-1?i+cols:-1, c>0?i-1:-1, c<cols-1?i+1:-1].forEach(j=>{
+        if(j>=0&&s2.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
+    if(seen.size!==keep.length) return false;
+    const bath=newReg('EB. BANYO','banyo',ebReg.unit);
+    unit.rooms.push(bath);
+    take.forEach(i=>{ cm[i]=bath.id; bath.cells.push(i); });
+    ebReg.cells=keep;
+    return true;
+  }
   function layoutUnit(cells, u, side, addStair){
     const unit={spec:u, rooms:[], antre:null};
+    const layoutMode = unitLayout[unitObjs.length] || 'auto'; // bu dairenin iç düzen tercihi
     const area=cells.length*M*M;
     const horiz = side==='N'||side==='S';
     const alOf = horiz ? (i=>i%cols) : (i=>(i/cols)|0);   // hole paralel eksen
@@ -623,8 +1209,8 @@ function generate(keepCuts){
     const dOf = i => { const v=dpRaw(i); return inv? adj-v : v-adj; }; // 0 = giriş kenarı
     let dMaxV=0; cells.forEach(i=>{ const d=dOf(i); if(d>dMaxV)dMaxV=d; });
     const depthM=(dMaxV+1)*M;
-    const bset=new Set(), aset=new Set();
-    cells.forEach(i=>{ aset.add(alOf(i)); if(dOf(i)<=0) bset.add(alOf(i)); });
+    const bset=new Set(), aset=new Set(), kset=new Set();
+    cells.forEach(i=>{ aset.add(alOf(i)); if(dOf(i)<=0) bset.add(alOf(i)); if(korNb(i)) kset.add(alOf(i)); });
     const widthM=(bset.size||aset.size)*M;
     const combined=!!u.acik;          // açık (Amerikan) mutfak
     const studio=u.salon===0;         // 1+0: tek yaşama/yatma mekânı
@@ -636,10 +1222,18 @@ function generate(keepCuts){
     /* mutfak dar kenarı: tezgah+insan+makine ≥2 m; yalnız gerçekten küçük dairede (≤45 m²) yasal 1,5 m */
     if(!combined) entry.push({name:'MUTFAK',type:'mutfak',w:8,min:3.6,cap:Math.max(13,area*0.085),ms:area<=45?1.5:(area>120?2.5:2.0)});
     entry.push({name:'BANYO',type:'banyo',w:4.5,min:3.4,cap:Math.max(6.5,area*0.04),ms:1.5});
-    const antreDef={name:'ANTRE',type:'antre',w:4,min:2.2,cap:7,ms:1.5};
+    /* SIĞ daire (≤9 m derin, tek yüklü T-plan — kullanıcının hedef görseli): antre kompakt
+       tutulur, alan odalara akar. Derin/çok bantlı dairede eski davranış korunur (regresyon yok). */
+    const shallowU = depthM<=9 && area<=140;
+    const antreDef={name:'ANTRE',type:'antre',w:shallowU?3:4,min:2.2,cap:shallowU?5:7,ms:shallowU?1.4:1.5};
     entry.push(antreDef);
     if(addStair) entry.push({name:'MERDİVEN',type:'merdiven',w:7,min:6,cap:14,ms:2.5});
-    if(nBeds>=3) entry.push({name:'WC',type:'wc',w:1.8,min:1.5,cap:Math.max(2.6,area*0.018),ms:1.0});
+    /* 3+ yatakta ikinci tuvalet; ensuite VARSA o görevi eb. banyo görür — kullanıcı
+       vaka-1'de iki dairede de kılçık WC'yi silip KİLER yaptı (v22 dersi) */
+    if(nBeds>=3){
+      if(hasEns) entry.push({name:'KİLER',type:'antre',w:1.8,min:1.5,cap:4,ms:1.0});
+      else entry.push({name:'WC',type:'wc',w:1.8,min:1.5,cap:Math.max(2.6,area*0.018),ms:1.0});
+    }
     if(studio) fac.push({name:'STÜDYO',type:'salon',w:24,ms:3.0});
     else {
       fac.push({name:combined?'SALON + MUTFAK':'SALON',type:'salon',w:combined?26:20,ms:3.0,salon:true});
@@ -650,7 +1244,39 @@ function generate(keepCuts){
     for(let b=0;b<nBeds-(hasEns?1:0);b++) fac.push({name:'YATAK ODASI',type:'yatak',w:11,ms:bedMs,cap:bedCap});
     let ebDef=null;
     if(hasEns){ ebDef={name:'EB. YATAK ODASI',type:'yatak',w:15.5,ms:bedMs,eb:true,cap:ebCap}; fac.push(ebDef); }
-    /* genişlik taşması: cepheye sığmayan yatak odaları giriş sırasına */
+    /* MUTFAK CEPHEYE (v22, vaka 1-5 dersi): penceresiz mutfak doğalgaz alamaz
+       (elektrikli ocak/havalandırma boşluğu TR'de tercih edilmez). Cephe genişliği
+       yetiyorsa mutfak giriş sırasından cephe sırasına, salonun yanına alınır;
+       yetmiyorsa eski davranış (iç mutfak) + runChecks bilgi notu. */
+    let mutToFac=false;
+    {
+      const mi=entry.findIndex(r=>r.type==='mutfak');
+      if(mi>=0 && !studio && widthM/(fac.length+1)>=3.2){
+        const mut=entry.splice(mi,1)[0];
+        const si=fac.findIndex(r=>r.salon);
+        fac.splice(si+1,0,mut);
+        mutToFac=true;
+      }
+    }
+    /* genişlik taşması: cephe sırasına sığmayan yatak odaları —
+       DERİN dairede (≥10,5 m) odalar derinlikte katmanlanır (demiryolu planı:
+       giriş → yatak bandı + 1,5 m iç koridor → cephede salon); sliver oda doğmaz.
+       Sığ dairede eski davranış: giriş sırasına itilir.
+       Kullanıcı tercihi (unitLayout): 'flat' demiryolunu kapatır (odalar yan yana),
+       'rail' eşikleri gevşeterek demiryolunu zorlar. */
+    const midBeds=[];
+    const wantRail = layoutMode==='flat' ? false
+                   : layoutMode==='rail' ? (fac.length>1 && depthM>=8)
+                   : (fac.length>1 && widthM/fac.length<3.2 && depthM>=10.5);
+    if(wantRail){
+      const maxFac=Math.max(1, Math.floor(widthM/3.2));
+      while(fac.length>maxFac){
+        let idx=fac.findIndex(r=>r.type==='yatak'&&!r.eb); // eb. yatak cephede kalsın (pencere önceliği)
+        if(idx<0) idx=fac.findIndex(r=>r.type==='yatak');
+        if(idx<0) break;
+        midBeds.push(fac.splice(idx,1)[0]);
+      }
+    }
     while(fac.length>2 && widthM/fac.length<3.2){
       const idx=fac.findIndex(r=>r.type==='yatak'&&!r.eb);
       if(idx<0) break;
@@ -663,48 +1289,127 @@ function generate(keepCuts){
     const entryHasRoom=entry.some(r=>r.type==='yatak'||r.type==='merdiven');
     /* mutfak varsa şerit derinliği mutfağın İDEAL oranını hedefler (kare-ye yakın, ince-uzun değil) */
     const mutDef=entry.find(r=>r.type==='mutfak');
-    const idealD = mutDef? Math.sqrt((mutDef.t||8)/1.35) : 0;
-    const minD = (mutDef&&area>45)? 2.0 : 1.5;
+    /* mutfak cepheye taşındıysa (YALNIZ o zaman — açık mutfak eski yolda kalır) şerit
+       derinliğini BANYO'nun ideal oranı belirler (v22: 1,5 m'lik kılçık banyo doğmasın) */
+    const wetDef=mutDef||(mutToFac? entry.find(r=>r.type==='banyo') : null);
+    const idealD = wetDef? Math.sqrt((wetDef.t||8)/1.35) : 0;
+    /* giriş sırasına yatak itildiyse sıra ≥2,5 m olmalı (2 m yatak yasadışı) */
+    const minD = entryHasRoom? 2.5 : ((wetDef&&area>45)? 2.0 : 1.5);
     let entryD=Math.min(entryHasRoom?3.5:3.0,
       Math.max(minD, snapG(Math.max(entry.reduce((s,r)=>s+r.t,0)/widthM, idealD))));
     let holD=1.0; // daire içi hol kolu (kompakt; alan oda programına kalsın)
     while(depthM-entryD-holD<2.8 && entryD>minD) entryD-=0.5; // cephe odalarına en az 2,8 m derinlik kalsın
-    if(fac.length<2) holD=0; // tek cephe odası (stüdyo): odaya antreden doğrudan geçilir, hol gereksiz
+    if(fac.length<2&&!midBeds.length) holD=0; // tek cephe odası (stüdyo): odaya antreden doğrudan geçilir, hol gereksiz
+    /* KOMB PLAN (sığ bant, v20→v21 dersi #3): cepheye <2,5 m kalıyorsa giriş sırası
+       İPTAL — antre koridor boyunca 1,5 m omurga olur, ıslak hacimler dâhil TÜM odalar
+       omurgaya asılır: orta odalar ~depth-1,5 m derinlik, uç odalar (salon / eb. yatak)
+       tam derinlik. 10×2,5 salon ve 7×2 mutfak şeritleri böyle ölür. */
+    let combU=false;
+    if(depthM-entryD-holD<2.5 && depthM>=4 && fac.length>=1 && !addStair && !studio && !midBeds.length){
+      combU=true;
+      for(let j=entry.length-1;j>=0;j--){ const r=entry[j];
+        if(r===antreDef) continue;
+        entry.splice(j,1);
+        r.t=Math.min(r.cap||1e9, Math.max(r.min||0, r.w*scale));
+        r.w=r.t; r.cap=r.t;              // ıslak hacim cephede 'emici' olmasın
+        if(r.ms&&r.ms>depthM-1.5) r.ms=Math.max(1.5, depthM-1.5);
+        fac.push(r);
+      }
+      antreDef.t=Math.min(antreDef.t, shallowU?5:6);
+      entryD=1.5; holD=0;
+    }
     const eRows=Math.round(entryD/M), hRows=Math.round(holD/M);
+    /* yatak bandı derinliği: yataklar TAM GENİŞLİK bantlar halinde derinlikte istiflenir
+       (yanda 1,5–2 m iç koridor şeridi); oda ~12 m² hedefler, salona ≥3,5 m kalır */
+    let mRows=0;
+    if(midBeds.length){
+      const bedW=Math.max(2.0, widthM-2.0);
+      const per=Math.min(4.0, Math.max(2.5, 12/bedW));
+      const avail=depthM-entryD-holD-3.5;
+      while(midBeds.length && midBeds.length*per>avail) // sığmayan yatak girişe (eski yol)
+        entry.push(Object.assign(midBeds.pop(),{min:8,cap:16}));
+      if(midBeds.length) mRows=Math.round(snapG(midBeds.length*per)/M);
+    }
     const sumT=entry.reduce((s,r)=>s+r.t,0);
     /* giriş şeridi yalnızca gerektiği kadar geniş; artık uçlar tam derinlikte cephe odalarına gider */
     let fullEntryArea=0; cells.forEach(i=>{ if(dOf(i)<eRows) fullEntryArea+=M*M; });
     let kilerT=0;
-    if(area>=110 && fullEntryArea-sumT>4) kilerT=Math.min(4, fullEntryArea-sumT); // kiler: yalnız 110 m²+ dairede, hücre yuvarlamasıyla ≤5 m²
+    /* kiler: yalnız 110 m²+ dairede; ensuite İSTENEN dairede eşik 130 m² —
+       program (eb. banyo) dururken lüks (kiler) çizilmez (v20→v21 dersi: kullanıcı
+       110 m² dairelerde kileri silip yerine eb. banyo koydu) */
+    if(!combU && area>=(hasEns?130:110) && fullEntryArea-sumT>4
+       && !entry.some(r=>r.name==='KİLER')) kilerT=Math.min(4, fullEntryArea-sumT);
     const minColsSum=entry.reduce((s,r)=>s+Math.max(2, Math.round((r.ms||1)/M)),0);
     const needAls=Math.max(6, minColsSum, Math.ceil((sumT+kilerT+0.5)/entryD/M)); // her oda asgari genişliğini bulsun
-    const alsAll=[...(bset.size?bset:aset)].sort((a,b)=>a-b); // şerit, koridora temas eden kenarda
+    /* şerit, KORİDORA GERÇEKTEN TEMAS EDEN sütunlarda kalır (kapı garantisi) —
+       tek daire/kat lobisinde kritik: lobi tüm cepheyi değil yalnız çekirdek önünü kaplar */
+    const alsAll=[...(kset.size?kset:(bset.size?bset:aset))].sort((a,b)=>a-b);
     /* bitişik segmentlere ayır; en uzununu kullan (şerit çekirdek boşluğuna yayılmasın) */
     const segs=[]; let seg=[alsAll[0]];
     for(let i=1;i<alsAll.length;i++){ if(alsAll[i]===alsAll[i-1]+1) seg.push(alsAll[i]); else { segs.push(seg); seg=[alsAll[i]]; } }
     segs.push(seg);
     const segBest=segs.reduce((a,b)=>b.length>a.length?b:a);
-    /* küçük artık uç (≤2,5 m) salona ince kanat olarak gitmesin: şerit tamamını kapsar, banyo/mutfak genişler */
-    const nA = (segBest.length-needAls<=5) ? segBest.length : Math.min(segBest.length, needAls);
-    /* büyük artık uç (≥4 m) varsa şerit salonun KARŞI ucuna yaslanır: tam derinlikli
-       artık hep salona kalır, üst sınırlı yatak odalarına yapışmaz; küçükse ortala */
-    let lo;
-    if(segBest.length-nA>=8) lo=segBest.length-nA;
-    else { lo=Math.max(0, Math.floor(segBest.length/2)-Math.floor(nA/2));
-           lo=Math.max(0, Math.min(segBest.length-nA, lo)); }
-    const inStrip=new Set(segBest.slice(lo, lo+nA));
-    const entryCells=[], holCells=[], facCells=[];
+    let inStrip;
+    if(combU){
+      /* OMURGA: uç odalar tam derinlik alır, antre omurgası aradaki sütunlarda kalır.
+         Sıralama: salon bir uca, eb. yatak öbür uca; çekirdek gölgesi (antre bandı
+         derinliğinde hücresi olmayan sütunlar — yangın merdiveni arkası gibi) varsa
+         EB. YATAK o uca gider: kapısız yaşayabilen tek oda olan EB. BANYO gölgeye
+         oyulur (kullanıcının v21'deki hamlesi), salon karşı uçta cephede kalır. */
+      const reach0=new Set(); cells.forEach(i=>{ if(dOf(i)<eRows) reach0.add(alOf(i)); });
+      const shAls=[...aset].filter(a=>!reach0.has(a));
+      const sal0=fac.find(r=>r.salon)||fac[0];
+      const eb0=fac.find(r=>r.eb);
+      const allA=[...aset].sort((a,b)=>a-b), midA=(allA[0]+allA[allA.length-1])/2;
+      fac.splice(fac.indexOf(sal0),1);
+      if(eb0) fac.splice(fac.indexOf(eb0),1);
+      if(shAls.length>=3 && eb0){
+        const shMid=shAls.reduce((s,a)=>s+a,0)/shAls.length;
+        if(shMid<midA){ fac.unshift(eb0); fac.push(sal0); }
+        else { fac.unshift(sal0); fac.push(eb0); }
+      } else { fac.unshift(sal0); if(eb0) fac.push(eb0); }
+      /* omurga önce TAM genişlik atanır; cephe odaları yerleştikten sonra uç
+         sütunlar (orta odaların gerçek aralığı dışında kalanlar) uç odalara geri
+         verilir — kestirimle uç payı biçmek orta odayı omurga dışına taşırıp
+         kapısız bırakıyordu (salon erimesi). Bkz. assignCols sonrası comb bloğu. */
+      inStrip=new Set(segBest);
+    } else {
+      /* küçük artık uç (≤2,5 m) salona ince kanat olarak gitmesin: şerit tamamını kapsar, banyo/mutfak genişler */
+      const nA = (segBest.length-needAls<=5) ? segBest.length : Math.min(segBest.length, needAls);
+      /* büyük artık uç (≥4 m) varsa şerit salonun KARŞI ucuna yaslanır: tam derinlikli
+         artık hep salona kalır, üst sınırlı yatak odalarına yapışmaz; küçükse ortala */
+      let lo;
+      if(segBest.length-nA>=8) lo=segBest.length-nA;
+      else { lo=Math.max(0, Math.floor(segBest.length/2)-Math.floor(nA/2));
+             lo=Math.max(0, Math.min(segBest.length-nA, lo)); }
+      inStrip=new Set(segBest.slice(lo, lo+nA));
+    }
+    const entryCells=[], holCells=[], midCells=[], facCells=[];
     cells.forEach(i=>{ const d=dOf(i);
       if(d<eRows){ (inStrip.has(alOf(i))?entryCells:facCells).push(i); }
       else if(d<eRows+hRows) holCells.push(i);
+      else if(d<eRows+hRows+mRows) midCells.push(i);
       else facCells.push(i); });
     if(kilerT>0) entry.splice(entry.indexOf(antreDef)+1,0,{name:'KİLER',type:'antre',t:kilerT,ms:1.0});
+    /* giriş sırasına itilen yatak odası pencere alabilsin: şeridin cepheye dokunan ucuna taşı */
+    {
+      const pushedBeds=entry.filter(r=>r.type==='yatak');
+      if(pushedBeds.length&&entryCells.length){
+        let aMin=1e9,aMax=-1e9; entryCells.forEach(i=>{const a=alOf(i); if(a<aMin)aMin=a; if(a>aMax)aMax=a;});
+        const extAt=(a,low)=>entryCells.some(i=>{ if(alOf(i)!==a) return false;
+          const r=(i/cols)|0, c=i%cols;
+          if(horiz) return low? (c===0||!inside[i-1]) : (c===cols-1||!inside[i+1]);
+          return low? (r===0||!inside[i-cols]) : (r===rows-1||!inside[i+cols]); });
+        if(extAt(aMin,true)&&!extAt(aMax,false))
+          pushedBeds.forEach(r=>{ entry.splice(entry.indexOf(r),1); entry.unshift(r); });
+      }
+    }
     const stripArea=entryCells.length*M*M, sumT2=entry.reduce((s,r)=>s+(r.t||0),0);
     if(stripArea-sumT2>1){ // artık önce odalara (üst sınıra kadar), antreye en çok 9 m²
       let exc=stripArea-sumT2;
       entry.forEach(r=>{ if(exc<=0||r===antreDef||!r.cap) return;
         const give=Math.min(exc, r.cap-r.t); if(give>0){ r.t+=give; exc-=give; } });
-      antreDef.t=Math.min(9, antreDef.t+exc);
+      antreDef.t=Math.min(shallowU?6:9, antreDef.t+exc);
     }
     entry.forEach(r=>{ r.w=r.t||r.w; });
     /* cephe hedefleri: yatak odaları üst sınırlı, artan alan salona akar */
@@ -712,13 +1417,21 @@ function generate(keepCuts){
     fac.forEach(r=>{ r.t=Math.min(r.cap||1e9, Math.max(r.ms*r.ms, r.w*scale)); });
     const facSum=fac.reduce((s,r)=>s+r.t,0);
     const salonDef=fac.find(r=>r.salon)||fac[0];
-    if(facArea>facSum) salonDef.t+=facArea-facSum;
+    if(facArea>facSum){
+      /* cephe artığı önce ÜST SINIRLI odalara (yatak/mutfak, cap'e kadar), kalan salona —
+         v22 vaka dersi: motor salonu 42-50 m²'ye şişirirken kullanıcı 5 vakada da
+         salonu küçültüp yatakları büyüttü (42→31 salon, 14→20 yatak). */
+      let exc=facArea-facSum;
+      fac.forEach(r=>{ if(exc<=0||r===salonDef||!r.cap) return;
+        const give=Math.min(exc, r.cap-r.t); if(give>0){ r.t+=give; exc-=give; } });
+      salonDef.t+=exc;
+    }
     fac.forEach(r=>{ r.w=r.t; });
     /* çekirdek gölgesi düzeltmesi: antre/hol bandı derinliğinde hücresi olmayan sütunlara
        (merdiven/asansör arkası raf) hol kolu uzanamaz; oraya bütünüyle düşen oda antreye
        komşu olamaz ve meltNoAccess'te erir. Üst sınırsız 'emici' salon o uca yaslanır,
        yatak odaları erişilebilir sütunlarda kalır. */
-    if(fac.length>1){
+    if(fac.length>1 && !combU){ // komb planda salon/eb yerleşimi omurga hesabında yapıldı
       const reach=new Set(); cells.forEach(i=>{ if(dOf(i)<eRows+hRows) reach.add(alOf(i)); });
       const facAls=[...new Set(facCells.map(alOf))].sort((a,b)=>a-b);
       const shadow=facAls.filter(a=>!reach.has(a));
@@ -735,6 +1448,64 @@ function generate(keepCuts){
     const f0=unit.rooms.length;
     assignCols(facCells, fac, unit, alOf);
     const facRegs0=unit.rooms.slice(f0);
+    /* KOMB: omurganın uç sütunları uç odalara geri verilir → salon / eb. yatak
+       TAM derinlik kazanır, orta odalar (≈depth−1,5 m) omurga üstünde kapılı kalır */
+    if(combU && unit.antre && unit.antre.cells.length){
+      const fr=facRegs0.filter(g=>g.cells.length);
+      if(fr.length>=3){
+        let m0=1e9, m1=-1e9;
+        fr.slice(1,-1).forEach(g=>g.cells.forEach(i=>{ const a=alOf(i); if(a<m0)m0=a; if(a>m1)m1=a; }));
+        const give=(g,pred)=>{ if(!g) return;
+          unit.antre.cells=unit.antre.cells.filter(i=>{ const a=alOf(i);
+            if(pred(a)){ cm[i]=g.id; g.cells.push(i); return false; } return true; }); };
+        give(fr[0], a=>a<m0);
+        give(fr[fr.length-1], a=>a>m1);
+      }
+    }
+    /* yatak bandı (derin daire): iç koridor cephe odaları SINIRINA oturur ki
+       hem salon hem yanındaki oda (eb. yatak) koridordan kapı alabilsin;
+       yataklar zaten üstteki kola (antreye) değer */
+    let midRegs=[];
+    if(midCells.length&&midBeds.length){
+      const facR=facRegs0.filter(g=>g.cells.length)
+        .map(g=>{ let a0=1e9,a1=-1e9; g.cells.forEach(i=>{const a=alOf(i); if(a<a0)a0=a; if(a>a1)a1=a;}); return {g,a0,a1}; })
+        .sort((x,y)=>x.a0-y.a0);
+      let m0=1e9,m1=-1e9; midCells.forEach(i=>{const a=alOf(i); if(a<m0)m0=a; if(a>m1)m1=a;});
+      /* koridor şeridi TAM DERİNLİKLİ sütunlarda olmalı: çekirdek gölgesinde kesilen
+         şerit salona ulaşamaz ve salon kapısız kalıp erirdi */
+      const cnt=new Map(); midCells.forEach(i=>{const a=alOf(i); cnt.set(a,(cnt.get(a)||0)+1);});
+      const isFull=a=>(cnt.get(a)||0)>=mRows;
+      const want = facR.length>=2? facR[1].a0 : m1-1; // hedef: cephe odaları sınırı / uç
+      const len = facR.length>=2? 4:3;                // sınırı kapsarken 2+2 hücre
+      let cLo=-1,cHi=-1,bestD=1e9;
+      for(let s2=m0;s2<=m1-len+1;s2++){
+        let ok=true; for(let a=s2;a<s2+len;a++) if(!isFull(a)){ok=false;break;}
+        if(!ok) continue;
+        const d2=Math.abs(s2-(want-(facR.length>=2?2:1)));
+        if(d2<bestD){ bestD=d2; cLo=s2; cHi=s2+len-1; }
+      }
+      if(cLo<0){ // tam derinlikli sütun yok: en iyi çaba (sınıra otur)
+        if(facR.length>=2){ cLo=Math.max(m0,want-2); cHi=Math.min(m1,want+1); }
+        else { cLo=Math.max(m0,m1-2); cHi=m1; }
+      }
+      const corrCells=[], segL=[], segR=[];
+      midCells.forEach(i=>{ const a=alOf(i);
+        if(a>=cLo&&a<=cHi) corrCells.push(i);
+        else if(a<cLo) segL.push(i); else segR.push(i); });
+      /* yataklar BÜYÜK parçada tam genişlik bantlar halinde derinlikte istiflenir;
+         küçük artık parça antreye (cep) */
+      const bedSeg = segL.length>=segR.length? segL : segR;
+      (bedSeg===segL? segR : segL).forEach(i=>corrCells.push(i));
+      if(bedSeg.length){
+        midBeds.forEach(b=>{ b.w=1; b.ms=2.5; });
+        const r0=unit.rooms.length;
+        assignCols(bedSeg, midBeds, unit, i=>dOf(i)); // eksen: DERİNLİK — odalar üst üste bant
+        midRegs=unit.rooms.slice(r0);
+      }
+      /* koridor + artık cepler antreye */
+      if(!unit.antre&&corrCells.length){ const an=newReg('ANTRE','antre',unitObjs.length); unit.rooms.push(an); unit.antre=an; }
+      if(unit.antre) corrCells.forEach(i=>{ cm[i]=unit.antre.id; unit.antre.cells.push(i); });
+    }
     /* iç hol → antreye kat (T sirkülasyon); kol HER odaya (mutfak dâhil) erişecek kadar uzun,
        artan uçlar köşe odalara bağışlanır */
     if(unit.antre){
@@ -744,17 +1515,26 @@ function generate(keepCuts){
       if(facR.length>=2){
         const fr=facR.map(g=>({g,...rngOf(g)})).sort((a,b)=>a.a0-b.a0);
         lReg=fr[0].g; rReg=fr[fr.length-1].g;
-        trimL=fr[0].a1-2; trimR=fr[fr.length-1].a0+2;
-        /* giriş sırası odaları da (mutfak, banyo, wc…) kola değmeli */
-        entryRegs.forEach(g=>{ if(g===unit.antre||!g.cells.length) return;
+        /* köşe odası (çoğu kez emici SALON) hol bandını geri alır: kol yalnız iç odalara
+           erişecek kadar uzar, salon temiz dikdörtgen kalır, antre kompaktlaşır.
+           SIĞ dairede (demiryolu yok) köşe oda hol bandına bitişiktir → tam genişlik geri
+           alınır (overlap=-1). DERİN/demiryolu dairede köşe oda orta banttan ayrıdır →
+           kola fazla yaklaşmak odayı koparır; eski güvenli pay (overlap=2) korunur. */
+        const isSalon = g => g && typeof g.name==='string' && g.name.indexOf('SALON')===0;
+        const ovOf = reg => (!shallowU || midRegs.length || !isSalon(reg)) ? 2 : -1; // yalnız SIĞ dairede köşedeki EMİCİ SALON tam genişlik geri alır
+        trimL=fr[0].a1-ovOf(lReg); trimR=fr[fr.length-1].a0+ovOf(rReg);
+        /* giriş sırası ve yatak bandı odaları da kola değmeli */
+        entryRegs.concat(midRegs).forEach(g=>{ if(g===unit.antre||!g.cells.length) return;
           const r=rngOf(g); trimL=Math.min(trimL, r.a1-2); trimR=Math.max(trimR, r.a0+2); });
         /* kol, antrenin kendi giriş yuvasını da kapsamalı (kopukluk olmasın) */
         if(unit.antre.cells.length){ const ar=rngOf(unit.antre);
           trimL=Math.min(trimL, ar.a0); trimR=Math.max(trimR, ar.a1); }
       }
+      /* v22: hol artığı MUTFAĞA bağışlanmaz — köşedeki mutfak L-biçimine düşüyordu */
+      const lOK=lReg&&lReg.type!=='mutfak', rOK=rReg&&rReg.type!=='mutfak';
       holCells.forEach(i=>{ const a=alOf(i);
-        if(a<trimL&&lReg){ cm[i]=lReg.id; lReg.cells.push(i); }
-        else if(a>trimR&&rReg){ cm[i]=rReg.id; rReg.cells.push(i); }
+        if(a<trimL&&lOK){ cm[i]=lReg.id; lReg.cells.push(i); }
+        else if(a>trimR&&rOK){ cm[i]=rReg.id; rReg.cells.push(i); }
         else { cm[i]=unit.antre.id; unit.antre.cells.push(i); } });
     }
     /* antre garantisi: hiç antre kalmadıysa giriş kenarı ortasından oy */
@@ -770,24 +1550,14 @@ function generate(keepCuts){
         if(an.cells.length){ unit.rooms.push(an); unit.antre=an; }
       }
     }
-    /* ebeveyn banyosu: eb. yatak odasının hol tarafı köşesinden oyulur */
+    /* ebeveyn banyosu: odada en çok hücre kapsayan pencereden oyulur (kırpık önlenir) */
     if(ebDef){
       const ebReg=unit.rooms.find(g=>g.name==='EB. YATAK ODASI');
-      if(ebReg && ebReg.cells.length>30){
-        let a1=-1e9, ebD0=1e9;
-        ebReg.cells.forEach(i=>{ const a=alOf(i); if(a>a1)a1=a; const d=dOf(i); if(d<ebD0)ebD0=d; });
-        const bath=newReg('EB. BANYO','banyo',ebReg.unit);
-        unit.rooms.push(bath);
-        const keep=[];
-        /* odanın HOL tarafı köşesinden oyulur (~2×2 m; büyük dairede 2,5×2,5 m) */
-        const cw=area>140?5:4;
-        ebReg.cells.forEach(i=>{ const a=alOf(i), d=dOf(i);
-          if(a>a1-cw && d<ebD0+cw){ cm[i]=bath.id; bath.cells.push(i); } else keep.push(i); });
-        ebReg.cells=keep;
-      }
+      carveCornerBath(unit, ebReg, area>140?5:4);
     }
     unit.rooms=unit.rooms.filter(g=>g.cells.length); // hücre alamayan oda (ör. sığmayan WC) plandan düşer
     if(unit.antre&&!unit.antre.cells.length) unit.antre=null;
+    unit.comb=combU; // omurga planı işareti: slimAntres omurgayı kemirmesin
     return unit;
   }
   function assignCols(cellArr, roomDefs, unit, alOf){
@@ -802,6 +1572,14 @@ function generate(keepCuts){
     for(const a of als){ acc+=colA.get(a);
       while(k<roomDefs.length-1 && acc>=total*roomDefs.slice(0,k+1).reduce((s,r)=>s+r.w,0)/tw){ bounds.push(a+1); k++; } }
     for(let j=0;j<bounds.length;j++){ // her oda kendi minimum genişliğini alsın
+      const minC=Math.max(2, Math.round((roomDefs[j].ms||1)/M));
+      const lo=(j===0?als[0]:bounds[j-1])+minC;
+      if(bounds[j]<lo) bounds[j]=lo; }
+    for(let j=bounds.length-1;j>=0;j--){ // SON oda da ezilmesin: geriye doğru aynı garanti
+      const minC=Math.max(2, Math.round((roomDefs[j+1].ms||1)/M));
+      const hi=(j===bounds.length-1? als[als.length-1]+1 : bounds[j+1])-minC;
+      if(bounds[j]>hi) bounds[j]=hi; }
+    for(let j=0;j<bounds.length;j++){ // toplam genişlik yetmiyorsa İLK odalar aç kalmasın (eski öncelik)
       const minC=Math.max(2, Math.round((roomDefs[j].ms||1)/M));
       const lo=(j===0?als[0]:bounds[j-1])+minC;
       if(bounds[j]<lo) bounds[j]=lo; }
@@ -938,7 +1716,9 @@ function generate(keepCuts){
         let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
         g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
         const side=Math.min((r1-r0+1)*M,(c1-c0+1)*M), a=g.cells.length*M*M;
-        const sliver = g.type==='wc' ? (side<0.9||a<1.1) : (side<1.4||a<3.5);
+        const sliver = g.type==='wc' ? (side<0.9||a<1.1)
+                     : g.type==='banyo' ? (side<1.2||a<2.8)   // 2×1,5 m eb. banyo meşru (purge yemesin)
+                     : (side<1.4||a<3.5);
         if(!sliver) return;
         const cnt=new Map();
         g.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
@@ -1012,11 +1792,37 @@ function generate(keepCuts){
       host.cells=keep;
     });
   }
+  /* --- ensuite SÖZÜ tutulur: spec ebeveyn banyolu ama EB. BANYO kalmadıysa
+         (kırpık banyo purge'a yenildi, pencere sığmadı...) önce yatağa komşu KİLER
+         dönüştürülür, olmadı en büyük yataktan pencere oyulur (v20→v21 dersi #1) --- */
+  function ensureEnsuite(){
+    unitObjs.forEach(u=>{
+      if(!u.spec||!u.spec.ensuite) return;
+      if(u.rooms.some(g=>g.name==='EB. BANYO'&&g.cells.length)) return;
+      const beds=u.rooms.filter(g=>g.type==='yatak'&&g.cells.length);
+      if(!beds.length) return;
+      const bedIds=new Set(beds.map(g=>g.id));
+      const kil=u.rooms.find(g=>g.name==='KİLER'&&g.cells.length);
+      if(kil){
+        let host=null;
+        kil.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+          [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc2])=>{
+            if(rr<0||cc2<0||rr>=rows||cc2>=cols) return;
+            const j=rr*cols+cc2;
+            if(inside[j]&&cm[j]>=0&&bedIds.has(cm[j])) host=regions[cm[j]]; }); });
+        if(host){ kil.name='EB. BANYO'; kil.type='banyo'; host.name='EB. YATAK ODASI'; return; }
+      }
+      const host=beds.find(g=>g.name==='EB. YATAK ODASI')||beds.reduce((a,b)=>b.cells.length>a.cells.length?b:a);
+      const ar=u.rooms.reduce((s,g)=>s+g.cells.length,0)*M*M;
+      if(carveCornerBath(u, host, ar>140?5:4)) host.name='EB. YATAK ODASI';
+    });
+  }
   fixOrphans();
   repairUnits();
   purgeSlivers();
   meltNoAccess();
   carveMissing();
+  ensureEnsuite();
   fixOrphans();
 
   /* --- bölge metrikleri --- */
@@ -1025,8 +1831,14 @@ function generate(keepCuts){
   plan={regions, cm, inside, rows, cols, minX, minY, corridorR0, corridorR1,
         stairs, unitObjs, villa, kat, binaYuk, perFloor, nAsansor, asansorYeri,
         fireStairNeeded, teknikNeeded, zoneUI};
-  hoverWall=null; hoverRoomId=null;
-  editHistory=editHistory.filter(e=>e.type!=='wall'); // bölge kimlikleri yeniden doğdu: duvar girdileri bayat
+  hoverWall=null; hoverRoomId=null; hoverDoor=null;
+  doorOverrides={}; extraDoors=[]; doorHidden={}; // bölge kimlikleri yeniden doğdu: elle kapı ayarları bayat
+  editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (ulayout tam durum taşır, hayatta kalır)
+  plan.wallRuns=computeWallRuns();
+  slimAntres(); // antre fazlalığı (kör uç kol, odaya sokulan çıkıntı, şişkin yuva) odalara geri verilir
+  /* slim sonrası odalar büyüdü: ilk turda yer bulamayan eb. banyo şimdi sığabilir */
+  ensureEnsuite();
+  regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
   plan.wallRuns=computeWallRuns();
   runChecks();
   buildUnitTable();
@@ -1071,11 +1883,16 @@ function buildUnitTable(){
   t.style.display='flex';
   body.innerHTML='';
   plan.unitObjs.forEach((u,k)=>{
+    if(!u.rooms.some(g=>g.cells.length)) return;   // silinmiş (komşuya katılmış) daire
     const tot=u.rooms.reduce((s,g)=>s+g.area,0);
     const d=document.createElement('div'); d.className='utUnit';
-    const rows=u.rooms.filter(g=>g.cells.length).map(g=>
+    let rows=u.rooms.filter(g=>g.cells.length).map(g=>
       `<tr data-reg="${g.id}"><td>${g.name}</td><td class="num">${fmt(g.bw)} × ${fmt(g.bh)}</td><td class="num">${fmt(g.area)} m²</td></tr>`).join('');
-    d.innerHTML=`<h3 data-unit="${k}">D${k+1} · ${unitTag(u.spec)} · ${fmt(tot)} m²</h3><table class="utT">${rows}</table>`;
+    const myBalks=balconies.filter(b=>balkUnit(b)===k);
+    let balkTot=0;
+    myBalks.forEach(b=>{ balkTot+=balkArea(b);
+      rows+=`<tr><td>BALKON (açık)</td><td class="num">${fmt(b.t1-b.t0)} × ${fmt(b.depth)}</td><td class="num">${fmt(balkArea(b))} m²</td></tr>`; });
+    d.innerHTML=`<h3 data-unit="${k}">D${k+1} · ${unitTag(u.spec)} · ${fmt(tot)} m²${balkTot?` + ${fmt(balkTot)} m² balkon`:''}</h3><table class="utT">${rows}</table>`;
     body.appendChild(d);
   });
   body.querySelectorAll('tr[data-reg]').forEach(tr=>tr.onclick=()=>focusRegion(+tr.dataset.reg));
@@ -1103,6 +1920,7 @@ function runChecks(){
   const p=plan;
   /* piyes ölçüleri — Planlı Alanlar İmar Yönetmeliği md.30 */
   p.unitObjs.forEach((u,k)=>{
+    if(!u.rooms.some(g=>g.cells.length)) return;   // silinmiş (komşuya katılmış) daire
     const tag=(p.villa?'Villa':'Daire '+(k+1)+' ('+unitTag(u.spec)+')');
     const find=t=>u.rooms.filter(g=>g.type===t);
     const salon=find('salon')[0];
@@ -1117,13 +1935,19 @@ function runChecks(){
     /* istenen oda programı tam yerleşti mi? */
     const wantBeds=u.spec.salon===0? Math.max(0,u.spec.oda-1) : u.spec.oda;
     if(beds.length<wantBeds) add('bad', `${tag} — ${wantBeds} yatak odasından ${beds.length} tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).`);
+    /* ensuite sözü: spec ebeveyn banyolu ise EB. BANYO var mı + ölçüleri (sessiz kayıp v20'de 4 daireden 3'ünü vurmuştu) */
+    if(u.spec.ensuite && wantBeds>0){
+      const ebb=u.rooms.find(g=>g.name==='EB. BANYO'&&g.cells.length);
+      if(!ebb) add('bad', `${tag} — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).`);
+      else add(ebb.area>=REG.banyo.area&&ebb.minSide>=REG.banyo.side?'ok':'bad',
+        `${tag} — Eb. banyo: ${fmt(ebb.area)} m² / ${fmt(ebb.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ebb.id);
+    }
     const banAll=u.rooms.find(g=>g.type==='banyo');
     if(!banAll) add('bad', `${tag} — Banyo yerleştirilemedi!`);
     const mut=u.rooms.find(g=>g.type==='mutfak');
     if(!u.spec.acik && u.spec.salon>0 && !mut) add('bad', `${tag} — Ayrı mutfak istendi ama yerleştirilemedi (salonla birleşik sayıldı).`);
     if(!salon) add('bad', `${tag} — Salon/oturma odası yerleştirilemedi (yasal zorunlu piyes)!`);
-    if(mut&&mut.cells.length){ const ratio=Math.max(mut.bw,mut.bh)/Math.max(0.5,Math.min(mut.bw,mut.bh));
-      if(ratio>2.8) add('bad', `${tag} — Mutfak ince-uzun (${fmt(Math.min(mut.bw,mut.bh))} × ${fmt(Math.max(mut.bw,mut.bh))} m). Ayırıcıyı sürükleyin.`, mut.id); }
+    // ince-uzun mutfak uyarısı kaldırıldı (tasarım tercihi, mevzuat sorunu değil)
     if(mut) add(mut.area>=REG.mutfak.area&&mut.minSide>=REG.mutfak.side?'ok':'bad',
       `${tag} — Mutfak: ${fmt(mut.area)} m² / ${fmt(mut.minSide)} m (min ${fmt(REG.mutfak.area)} m², ${fmt(REG.mutfak.side)} m)`, mut.id);
     const ban=u.rooms.find(g=>g.type==='banyo'&&!g.name.startsWith('EB'));
@@ -1132,6 +1956,23 @@ function runChecks(){
     const wc=u.rooms.find(g=>g.type==='wc');
     if(wc) add(wc.area>=REG.wc.area&&wc.minSide>=REG.wc.side?'ok':'bad',
       `${tag} — WC: ${fmt(wc.area)} m² / ${fmt(wc.minSide)} m (min ${fmt(REG.wc.area)} m², ${fmt(REG.wc.side)} m)`, wc.id);
+    /* doğal ışık: yaşama mekânları (salon, yatak odası) dış cepheye dokunmalı —
+       PAİY md.30: piyeslerde pencere alanı ≥ taban alanının 1/8'i */
+    u.rooms.forEach(g=>{ if(!g.cells.length||(g.type!=='salon'&&g.type!=='yatak'&&g.type!=='mutfak')) return;
+      const ext=g.cells.some(i=>{ const r=(i/p.cols)|0, c=i%p.cols;
+        return r===0||r===p.rows-1||c===0||c===p.cols-1
+          ||!p.inside[i-p.cols]||!p.inside[i+p.cols]||!p.inside[i-1]||!p.inside[i+1]; });
+      if(!ext){
+        if(g.type==='mutfak') add('info', `${tag} — Mutfak dış cepheye açılmıyor: penceresiz mutfak DOĞALGAZ alamaz (elektrikli ocak ya da havalandırma boşluğu gerekir — tercih edilmez). Mutfağı duvar sürükleyerek/takasla cepheye alın.`, g.id);
+        else add('bad', `${tag} — ${g.name} dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.`, g.id);
+      }
+    });
+    /* oran denetimi: artık alan salona akar; salon dairenin yarısını geçtiyse taban bu programa fazla geliyor */
+    if(salon&&salon.cells.length){
+      const totU=u.rooms.reduce((s,g)=>s+g.area,0);
+      if(salon.area>Math.max(45, totU*0.5))
+        add('info', `${tag} — Salon ${fmt(salon.area)} m² (dairenin %${Math.round(100*salon.area/totU)}'i): artık taban alanı salona aktı. Daire sayısını artırın veya derinliği azaltın.`, salon.id);
+    }
     /* biçim denetimi: oda, kapsayan dikdörtgeninin en az %55'ini doldurmalı */
     u.rooms.forEach(g=>{ if(!g.cells.length||g.type==='antre'||g.bw*g.bh<=0) return;
       const fill=g.area/(g.bw*g.bh);
@@ -1149,6 +1990,19 @@ function runChecks(){
       });
     }
   });
+  /* kapı denetimi: silinen veya yerleştirilemeyen kapılar */
+  computeDoors().forEach(d=>{
+    if(d.status==='ok'||d.status==='stale') return;
+    const tag=(p.villa?'Villa':'Daire '+(d.k+1));
+    if(d.kind==='unit')
+      add('bad', d.status==='hidden'
+        ? `${tag} — Giriş kapısı silindi! (🚪 Kapı modunda "Geri al" ile geri getirin.)`
+        : `${tag} — Giriş kapısı için uygun duvar yok (antre koridora komşu değil).`);
+    else
+      add('bad', d.status==='hidden'
+        ? `${tag} — ${d.reg.name} kapısı silindi; odaya erişim yok. ("Geri al" ile geri getirin.)`
+        : `${tag} — ${d.reg.name} için uygun kapı yeri yok: duvar teması 1 m'den kısa. Duvarı sürükleyin.`, d.reg.id);
+  });
   if(!p.villa){
     add('ok',`Ortak hol genişliği 1,50 m olarak yerleştirildi (min ${REG.koridorMin.toLocaleString('tr-TR')} m).`);
     add('ok',`Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ ${REG.merdivenMin.toLocaleString('tr-TR')} m (konut).`);
@@ -1164,12 +2018,15 @@ function runChecks(){
     } else add('ok',`Bina yüksekliği ${fmt(p.binaYuk)} m ≤ 21,5 m → tek kaçış merdiveni yeterli olabilir (BYKHY, kullanım yüküne bağlı).`);
     /* kaçış mesafesi */
     if(p.stairs.length){
+      /* BYKHY mesafesi daire ÇIKIŞ KAPISINDAN ölçülür (antre merkezinden değil) */
+      const doors=computeDoors().filter(d=>d.kind==='unit'&&d.e);
       let worst=0, worstReg=null;
-      p.unitObjs.forEach(u=>{ if(!u.antre) return;
-        let best=1e9;
+      const meas=(x,y,reg)=>{ let best=1e9;
         p.stairs.forEach(s=>{ const sx=p.minX+(s.c0+s.w/2)*M, sy=p.minY+(s.r0+s.h/2)*M;
-          best=Math.min(best, Math.abs(u.antre.cx-sx)+Math.abs(u.antre.cy-sy)); });
-        if(best>worst){ worst=best; worstReg=u.antre.id; } });
+          best=Math.min(best, Math.abs(x-sx)+Math.abs(y-sy)); });
+        if(best>worst){ worst=best; worstReg=reg; } };
+      if(doors.length) doors.forEach(d=>meas(d.e.x, d.e.y, p.unitObjs[d.k].antre?p.unitObjs[d.k].antre.id:null));
+      else p.unitObjs.forEach(u=>{ if(u.antre) meas(u.antre.cx, u.antre.cy, u.antre.id); });
       add(worst<=REG.kacisMesafe?'ok':'bad',`En uzak daire kapısı → merdiven kaçış mesafesi ≈ ${fmt(worst)} m (max ${REG.kacisMesafe} m).`, worstReg);
     }
     /* sığınak + teknik */
@@ -1178,11 +2035,45 @@ function runChecks(){
     if(p.teknikNeeded) add('ok',`Katta ${p.perFloor} daire ≥ ${REG.teknikOdaDaire} → teknik/tesisat şaftı çekirdeğe eklendi.`);
     const saftReg=p.regions.find(g=>g.name==='ŞAFT'&&g.cells.length);
     if(saftReg) add('info',`Çekirdek arkasındaki ${fmt(saftReg.area)} m² cep, ulaşılamaz alan kalmaması için tesisat şaftına dönüştürüldü.`);
-    if(p.unitObjs.length<p.perFloor) add('bad',`${p.perFloor} daireden ${p.unitObjs.length} tanesi yerleştirilebildi — taban alanı/şekli yetersiz.`);
+    if(p.unitObjs.length<p.perFloor) add('bad',`${p.perFloor} daireden ${p.unitObjs.length} tanesi yerleştirilebildi — bölge cepheleri daha fazla daireye yetmiyor. Daire sayısını azaltın veya tabanı genişletin.`);
+    /* daire büyüklüğü gerçekçiliği: ortalama daire hedefin çok üstündeyse taban bu adede fazla */
+    if(p.unitObjs.length){
+      const targetOf=s2=>30 + s2.oda*15 + s2.salon*25 + (s2.ensuite?6:0);
+      const tTot=p.unitObjs.reduce((s,u2)=>s+targetOf(u2.spec),0);
+      const aTot=p.unitObjs.reduce((s,u2)=>s+u2.rooms.reduce((q,g)=>q+g.area,0),0);
+      if(tTot>0 && aTot/tTot>1.6)
+        add('info',`Ortalama daire ${fmt(aTot/p.unitObjs.length)} m² — bu programın hedefinin ~${fmt(aTot/tTot)} katı. Bu tabana kat başına ~${Math.round(p.perFloor*aTot/tTot)} daire daha uygun olur.`);
+    }
     add('info','İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.');
   } else {
     add('info','Tek bağımsız bölümlü konut → asansör zorunluluğundan muaf (PAİY md.34).');
     if(p.kat>1) add('ok','Çok katlı villa → iç merdiven yerleştirildi.');
+  }
+  /* parsel / bahçe */
+  if(parcelClosed && parcelPts.length>=3 && closed){
+    const pa=shoelace(parcelPts), ba=shoelace(pts);
+    add('info',`Parsel ${fmt(pa)} m² · bina taban alanı ${fmt(ba)} m² · bahçe ${fmt(Math.max(0,pa-ba))} m².`);
+    if(pts.some(q=>!pip(q.x,q.y,parcelPts)))
+      add('bad','Bina sınırı parsel dışına taşıyor!');
+    else{
+      const taks=ba/pa;
+      add(taks<=REG.taksMax?'ok':'bad',`TAKS ≈ ${fmt(taks)} (örnek max ${fmt(REG.taksMax)} — imar durumuna göre değişir).`);
+      let minD=1e9;
+      pts.forEach(q=>{ for(let i=0;i<parcelPts.length;i++){ const A=parcelPts[i],B=parcelPts[(i+1)%parcelPts.length];
+        minD=Math.min(minD, distSeg(q.x,q.y,A.x,A.y,B.x,B.y)); }});
+      add(minD>=REG.yanBahce?'ok':'info',`En küçük çekme mesafesi ≈ ${fmt(minD)} m (yan bahçe min ${fmt(REG.yanBahce)} m, ön bahçe imar durumuna bağlı).`);
+    }
+  }
+  /* balkonlar */
+  if(balconies.length){
+    const tot=balconies.reduce((s,b)=>s+balkArea(b),0);
+    add('info',`${balconies.length} balkon, toplam ${fmt(tot)} m² açık alan (brüt alana dahil edilmedi).`);
+    balconies.forEach((b,i)=>{
+      if(b.depth>REG.cikmaMax) add('bad',`Balkon ${i+1}: çıkma derinliği ${fmt(b.depth)} m > max ${fmt(REG.cikmaMax)} m (PAİY açık çıkma).`);
+      else if(b.depth<REG.balkonMinD) add('info',`Balkon ${i+1}: derinlik ${fmt(b.depth)} m < ${fmt(REG.balkonMinD)} m — kullanışlılık için önerilen min.`);
+      if(parcelClosed && balkQuad(b).some(q=>!pip(q.x,q.y,parcelPts)))
+        add('bad',`Balkon ${i+1} parsel dışına taşıyor!`);
+    });
   }
   /* sorunlar en üstte */
   const ORD={bad:0, ok:1, info:2};
@@ -1194,12 +2085,39 @@ function runChecks(){
     d.innerHTML=`<span class="ic">${IC[o.s]}</span><span>${o.t}</span>`;
     if(o.reg!=null){ d.title='Plana odaklamak için tıklayın'; d.onclick=()=>focusRegion(o.reg); }
     box.appendChild(d); });
+  return out; // slimUnitAntre vb. ihlal sayısını kabul kapısı olarak kullanır
 }
 
 /* ================= çizim (render) ================= */
+/* kenar ölçü etiketleri (her iki poligon için ortak) */
+function polyDims(g, arr, isClosed, color){
+  const cen=centroidOf(arr);
+  const segs=[...arr.map((p,i)=>[p,arr[(i+1)%arr.length]])];
+  if(!isClosed) segs.pop();
+  segs.forEach(([a,b])=>{
+    const L=Math.hypot(b.x-a.x,b.y-a.y); if(L<0.01)return;
+    const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
+    let nx=-(b.y-a.y)/L, ny=(b.x-a.x)/L;
+    if((mx+nx-cen.x)**2+(my+ny-cen.y)**2 < (mx-nx-cen.x)**2+(my-ny-cen.y)**2){nx=-nx;ny=-ny;}
+    const t=el('text',{x:W2Sx(mx+nx*0.8),y:W2Sy(my+ny*0.8),'text-anchor':'middle','dominant-baseline':'middle',
+      'font-size':Math.max(10,Math.min(13,pxPerM*0.8)),fill:color,'font-weight':'600'});
+    t.textContent=fmt(L)+' m'; g.appendChild(t);
+  });
+}
+/* bahçe etiketi: parsel içinde ama bina dışında bir nokta */
+function gardenLabelPos(){
+  const cen=centroidOf(parcelPts), cand=[];
+  for(let i=0;i<parcelPts.length;i++){
+    const A=parcelPts[i],B=parcelPts[(i+1)%parcelPts.length];
+    const mx=(A.x+B.x)/2,my=(A.y+B.y)/2;
+    const dx=cen.x-mx, dy=cen.y-my, L=Math.hypot(dx,dy)||1;
+    for(const k of [1.4, 2.6]) cand.push({x:mx+dx/L*k, y:my+dy/L*k});
+  }
+  return cand.find(p=>pip(p.x,p.y,parcelPts)&&(!closed||!pip(p.x,p.y,pts)))||null;
+}
 function render(){
   svg.innerHTML='';
-  const r=svg.getBoundingClientRect();
+  const r=exportView||svg.getBoundingClientRect();
   /* ızgara */
   const g0=el('g',{}); svg.appendChild(g0);
   const step=M*pxPerM, big=5*pxPerM;
@@ -1212,59 +2130,232 @@ function render(){
   for(let x=X0;x<r.width;x+=big) g0.appendChild(el('line',{x1:x,y1:0,x2:x,y2:r.height,stroke:'#ddd5c4','stroke-width':1}));
   for(let y=Y0;y<r.height;y+=big) g0.appendChild(el('line',{x1:0,y1:y,x2:r.width,y2:y,stroke:'#ddd5c4','stroke-width':1}));
 
+  /* parsel (bahçe) — plan katmanlarının altında */
+  if(parcelPts.length){
+    const g=el('g',{}); svg.appendChild(g);
+    let d='M'+parcelPts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
+    if(parcelClosed) d+='Z';
+    g.appendChild(el('path',{d,fill:parcelClosed?'rgba(106,153,78,.13)':'none',stroke:'#4a7c4a','stroke-width':2,'stroke-dasharray':'9 5','stroke-linejoin':'miter'}));
+    if(!parcelClosed||mode==='parcel') parcelPts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#4a7c4a','stroke-width':2})));
+    polyDims(g, parcelPts, parcelClosed, '#4a7c4a');
+    if(parcelClosed){
+      const lbl=gardenLabelPos();
+      if(lbl){ const t=el('text',{x:W2Sx(lbl.x),y:W2Sy(lbl.y),'text-anchor':'middle','font-size':Math.max(10,Math.min(14,pxPerM*0.9)),fill:'#4a7c4a','font-weight':'700'});
+        t.textContent='BAHÇE · '+fmt(Math.max(0,shoelace(parcelPts)-(closed?shoelace(pts):0)))+' m²'; g.appendChild(t); }
+    }
+  }
+
   if(plan){ renderPlan(); }
-  /* poligon */
+  /* bina poligonu */
   if(pts.length){
     const g=el('g',{}); svg.appendChild(g);
     let d='M'+pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
     if(closed) d+='Z';
-    g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?3.5:2.5,'stroke-linejoin':'miter'}));
+    g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?Math.max(3,pxPerM*0.22):2.5,'stroke-linejoin':'miter'}));
     if(!plan||!closed) pts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#b35a2e','stroke-width':2})));
-    /* kenar ölçüleri */
-    const cen=centroidOf(pts);
-    const segs=[...pts.map((p,i)=>[p,pts[(i+1)%pts.length]])];
-    if(!closed) segs.pop();
-    segs.forEach(([a,b])=>{
-      const L=Math.hypot(b.x-a.x,b.y-a.y); if(L<0.01)return;
-      const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
-      let nx=-(b.y-a.y)/L, ny=(b.x-a.x)/L;
-      if((mx+nx-cen.x)**2+(my+ny-cen.y)**2 < (mx-nx-cen.x)**2+(my-ny-cen.y)**2){nx=-nx;ny=-ny;}
-      const t=el('text',{x:W2Sx(mx+nx*0.8),y:W2Sy(my+ny*0.8),'text-anchor':'middle','dominant-baseline':'middle',
-        'font-size':Math.max(10,Math.min(13,pxPerM*0.8)),fill:'#6b5e4d','font-weight':'600'});
-      t.textContent=fmt(L)+' m'; g.appendChild(t);
+    polyDims(g, pts, closed, '#6b5e4d');
+  }
+
+  /* balkonlar */
+  if(closed && (balconies.length || (mode==='balkon'&&hoverBalk&&hoverBalk.ghost))){
+    const g=el('g',{}); svg.appendChild(g);
+    const wallW=plan?Math.max(3,pxPerM*0.22):2.5;
+    const drawB=(b,ghost)=>{
+      const q=balkQuad(b);
+      g.appendChild(el('path',{d:'M'+q.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z',
+        fill:ghost?'rgba(179,90,46,.15)':'rgba(213,229,241,.9)',stroke:'#2b2620',
+        'stroke-width':ghost?1.2:1.5,'stroke-dasharray':ghost?'5 4':'none'}));
+      if(ghost) return;
+      /* korkuluk çizgisi (dış kenara paralel) */
+      const {A,u,n}=balkBase(b.ei), ko=b.depth-0.12;
+      g.appendChild(el('line',{x1:W2Sx(A.x+u.x*b.t0+n.x*ko),y1:W2Sy(A.y+u.y*b.t0+n.y*ko),
+        x2:W2Sx(A.x+u.x*b.t1+n.x*ko),y2:W2Sy(A.y+u.y*b.t1+n.y*ko),stroke:'#2b2620','stroke-width':0.8}));
+      /* kapı boşluğu: iç kenarın ortası */
+      const tm=(b.t0+b.t1)/2;
+      g.appendChild(el('line',{x1:W2Sx(A.x+u.x*(tm-0.45)),y1:W2Sy(A.y+u.y*(tm-0.45)),
+        x2:W2Sx(A.x+u.x*(tm+0.45)),y2:W2Sy(A.y+u.y*(tm+0.45)),stroke:'#faf8f3','stroke-width':wallW+1}));
+      /* etiket */
+      if(pxPerM>7){
+        const cx=(q[0].x+q[2].x)/2, cy=(q[0].y+q[2].y)/2;
+        const fs=Math.max(8,Math.min(11,pxPerM*0.55));
+        const t=el('text',{x:W2Sx(cx),y:W2Sy(cy)-fs*0.35,'text-anchor':'middle','dominant-baseline':'middle',
+          'font-size':fs,fill:'#3f5b73','font-weight':'600'});
+        t.textContent='BALKON '+fmt(balkArea(b))+' m²'; g.appendChild(t);
+        const t2=el('text',{x:W2Sx(cx),y:W2Sy(cy)+fs*0.75,'text-anchor':'middle','dominant-baseline':'middle',
+          'font-size':fs*0.9,fill:'#3f5b73'});
+        t2.textContent=fmt(b.t1-b.t0)+' × '+fmt(b.depth)+' m'; g.appendChild(t2);
+      }
+      /* tutamaçlar */
+      if(mode==='balkon'){
+        const mid=(P,Q)=>({x:(P.x+Q.x)/2,y:(P.y+Q.y)/2});
+        for(const h of [mid(q[2],q[3]),mid(q[0],q[3]),mid(q[1],q[2])])
+          g.appendChild(el('rect',{x:W2Sx(h.x)-4,y:W2Sy(h.y)-4,width:8,height:8,fill:'#fff',stroke:'#b35a2e','stroke-width':2}));
+      }
+    };
+    balconies.forEach(b=>drawB(b,false));
+    if(mode==='balkon'&&hoverBalk&&hoverBalk.ghost) drawB(hoverBalk.ghost,true);
+  }
+
+  /* aktif poligon çizimi (bina veya parsel) */
+  const act=activePoly();
+  if(hoverP && !act.cl && (mode==='draw'||mode==='parcel')){
+    const g=el('g',{}); svg.appendChild(g);
+    const col=mode==='parcel'?'#4a7c4a':'#b35a2e';
+    const l=act.arr[act.arr.length-1];
+    if(l){ g.appendChild(el('line',{x1:W2Sx(l.x),y1:W2Sy(l.y),x2:W2Sx(hoverP.x),y2:W2Sy(hoverP.y),stroke:col,'stroke-width':2,'stroke-dasharray':'6 4'}));
+      const L=Math.hypot(hoverP.x-l.x,hoverP.y-l.y);
+      const t=el('text',{x:W2Sx((l.x+hoverP.x)/2),y:W2Sy((l.y+hoverP.y)/2)-8,'text-anchor':'middle','font-size':12,fill:col,'font-weight':'700'});
+      t.textContent=fmt(L)+' m'; g.appendChild(t); }
+    g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:hoverP.closing?'#2e7d4f':col,opacity:.8}));
+  }
+  updateZoomUI();
+}
+
+/* ---- kapılar: aday kenarlar + seçili kenar (elle ayar destekli) ----
+   Her kapı kaydı: {key, e:{x,y,h}, edges, kind:'unit'|'inner', k}
+   doorOverrides[key] mevcut aday kenarlardan biriyle eşleşiyorsa o kullanılır,
+   yoksa otomatik seçime (en uzun temas şeridinin ortası) düşülür. */
+function pickDoorEdge(list){
+  const groups=new Map();
+  list.forEach(e=>{ const k=e.h? 'h'+e.y : 'v'+e.x;
+    if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(e); });
+  let best=null;
+  groups.forEach(arr=>{
+    arr.sort((a,b)=>a.h? a.x-b.x : a.y-b.y);
+    let s=0;
+    for(let i=1;i<=arr.length;i++){
+      const brk = i===arr.length || (arr[i].h? arr[i].x-arr[i-1].x : arr[i].y-arr[i-1].y) > M+1e-9;
+      if(brk){ const run=arr.slice(s,i); if(!best||run.length>best.length) best=run; s=i; }
+    }
+  });
+  return best? best[Math.floor(best.length/2)] : null;
+}
+function computeDoors(){
+  const p=plan; if(!p) return [];
+  const id=(r,c)=>(r<0||c<0||r>=p.rows||c>=p.cols)?-9:(p.inside[r*p.cols+c]?p.cm[r*p.cols+c]:-9);
+  const out=[];
+  const resolve=(key,edges)=>{
+    const ov=doorOverrides[key];
+    const m=ov && edges.find(g2=>g2.h===ov.h && Math.abs(g2.x-ov.x)<1e-6 && Math.abs(g2.y-ov.y)<1e-6);
+    return m||pickDoorEdge(edges);
+  };
+  /* daire kapıları: antre → koridor */
+  p.unitObjs.forEach((u,k)=>{
+    if(!u.antre||!u.antre.cells.length) return;
+    const isCor=v=>v>=0&&p.regions[v]&&p.regions[v].type==='koridor';
+    const edges=[];
+    u.antre.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+      if(isCor(id(r+1,c))||(p.villa&&id(r+1,c)===-9)) edges.push({x:p.minX+c*M, y:p.minY+(r+1)*M, h:1});
+      if(isCor(id(r-1,c))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:1});
+      if(isCor(id(r,c+1))) edges.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0});
+      if(isCor(id(r,c-1))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); });
+    const key='u'+k;
+    if(!edges.length){ out.push({key, e:null, edges, kind:'unit', k, status:'none'}); return; }
+    if(doorHidden[key]){ out.push({key, e:null, edges, kind:'unit', k, status:'hidden'}); return; }
+    const e=resolve(key, edges);
+    if(e) out.push({key, e, edges, kind:'unit', k, status:'ok'});
+  });
+  /* iç kapılar: hol → odalar, eb. yatak → eb. banyo */
+  p.unitObjs.forEach((u,k)=>{
+    if(!u.antre) return;
+    const inner=(reg,fromId)=>{
+      const edges=[];
+      reg.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+        if(id(r-1,c)===fromId) edges.push({x:p.minX+c*M,y:p.minY+r*M,h:1});
+        if(id(r+1,c)===fromId) edges.push({x:p.minX+c*M,y:p.minY+(r+1)*M,h:1});
+        if(id(r,c-1)===fromId) edges.push({x:p.minX+c*M,y:p.minY+r*M,h:0});
+        if(id(r,c+1)===fromId) edges.push({x:p.minX+(c+1)*M,y:p.minY+r*M,h:0}); });
+      const key='r'+reg.id;
+      if(!edges.length) return; // komşuluk denetimi ayrıca raporluyor
+      if(edges.length<2){ out.push({key, e:null, edges, kind:'inner', k, reg, status:'none'}); return; }
+      if(doorHidden[key]){ out.push({key, e:null, edges, kind:'inner', k, reg, status:'hidden'}); return; }
+      const e=resolve(key, edges);
+      if(e) out.push({key, e, edges, kind:'inner', k, reg, status:'ok'});
+    };
+    u.rooms.forEach(reg=>{
+      if(reg===u.antre||!reg.cells.length) return;
+      if(reg.name==='EB. BANYO'){ const eb=u.rooms.find(g2=>g2.name==='EB. YATAK ODASI'); if(eb) inner(reg,eb.id); return; }
+      inner(reg,u.antre.id);
     });
-    /* aktif çizim */
-    if(!closed && hoverP && mode==='draw'){
-      const l=pts[pts.length-1];
-      if(l){ g.appendChild(el('line',{x1:W2Sx(l.x),y1:W2Sy(l.y),x2:W2Sx(hoverP.x),y2:W2Sy(hoverP.y),stroke:'#b35a2e','stroke-width':2,'stroke-dasharray':'6 4'}));
-        const L=Math.hypot(hoverP.x-l.x,hoverP.y-l.y);
-        const t=el('text',{x:W2Sx((l.x+hoverP.x)/2),y:W2Sy((l.y+hoverP.y)/2)-8,'text-anchor':'middle','font-size':12,fill:'#b35a2e','font-weight':'700'});
-        t.textContent=fmt(L)+' m'; g.appendChild(t); }
-      g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:hoverP.closing?'#2e7d4f':'#b35a2e',opacity:.8}));
+  });
+  /* çift tıkla eklenen kapılar (kenar hâlâ iki farklı bölgeyi ayırıyorsa) */
+  extraDoors.forEach((d,i)=>{
+    const r=Math.round((d.y-p.minY)/M), c=Math.round((d.x-p.minX)/M);
+    const sides=d.h? [id(r-1,c),id(r,c)] : [id(r,c-1),id(r,c)];
+    const ok=sides[0]>=0&&sides[1]>=0&&sides[0]!==sides[1];
+    out.push({key:'x'+i, e:ok?{h:d.h,x:d.x,y:d.y}:null, edges:[], kind:'extra', i, status:ok?'ok':'stale'});
+  });
+  return out;
+}
+function doorSnapshot(){ return {ov:{...doorOverrides}, extra:extraDoors.map(d=>({...d})), hidden:{...doorHidden}}; }
+function doorRestore(s){ doorOverrides={...s.ov}; extraDoors=s.extra.map(d=>({...d})); doorHidden={...s.hidden}; }
+/* imlece en yakın iki-bölge iç duvar kenarı (çift tıkla kapı ekleme / ekstra kapı sürükleme) */
+function edgeNear(wx,wy){
+  const p=plan; if(!p) return null;
+  const id=(r,c)=>(r<0||c<0||r>=p.rows||c>=p.cols)?-9:(p.inside[r*p.cols+c]?p.cm[r*p.cols+c]:-9);
+  const r0=Math.floor((wy-p.minY)/M), c0=Math.floor((wx-p.minX)/M);
+  let best=null, bd=Math.max(0.3, 8/pxPerM);
+  for(let r=r0-1;r<=r0+2;r++)for(let c=c0-1;c<=c0+2;c++){
+    const x=p.minX+c*M, y=p.minY+r*M;
+    if(id(r-1,c)>=0&&id(r,c)>=0&&id(r-1,c)!==id(r,c)){      /* üst kenar */
+      const d=distSeg(wx,wy,x,y,x+M,y);
+      if(d<bd){ bd=d; best={h:1,x,y}; }
+    }
+    if(id(r,c-1)>=0&&id(r,c)>=0&&id(r,c-1)!==id(r,c)){      /* sol kenar */
+      const d=distSeg(wx,wy,x,y,x,y+M);
+      if(d<bd){ bd=d; best={h:0,x,y}; }
     }
   }
+  return best;
+}
+function doorMid(e){ return e.h? {x:W2Sx(e.x+0.45), y:W2Sy(e.y)} : {x:W2Sx(e.x), y:W2Sy(e.y+0.45)}; }
+function hitDoor(sx,sy){
+  if(!plan) return null;
+  let best=null, bd=170; // ~13 px yarıçap
+  computeDoors().forEach(d=>{
+    if(d.status!=='ok') return;
+    const m=doorMid(d.e), dd=(m.x-sx)**2+(m.y-sy)**2;
+    if(dd<bd){ bd=dd; best=d; }
+  });
+  return best;
 }
 
 function renderPlan(){
   const p=plan, g=el('g',{}); svg.appendChild(g);
   const cs=M*pxPerM;
-  /* hücre dolguları */
+  /* sınır poligonuna kırpma: ızgara basamakları arsa sınırı dışına taşmasın (eğik kenarlar) */
+  const defs=el('defs',{}); g.appendChild(defs);
+  const cp=el('clipPath',{id:'planClip'}); defs.appendChild(cp);
+  cp.appendChild(el('path',{d:'M'+pts.map(q=>W2Sx(q.x)+','+W2Sy(q.y)).join('L')+'Z'}));
+  const gc=el('g',{'clip-path':'url(#planClip)'}); g.appendChild(gc);
+  const insideAt=(r,c)=>r>=0&&c>=0&&r<p.rows&&c<p.cols&&p.inside[r*p.cols+c];
+  /* hücre dolguları (+sınır hücreleri dışarı taşar: eğik kenarla ızgara arasındaki
+     şerit komşu odanın rengiyle dolar; kırpma poligonda keser) */
   p.regions.forEach(reg=>{
     const fill=COLORS[reg.type]||'#fff';
     const dash=reg.name==='ASANSÖR YERİ';
     reg.cells.forEach(i=>{
       const r=(i/p.cols)|0,c=i%p.cols;
-      g.appendChild(el('rect',{x:W2Sx(p.minX+c*M),y:W2Sy(p.minY+r*M),width:cs+0.5,height:cs+0.5,fill,opacity:dash?0.45:1}));
+      gc.appendChild(el('rect',{x:W2Sx(p.minX+c*M),y:W2Sy(p.minY+r*M),width:cs+0.5,height:cs+0.5,fill,opacity:dash?0.45:1}));
+      for(const[dr,dc]of[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]])
+        if(!insideAt(r+dr,c+dc))
+          gc.appendChild(el('rect',{x:W2Sx(p.minX+(c+dc)*M),y:W2Sy(p.minY+(r+dr)*M),width:cs+0.5,height:cs+0.5,fill,opacity:dash?0.45:1}));
     });
   });
   /* duvarlar */
   const id=(r,c)=>(r<0||c<0||r>=p.rows||c>=p.cols)?-9:(p.inside[r*p.cols+c]?p.cm[r*p.cols+c]:-9);
-  const walls=el('g',{stroke:'#2b2620','stroke-linecap':'square'}); g.appendChild(walls);
+  /* nokta poligon kenarı üzerinde mi? (eğik kenarda ızgara dış duvarı çizilmez; sınır çizgisi duvardır) */
+  const onEdge=(x,y)=>{ for(let i=0;i<pts.length;i++){ const A=pts[i],B=pts[(i+1)%pts.length];
+    if(Math.abs((B.x-A.x)*(y-A.y)-(B.y-A.y)*(x-A.x))>1e-6) continue;
+    const dot=(x-A.x)*(B.x-A.x)+(y-A.y)*(B.y-A.y), l2=(B.x-A.x)**2+(B.y-A.y)**2;
+    if(dot>=-1e-9&&dot<=l2+1e-9) return true; } return false; };
+  const walls=el('g',{stroke:'#2b2620','stroke-linecap':'square'}); gc.appendChild(walls);
   for(let r=0;r<p.rows;r++)for(let c=0;c<p.cols;c++){
     const a=id(r,c); if(a===-9) continue;
     const x=p.minX+c*M, y=p.minY+r*M;
     const draw=(b,x1,y1,x2,y2)=>{ if(a!==b){
       const outer=(b===-9);
+      if(outer && !(onEdge(x1,y1)&&onEdge(x2,y2))) return;
       walls.appendChild(el('line',{x1:W2Sx(x1),y1:W2Sy(y1),x2:W2Sx(x2),y2:W2Sy(y2),
         'stroke-width':outer?Math.max(2.5,pxPerM*0.22):Math.max(1,pxPerM*0.07)})); } };
     draw(id(r,c+1), x+M,y, x+M,y+M);
@@ -1272,66 +2363,34 @@ function renderPlan(){
     if(c===0||id(r,c-1)===-9) draw(-9, x,y, x,y+M);
     if(r===0||id(r-1,c)===-9) draw(-9, x,y, x+M,y);
   }
-  /* kapı yeri seçimi: EN UZUN kesintisiz temas şeridinin ortası (parçalı temasta kapı bölünmez) */
-  const pickDoor=(list)=>{
-    const groups=new Map();
-    list.forEach(e=>{ const k=e.h? 'h'+e.y : 'v'+e.x;
-      if(!groups.has(k)) groups.set(k,[]); groups.get(k).push(e); });
-    let best=null;
-    groups.forEach(arr=>{
-      arr.sort((a,b)=>a.h? a.x-b.x : a.y-b.y);
-      let s=0;
-      for(let i=1;i<=arr.length;i++){
-        const brk = i===arr.length || (arr[i].h? arr[i].x-arr[i-1].x : arr[i].y-arr[i-1].y) > M+1e-9;
-        if(brk){ const run=arr.slice(s,i); if(!best||run.length>best.length) best=run; s=i; }
-      }
-    });
-    return best? best[Math.floor(best.length/2)] : null;
-  };
-  /* daire kapıları (antre → hol, 4 yön) + kapı üstünde daire rozeti */
-  p.unitObjs.forEach((u,k)=>{
-    if(!u.antre||!u.antre.cells.length) return;
-    const isCor=v=>v>=0&&p.regions[v]&&p.regions[v].type==='koridor';
-    let edges=[];
-    u.antre.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
-      if(isCor(id(r+1,c))||(p.villa&&id(r+1,c)===-9)) edges.push({x:p.minX+c*M, y:p.minY+(r+1)*M, h:1});
-      if(isCor(id(r-1,c))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:1});
-      if(isCor(id(r,c+1))) edges.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0});
-      if(isCor(id(r,c-1))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); });
-    if(!edges.length) return;
-    const e=pickDoor(edges); if(!e) return;
-    const w=Math.max(2,pxPerM*0.2);
-    let bx,by;
-    if(e.h){ g.appendChild(el('line',{x1:W2Sx(e.x-0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.95),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
-      bx=W2Sx(e.x+0.45); by=W2Sy(e.y); }
-    else { g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y-0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.95),stroke:'#faf8f3','stroke-width':w}));
-      bx=W2Sx(e.x); by=W2Sy(e.y+0.45); }
-    const fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
-    g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05,fill:'#b35a2e',stroke:'#fff','stroke-width':1.5}));
-    const tb=el('text',{x:bx,y:by+fs2*0.35,'text-anchor':'middle','font-size':fs2,fill:'#fff','font-weight':'700'});
-    tb.textContent='D'+(k+1); g.appendChild(tb);
-  });
-  /* iç kapılar: hol → odalar, eb. yatak → eb. banyo */
-  p.unitObjs.forEach(u=>{
-    if(!u.antre) return;
-    const door=(reg,fromId)=>{
-      const edges=[];
-      reg.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
-        if(id(r-1,c)===fromId) edges.push({x:p.minX+c*M,y:p.minY+r*M,h:1});
-        if(id(r+1,c)===fromId) edges.push({x:p.minX+c*M,y:p.minY+(r+1)*M,h:1});
-        if(id(r,c-1)===fromId) edges.push({x:p.minX+c*M,y:p.minY+r*M,h:0});
-        if(id(r,c+1)===fromId) edges.push({x:p.minX+(c+1)*M,y:p.minY+r*M,h:0}); });
-      if(edges.length<2) return;
-      const e=pickDoor(edges); if(!e) return;
+  /* kapılar (computeDoors: elle ayar destekli) + kapı modunda tutamaçlar */
+  computeDoors().forEach(dr=>{
+    if(dr.status!=='ok') return;
+    const e=dr.e, hov=mode==='door' && hoverDoor && hoverDoor.key===dr.key;
+    if(dr.kind==='unit'){
+      const w=Math.max(2,pxPerM*0.2);
+      let bx,by;
+      if(e.h){ g.appendChild(el('line',{x1:W2Sx(e.x-0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.95),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
+        bx=W2Sx(e.x+0.45); by=W2Sy(e.y); }
+      else { g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y-0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.95),stroke:'#faf8f3','stroke-width':w}));
+        bx=W2Sx(e.x); by=W2Sy(e.y+0.45); }
+      const fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
+      g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05,fill:'#b35a2e',stroke:'#fff','stroke-width':1.5}));
+      const tb=el('text',{x:bx,y:by+fs2*0.35,'text-anchor':'middle','font-size':fs2,fill:'#fff','font-weight':'700'});
+      tb.textContent='D'+(dr.k+1); g.appendChild(tb);
+      if(mode==='door') /* rozet etrafında halka tutamaç */
+        g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05+3,fill:'none',stroke:'#b35a2e',
+          'stroke-width':hov?2.5:1.5,'stroke-dasharray':hov?'none':'3 3'}));
+    } else {
       const w=Math.max(1.5,pxPerM*0.12);
       if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.85),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
       else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.85),stroke:'#faf8f3','stroke-width':w}));
-    };
-    u.rooms.forEach(reg=>{
-      if(reg===u.antre||!reg.cells.length) return;
-      if(reg.name==='EB. BANYO'){ const eb=u.rooms.find(g2=>g2.name==='EB. YATAK ODASI'); if(eb) door(reg,eb.id); return; }
-      door(reg,u.antre.id);
-    });
+      if(mode==='door'){ /* kare tutamaç */
+        const m2=doorMid(e);
+        g.appendChild(el('rect',{x:m2.x-4.5,y:m2.y-4.5,width:9,height:9,
+          fill:hov?'#b35a2e':'#fff',stroke:'#b35a2e','stroke-width':2}));
+      }
+    }
   });
   /* duvar uzunlukları: yakınlaşınca hepsi, imleç bir odanın üzerindeyken o oda her ölçekte.
      Aynı duvarı iki oda da etiketliyorsa teke iner ve duvarın ÜSTÜNE (haleyle) yazılır;
@@ -1404,8 +2463,8 @@ function renderPlan(){
       if(nb(r,c+1)!==hg.id) hl(x+M,y,x+M,y+M);
     });
   }
-  /* ayırıcı tutamaçları (bölge başına, hole paralel) */
-  if(!p.villa && p.zoneUI && customCutsZ){
+  /* ayırıcı tutamaçları (bölge başına, hole paralel) — kapı modunda gizli */
+  if(!p.villa && p.zoneUI && customCutsZ && mode!=='door'){
     p.zoneUI.forEach(zu=>{
       (customCutsZ[zu.zi]||[]).forEach((v,idx)=>{
         const cx= zu.horiz? W2Sx(v) : W2Sx(zu.perp);
@@ -1420,19 +2479,20 @@ function renderPlan(){
   if(p.wallRuns){
     const act = dragging&&dragging.type==='wall'? dragging.run
               : (hoverWall&&p.wallRuns.includes(hoverWall)? hoverWall : null);
+    const EXTC='#2f6f8f'; // dış (daire sınırı / hol) duvar rengi — iç duvar turuncu
     if(act){
       const s=wallSeg(act);
       g.appendChild(el('line',{x1:W2Sx(s.x1),y1:W2Sy(s.y1),x2:W2Sx(s.x2),y2:W2Sy(s.y2),
-        stroke:'#b35a2e','stroke-width':5,'stroke-linecap':'round',opacity:.85}));
+        stroke:act.ext?EXTC:'#b35a2e','stroke-width':5,'stroke-linecap':'round',opacity:.85}));
     }
-    if(pxPerM>=9){
+    if(pxPerM>=9 && mode!=='door'){
       p.wallRuns.forEach(rn=>{
         const mx = rn.horiz? p.minX+((rn.lo+rn.hi)/2)*M : p.minX+rn.pos*M;
         const my = rn.horiz? p.minY+rn.pos*M : p.minY+((rn.lo+rn.hi)/2)*M;
-        const hs=4.5;
-        g.appendChild(el('rect',{x:W2Sx(mx)-hs,y:W2Sy(my)-hs,width:hs*2,height:hs*2,rx:1.5,
-          fill:rn===act?'#b35a2e':'#fff',stroke:'#b35a2e','stroke-width':1.6,
-          cursor:rn.horiz?'ns-resize':'ew-resize'}));
+        const hs=rn.ext?5.2:4.5, col=rn.ext?EXTC:'#b35a2e';
+        g.appendChild(el(rn.ext?'circle':'rect', rn.ext
+          ? {cx:W2Sx(mx),cy:W2Sy(my),r:hs,fill:rn===act?col:'#fff',stroke:col,'stroke-width':1.8,cursor:rn.horiz?'ns-resize':'ew-resize'}
+          : {x:W2Sx(mx)-hs,y:W2Sy(my)-hs,width:hs*2,height:hs*2,rx:1.5,fill:rn===act?col:'#fff',stroke:col,'stroke-width':1.6,cursor:rn.horiz?'ns-resize':'ew-resize'}));
       });
     }
   }
@@ -1467,11 +2527,14 @@ function computeWallRuns(){
   const p=plan; if(!p) return [];
   const unitOf=new Map();
   p.unitObjs.forEach((u,k)=>u.rooms.forEach(g=>unitOf.set(g.id,k)));
+  const FIXED=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik'; // çekirdek/kaçış/şaft sabit
   const eligible=(a,b)=>{
-    const ka=unitOf.get(a);
-    if(ka===undefined||ka!==unitOf.get(b)) return false;          // yalnız aynı dairenin iç duvarı
-    return p.regions[a].type!=='merdiven'&&p.regions[b].type!=='merdiven';
+    if(FIXED(p.regions[a].type)||FIXED(p.regions[b].type)) return false;
+    const ka=unitOf.get(a), kb=unitOf.get(b);
+    // aynı daire iç duvarı VEYA daire dış sınırı (komşu daire / ortak hol) — ikisi de sürüklenebilir
+    return ka!==undefined || kb!==undefined; // en az bir taraf daire odası olmalı (hol-hol değil)
   };
+  const isExt=(a,b)=>unitOf.get(a)!==unitOf.get(b); // farklı daire ya da hol sınırı = dış duvar
   const hMap=new Map(), vMap=new Map();
   for(let r=0;r<p.rows;r++)for(let c=0;c<p.cols;c++){
     const i=r*p.cols+c; if(!p.inside[i]||p.cm[i]<0) continue;
@@ -1490,7 +2553,7 @@ function computeWallRuns(){
     let s=e.als[0], prev=e.als[0];
     for(let j=1;j<=e.als.length;j++){
       if(j===e.als.length||e.als[j]!==prev+1){
-        runs.push({horiz,pos:e.pos,lo:s,hi:prev+1,a:e.a,b:e.b});
+        runs.push({horiz,pos:e.pos,lo:s,hi:prev+1,a:e.a,b:e.b,ext:isExt(e.a,e.b)});
         if(j<e.als.length){ s=e.als[j]; prev=e.als[j]; } }
       else prev=e.als[j]; } };
   hMap.forEach(e=>split(e,1)); vMap.forEach(e=>split(e,0));
@@ -1505,11 +2568,24 @@ function regConnected(g){
       const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
   return seen.size===g.cells.length;
 }
-/* duvarı 1 hücre kaydır: dir=+1 → a büyür (b'den şerit alır), dir=-1 → b büyür */
+/* bir oda yutulabilir mi? (duvar birleşmesinde donör oda tümüyle alıcıya katılır) */
+function canAbsorb(g){
+  if(!g) return false;
+  if(['merdiven','yangin','asansor','teknik','koridor'].includes(g.type)) return false; // çekirdek/hol sabit
+  const k=unitOfRoom(g.id); if(k<0) return false;
+  const u=plan.unitObjs[k];
+  if(g===u.antre) return false;                                          // giriş kaybolmasın
+  if(g.type==='salon' && !u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length)) return false; // tek salon kalsın
+  return true;
+}
+/* duvarı 1 hücre kaydır: dir=+1 → a büyür (b'den şerit alır), dir=-1 → b büyür.
+   Donör oda yok olacak kadar sıkışırsa ("sonuna kadar itildi") → oda yutulur ve
+   duvarlar BİRLEŞİR: tüm donör hücreleri alıcıya geçer, oda plandan düşer. */
 function moveWallStep(run, dir){
   const p=plan;
   const donor = dir>0? p.regions[run.b] : p.regions[run.a];
   const recv  = dir>0? p.regions[run.a] : p.regions[run.b];
+  if(!donor.cells.length) return false;
   const line  = dir>0? run.pos : run.pos-1;
   if(line<0 || (run.horiz? line>=p.rows : line>=p.cols)) return false;
   const strip=[];
@@ -1518,7 +2594,14 @@ function moveWallStep(run, dir){
     if(!p.inside[i]||p.cm[i]!==donor.id) return false; // şeridin tamamı donöre ait olmalı (3. odaya taşmaz)
     strip.push(i);
   }
-  if(donor.cells.length-strip.length<4) return false;  // donör oda en az 1 m² kalsın
+  if(donor.cells.length-strip.length<4){               // donör yok olacak: birleştir ya da dur
+    if(!canAbsorb(donor)) return false;                // yutulamaz oda (tek salon/antre/çekirdek) → duvar durur
+    donor.cells.slice().forEach(i=>{ p.cm[i]=recv.id; recv.cells.push(i); });
+    donor.cells=[];
+    const k=unitOfRoom(donor.id);
+    if(k>=0){ const u=p.unitObjs[k]; u.rooms=u.rooms.filter(g=>g!==donor); if(u.antre===donor) u.antre=null; }
+    return 'merged';
+  }
   strip.forEach(i=>{ p.cm[i]=recv.id; recv.cells.push(i); });
   const rm=new Set(strip); donor.cells=donor.cells.filter(i=>!rm.has(i));
   if(!regConnected(donor)){ // donör ikiye bölünüyorsa geri al
@@ -1544,40 +2627,756 @@ function hitWallRun(sx,sy){
   }
   return null;
 }
+/* tüm plan hücre durumunun anlık görüntüsü (grup/birleşme geri alma için) */
+function snapshotRegions(){
+  return plan.regions.map(g=>({id:g.id, cells:g.cells.slice()}));
+}
+function snapshotChanged(snap){
+  for(const s of snap){ const g=plan.regions[s.id];
+    if(!g || g.cells.length!==s.cells.length) return true; }
+  return false;
+}
+function restoreRegions(snap){
+  snap.forEach(s=>{ const g=plan.regions[s.id]; if(!g) return;
+    g.cells=s.cells.slice(); g.cells.forEach(i=>plan.cm[i]=g.id);
+    calcRegionMetrics(g, plan.cols, plan.minX, plan.minY); });
+}
+/* dış (daire sınırı) duvarının tüm doğrusal parçaları: aynı yön + aynı konum +
+   aynı daire-ikilisi → birlikte taşınır (apartman sınırı bütün olarak hareket eder) */
+function boundaryGroup(run){
+  if(!run.ext || !plan.wallRuns) return [run];
+  const uo=id=>{ for(let k=0;k<plan.unitObjs.length;k++) if(plan.unitObjs[k].rooms.some(g=>g.id===id)) return k; return 'h'; };
+  const key=r=>r.horiz+'|'+[uo(r.a),uo(r.b)].sort().join('-');
+  const k0=key(run);
+  return plan.wallRuns.filter(r=>r.horiz===run.horiz && r.pos===run.pos && key(r)===k0);
+}
 function dragWallTo(sx,sy){
   const p=plan, run=dragging.run;
   const want = run.horiz? Math.round((S2Wy(sy)-p.minY)/M) : Math.round((S2Wx(sx)-p.minX)/M);
-  let moved=false, guard=0;
-  while(run.pos!==want && guard++<80){
-    if(!moveWallStep(run, want>run.pos?1:-1)) break;
-    moved=true;
-  }
+  const group = boundaryGroup(run);
+  let moved=false, merged=false;
+  group.forEach(rn=>{ let guard=0;
+    while(rn.pos!==want && guard++<160){
+      const res=moveWallStep(rn, want>rn.pos?1:-1);
+      if(!res) break;
+      moved=true; if(res==='merged'){ merged=true; break; } // birleşme: bu parça tüketildi
+    } });
   if(!moved) return;
-  calcRegionMetrics(p.regions[run.a], p.cols, p.minX, p.minY);
-  calcRegionMetrics(p.regions[run.b], p.cols, p.minX, p.minY);
+  p.regions.forEach(g=>calcRegionMetrics(g, p.cols, p.minX, p.minY));
   p.wallRuns=computeWallRuns();
   const nr=p.wallRuns.find(rn=>rn.a===run.a&&rn.b===run.b&&rn.horiz===run.horiz&&rn.pos===run.pos&&rn.hi>run.lo&&rn.lo<run.hi);
-  if(nr) dragging.run=nr;
+  dragging.run=nr||run;
   hoverWall=nr||null;
   runChecks(); buildUnitTable(); render();   // canlı yeniden denetim
 }
 
+/* ================= antre inceltme =================
+   Üretim/onarım sonrası antre yalnız gerektiği kadar yer tutar. Fazla hücre
+   şeritleri duvar adımlarıyla (moveWallStep) komşu odalara geri verilir —
+   önce mevzuat açığı olan odaya, sonra emici salona. Korumalar: antre bağlantılı
+   kalır, hiçbir odanın antre komşuluğu (kapı erişimi) kopmaz, antre ≥3,5 m² ve
+   hiçbir yeri 1 m'den ince olmaz, koridor (giriş kapısı) teması korunur.
+   Görseldeki hatayı çözer: kör uç kollar ve salona/odaya sokulan çıkıntılar erir. */
+function antreAdjSet(u){
+  const p=plan, aid=u.antre.id, s=new Set();
+  u.rooms.forEach(g=>{ if(g===u.antre||!g.cells.length) return;
+    const ok=g.cells.some(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+      return (r>0&&p.cm[i-p.cols]===aid)||(r<p.rows-1&&p.cm[i+p.cols]===aid)
+           ||(c>0&&p.cm[i-1]===aid)||(c<p.cols-1&&p.cm[i+1]===aid); });
+    if(ok) s.add(g.id); });
+  return s;
+}
+function thinCells(g){ /* 2×2 tam-blok içinde olmayan hücre sayısı (<1 m genişlik) */
+  const p=plan, set=new Set(g.cells); let n=0;
+  g.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols; let ok=false;
+    for(let dr=-1;dr<=0&&!ok;dr++)for(let dc=-1;dc<=0&&!ok;dc++){
+      const r0=r+dr,c0=c+dc;
+      if(r0<0||c0<0||r0+1>=p.rows||c0+1>=p.cols) continue;
+      if(set.has(r0*p.cols+c0)&&set.has(r0*p.cols+c0+1)&&set.has((r0+1)*p.cols+c0)&&set.has((r0+1)*p.cols+c0+1)) ok=true; }
+    if(!ok) n++; });
+  return n;
+}
+function slimUnitAntre(u){
+  const p=plan, an=u.antre;
+  if(!an||!an.cells.length) return false;
+  const FLOOR=t=>t==='salon'?REG.salon:t==='yatak'?REG.yatak:t==='mutfak'?REG.mutfak:t==='banyo'?REG.banyo:t==='wc'?REG.wc:null;
+  const recalc=()=>p.regions.forEach(g=>calcRegionMetrics(g,p.cols,p.minX,p.minY));
+  const badCount=()=>runChecks().filter(o=>o.s==='bad').length; // KABUL KAPISI: yeni mevzuat/kapı/cephe ihlali doğmasın
+  const mustAdj=antreAdjSet(u);
+  recalc();
+  let badRef=badCount();
+  /* komb (omurga) dairede taban daha yüksek: omurga, orta odaların kapı hattıdır —
+     3,5 m²'ye kemirilirse odalar köşe temasıyla 4+ m derinliğe şişer (v21 ince
+     ayarında kullanıcı omurgayı ~%13-15'te tuttu) */
+  const uArea=u.rooms.reduce((s,g)=>s+g.cells.length,0)*M*M;
+  const slimFloor = u.comb? Math.max(6, uArea*0.12) : 3.5;
+  let changed=false, guard=0;
+  for(;;){
+    if(an.cells.length*M*M<=slimFloor || guard++>240) break;
+    const runs=computeWallRuns().filter(rn=>{
+      const other = rn.a===an.id? rn.b : (rn.b===an.id? rn.a : -1);
+      if(other<0) return false;
+      const og=p.regions[other];
+      return u.rooms.includes(og) && og!==an && og.type!=='antre' && og.name!=='EB. BANYO';
+    });
+    const rank=t=>t==='salon'?0:t==='yatak'?1:t==='oda'?2:t==='mutfak'?3:t==='banyo'?4:5;
+    const sc=rn=>{ const og=p.regions[rn.a===an.id?rn.b:rn.a]; const f=FLOOR(og.type);
+      const need=f&&(og.area<f.area||og.minSide<f.side);
+      return (need?0:10)+rank(og.type); };
+    runs.sort((x,y)=>sc(x)-sc(y));
+    let did=false;
+    for(const rn of runs){
+      const dir = rn.a===an.id? -1 : 1;          // antre donör olacak yön
+      const thin0=thinCells(an);
+      const res=moveWallStep(rn,dir);
+      if(res!==true) continue;                   // birleşme olamaz (canAbsorb antreyi korur)
+      /* ucuz ön elemeler */
+      const adjNow=antreAdjSet(u);
+      let ok = an.cells.length*M*M>=slimFloor && thinCells(an)<=thin0;
+      if(ok) for(const id2 of mustAdj){ const g2=p.regions[id2];
+        if(g2&&g2.cells.length&&!adjNow.has(id2)){ ok=false; break; } }
+      /* asıl kapı: runChecks ihlal sayısı artmamalı (kapı yeri, dış cephe,
+         biçimsizlik, ince-uzun mutfak... hepsi bu sayede korunur) */
+      if(ok){ recalc(); const b=badCount(); if(b>badRef) ok=false; else badRef=b; }
+      if(!ok){ moveWallStep(rn,-dir); recalc(); continue; } // geri adım (şerit alıcıdan geri alınır)
+      did=true; changed=true; break;
+    }
+    if(!did) break;
+  }
+  recalc();
+  return changed;
+}
+function slimAntres(){
+  if(!plan) return;
+  plan.unitObjs.forEach(u=>slimUnitAntre(u));
+  plan.wallRuns=computeWallRuns();
+}
+
+/* ================= oda ekle / sil (sağ tık) =================
+   Üretim sonrası tek dairede oda düzenleme. Silme: oda, aynı dairede en uzun ortak
+   duvarlı komşusuna katılır (purgeSlivers mantığı). Ekleme: ev sahibi odadan, antreye
+   komşu kenardan dikdörtgen oyulur (carveMissing mantığı); ince ayar duvar sürükleme
+   ile yapılır. Her ikisi de editHistory'ye yazar (Geri Al) ve daire spec KOPYASINI
+   günceller (runChecks oda programı raporu yanlış alarm vermesin). generate() bu
+   girdileri de sıfırlar — duvar düzenlemeleriyle aynı bilinçli karar. */
+const ROOM_ADD=[
+  {name:'YATAK ODASI',  type:'yatak',  h:5, w:8},  // 2,5 × 4,0 m hedef
+  {name:'EB. BANYO',    type:'banyo',  h:4, w:4, eb:true}, // 2,0 × 2,0 m; yalnız yatak odasından oyulur
+  {name:'OTURMA ODASI', type:'salon',  h:6, w:8},  // 3,0 × 4,0 m
+  {name:'MUTFAK',       type:'mutfak', h:4, w:6},  // 2,0 × 3,0 m
+  {name:'BANYO',        type:'banyo',  h:3, w:4},  // 1,5 × 2,0 m
+  {name:'WC',           type:'wc',     h:2, w:3},  // 1,0 × 1,5 m
+  {name:'KİLER',        type:'antre',  h:3, w:4}   // 1,5 × 2,0 m
+];
+function unitOfRoom(id){
+  if(!plan) return -1;
+  for(let k=0;k<plan.unitObjs.length;k++) if(plan.unitObjs[k].rooms.some(g=>g.id===id)) return k;
+  return -1;
+}
+function refreshAfterRoomEdit(){
+  hoverWall=null; hoverRoomId=null;
+  plan.wallRuns=computeWallRuns();
+  runChecks(); buildUnitTable(); render();
+}
+/* daireyi tümüyle sil → hücreleri en çok sınır paylaşan komşu daireye kat
+   (iki daireyi birleştirmenin temiz yolu; oda bazlı korumalarla uğraşmadan).
+   Daire nesnesi boş bırakılır (yeniden indeksleme yok); boş daireler tabloda/
+   denetimde atlanır. Geri al: bölge anlık görüntüsü odaları diriltir. */
+function dissolveUnit(k){
+  const p=plan, u=p.unitObjs[k]; if(!u) return false;
+  const mine=new Set(); u.rooms.forEach(g=>g.cells.forEach(i=>mine.add(i)));
+  if(!mine.size){ return false; }
+  const FIX=t=>['merdiven','yangin','asansor','teknik'].includes(t);
+  const unitOfReg=v=>{ for(let j=0;j<p.unitObjs.length;j++) if(p.unitObjs[j]!==u && p.unitObjs[j].rooms.some(g=>g.id===v)) return j; return -1; };
+  // hedef: en çok sınır paylaşan komşu daire
+  const border=new Map();
+  mine.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols)return; const j=rr*p.cols+cc;
+      if(!p.inside[j]||p.cm[j]<0||mine.has(j))return; const kk=unitOfReg(p.cm[j]);
+      if(kk>=0) border.set(kk,(border.get(kk)||0)+1); }); });
+  let tgt=-1,bn=0; border.forEach((n,kk)=>{ if(n>bn){bn=n;tgt=kk;} });
+  // hangi bölgelere katılabilir? (hedef daire odaları; hedef yoksa koridor)
+  const okReg=v=>{ const reg=p.regions[v]; if(FIX(reg.type)) return false;
+    return tgt>=0 ? p.unitObjs[tgt].rooms.some(g=>g.id===v) : reg.type==='koridor'; };
+  const flood=test=>{ let changed=true,guard=0;
+    while(mine.size && changed && guard++<20000){ changed=false; const todo=[];
+      mine.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols; const cnt=new Map();
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols)return; const j=rr*p.cols+cc;
+          if(!p.inside[j]||p.cm[j]<0||mine.has(j))return; if(!test(p.cm[j]))return;
+          cnt.set(p.cm[j],(cnt.get(p.cm[j])||0)+1); });
+        if(cnt.size){ let best=-1,b2=0; cnt.forEach((n,v)=>{if(n>b2){b2=n;best=v;}}); todo.push([i,best]); } });
+      todo.forEach(([i,v])=>{ p.cm[i]=v; p.regions[v].cells.push(i); mine.delete(i); changed=true; }); } };
+  flood(okReg);
+  if(mine.size) flood(v=>{ const reg=p.regions[v]; return !FIX(reg.type); }); // kalan: çekirdek dışı herhangi komşu (koridor dahil)
+  if(mine.size){ const dp=newRegRuntime('ORTAK DEPO','teknik'); mine.forEach(i=>{ p.cm[i]=dp.id; dp.cells.push(i); }); } // izole kalıntı
+  u.rooms.forEach(g=>{ g.cells=[]; }); u.antre=null;
+  doorOverrides={}; doorHidden={}; unitLayout={}; // daire indeks anahtarlı düzenlemeler bayatladı
+  p.regions.forEach(g=>calcRegionMetrics(g,p.cols,p.minX,p.minY));
+  refreshAfterRoomEdit();
+  return true;
+}
+/* runtime'da yeni bölge (generate dışında; dissolve kalıntısı için) */
+function newRegRuntime(name,type){ const g={id:plan.regions.length,name,type,unit:-1,cells:[]}; plan.regions.push(g); return g; }
+/* odayı sil: hücreleri aynı dairedeki en uzun ortak duvarlı komşuya geçer */
+function removeRoom(g){
+  const p=plan, k=unitOfRoom(g.id); if(k<0) return false;
+  const u=p.unitObjs[k];
+  if(g===u.antre||g.type==='merdiven') return false;       // antre/merdiven silinmez
+  if(g.type==='salon'&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length))
+    return false;                                          // TEK salon ölmez (yasal zorunlu piyes)
+  const cnt=new Map();
+  g.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+      if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+      const j=rr*p.cols+cc, v=p.cm[j];
+      if(p.inside[j]&&v>=0&&v!==g.id&&u.rooms.includes(p.regions[v])&&p.regions[v].type!=='merdiven')
+        cnt.set(v,(cnt.get(v)||0)+1); }); });
+  let best=-1,bn=0; cnt.forEach((n,v)=>{ if(n>bn){bn=n;best=v;} });
+  if(best<0) return false;                                 // daire içi komşusu yok
+  const tgt=p.regions[best];
+  editHistory.push({type:'room', op:'remove', unit:k, reg:g, tgt:best,
+    cells:g.cells.slice(), roomsIdx:u.rooms.indexOf(g), spec:u.spec});
+  g.cells.forEach(i=>{ p.cm[i]=best; tgt.cells.push(i); });
+  g.cells=[];
+  u.rooms=u.rooms.filter(o=>o!==g);
+  /* spec kopyası: program raporu yeni duruma göre denetlesin */
+  const s={...u.spec};
+  if(g.type==='yatak') s.oda=Math.max(0,s.oda-1);
+  else if(g.type==='salon') s.salon=Math.max(0,s.salon-1);
+  else if(g.type==='mutfak') s.acik=true;                  // mutfak salona katıldı → açık mutfak
+  else if(g.name==='EB. BANYO') s.ensuite=false;
+  u.spec=s;
+  calcRegionMetrics(tgt, p.cols, p.minX, p.minY);
+  calcRegionMetrics(g, p.cols, p.minX, p.minY);
+  refreshAfterRoomEdit();
+  return true;
+}
+/* oda ekle: ev sahibi odadan, antreye komşu tohum hücreden başlayan pencere oyulur */
+function addRoom(host, def, hint){
+  const p=plan, k=unitOfRoom(host.id); if(k<0) return false;
+  const u=p.unitObjs[k];
+  if(host.type==='merdiven') return false;
+  if(def.eb&&host.type!=='yatak') return false;            // eb. banyo yalnız yatak odasından oyulur
+  if(def.eb&&u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length)) return false; // dairede tek EB. BANYO (denetim/kapı eşleşmesi ada bağlı)
+  /* tohum: antreye komşu host hücresi (kapı verilebilsin); eb. banyo köşeden oyulur.
+     hint (sağ tık hücresi) verilirse adaylar içinden ona en yakını seçilir —
+     kullanıcı odanın hangi kenara dayanacağını tık konumuyla belirler. */
+  const aid=(u.antre&&host!==u.antre&&!def.eb)? u.antre.id : -99;
+  const adjA=i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+    return (r>0&&p.cm[i-p.cols]===aid)||(r<p.rows-1&&p.cm[i+p.cols]===aid)
+         ||(c>0&&p.cm[i-1]===aid)||(c<p.cols-1&&p.cm[i+1]===aid); };
+  /* YENİ ANTRE: tohum koridora (apartman holü) komşu hücrelerden — giriş kapısı oradan
+     gelir; alttan/cepheden eklenen antre pencereyi yiyordu (vaka-3 D3 dersi) */
+  const newAntre = def.type==='antre' && (!u.antre || !u.antre.cells.length);
+  const isCorAdj=i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+    const ok=j=>j>=0&&j<p.rows*p.cols&&p.cm[j]>=0&&p.regions[p.cm[j]].type==='koridor';
+    return (r>0&&ok(i-p.cols))||(r<p.rows-1&&ok(i+p.cols))||(c>0&&ok(i-1))||(c<p.cols-1&&ok(i+1)); };
+  const isExtC=i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+    return r===0||r===p.rows-1||c===0||c===p.cols-1
+      ||!p.inside[i-p.cols]||!p.inside[i+p.cols]||!p.inside[i-1]||!p.inside[i+1]; };
+  const seeds = newAntre? host.cells.filter(isCorAdj) : host.cells.filter(adjA);
+  const pool=seeds.length?seeds:host.cells;
+  let seed;
+  if(hint!=null){
+    const hr=(hint/p.cols)|0, hc=hint%p.cols; let bd=1e9; seed=pool[0];
+    pool.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols, d=Math.abs(r-hr)+Math.abs(c-hc);
+      if(d<bd){ bd=d; seed=i; } });
+  } else seed=pool.slice().sort((a,b)=>a-b)[0];
+  let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+  host.cells.forEach(i=>{const r=(i/p.cols)|0,c=i%p.cols;
+    r0=Math.min(r0,r);r1=Math.max(r1,r);c0=Math.min(c0,c);c1=Math.max(c1,c);});
+  const sr=(seed/p.cols)|0, sc=seed%p.cols;
+  /* pencere tohumdan başlar, host bbox'ına kıstırılır; sığmazsa küçülür */
+  let h=def.h, w=def.w, take=null, keep=null;
+  const windowAt=(wr,wc,hh,ww)=>{ const tk=[],kp=[];
+    host.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+      (r>=wr&&r<wr+hh&&c>=wc&&c<wc+ww? tk:kp).push(i); });
+    return [tk,kp]; };
+  for(let t=0;t<12;t++){
+    if(hint!=null){
+      /* tohumu içeren tüm pencere konumları denenir; en çok hücre kapsayan kazanır
+         (eşitlikte tohum pencere ortasına yakın) — kenar/köşe tohumlarında sliver önler */
+      let bs=-1;
+      for(let dr=0;dr<h;dr++) for(let dc=0;dc<w;dc++){
+        const wr=Math.max(r0,Math.min(sr-dr,r1-h+1)), wc=Math.max(c0,Math.min(sc-dc,c1-w+1));
+        const [tk,kp]=windowAt(wr,wc,h,w);
+        let score=tk.length*1000 - Math.abs(dr-(h-1)/2) - Math.abs(dc-(w-1)/2);
+        /* yeni antre koridora yapışsın, cepheden uzak dursun (pencere odalara kalsın) */
+        if(newAntre) tk.forEach(i=>{ if(isCorAdj(i)) score+=300; if(isExtC(i)) score-=120; });
+        if(score>bs){ bs=score; take=tk; keep=kp; } }
+    } else {
+      const wr=Math.max(r0, Math.min(sr, r1-h+1)), wc=Math.max(c0, Math.min(sc, c1-w+1));
+      [take,keep]=windowAt(wr,wc,h,w);
+    }
+    if(keep.length>=12||(h<=2&&w<=2)) break;               // ev sahibine ≥3 m² kalsın
+    if(w>=h&&w>2) w--; else if(h>2) h--;
+  }
+  if(take.length<4||keep.length<12) return false;          // yeni oda ≥1 m² olmalı
+  const oldCells=host.cells;
+  host.cells=keep;
+  if(!regConnected(host)){ host.cells=oldCells; return false; } // ev sahibi ikiye bölünemez
+  const ng={id:p.regions.length, name:def.name, type:def.type, unit:k, cells:take};
+  p.regions.push(ng);
+  take.forEach(i=>p.cm[i]=ng.id);
+  u.rooms.splice(u.rooms.indexOf(host)+1, 0, ng);
+  editHistory.push({type:'room', op:'add', unit:k, reg:ng, host:host.id,
+    cells:take.slice(), spec:u.spec, hostName:host.name});
+  const s={...u.spec};
+  if(def.type==='yatak') s.oda+=1;
+  else if(def.type==='salon') s.salon+=1;
+  else if(def.type==='mutfak') s.acik=false;               // artık ayrı mutfak var
+  else if(def.eb){ s.ensuite=true; host.name='EB. YATAK ODASI'; } // denetim/kapı eb. yatağa bağlanır
+  if(def.type==='antre'&&def.name==='ANTRE'&&!u.antre) u.antre=ng; // antresiz daireye antre eklendi
+  u.spec=s;
+  calcRegionMetrics(host, p.cols, p.minX, p.minY);
+  calcRegionMetrics(ng, p.cols, p.minX, p.minY);
+  refreshAfterRoomEdit();
+  return true;
+}
+/* ================= oda etiketi / takas / bölme / antre uzatma =================
+   Etiket: oda tipi değiştirilebilir (spec kopyası güncellenir, denetim doğru kalır)
+   ya da iki odanın etiketi takas edilir (program değişmez, yalnız adlar yer değiştirir).
+   Bölme: oda ortadan nötr "ODA" tipiyle ikiye ayrılır; kullanıcı duvarı sürükleyip
+   "Tipini değiştir" ile adlandırır — duvar birleşip kaybolduğunda geri getirme yolu.
+   Uzatma: antre, hedef odaya Dijkstra ile en ucuz yoldan 1 m'lik korıdorla bağlanır. */
+const RETYPE=[
+  {name:'YATAK ODASI',  type:'yatak'},
+  {name:'OTURMA ODASI', type:'salon'},
+  {name:'MUTFAK',       type:'mutfak'},
+  {name:'BANYO',        type:'banyo'},
+  {name:'WC',           type:'wc'},
+  {name:'ÇALIŞMA ODASI',type:'oda'},
+  {name:'KİLER',        type:'antre'}
+];
+function retypeGuard(g,u){ /* tip değişimi/takas yasağı: antre, merdiven, EB ikilisi, tek salon */
+  if(g===u.antre||g.type==='merdiven'||g.name==='EB. BANYO') return 'Bu odanın tipi değiştirilemez.';
+  if(g.name==='EB. YATAK ODASI'&&u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length))
+    return 'Önce EB. BANYO silinmeli (eb. banyo bu odaya bağlı).';
+  return null;
+}
+function retypeRoom(g, def){
+  const p=plan, k=unitOfRoom(g.id); if(k<0) return false;
+  const u=p.unitObjs[k];
+  if(retypeGuard(g,u)) return false;
+  if(g.type==='salon'&&def.type!=='salon'&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length))
+    return false;                                          // TEK salon tipsizleşemez (yasal zorunlu piyes)
+  editHistory.push({type:'retype', reg:g, name:g.name, rtype:g.type, unit:k, spec:u.spec});
+  const s={...u.spec};
+  if(g.type==='yatak') s.oda=Math.max(0,s.oda-1);
+  else if(g.type==='salon') s.salon=Math.max(0,s.salon-1);
+  else if(g.type==='mutfak') s.acik=true;
+  if(def.type==='yatak') s.oda+=1;
+  else if(def.type==='salon') s.salon+=1;
+  else if(def.type==='mutfak') s.acik=false;
+  u.spec=s;
+  g.name=def.name; g.type=def.type;
+  refreshAfterRoomEdit();
+  return true;
+}
+function swapRooms(g1,g2){
+  const k=unitOfRoom(g1.id);
+  if(k<0||k!==unitOfRoom(g2.id)) return false;             // yalnız aynı daire içinde
+  const u=plan.unitObjs[k];
+  if(retypeGuard(g1,u)||retypeGuard(g2,u)) return false;
+  editHistory.push({type:'swap', a:g1.id, b:g2.id});
+  const n=g1.name,t=g1.type; g1.name=g2.name; g1.type=g2.type; g2.name=n; g2.type=t;
+  refreshAfterRoomEdit();
+  return true;
+}
+/* odayı ortadan böl: horiz=true yatay duvar (satırlar ayrılır), false dikey duvar.
+   Yeni parça nötr "ODA" doğar; ince ayar duvar sürükleme, adlandırma Tipini değiştir. */
+function splitRoom(g, horiz){
+  const p=plan, k=unitOfRoom(g.id); if(k<0) return false;
+  const u=p.unitObjs[k];
+  if(g.type==='merdiven'||g===u.antre) return false;
+  let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+  g.cells.forEach(i=>{const r=(i/p.cols)|0,c=i%p.cols; r0=Math.min(r0,r);r1=Math.max(r1,r);c0=Math.min(c0,c);c1=Math.max(c1,c);});
+  const span=horiz? r1-r0+1 : c1-c0+1;
+  if(span<4) return false;                                 // iki yarıya da ≥1 m kalmalı
+  const mid=(horiz?r0:c0)+(span>>1);
+  const take=[], keep=[];
+  g.cells.forEach(i=>{ const v=horiz?(i/p.cols)|0:i%p.cols; (v>=mid?take:keep).push(i); });
+  if(take.length<4||keep.length<4) return false;
+  const old=g.cells;
+  g.cells=keep;
+  if(!regConnected(g)){ g.cells=old; return false; }
+  const ng={id:p.regions.length, name:'ODA', type:'oda', unit:k, cells:take};
+  p.regions.push(ng); take.forEach(i=>p.cm[i]=ng.id);
+  if(!regConnected(ng)){ p.regions.pop(); take.forEach(i=>p.cm[i]=g.id); g.cells=old; return false; }
+  u.rooms.splice(u.rooms.indexOf(g)+1, 0, ng);
+  editHistory.push({type:'room', op:'add', unit:k, reg:ng, host:g.id,
+    cells:take.slice(), spec:u.spec, hostName:g.name});    // addRoom ile aynı geri alma yolu
+  calcRegionMetrics(g, p.cols, p.minX, p.minY);
+  calcRegionMetrics(ng, p.cols, p.minX, p.minY);
+  refreshAfterRoomEdit();
+  return true;
+}
+/* antreyi hedef odaya bağla: daire hücreleri üzerinde Dijkstra (ıslak hacimden
+   geçiş pahalı), yol 1 m'ye genişletilir, hücreler antreye aktarılır.
+   Donör odalar bağlantılı ve ≥1 m² kalmazsa işlem geri alınır. */
+function extendAntreTo(g){
+  const p=plan, k=unitOfRoom(g.id); if(k<0) return false;
+  const u=p.unitObjs[k], an=u.antre;
+  if(!an||!an.cells.length||g===an) return false;
+  const aid=an.id;
+  const adj=g.cells.some(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+    return (r>0&&p.cm[i-p.cols]===aid)||(r<p.rows-1&&p.cm[i+p.cols]===aid)
+         ||(c>0&&p.cm[i-1]===aid)||(c<p.cols-1&&p.cm[i+1]===aid); });
+  if(adj) return 'already';
+  const inUnit=new Map();
+  u.rooms.forEach(o=>{ if(o.type==='merdiven'||o.name==='EB. BANYO') return;
+    o.cells.forEach(i=>inUnit.set(i,o)); });
+  const costOf=o=> (o===an||o===g)?0 : (o.type==='salon'||o.type==='yatak'||o.type==='oda')?1 : 4;
+  const dist=new Map(), prev=new Map(); let pq=[];
+  an.cells.forEach(i=>{ dist.set(i,0); pq.push([0,i]); });
+  let goal=-1, guard=0;
+  while(pq.length&&guard++<20000){
+    pq.sort((x,y)=>x[0]-y[0]); const [d,i]=pq.shift();
+    if(d>(dist.has(i)?dist.get(i):1e9)) continue;
+    if(inUnit.get(i)===g){ goal=i; break; }
+    const r=(i/p.cols)|0,c=i%p.cols;
+    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+      if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+      const j=rr*p.cols+cc, o=inUnit.get(j); if(!o) return;
+      const nd=d+costOf(o);
+      if(nd<(dist.has(j)?dist.get(j):1e9)){ dist.set(j,nd); prev.set(j,i); pq.push([nd,j]); } });
+  }
+  if(goal<0) return false;
+  const path=[]; let cur=goal;
+  while(cur!==undefined && inUnit.get(cur)!==an){
+    if(inUnit.get(cur)!==g) path.push(cur);
+    cur=prev.get(cur); }
+  if(!path.length) return false;
+  const takeSet=new Set(path);
+  path.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;       // 0,5 m yol → 1 m koridor
+    for(const [rr,cc] of [[r,c+1],[r+1,c],[r,c-1],[r-1,c]]){
+      if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) continue;
+      const j=rr*p.cols+cc, o=inUnit.get(j);
+      if(!o||o===an||o===g||takeSet.has(j)) continue;
+      takeSet.add(j); break; } });
+  const snap=snapshotRegions();
+  const donors=new Set();
+  takeSet.forEach(i=>{ const o=p.regions[p.cm[i]]; if(o===an) return; donors.add(o);
+    o.cells=o.cells.filter(j=>j!==i); p.cm[i]=aid; an.cells.push(i); });
+  let ok=regConnected(an);
+  donors.forEach(o=>{ if(o.cells.length<4||!regConnected(o)) ok=false; });
+  if(!ok){ restoreRegions(snap); return false; }
+  editHistory.push({type:'wallsnap', snap});
+  p.regions.forEach(g2=>calcRegionMetrics(g2,p.cols,p.minX,p.minY));
+  refreshAfterRoomEdit();
+  return true;
+}
+/* --- menü --- */
+const roomMenu=document.getElementById('roomMenu');
+function hideRoomMenu(){ roomMenu.style.display='none'; }
+svg.addEventListener('contextmenu',e=>{
+  e.preventDefault(); hideRoomMenu();
+  if(mode==='balkon'){
+    const rb=svg.getBoundingClientRect();
+    const h=hitBalk(S2Wx(e.clientX-rb.left), S2Wy(e.clientY-rb.top));
+    if(h){ editHistory.push({type:'balk', prev:balkSnapshot()});
+      balconies.splice(h.i,1); hoverBalk=null; balkChecksRefresh(); render(); }
+    return;
+  }
+  if(mode==='door'){ /* SAĞ TIK: kapıyı otomatik yerine döndür */
+    if(!plan) return;
+    const rb=svg.getBoundingClientRect();
+    const h=hitDoor(e.clientX-rb.left, e.clientY-rb.top);
+    if(h && h.kind!=='extra' && doorOverrides[h.key]){
+      editHistory.push({type:'door', prev:doorSnapshot()});
+      delete doorOverrides[h.key]; hoverDoor=null; render();
+    }
+    return;
+  }
+  if(!plan) return;
+  const rb=svg.getBoundingClientRect(), sx=e.clientX-rb.left, sy=e.clientY-rb.top;
+  const c=Math.floor((S2Wx(sx)-plan.minX)/M), r=Math.floor((S2Wy(sy)-plan.minY)/M);
+  if(r<0||c<0||r>=plan.rows||c>=plan.cols) return;
+  const j=r*plan.cols+c;
+  if(!plan.inside[j]||plan.cm[j]<0) return;
+  const g=plan.regions[plan.cm[j]];
+  const k=unitOfRoom(g.id);
+  if(k<0||g.type==='merdiven') return;                     // ortak alan/merdivene menü yok
+  const u=plan.unitObjs[k];
+  const wrap=roomMenu.parentElement.getBoundingClientRect();
+  const place=()=>{ roomMenu.style.display='block';
+    roomMenu.style.left=Math.min(e.clientX-wrap.left, wrap.width-200)+'px';
+    roomMenu.style.top =Math.min(e.clientY-wrap.top,  wrap.height-roomMenu.offsetHeight-10)+'px'; };
+  const fail=msg=>{ roomMenu.innerHTML=`<div class="note">${msg}</div>`; place();
+    setTimeout(hideRoomMenu,1600); };
+  const isAntre = g===u.antre;
+  const antreAdj = !isAntre && u.antre && u.antre.cells.length && g.cells.some(i=>{
+    const r=(i/plan.cols)|0, c=i%plan.cols, aid=u.antre.id;
+    return (r>0&&plan.cm[i-plan.cols]===aid)||(r<plan.rows-1&&plan.cm[i+plan.cols]===aid)
+         ||(c>0&&plan.cm[i-1]===aid)||(c<plan.cols-1&&plan.cm[i+1]===aid); });
+  const buildMain=()=>{
+    let html=`<div class="mh">D${k+1} · ${g.name}</div><hr>`;
+    html+=`<div class="mh">Bu odadan oyarak ekle (tıkladığınız yere yakın)</div>`;
+    const hasEB=u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length);
+    ROOM_ADD.forEach((d,i)=>{
+      if(d.eb&&hasEB){ html+=`<div class="mi dis" title="Bu dairede zaten EB. BANYO var">+ ${d.name} (zaten var)</div>`; return; }
+      if(d.eb&&g.type!=='yatak'){ html+=`<div class="mi dis" title="Ebeveyn banyosu yatak odasından oyulur">+ ${d.name} (yatak odasına sağ tıklayın)</div>`; return; }
+      html+=`<div class="mi" data-add="${i}">+ ${d.name}</div>`; });
+    if(!u.antre) html+=`<div class="mi" data-addantre="1">+ ANTRE (girişi yeniden oluştur)</div>`;
+    if(isAntre){
+      html+='<hr><div class="mh">Antre</div>'
+        + `<div class="mi" data-slim="1">⇲ Antreyi kırp (fazlalık odalara)</div>`
+        + `<div class="mi dis" title="Daire girişi her zaman korunur">✕ Antre silinemez</div>`
+        + `<div class="mh">Uzatmak için: duvarını sürükleyin ya da hedef odaya sağ tıklayın</div>`;
+    } else {
+      html+='<hr><div class="mh">Düzenle</div>'
+        + `<div class="mi" data-retype-open="1">✎ Tipini değiştir…</div>`
+        + `<div class="mi" data-swap-open="1">⇄ Başka odayla takas et…</div>`
+        + `<div class="mi" data-split="v">║ Odayı dikine böl</div>`
+        + `<div class="mi" data-split="h">═ Odayı enine böl</div>`;
+      if(u.antre&&u.antre.cells.length&&!antreAdj)
+        html+=`<div class="mi" data-extend="1">➜ Antreyi bu odaya uzat (kapı erişimi)</div>`;
+      const onlySalon=g.type==='salon'&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length);
+      html+='<hr>'+(onlySalon
+        ? `<div class="mi dis" title="Yasal zorunlu piyes">✕ Tek salon silinemez</div>`
+        : `<div class="mi del" data-del="1">✕ Odayı sil (komşuya katılır)</div>`);
+    }
+    if(!plan.villa){
+      const cur=unitLayout[k]||'auto';
+      const opt=(m,lbl)=>`<div class="mi${cur===m?' on':''}" data-lay="${m}">${cur===m?'● ':'○ '}${lbl}</div>`;
+      html+='<hr><div class="mh">Daire iç düzeni</div>'
+         + opt('auto','Otomatik')
+         + opt('flat','Odalar yan yana')
+         + opt('rail','Yatak odaları derinlemesine');
+      const nbr=u.rooms.length && plan.unitObjs.filter((o,j)=>j!==k && o.rooms.some(x=>x.cells.length)).length;
+      if(nbr) html+='<hr><div class="mi del" data-dissolve="1">✕ Daireyi sil (komşuya kat)</div>';
+    }
+    roomMenu.innerHTML=html; place(); bindMain();
+  };
+  const showRetype=()=>{
+    let html=`<div class="mh">D${k+1} · ${g.name} → yeni tip</div><hr>`;
+    RETYPE.forEach((d,i)=>{ if(d.name===g.name) return;
+      html+=`<div class="mi" data-retype="${i}">${d.name}</div>`; });
+    html+=`<hr><div class="mi" data-back="1">‹ Geri</div>`;
+    roomMenu.innerHTML=html; place();
+    roomMenu.querySelectorAll('.mi[data-retype]').forEach(mi=>mi.onclick=()=>{
+      if(retypeRoom(g, RETYPE[+mi.dataset.retype])) hideRoomMenu();
+      else fail('Tip değiştirilemedi (tek salon / EB ikilisi korunur).'); });
+    const back=roomMenu.querySelector('.mi[data-back]'); if(back) back.onclick=buildMain;
+  };
+  const showSwap=()=>{
+    let html=`<div class="mh">${g.name} ↔ takas edilecek oda</div><hr>`;
+    u.rooms.forEach(o=>{ if(o===g||!o.cells.length||o===u.antre||o.type==='merdiven'||o.name==='EB. BANYO') return;
+      html+=`<div class="mi" data-swap="${o.id}">${o.name} (${fmt(o.cells.length*M*M)} m²)</div>`; });
+    html+=`<hr><div class="mi" data-back="1">‹ Geri</div>`;
+    roomMenu.innerHTML=html; place();
+    roomMenu.querySelectorAll('.mi[data-swap]').forEach(mi=>mi.onclick=()=>{
+      if(swapRooms(g, plan.regions[+mi.dataset.swap])) hideRoomMenu();
+      else fail('Takas yapılamadı (EB ikilisi / tek salon korunur).'); });
+    const back=roomMenu.querySelector('.mi[data-back]'); if(back) back.onclick=buildMain;
+  };
+  function bindMain(){
+    roomMenu.querySelectorAll('.mi[data-add]').forEach(mi=>mi.onclick=()=>{
+      const ok=addRoom(g, ROOM_ADD[+mi.dataset.add], j);
+      if(ok) hideRoomMenu();
+      else fail('Yer yetersiz — duvarları sürükleyerek odayı büyütüp yeniden deneyin.');
+    });
+    const aa=roomMenu.querySelector('.mi[data-addantre]');
+    if(aa) aa.onclick=()=>{ if(addRoom(g,{name:'ANTRE',type:'antre',h:3,w:6},j)) hideRoomMenu();
+      else fail('Antre için yer bulunamadı.'); };
+    const del=roomMenu.querySelector('.mi[data-del]');
+    if(del) del.onclick=()=>{ if(removeRoom(g)) hideRoomMenu();
+      else fail('Bu oda silinemedi (daire içi komşusu yok).'); };
+    const slim=roomMenu.querySelector('.mi[data-slim]');
+    if(slim) slim.onclick=()=>{ const snap=snapshotRegions();
+      if(slimUnitAntre(u)){ editHistory.push({type:'wallsnap', snap}); refreshAfterRoomEdit(); hideRoomMenu(); }
+      else fail('Kırpılacak fazlalık yok (erişim ve bağlantı korunuyor).'); };
+    const rt=roomMenu.querySelector('.mi[data-retype-open]'); if(rt) rt.onclick=showRetype;
+    const sw=roomMenu.querySelector('.mi[data-swap-open]'); if(sw) sw.onclick=showSwap;
+    roomMenu.querySelectorAll('.mi[data-split]').forEach(mi=>mi.onclick=()=>{
+      if(splitRoom(g, mi.dataset.split==='h')) hideRoomMenu();
+      else fail('Oda bölünemedi (çok küçük ya da parçalar kopuk kalırdı).'); });
+    const ex=roomMenu.querySelector('.mi[data-extend]');
+    if(ex) ex.onclick=()=>{ const r=extendAntreTo(g);
+      if(r===true) hideRoomMenu();
+      else if(r==='already') fail('Oda zaten antreye komşu.');
+      else fail('Uygun yol bulunamadı (donör odalar bölünemez).'); };
+    roomMenu.querySelectorAll('.mi[data-lay]').forEach(mi=>mi.onclick=()=>{
+      applyUnitLayout(k, mi.dataset.lay); hideRoomMenu();
+    });
+    const dis=roomMenu.querySelector('.mi[data-dissolve]');
+    if(dis) dis.onclick=()=>{
+      const snap=snapshotRegions();
+      if(dissolveUnit(k)){ editHistory.push({type:'wallsnap', snap}); hideRoomMenu(); }
+      else fail('Daire silinemedi (komşu daire bulunamadı).');
+    };
+  }
+  buildMain();
+});
+/* daire iç düzen tercihini uygula: tüm planı aynı ayırıcılarla yeniden üretir
+   (yalnız bu dairenin içi değişir; ayırıcı sürükleme gibi elle duvar/oda
+   düzenlemelerini sıfırlar — bilinçli yeniden üretim). */
+function applyUnitLayout(k, mode){
+  const prev=Object.assign({}, unitLayout);
+  const state=stateSnapshot(); // DEĞİŞİKLİKTEN ÖNCE tam durum: geri al elle düzenlemeleri de birebir getirir
+  if(mode==='auto') delete unitLayout[k]; else unitLayout[k]=mode;
+  if(JSON.stringify(prev)===JSON.stringify(unitLayout)) return;
+  editHistory.push({type:'ulayout', prev, state});
+  generate(true);
+}
+svg.addEventListener('mousedown',hideRoomMenu);
+window.addEventListener('keydown',e=>{ if(e.key==='Escape') hideRoomMenu(); });
+svg.addEventListener('wheel',hideRoomMenu,{passive:true});
+
 /* ================= dışa aktarma ================= */
-function exportSVG(){
+const EXPORT_FONT="'Helvetica Neue',Helvetica,Arial,sans-serif"; // sayfa CSS'i dışa aktarılan SVG'ye taşınmaz; font belirtilmezse tarayıcı varsayılan serif (Times) kullanır
+let exportView=null; // render() için geçici görünüm: dışa aktarmada plan sabit ölçekte yeniden çizilir
+function exportTableGroup(x0,maxH){
+  /* yüzen daire tablosunun SVG kopyası — özdeş daireler gruplanır, plan yüksekliğini aşınca yeni sütuna sarar */
+  if(!plan||!plan.unitObjs.length) return null;
+  const W=300, pad=12, gap=14, topY=34;
+  /* özdeş daireleri grupla (aynı tip + aynı oda listesi) */
+  const groups=[], sig=new Map();
+  plan.unitObjs.forEach((u,k)=>{
+    const tot=u.rooms.reduce((s,r2)=>s+r2.area,0);
+    const rows=u.rooms.filter(r2=>r2.cells.length).map(r2=>[r2.name,`${fmt(r2.bw)} × ${fmt(r2.bh)}`,`${fmt(r2.area)} m²`]);
+    const myBalks=balconies.filter(b=>balkUnit(b)===k);
+    myBalks.forEach(b=>rows.push(['BALKON (açık)',`${fmt(b.t1-b.t0)} × ${fmt(b.depth)}`,`${fmt(balkArea(b))} m²`]));
+    const balkTot=myBalks.reduce((s,b)=>s+balkArea(b),0);
+    const key=unitTag(u.spec)+'|'+fmt(tot)+'|'+rows.map(r2=>r2.join(',')).join(';');
+    if(sig.has(key)) sig.get(key).ks.push(k);
+    else { const o={ks:[k],tag:unitTag(u.spec),tot,balkTot,rows}; sig.set(key,o); groups.push(o); }
+  });
+  const rng=ks=>{ const out=[]; let s=ks[0],p2=ks[0];
+    for(let i=1;i<=ks.length;i++){ const v=ks[i];
+      if(v===p2+1){p2=v;continue;}
+      out.push(s===p2?`D${s+1}`:`D${s+1}–D${p2+1}`); s=p2=v; }
+    return out.join(', '); };
+  maxH=Math.max(maxH||0,420);
+  const g=el('g',{'font-family':EXPORT_FONT});
+  const txt=(s,x,yy,a)=>{ const t=el('text',Object.assign({x,y:yy,'font-size':a.size||11,fill:a.color||'#3a3a3a'},
+      a.weight?{'font-weight':a.weight}:{}, a.anchor?{'text-anchor':a.anchor}:{}));
+    t.textContent=s; g.appendChild(t); return t; };
+  txt('DAİRE TABLOSU',x0+pad,24,{size:13,weight:'700',color:'#1f1f1f'});
+  let col=0, y=topY; const colHs=[];
+  const colX=()=>x0+col*(W+gap);
+  groups.forEach(gr=>{
+    const bh=22+gr.rows.length*15;
+    if(y+bh>maxH-14 && y>topY){ colHs[col]=y; col++; y=topY; }
+    y+=22;
+    txt(`${rng(gr.ks)} · ${gr.tag} · ${fmt(gr.tot)} m²${gr.balkTot?` + ${fmt(gr.balkTot)} m² balkon`:''}${gr.ks.length>1?` (${gr.ks.length} daire)`:''}`,
+        colX()+pad,y,{size:11.5,weight:'700',color:'#8a4b2d'});
+    gr.rows.forEach(r2=>{ y+=15;
+      txt(r2[0],colX()+pad+6,y,{size:10.5});
+      txt(r2[1],colX()+W-pad-72,y,{size:10.5,anchor:'end',color:'#888'});
+      txt(r2[2],colX()+W-pad,y,{size:10.5,anchor:'end'}); });
+  });
+  colHs[col]=y;
+  for(let i=0;i<=col;i++)
+    g.insertBefore(el('rect',{x:x0+i*(W+gap),y:8,width:W,height:colHs[i]+6,fill:'#ffffff',stroke:'#c9c2b4','stroke-width':1,rx:6}),g.firstChild);
+  return {g, w:(col+1)*(W+gap)-gap, h:Math.max(...colHs)+22};
+}
+function exportClone(){
+  /* ekran yakınlığından bağımsız, etiketlerin okunaklı olduğu sabit ölçekte çiz */
+  const bb=bboxOf(pts.concat(parcelPts));
+  const bd=balconies.reduce((m,b)=>Math.max(m,b.depth||0),0);
+  const marg=2.5+bd; // ölçü yazıları + balkon taşması (m)
+  const w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
+  const S=Math.max(22,Math.min(45,2200/w)); // ≥22 px/m: oda etiketleri ve duvar ölçüleri görünür
+  const save={p:pxPerM,x:panX,y:panY};
+  exportView={width:Math.round(w*S),height:Math.round(h*S),left:0,top:0};
+  pxPerM=S; panX=(marg-bb.minX)*S; panY=(marg-bb.minY)*S;
+  render();
   const clone=svg.cloneNode(true);
-  const r=svg.getBoundingClientRect();
-  clone.setAttribute('width',r.width); clone.setAttribute('height',r.height);
+  const planW=exportView.width, planH=exportView.height;
+  exportView=null; pxPerM=save.p; panX=save.x; panY=save.y; render(); // ekranı eski haline döndür
+  clone.setAttribute('font-family',EXPORT_FONT);
+  const tbl=exportTableGroup(planW+12, planH);
+  let W=planW, H=planH;
+  if(tbl){ clone.appendChild(tbl.g); W=planW+tbl.w+24; H=Math.max(H,tbl.h+8); }
+  clone.setAttribute('width',W); clone.setAttribute('height',H);
+  return {clone,W,H};
+}
+/* ================= durum anlık görüntüsü (SVG'ye gömülür / içe alınır) =================
+   Dışa aktarılan her SVG <metadata id="kpState"> içinde TAM plan durumunu taşır:
+   girdiler (sınır, parsel, balkon, daire tipleri, ayırıcılar) + bölge hücreleri
+   (elle duvar/oda düzenlemeleri dâhil) + kapı ayarları. İçe aktarınca generate()
+   ÇAĞRILMADAN plan aynen geri kurulur — elle düzenlemeler kalıcılaşır. */
+function stateSnapshot(){
+  if(!plan) return null;
+  const el2=id=>document.getElementById(id).value;
+  return {v:1, app:'kat-plani-tasarim',
+    ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk')},
+    pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
+    parcelClosed, balconies:balconies.map(b=>({...b})),
+    specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ, unitLayout:Object.assign({},unitLayout),
+    doors:{ov:doorOverrides, extra:extraDoors, hidden:doorHidden},
+    plan:{rows:plan.rows, cols:plan.cols, minX:plan.minX, minY:plan.minY,
+      corridorR0:plan.corridorR0, corridorR1:plan.corridorR1,
+      kat:plan.kat, binaYuk:plan.binaYuk, perFloor:plan.perFloor, villa:plan.villa,
+      nAsansor:plan.nAsansor, asansorYeri:plan.asansorYeri,
+      fireStairNeeded:plan.fireStairNeeded, teknikNeeded:plan.teknikNeeded,
+      inside:Array.from(plan.inside, v=>v?1:0),
+      stairs:plan.stairs.map(s=>({...s})), zoneUI:plan.zoneUI||[],
+      regions:plan.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice()})),
+      units:plan.unitObjs.map(u=>({spec:{...u.spec}, comb:!!u.comb,
+        antre:u.antre?u.antre.id:-1, rooms:u.rooms.map(g=>g.id)}))}};
+}
+function restoreState(st, opt){
+  if(!st||st.v!==1||!st.plan) throw new Error('durum sürümü tanınmadı');
+  document.getElementById('binaTipi').value=st.ui.binaTipi;
+  document.getElementById('katSayisi').value=st.ui.katSayisi;
+  document.getElementById('katYuk').value=st.ui.katYuk;
+  pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
+  parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed;
+  balconies=(st.balconies||[]).map(b=>({...b}));
+  unitSpecs=st.specs.map(s=>({...s})); renderUnits();
+  customCutsZ=st.cuts||null; unitLayout=st.unitLayout||{};
+  doorOverrides=(st.doors&&st.doors.ov)||{};
+  extraDoors=(st.doors&&st.doors.extra)||[];
+  doorHidden=(st.doors&&st.doors.hidden)||{};
+  editHistory=[];
+  const sp=st.plan;
+  const regions=sp.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice()}));
+  const cm=new Int16Array(sp.rows*sp.cols); cm.fill(-1);
+  regions.forEach(g=>g.cells.forEach(i=>{ cm[i]=g.id; }));
+  const inside=Uint8Array.from(sp.inside);
+  const byId2={}; regions.forEach(g=>{ byId2[g.id]=g; });
+  const unitObjs=sp.units.map(u=>({spec:{...u.spec}, comb:!!u.comb,
+    antre:u.antre>=0?(byId2[u.antre]||null):null,
+    rooms:u.rooms.map(id2=>byId2[id2]).filter(Boolean)}));
+  plan={regions, cm, inside, rows:sp.rows, cols:sp.cols, minX:sp.minX, minY:sp.minY,
+    corridorR0:sp.corridorR0, corridorR1:sp.corridorR1,
+    stairs:(sp.stairs||[]).map(s=>({...s})), unitObjs,
+    villa:!!sp.villa, kat:sp.kat, binaYuk:sp.binaYuk, perFloor:sp.perFloor,
+    nAsansor:sp.nAsansor, asansorYeri:sp.asansorYeri,
+    fireStairNeeded:sp.fireStairNeeded, teknikNeeded:sp.teknikNeeded,
+    zoneUI:sp.zoneUI||[]};
+  regions.forEach(g=>calcRegionMetrics(g, plan.cols, plan.minX, plan.minY));
+  hoverWall=null; hoverRoomId=null; hoverDoor=null; hoverBalk=null; hoverP=null;
+  plan.wallRuns=computeWallRuns();
+  document.getElementById('genBtn').disabled=false;
+  document.getElementById('svgBtn').disabled=false;
+  document.getElementById('pngBtn').disabled=false;
+  document.getElementById('unitTable').style.display='';
+  /* durum çubuğu: içe aktarılan sınırın alan/çevresi (eski değer asılı kalmasın) */
+  document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+  document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+  runChecks(); buildUnitTable(); if(!opt||opt.fit!==false) fitView(); render();
+}
+function exportSVG(){
+  const {clone}=exportClone();
   clone.setAttribute('style','background:#faf8f3');
+  const st=stateSnapshot();
+  if(st){
+    const md=document.createElementNS('http://www.w3.org/2000/svg','metadata');
+    md.setAttribute('id','kpState');
+    md.textContent=JSON.stringify(st);
+    if(clone.insertBefore) clone.insertBefore(md, clone.firstChild||null); else clone.appendChild(md);
+  }
   const blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='kat-plani.svg'; a.click();
 }
 function exportPNG(){
-  const r=svg.getBoundingClientRect();
-  const clone=svg.cloneNode(true);
-  clone.setAttribute('width',r.width); clone.setAttribute('height',r.height);
+  const {clone,W,H}=exportClone();
   const data='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(clone))));
   const img=new Image();
-  img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=r.width*2; cv.height=r.height*2;
+  img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
     const ctx=cv.getContext('2d'); ctx.fillStyle='#faf8f3'; ctx.fillRect(0,0,cv.width,cv.height);
     ctx.scale(2,2); ctx.drawImage(img,0,0);
     const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani.png'; a.click(); };
@@ -1585,6 +3384,247 @@ function exportPNG(){
 }
 document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
+
+/* ================= içe aktarma =================
+   1) kpState gömülü SVG / .json → restoreState (birebir geri yükleme)
+   2) Eski (durumsuz) dışa aktarılmış SVG → geometri çözümleyici:
+      hücre dolgu kareleri (0,5 m) + duvar çizgileri + kapı boşlukları + etiketlerden
+      bölgeler, daireler ve program geri kurulur. Deneysel; balkon/parsel taşınmaz. */
+function importLegacySvg(txt){
+  const doc=new DOMParser().parseFromString(txt,'image/svg+xml');
+  if(doc.querySelector('parsererror')) throw new Error('SVG okunamadı');
+  /* ölçek: ızgara çizgileri 0,5 m aralıklı */
+  const gxs=[...doc.querySelectorAll('line[stroke="#eae5d9"]')]
+    .map(l=>parseFloat(l.getAttribute('x1')))
+    .filter((v,i,a)=>!isNaN(v)&&a.indexOf(v)===i).sort((a,b)=>a-b);
+  let S=45;
+  if(gxs.length>=2){ const ds=[]; for(let i=1;i<gxs.length;i++) ds.push(gxs[i]-gxs[i-1]);
+    ds.sort((a,b)=>a-b); S=2*ds[Math.floor(ds.length/2)]; }
+  /* dış sınır: en kalın çizgili, dolgusuz path */
+  let bp=null,bw=0;
+  doc.querySelectorAll('path').forEach(p2=>{
+    const sw=parseFloat(p2.getAttribute('stroke-width')||0), f=p2.getAttribute('fill');
+    if(sw>bw&&(f==='none'||!f)){ bw=sw; bp=p2; } });
+  if(!bp) throw new Error('bina sınırı bulunamadı');
+  const nums=(bp.getAttribute('d').match(/-?[\d.]+/g)||[]).map(Number);
+  const bpts=[]; for(let i=0;i+1<nums.length;i+=2) bpts.push({x:nums[i],y:nums[i+1]});
+  if(bpts.length<3) throw new Error('bina sınırı çözülemedi');
+  const ox=Math.min(...bpts.map(p2=>p2.x)), oy=Math.min(...bpts.map(p2=>p2.y));
+  const toM=v=>Math.round(v/S*2)/2;
+  const poly=bpts.map(p2=>({x:toM(p2.x-ox), y:toM(p2.y-oy)}));
+  const W=Math.max(...poly.map(p2=>p2.x)), H=Math.max(...poly.map(p2=>p2.y));
+  const cols2=Math.round(W/M), rows2=Math.round(H/M);
+  const pip2=(x,y)=>{ let inn=false;
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+      const a=poly[i],b=poly[j];
+      if((a.y>y)!==(b.y>y) && x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x) inn=!inn; }
+    return inn; };
+  /* hücreler: tipe boyalı 0,5 m kareler (sınır dışı taşma kopyaları PIP ile elenir) */
+  const colorType={}; for(const t in COLORS) colorType[COLORS[t].toLowerCase()]=t;
+  const cellType=new Array(rows2*cols2).fill(null);
+  const csPx=S*M;
+  doc.querySelectorAll('rect').forEach(rc=>{
+    const f=(rc.getAttribute('fill')||'').toLowerCase();
+    const t=colorType[f]; if(!t) return;
+    const w2=parseFloat(rc.getAttribute('width')), x=parseFloat(rc.getAttribute('x')), y=parseFloat(rc.getAttribute('y'));
+    if(!(Math.abs(w2-csPx)<2)) return; // hücre boyutunda değil (tablo/araç kutusu)
+    const mx=(x-ox)/S+M/2, my=(y-oy)/S+M/2;
+    if(!pip2(mx,my)) return;
+    const c=Math.floor(mx/M), r=Math.floor(my/M);
+    if(r<0||c<0||r>=rows2||c>=cols2) return;
+    cellType[r*cols2+c]=t; });
+  if(!cellType.some(Boolean)) throw new Error('oda hücreleri bulunamadı');
+  /* duvarlar: hücreler arası kapalı kenarlar (dikey: vKey r,c = (r,c-1)|(r,c) arası) */
+  const vWall=new Set(), hWall=new Set();
+  doc.querySelectorAll('line').forEach(l=>{
+    const st2=l.getAttribute('stroke');
+    if(st2&&st2!=='#2b2620'&&st2!=='#faf8f3') return; // duvar grubu stroke'u kalıtır (attr yok) ya da kapı
+    if(st2==='#faf8f3') return;
+    const x1=parseFloat(l.getAttribute('x1')),y1=parseFloat(l.getAttribute('y1')),
+          x2=parseFloat(l.getAttribute('x2')),y2=parseFloat(l.getAttribute('y2'));
+    if([x1,y1,x2,y2].some(isNaN)) return;
+    if(Math.abs(x1-x2)<0.01){ // dikey duvar
+      const c=Math.round((x1-ox)/S/M); if(c<=0||c>=cols2) return;
+      const r0=Math.round((Math.min(y1,y2)-oy)/S/M), r1=Math.round((Math.max(y1,y2)-oy)/S/M);
+      for(let r=r0;r<r1;r++) if(r>=0&&r<rows2) vWall.add(r+','+c);
+    } else if(Math.abs(y1-y2)<0.01){
+      const r=Math.round((y1-oy)/S/M); if(r<=0||r>=rows2) return;
+      const c0=Math.round((Math.min(x1,x2)-ox)/S/M), c1=Math.round((Math.max(x1,x2)-ox)/S/M);
+      for(let c=c0;c<c1;c++) if(c>=0&&c<cols2) hWall.add(r+','+c);
+    } });
+  /* bölgeler: duvarsız komşuluk bileşenleri */
+  const regOf=new Array(rows2*cols2).fill(-1); const regs=[];
+  for(let i=0;i<rows2*cols2;i++){
+    if(!cellType[i]||regOf[i]>=0) continue;
+    const id2=regs.length, cells2=[], stk=[i]; regOf[i]=id2;
+    while(stk.length){ const j=stk.pop(); cells2.push(j);
+      const r=(j/cols2)|0, c=j%cols2;
+      const tryN=(jj,open)=>{ if(jj<0||jj>=rows2*cols2||!cellType[jj]||regOf[jj]>=0||!open) return;
+        regOf[jj]=id2; stk.push(jj); };
+      tryN(r>0?j-cols2:-1, r>0&&!hWall.has(r+','+c));
+      tryN(r<rows2-1?j+cols2:-1, r<rows2-1&&!hWall.has((r+1)+','+c));
+      tryN(c>0?j-1:-1, c>0&&!vWall.has(r+','+c));
+      tryN(c<cols2-1?j+1:-1, c<cols2-1&&!vWall.has(r+','+(c+1))); }
+    const tc={}; cells2.forEach(j=>{ tc[cellType[j]]=(tc[cellType[j]]||0)+1; });
+    const ty=Object.keys(tc).sort((a,b)=>tc[b]-tc[a])[0];
+    regs.push({id:id2, name:null, type:ty, unit:-1, cells:cells2});
+  }
+  /* etiketler: oda adı metinleri bölgeye ad verir (BANYO/WC ayrımı, EB. BANYO, KİLER)
+     — ölçü yazıları (paint-order/stroke'lu, salt rakam) elenir */
+  doc.querySelectorAll('text').forEach(tx=>{
+    if(tx.getAttribute('font-weight')!=='700'||tx.getAttribute('fill')!=='#2b2620') return;
+    if(tx.getAttribute('paint-order')||tx.getAttribute('stroke')) return;
+    const nm=(tx.textContent||'').trim();
+    if(!nm||nm.length>30||/^[\d,.\s×x]+$/.test(nm)) return;
+    const mx=(parseFloat(tx.getAttribute('x'))-ox)/S, my=(parseFloat(tx.getAttribute('y'))-oy)/S;
+    const c=Math.floor(mx/M), r=Math.floor(my/M);
+    if(r<0||c<0||r>=rows2||c>=cols2) return;
+    const rid=regOf[r*cols2+c]; if(rid<0) return;
+    if(!regs[rid].name) regs[rid].name=nm; });
+  const NAME_TYPE={'WC':'wc','BANYO':'banyo','EB. BANYO':'banyo','KİLER':'antre','APARTMAN HOLÜ':'koridor',
+    'MERDİVEN':'merdiven','ASANSÖR':'asansor','ASANSÖR YERİ':'asansor','YANGIN MERD.':'yangin',
+    'TEKNİK / ŞAFT':'teknik','ORTAK DEPO':'teknik','ANTRE':'antre','MUTFAK':'mutfak'};
+  regs.forEach(g=>{
+    /* banyo ve wc aynı renk: etiketi BANYO olan ya da etiketsiz ≥2,5 m² 'wc' aslında banyodur */
+    if(g.type==='wc'&&g.name&&g.name!=='WC') g.type='banyo';
+    if(g.type==='wc'&&!g.name&&g.cells.length>=10) g.type='banyo';
+    if(!g.name) g.name=({koridor:'APARTMAN HOLÜ',merdiven:'MERDİVEN',asansor:'ASANSÖR',
+      teknik:'TEKNİK / ŞAFT',yangin:'YANGIN MERD.'})[g.type]||(TYPE_TR[g.type]||'ODA').toUpperCase();
+    if(NAME_TYPE[g.name]) g.type=NAME_TYPE[g.name];
+    if(g.name.indexOf('SALON')===0||g.name==='STÜDYO'||g.name==='OTURMA ODASI') g.type='salon';
+    if(g.name.indexOf('YATAK')>=0) g.type='yatak'; });
+  /* kapılar: #faf8f3 çizgiler duvar boşluğudur → bölge çiftlerini bağlar */
+  const doorPairs=[];
+  doc.querySelectorAll('line[stroke="#faf8f3"]').forEach(l=>{
+    const x1=parseFloat(l.getAttribute('x1')),y1=parseFloat(l.getAttribute('y1')),
+          x2=parseFloat(l.getAttribute('x2')),y2=parseFloat(l.getAttribute('y2'));
+    if([x1,y1,x2,y2].some(isNaN)) return;
+    let a=-1,b=-1;
+    if(Math.abs(x1-x2)<0.01){ // dikey kapı: sol/sağ hücreler
+      const c=Math.round((x1-ox)/S/M), r=Math.floor(((y1+y2)/2-oy)/S/M);
+      if(r<0||r>=rows2||c<=0||c>=cols2) return;
+      a=regOf[r*cols2+c-1]; b=regOf[r*cols2+c];
+    } else {
+      const r=Math.round((y1-oy)/S/M), c=Math.floor(((x1+x2)/2-ox)/S/M);
+      if(c<0||c>=cols2||r<=0||r>=rows2) return;
+      a=regOf[(r-1)*cols2+c]; b=regOf[r*cols2+c];
+    }
+    if(a>=0&&b>=0&&a!==b) doorPairs.push([a,b]); });
+  /* daireler: kapı grafiğinde (ortak alanlar hariç) bileşenler */
+  const COMMON=new Set(['koridor','merdiven','asansor','teknik','yangin']);
+  const adj2=new Map();
+  doorPairs.forEach(([a,b])=>{
+    if(COMMON.has(regs[a].type)||COMMON.has(regs[b].type)) return;
+    (adj2.get(a)||adj2.set(a,[]).get(a)).push(b);
+    (adj2.get(b)||adj2.set(b,[]).get(b)).push(a); });
+  const unitOf=new Array(regs.length).fill(-1); let unitRaw=[];
+  regs.forEach(g=>{
+    if(COMMON.has(g.type)||unitOf[g.id]>=0) return;
+    const k=unitRaw.length, rooms2=[], stk=[g.id]; unitOf[g.id]=k;
+    while(stk.length){ const id2=stk.pop(); rooms2.push(regs[id2]);
+      (adj2.get(id2)||[]).forEach(nb=>{ if(unitOf[nb]<0&&!COMMON.has(regs[nb].type)){ unitOf[nb]=k; stk.push(nb); } }); }
+    unitRaw.push(rooms2); });
+  /* kapısı çözülemeyen oda tek başına daire olamaz: antresi/salonu olmayan grup,
+     en uzun ortak duvarlı komşu daireye katılır */
+  for(let pass=0;pass<2;pass++) unitRaw.forEach((rooms2,k)=>{
+    if(!rooms2.length) return;
+    if(rooms2.some(r2=>r2.type==='antre'||r2.type==='salon')) return;
+    const cnt2=new Map();
+    rooms2.forEach(r2=>r2.cells.forEach(i=>{ const r=(i/cols2)|0,c=i%cols2;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc3])=>{
+        if(rr<0||cc3<0||rr>=rows2||cc3>=cols2) return;
+        const rid=regOf[rr*cols2+cc3]; if(rid<0) return;
+        const k2=unitOf[rid];
+        if(k2>=0&&k2!==k&&unitRaw[k2].length) cnt2.set(k2,(cnt2.get(k2)||0)+1); }); }));
+    let bk=-1,bn=0; cnt2.forEach((n,k2)=>{ if(n>bn){bn=n;bk=k2;} });
+    if(bk>=0){ rooms2.forEach(r2=>{ unitOf[r2.id]=bk; unitRaw[bk].push(r2); }); unitRaw[k]=[]; } });
+  unitRaw=unitRaw.filter(rooms2=>rooms2.length);
+  const unitObjs2=unitRaw.map((rooms2,k)=>{
+    rooms2.forEach(r2=>{ r2.unit=k; });
+    const antre2=rooms2.find(r2=>r2.type==='antre'&&r2.name==='ANTRE')||rooms2.find(r2=>r2.type==='antre')||null;
+    const beds2=rooms2.filter(r2=>r2.type==='yatak').length;
+    const salons2=rooms2.filter(r2=>r2.type==='salon').length;
+    const studio2=rooms2.some(r2=>r2.name==='STÜDYO');
+    return {spec:{oda: studio2? Math.max(1,beds2+1) : Math.max(1,beds2),
+      salon: studio2?0:Math.max(1,salons2),
+      ensuite: rooms2.some(r2=>r2.name==='EB. BANYO'),
+      acik: studio2||rooms2.some(r2=>r2.name&&r2.name.indexOf('SALON + MUTFAK')===0),
+      adet:1}, rooms:rooms2, antre:antre2, comb:false}; });
+  if(!unitObjs2.length) throw new Error('daire bulunamadı (kapı boşlukları çözülemedi)');
+  /* plan kur */
+  const cm2=new Int16Array(rows2*cols2); cm2.fill(-1);
+  const inside2=new Uint8Array(rows2*cols2);
+  regs.forEach(g=>g.cells.forEach(i=>{ cm2[i]=g.id; inside2[i]=1; }));
+  let kR0=1e9,kR1=-1;
+  regs.forEach(g=>{ if(g.type!=='koridor') return;
+    g.cells.forEach(i=>{ const r=(i/cols2)|0; if(r<kR0)kR0=r; if(r>kR1)kR1=r; }); });
+  const stairs2=regs.filter(g=>g.type==='merdiven').map(g=>{
+    let r0=1e9,r1=-1,c0=1e9,c1=-1;
+    g.cells.forEach(i=>{const r=(i/cols2)|0,c=i%cols2; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+    return {r0, c0, h:r1-r0+1, w:c1-c0+1}; });
+  /* daire tipleri: özdeş spec'ler adetle birleşir */
+  const specMap=new Map();
+  unitObjs2.forEach(u=>{ const k2=JSON.stringify({...u.spec, adet:0});
+    if(specMap.has(k2)) specMap.get(k2).adet++; else specMap.set(k2,{...u.spec}); });
+  pts=poly; closed=true;
+  parcelPts=[]; parcelClosed=false; balconies=[];
+  unitSpecs=[...specMap.values()]; renderUnits();
+  customCutsZ=null; unitLayout={};
+  doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
+  plan={regions:regs, cm:cm2, inside:inside2, rows:rows2, cols:cols2, minX:0, minY:0,
+    corridorR0:kR0<=kR1?kR0:-1, corridorR1:kR0<=kR1?kR1:-1, stairs:stairs2,
+    unitObjs:unitObjs2, villa:false,
+    kat:parseInt(document.getElementById('katSayisi').value)||5,
+    binaYuk:(parseInt(document.getElementById('katSayisi').value)||5)*(parseFloat(document.getElementById('katYuk').value)||2.9),
+    perFloor:unitObjs2.length, nAsansor:regs.filter(g=>g.type==='asansor').length,
+    asansorYeri:regs.some(g=>g.name==='ASANSÖR YERİ'),
+    fireStairNeeded:regs.some(g=>g.type==='yangin'), teknikNeeded:regs.some(g=>g.type==='teknik'),
+    zoneUI:[]};
+  regs.forEach(g=>calcRegionMetrics(g, cols2, 0, 0));
+  hoverWall=null; hoverRoomId=null; hoverDoor=null; hoverBalk=null; hoverP=null;
+  plan.wallRuns=computeWallRuns();
+  document.getElementById('genBtn').disabled=false;
+  document.getElementById('svgBtn').disabled=false;
+  document.getElementById('pngBtn').disabled=false;
+  document.getElementById('unitTable').style.display='';
+  /* durum çubuğu: çözümlenen sınırın alan/çevresi */
+  document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+  document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+  runChecks(); buildUnitTable(); fitView(); render();
+}
+function importPlanText(txt, fname){
+  txt=txt.replace(/^﻿/,'');
+  try{
+    if(/^\s*\{/.test(txt)){ restoreState(JSON.parse(txt)); return; }
+    const m=txt.match(/<metadata[^>]*id="kpState"[^>]*>([\s\S]*?)<\/metadata>/);
+    if(m){
+      const json=m[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
+      restoreState(JSON.parse(json)); return;
+    }
+    importLegacySvg(txt);
+  }catch(err){
+    alert('İçe aktarılamadı ('+(fname||'dosya')+'): '+err.message);
+  }
+}
+{
+  const impInput=document.getElementById('impFile');
+  document.getElementById('impBtn').onclick=()=>impInput.click();
+  impInput.addEventListener('change',()=>{
+    const f=impInput.files&&impInput.files[0]; if(!f) return;
+    const rd=new FileReader();
+    rd.onload=()=>importPlanText(String(rd.result), f.name);
+    rd.readAsText(f); impInput.value='';
+  });
+  window.addEventListener('dragover',e=>{ e.preventDefault(); });
+  window.addEventListener('drop',e=>{
+    e.preventDefault();
+    const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
+    if(!/\.(svg|json)$/i.test(f.name)) return;
+    const rd=new FileReader();
+    rd.onload=()=>importPlanText(String(rd.result), f.name);
+    rd.readAsText(f);
+  });
+}
 
 /* ================= başlat ================= */
 renderUnits(); render();
