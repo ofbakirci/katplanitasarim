@@ -245,9 +245,11 @@ Oluştur" der; motor koridor + çekirdek + daireleri yerleştirir, mevzuat panel
 7. ~~Antre odalara taşıyor / şişiyor~~ TAMAMLANDI (md.13).
 8. ~~Oda etiketi değiştirme/takas, oda bölme, antre menü işlemleri~~ TAMAMLANDI (md.14).
 9. Bayat test düzeltmeleri: `wall-drag.js` artık uygulamadaki gibi `snap:` koyar, boş
-   (yutulmuş) donörü meşru sayar, dış sınır duvarlarını tanır. DİKKAT: çalışma ağacı
-   HEAD'den ilerideydi (commit'lenmemiş oturum işi) — taban karşılaştırması için
-   `git show HEAD:` DEĞİL, değişiklik öncesi çalışma kopyası kullanılmalı.
+   (yutulmuş) donörü meşru sayar, dış sınır duvarlarını tanır.
+   ~~Çalışma ağacı HEAD'den ilerideydi~~ ÇÖZÜLDÜ (2026-06-10 v5): her şey commit'li
+   (f429a7d, motor v22 + vakalar + testler). Yeni oturumda taban = `git show HEAD:`
+   GÜVENİLİR. Kural: oturum sonunda commit at; .git/*.lock kalıntısı görürsen
+   (çökmüş süreçten, 0 bayt) silmek güvenlidir. .gitignore: .DS_Store, snapshots/zi*.
 
 ## Test altyapısı
 Ayrıntılı liste `tests/README.md`'de (v22 vaka/tanı araçları dâhil: diff-vaka.js,
