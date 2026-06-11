@@ -218,6 +218,25 @@ Oluştur" der; motor koridor + çekirdek + daireleri yerleştirir, mevzuat panel
    yeniden üret + mutfak cephesi ölç), tests/villa-test.js (sofa monotonluk),
    tests/antre-test.js (+ANTRE koridor tohumu).
 
+19. **Mobil sürüm** (2026-06-11 v6): aynı dosya, duyarlı + dokunmatik. Motor DOKUNULMADI.
+   *Düzen* (≤700px medya sorgusu): kenar çubuğu ☰ ile açılan çekmece (`#menuBtn`/`#backdrop`,
+   "Yerleşimi Oluştur" çekmeceyi kapatır), daire tablosu alta sabit yarım sayfa (CSS
+   `!important` sürükleme inline stillerini ezer; telefonda daraltılmış başlar), araç
+   çubuğu yatay kaydırmalı, durum çubuğu + zoom kaydırıcısı gizli, `100dvh`.
+   *Dokunmatik katman* (script sonunda, `typeof MouseEvent` korumalı — Node testleri
+   atlar): mevcut fare mantığı yeniden YAZILMADI; dokunuşlar sentetik MouseEvent'lerle
+   aynı dinleyicilere gider. Eşleme: tutamaç/kapı/balkon kenarı üstünde parmak =
+   sürükleme (touchstart'ta hit-test, sentetik mousedown), boşta sürükleme = kaydır,
+   dokunuş = sol tık + oda vurgusu (sentetik mousedown+mousemove), uzun basış (500 ms,
+   <8 px) = sağ tık menüsü, çift dokunuş (350 ms/30 px, kapı modunda) = çift tık,
+   iki parmak = yakınlaştır+kaydır (kendi pinch matematiği, 4–80 px/m). `svg`
+   `touch-action:none`; daire tablosu sürüklemesi pointer event'e çevrildi.
+   *Dokunma hedefleri*: `HITSC` (coarse pointer'da 1,8; matchMedia yoksa 1) —
+   hitWallRun/hitCutHandle/hitDoor/hitBalk yarıçapları; `(pointer:coarse)` CSS'le
+   stepper/menü/araç düğmeleri büyür. Onboarding md.4'e dokunmatik karşılıklar eklendi.
+   Test: `tests/touch.js` (16: dinleyiciler, nokta/kaydırma ayrımı, pinch, uzun basış
+   menüsü + iptali, vurgu). Görsel doğrulama: 390px Chrome — çekmece, kompakt düzen OK.
+
 ## Bilerek verilen kararlar
 - Salon "emici"dir: program alanı doldurmuyorsa artık alan salona gider (her alternatif
   daha kötüydü: şişen banyolar, dev kiler, sahte odalar).
@@ -258,6 +277,7 @@ Kendi kendine yeten (doğrudan `node tests/<dosya>.js`) testler: `room-edit.js` 
 `antre-slim.js` (51: antre kompakt ≤ max(6 m², %14), ince çıkıntı yok, erişim, bütünlük),
 `etiket.js` (31: retype/swap/split/extendAntreTo + geri al + korumalar),
 `oda-hint.js` (13: hint'li/hintsiz addRoom, yön denetimi, EB. BANYO çift koruması),
+`touch.js` (16: dokunmatik katman — dokunuş/kaydırma/pinch/uzun basış, md.19),
 `import.js` (15: snapshot→restore gidiş-dönüş bölge imzası birebir + eski-SVG geometri
 çözümleyici; 2. bölüm `linkedom` ister, yoksa kendini atlar — `npm i linkedom`).
 DİKKAT (2026-06-10/2): bu makinede `/tmp/app.js` ve `/tmp/plan*.svg` başka kullanıcıya

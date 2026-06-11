@@ -128,13 +128,50 @@
   #roomMenu .mi.dis:hover{background:none; color:var(--muted);}
   #roomMenu .note{padding:6px 12px; color:var(--bad); max-width:230px; white-space:normal;}
   #roomMenu hr{border:none; border-top:1px solid var(--line); margin:4px 0;}
+  /* ---- mobil / dokunmatik ---- */
+  svg{touch-action:none;}            /* svg dokunuşları script yönetir (tek parmak araç, iki parmak yakınlaştırma) */
+  #utHead{touch-action:none;}
+  #menuBtn{display:none;}
+  #backdrop{display:none; position:fixed; inset:0; background:rgba(0,0,0,.35); z-index:19;}
+  #backdrop.show{display:block;}
+  @media (pointer: coarse){          /* parmak hedefleri büyür */
+    .stepper button{width:40px; min-height:40px;}
+    #roomMenu .mi{padding:11px 14px;}
+    #roomMenu{min-width:210px;}
+    #toolbar button{padding:10px 12px;}
+    #zoomCtl button{width:34px; height:34px; font-size:18px;}
+    #utHead button{padding:4px 12px;}
+  }
+  @media (max-width: 700px){         /* telefon düzeni */
+    body{height:100dvh;}
+    header{padding:8px 10px; gap:8px;}
+    header h1{font-size:14px;}
+    header .sub{display:none;}
+    #menuBtn{display:block; font-size:18px; padding:6px 12px; flex-shrink:0;}
+    aside{position:fixed; z-index:20; top:0; bottom:0; left:0; width:min(85vw,320px);
+      transform:translateX(-105%); transition:transform .2s ease; box-shadow:4px 0 18px rgba(0,0,0,.18);}
+    aside.open{transform:none;}
+    #toolbar{flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch; right:10px; max-width:none;}
+    #toolbar button{flex-shrink:0;}
+    #toolbar.collapsed{width:max-content;}
+    #onb{width:min(290px, calc(100vw - 20px));}
+    #status{display:none;}
+    #zoomCtl input[type=range]{display:none;}  /* yakınlaştırma: iki parmak */
+    #zoomCtl{bottom:56px;}
+    #unitTable{left:0 !important; right:0 !important; top:auto !important; bottom:0 !important;
+      width:auto; max-height:45%; border-radius:12px 12px 0 0; z-index:7;}
+    #utHead{cursor:default;}
+    #roomMenu{max-width:calc(100vw - 16px);}
+  }
 </style>
 </head>
 <body>
 <header>
+  <button id="menuBtn" title="Paneli aç/kapat">☰</button>
   <h1>Kat Planı Tasarım Aracı</h1>
   <span class="sub">Türkiye mevzuatına göre şematik kat planı üretici — Planlı Alanlar İmar Yönetmeliği &amp; Yangın Yönetmeliği</span>
 </header>
+<div id="backdrop"></div>
 <main>
 <aside>
   <div class="scroll">
@@ -207,6 +244,8 @@
 'use strict';
 /* ================= sabitler / mevzuat ================= */
 const M = 0.5; // ızgara (m)
+/* dokunmatik ekranda tutamaç/kapı/duvar yakalama yarıçapı büyür (matchMedia testlerde yok → 1) */
+const HITSC = (typeof matchMedia==='function' && matchMedia('(pointer: coarse)').matches) ? 1.8 : 1;
 const REG = {
   salon:{area:12.0, side:3.0}, yatak:{area:9.0, side:2.5},
   mutfak:{area:3.3, side:1.5}, salonMutfak:{area:15.3, side:3.0},
@@ -407,7 +446,7 @@ function balkUnit(b){
 /* imleç altındaki balkon tutamağı: dış kenar=derinlik, uçlar=uzunluk, içi=taşı/sil */
 function hitBalk(wx,wy){
   for(let i=balconies.length-1;i>=0;i--){
-    const b=balconies[i], q=balkQuad(b), tol=Math.max(0.25, 6/pxPerM);
+    const b=balconies[i], q=balkQuad(b), tol=Math.max(0.25, 6*HITSC/pxPerM);
     if(distSeg(wx,wy,q[3].x,q[3].y,q[2].x,q[2].y)<tol) return {b,i,part:'depth'};
     if(distSeg(wx,wy,q[0].x,q[0].y,q[3].x,q[3].y)<tol) return {b,i,part:'t0'};
     if(distSeg(wx,wy,q[1].x,q[1].y,q[2].x,q[2].y)<tol) return {b,i,part:'t1'};
@@ -600,6 +639,7 @@ function undoEdit(){
     const u=plan.unitObjs[e.unit], rm=new Set(e.cells);
     if(e.op==='remove'){ // hücreler hedef odadan geri alınır, oda diriltilir
       const tgt=plan.regions[e.tgt];
+      if(e.tgtName!==undefined) tgt.name=e.tgtName;        // açık mutfak dönüşümünde salon adı değişti
       tgt.cells=tgt.cells.filter(i=>!rm.has(i));
       e.reg.cells=e.cells.slice();
       e.cells.forEach(i=>plan.cm[i]=e.reg.id);
@@ -671,7 +711,7 @@ document.getElementById('tbToggle').onclick=()=>{
     {t:'Sınırı çizin', h:'<b>✏️ Çiz</b> aracıyla tıklayarak bina dış sınırını oluşturun; kenarlar 15°’ye ve 0,5 m ızgaraya oturur. Başlangıç noktasına tıklayınca sınır kapanır. Hızlı denemek için <b>▭ Örnek sınır</b>.'},
     {t:'Parsel ve balkon', h:'<b>⬠ Parsel</b> ile arsa sınırını çizin; bahçe alanı, TAKS ve çekme mesafeleri hesaplanır. <b>▦ Balkon</b> aracında dış duvara tıklayıp balkon ekleyin (tutamaçlarla boyutlandırın, SAĞ TIK siler).'},
     {t:'Yerleşimi oluşturun', h:'Sol panelden daire tiplerini ayarlayın ve <b>Yerleşimi Oluştur</b>’a basın. Mevzuat paneli her değişiklikte canlı güncellenir.'},
-    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
+    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. Dokunmatik ekranda: <b>uzun basış</b> = sağ tık, <b>çift dokunuş</b> = çift tık, <b>iki parmak</b> = yakınlaştır, boşta sürükleme = kaydır. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
     {t:'Kontrol ve dışa aktarım', h:'<b>↩︎ Geri al</b> elle yapılan değişiklikleri adım adım geri alır. Mevzuat kontrolleri yeşile dönünce <b>SVG / PNG indir</b> ile dışa aktarın.'}
   ];
   const onb=document.getElementById('onb'), body=document.getElementById('onbBody'),
@@ -1901,13 +1941,14 @@ function buildUnitTable(){
 (function(){ /* tabloyu sürükleme + daraltma */
   const t=document.getElementById('unitTable'), h=document.getElementById('utHead');
   let drag=null;
-  h.addEventListener('mousedown',e=>{ if(e.target.id==='utToggle') return;
+  h.addEventListener('pointerdown',e=>{ if(e.target.id==='utToggle') return;
     const r=t.getBoundingClientRect(), pr=t.parentElement.getBoundingClientRect();
     drag={dx:e.clientX-r.left, dy:e.clientY-r.top, pr}; t.style.right='auto'; e.preventDefault(); });
-  window.addEventListener('mousemove',e=>{ if(!drag) return;
+  window.addEventListener('pointermove',e=>{ if(!drag) return;
     t.style.left=Math.max(0, e.clientX-drag.pr.left-drag.dx)+'px';
     t.style.top=Math.max(0, e.clientY-drag.pr.top-drag.dy)+'px'; });
-  window.addEventListener('mouseup',()=>drag=null);
+  window.addEventListener('pointerup',()=>drag=null);
+  window.addEventListener('pointercancel',()=>drag=null);
   document.getElementById('utToggle').addEventListener('click',()=>{
     const b=document.getElementById('utBody');
     const off=b.style.display==='none';
@@ -1963,7 +2004,7 @@ function runChecks(){
         return r===0||r===p.rows-1||c===0||c===p.cols-1
           ||!p.inside[i-p.cols]||!p.inside[i+p.cols]||!p.inside[i-1]||!p.inside[i+1]; });
       if(!ext){
-        if(g.type==='mutfak') add('info', `${tag} — Mutfak dış cepheye açılmıyor: penceresiz mutfak DOĞALGAZ alamaz (elektrikli ocak ya da havalandırma boşluğu gerekir — tercih edilmez). Mutfağı duvar sürükleyerek/takasla cepheye alın.`, g.id);
+        if(g.type==='mutfak') add('info', `${tag} — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)`, g.id);
         else add('bad', `${tag} — ${g.name} dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.`, g.id);
       }
     });
@@ -2311,7 +2352,7 @@ function edgeNear(wx,wy){
 function doorMid(e){ return e.h? {x:W2Sx(e.x+0.45), y:W2Sy(e.y)} : {x:W2Sx(e.x), y:W2Sy(e.y+0.45)}; }
 function hitDoor(sx,sy){
   if(!plan) return null;
-  let best=null, bd=170; // ~13 px yarıçap
+  let best=null, bd=170*HITSC*HITSC; // ~13 px yarıçap (dokunmatikte ~23 px)
   computeDoors().forEach(d=>{
     if(d.status!=='ok') return;
     const m=doorMid(d.e), dd=(m.x-sx)**2+(m.y-sy)**2;
@@ -2501,7 +2542,7 @@ function hitCutHandle(sx,sy){
   const hs=svg.querySelectorAll('circle[data-cut]');
   for(const h of hs){
     const dx=sx-+h.getAttribute('cx'), dy=sy-+h.getAttribute('cy');
-    if(dx*dx+dy*dy<=225){
+    if(dx*dx+dy*dy<=225*HITSC*HITSC){
       const info=JSON.parse(h.dataset.cut);
       if(!customCutsZ||!customCutsZ[info.zi]) return null;
       return {type:'cut', arr:customCutsZ[info.zi], idx:info.idx, horiz:info.horiz, min:info.min, max:info.max};
@@ -2619,7 +2660,7 @@ function wallSeg(rn){ const p=plan;
 }
 function hitWallRun(sx,sy){
   if(!plan||!plan.wallRuns) return null;
-  const tol=6;
+  const tol=6*HITSC;
   for(const rn of plan.wallRuns){
     const s=wallSeg(rn);
     if(rn.horiz){ if(Math.abs(sy-W2Sy(s.y1))<=tol && sx>=W2Sx(s.x1)-tol && sx<=W2Sx(s.x2)+tol) return rn; }
@@ -2848,6 +2889,32 @@ function removeRoom(g){
   u.spec=s;
   calcRegionMetrics(tgt, p.cols, p.minX, p.minY);
   calcRegionMetrics(g, p.cols, p.minX, p.minY);
+  refreshAfterRoomEdit();
+  return true;
+}
+/* salonu açık mutfağa dönüştür: dairenin ayrı MUTFAK'ı salona katılır, salon
+   'SALON + MUTFAK' olur, spec.acik=true (denetim ve kaydet/yükle tutarlı kalır —
+   restoreState açık mutfağı bu addan tanır). Mutfak salona komşu değilse katma
+   kopuk bölge yaratacağından reddedilir. Geri Al: removeRoom ile aynı 'room' yolu
+   + tgtName ile salon adı da geri döner. */
+function openKitchen(salon){
+  const p=plan, k=unitOfRoom(salon.id); if(k<0||salon.type!=='salon') return false;
+  const u=p.unitObjs[k];
+  const mut=u.rooms.find(o=>o.type==='mutfak'&&o.cells.length);
+  if(!mut) return 'nomut';
+  const adj=mut.cells.some(i=>{ const r=(i/p.cols)|0, c=i%p.cols;
+    return (r>0&&p.cm[i-p.cols]===salon.id)||(r<p.rows-1&&p.cm[i+p.cols]===salon.id)
+         ||(c>0&&p.cm[i-1]===salon.id)||(c<p.cols-1&&p.cm[i+1]===salon.id); });
+  if(!adj) return 'noadj';
+  editHistory.push({type:'room', op:'remove', unit:k, reg:mut, tgt:salon.id,
+    cells:mut.cells.slice(), roomsIdx:u.rooms.indexOf(mut), spec:u.spec, tgtName:salon.name});
+  mut.cells.forEach(i=>{ p.cm[i]=salon.id; salon.cells.push(i); });
+  mut.cells=[];
+  u.rooms=u.rooms.filter(o=>o!==mut);
+  u.spec={...u.spec, acik:true};
+  salon.name='SALON + MUTFAK';
+  calcRegionMetrics(salon, p.cols, p.minX, p.minY);
+  calcRegionMetrics(mut, p.cols, p.minX, p.minY);
   refreshAfterRoomEdit();
   return true;
 }
@@ -3129,6 +3196,8 @@ svg.addEventListener('contextmenu',e=>{
         + `<div class="mi" data-swap-open="1">⇄ Başka odayla takas et…</div>`
         + `<div class="mi" data-split="v">║ Odayı dikine böl</div>`
         + `<div class="mi" data-split="h">═ Odayı enine böl</div>`;
+      if(g.type==='salon'&&u.rooms.some(o=>o.type==='mutfak'&&o.cells.length))
+        html+=`<div class="mi" data-acik="1">⌐ Açık mutfağa dönüştür (mutfağı salona kat)</div>`;
       if(u.antre&&u.antre.cells.length&&!antreAdj)
         html+=`<div class="mi" data-extend="1">➜ Antreyi bu odaya uzat (kapı erişimi)</div>`;
       const onlySalon=g.type==='salon'&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length);
@@ -3191,6 +3260,11 @@ svg.addEventListener('contextmenu',e=>{
     roomMenu.querySelectorAll('.mi[data-split]').forEach(mi=>mi.onclick=()=>{
       if(splitRoom(g, mi.dataset.split==='h')) hideRoomMenu();
       else fail('Oda bölünemedi (çok küçük ya da parçalar kopuk kalırdı).'); });
+    const ac=roomMenu.querySelector('.mi[data-acik]');
+    if(ac) ac.onclick=()=>{ const r=openKitchen(g);
+      if(r===true) hideRoomMenu();
+      else if(r==='noadj') fail('Mutfak salona komşu değil — önce takasla ya da duvar sürükleyerek bitiştirin.');
+      else fail('Bu dairede ayrı mutfak yok (zaten açık mutfak).'); };
     const ex=roomMenu.querySelector('.mi[data-extend]');
     if(ex) ex.onclick=()=>{ const r=extendAntreTo(g);
       if(r===true) hideRoomMenu();
@@ -3626,6 +3700,103 @@ function importPlanText(txt, fname){
   });
 }
 
+/* ================= dokunmatik katman (mobil) ================= */
+/* Eşleme: tek parmak tutamaçta = sürükleme, boşta = kaydırma, dokunuş = tıklama,
+   uzun basış = sağ tık, çift dokunuş = çift tık, iki parmak = yakınlaştır+kaydır.
+   Mevcut fare mantığı YENİDEN YAZILMAZ: sentetik MouseEvent'ler aynı dinleyicilere gider.
+   (typeof MouseEvent guard'ı: Node testleri bu bloğu atlar.) */
+if(typeof MouseEvent!=='undefined'){
+(function(){
+  let T=null, pinch=null, lastTap=null, lpTimer=null;
+  const synth=(type,cx,cy)=>svg.dispatchEvent(new MouseEvent(type,{clientX:cx,clientY:cy,button:0,bubbles:true,cancelable:true}));
+  const clearLP=()=>{ if(lpTimer){ clearTimeout(lpTimer); lpTimer=null; } };
+  svg.addEventListener('touchstart',e=>{
+    e.preventDefault(); hideRoomMenu();
+    if(e.touches.length>=2){ // iki parmak: yakınlaştırma — tek parmak işi varsa kapat
+      clearLP();
+      if(dragging){ if(dragging.type==='pan') dragging=null; else finishDrag(); }
+      T=null;
+      const a=e.touches[0], b=e.touches[1], r=svg.getBoundingClientRect();
+      const mx=(a.clientX+b.clientX)/2-r.left, my=(a.clientY+b.clientY)/2-r.top;
+      pinch={d0:Math.max(10,Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)), p0:pxPerM, wx:S2Wx(mx), wy:S2Wy(my)};
+      return;
+    }
+    pinch=null;
+    const t=e.touches[0], r=svg.getBoundingClientRect();
+    const sx=t.clientX-r.left, sy=t.clientY-r.top;
+    T={sx,sy,cx:t.clientX,cy:t.clientY,moved:false,drag:false};
+    /* tutamaç/kapı/balkon kenarı/kaydırma modu: sürükleme HEMEN başlar (mousedown mantığıyla) */
+    let grab=false;
+    if(mode==='pan') grab=true;
+    else if(mode==='balkon'){ const h=hitBalk(S2Wx(sx),S2Wy(sy)); grab=!!(h&&h.part!=='body'); }
+    else if(mode==='door'){ grab=!!(plan&&hitDoor(sx,sy)); }
+    else if(plan&&closed&&mode!=='parcel'){ grab=!!(hitCutHandle(sx,sy)||hitWallRun(sx,sy)); }
+    if(grab){ synth('mousedown',t.clientX,t.clientY); T.drag=true; }
+    else lpTimer=setTimeout(()=>{ lpTimer=null; // uzun basış → sağ tık menüsü
+      if(T&&!T.moved){ const c=T; T=null;
+        svg.dispatchEvent(new MouseEvent('contextmenu',{clientX:c.cx,clientY:c.cy,bubbles:true,cancelable:true})); } },500);
+  },{passive:false});
+  svg.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    if(pinch&&e.touches.length>=2){
+      const a=e.touches[0], b=e.touches[1], r=svg.getBoundingClientRect();
+      const mx=(a.clientX+b.clientX)/2-r.left, my=(a.clientY+b.clientY)/2-r.top;
+      const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      pxPerM=Math.min(80, Math.max(4, pinch.p0*d/pinch.d0));
+      panX=mx-pinch.wx*pxPerM; panY=my-pinch.wy*pxPerM; render();
+      return;
+    }
+    if(!T) return;
+    const t=e.touches[0];
+    if(!T.moved && Math.hypot(t.clientX-T.cx, t.clientY-T.cy)>8){
+      T.moved=true; clearLP();
+      if(!T.drag){ dragging={type:'pan',sx:T.sx,sy:T.sy,px:panX,py:panY}; T.drag=true; } // boşta sürükleme = kaydır
+    }
+    if(T.drag) synth('mousemove',t.clientX,t.clientY);
+  },{passive:false});
+  svg.addEventListener('touchend',e=>{
+    e.preventDefault();
+    if(e.touches.length>0){ pinch=null; T=null; clearLP(); return; } // kalan parmak: yeni dokunuşla devam
+    if(pinch){ pinch=null; return; }
+    clearLP();
+    if(!T) return;
+    const tp=T; T=null;
+    if(tp.drag){ finishDrag(); dragging=null; return; }
+    if(tp.moved) return;
+    /* DOKUNUŞ: kapı modunda çift dokunuş = çift tık (kapı ekle/sil) */
+    const now=Date.now();
+    if(lastTap && now-lastTap.t<350 && Math.hypot(tp.cx-lastTap.x, tp.cy-lastTap.y)<30){
+      lastTap=null;
+      if(mode==='door'&&plan){
+        svg.dispatchEvent(new MouseEvent('dblclick',{clientX:tp.cx,clientY:tp.cy,bubbles:true,cancelable:true}));
+        return;
+      }
+    } else lastTap={t:now,x:tp.cx,y:tp.cy};
+    /* tekli dokunuş = sol tık (çizim noktası, parsel, balkon ekle...) */
+    synth('mousedown',tp.cx,tp.cy);
+    if(dragging){ finishDrag(); dragging=null; }
+    /* dokunuş = imleç: oda ölçü vurgusu / sonraki nokta önizlemesi */
+    synth('mousemove',tp.cx,tp.cy);
+  },{passive:false});
+  svg.addEventListener('touchcancel',()=>{
+    clearLP(); if(T&&T.drag){ finishDrag(); dragging=null; } T=null; pinch=null; },{passive:false});
+})();
+/* ---- mobil çekmece + daire tablosu başlangıcı ---- */
+(function(){
+  const mq=(typeof matchMedia==='function')? matchMedia('(max-width: 700px)') : null;
+  const btn=document.getElementById('menuBtn'), aside=document.querySelector('aside'),
+        bk=document.getElementById('backdrop');
+  if(!btn||!aside||!bk) return;
+  const set=o=>{ aside.classList.toggle('open',o); bk.classList.toggle('show',o); };
+  btn.onclick=()=>set(!aside.classList.contains('open'));
+  bk.onclick=()=>set(false);
+  document.getElementById('genBtn').addEventListener('click',()=>{ if(mq&&mq.matches) set(false); }); // planı görsün
+  if(mq&&mq.matches){ // telefonda daire tablosu daraltılmış başlar (alt sayfa yarım ekranı yemesin)
+    document.getElementById('utBody').style.display='none';
+    document.getElementById('utToggle').textContent='+';
+  }
+})();
+}
 /* ================= başlat ================= */
 renderUnits(); render();
 window.addEventListener('resize',render);
