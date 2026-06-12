@@ -38,6 +38,9 @@ YALNIZ anahtar AÇIKKEN salon=0 SALONSUZ KAT demektir (stüdyo değil: salon da 
 konmaz, yatak sayısı eksilmez, kat bazlı salon ihlali yazılmaz) — bir katta salon olması
 yeter; hiçbir katta yoksa runChecks "Evde hiç salon yok" ihlali basar (PAİY md.30).
 Anahtar kapalıyken eski davranış (salon hep konur); apartman stüdyo semantiği değişmedi.
+TEK SALON korumaları da anahtara bağlı (`salonProtected()`): açıkken tek salon sağ tıkla
+silinebilir / duvarla yutulabilir / tipi değiştirilebilir (spec salon=0'a düşer), kapalıyken
+ve apartmanda eski korumalar aynen geçerli.
 
 ## Mimari (script içi akış)
 1. **Izgara**: 0,5 m hücreler (`M=0.5`), poligon içi test, `cm` Int16Array bölge haritası.
@@ -295,7 +298,7 @@ Kendi kendine yeten (doğrudan `node tests/<dosya>.js`) testler: `room-edit.js` 
 `etiket.js` (31: retype/swap/split/extendAntreTo + geri al + korumalar),
 `oda-hint.js` (13: hint'li/hintsiz addRoom, yön denetimi, EB. BANYO çift koruması),
 `touch.js` (16: dokunmatik katman — dokunuş/kaydırma/pinch/uzun basış, md.19),
-`villa-kat.js` (33: katları ayrı planla — sekme geçişi, merdiven düşey hizası, oturum
+`villa-kat.js` (37: katları ayrı planla — sekme geçişi, merdiven düşey hizası, oturum
 oranı + çıkma ihlalleri, üst katta giriş kapısı yok, salonsuz yatak katı + ev geneli
 salon denetimi, snapshot gidiş-dönüşü, md.20),
 `import.js` (15: snapshot→restore gidiş-dönüş bölge imzası birebir + eski-SVG geometri

@@ -82,6 +82,14 @@ eval(src+`
   unitSpecs=[{oda:3,salon:1,ensuite:true,acik:false,adet:1}];
   generate();
 
+  /* --- anahtar AÇIKKEN tek salon sağ tıkla silinebilir (spec salon=0'a düşer, ihlal yok) --- */
+  const sal=plan.unitObjs[0].rooms.find(g=>g.type==='salon'&&g.cells.length);
+  T('açıkken tek salon silinebilir', !!sal && removeRoom(sal)===true);
+  T('silince spec salonsuz kata düştü', plan.unitObjs[0].spec.salon===0);
+  out=runChecks();
+  T('silince kat bazlı salon ihlali yok', !out.some(o=>o.s==='bad'&&/yerleştirilemedi.*zorunlu piyes/.test(o.t)));
+  generate(); // program (salon:1) ile tazele, akış devam etsin
+
   /* --- oturum oranı kuralı: 9×8 = 72 m² < %70 × 154 m² --- */
   pts=[{x:0,y:0},{x:9,y:0},{x:9,y:8},{x:0,y:8}]; closed=true;
   generate(); out=runChecks();
@@ -120,6 +128,8 @@ eval(src+`
   generate(); out=runChecks();
   T('kapalıyken salon yine konur (eski davranış)', plan.regions.some(g=>g.type==='salon'&&g.cells.length));
   T('kapalıyken ev geneli denetimi çalışmaz', !out.some(o=>/Evde hiç salon/.test(o.t)));
+  const sal2=plan.unitObjs[0].rooms.find(g=>g.type==='salon'&&g.cells.length);
+  T('kapalıyken tek salon silinemez (eski koruma)', !!sal2 && removeRoom(sal2)===false);
 })();
 `);
 console.log(pass+' geçti, '+fail+' kaldı');

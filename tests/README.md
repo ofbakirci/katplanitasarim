@@ -52,7 +52,8 @@ o durumda `$HOME/app.js` gibi farklı yola yazıp test KOPYASINDA yolu sed ile d
   üretimi, merdiven düşey hizası, oturum oranı (%70) ve çıkma (1,5 m) ihlalleri, üst
   katta giriş kapısı çizilmemesi, kat başına program, salonsuz yatak katı (YALNIZ
   anahtar açıkken salon=0: salon/mutfak konmaz, ihlal yok; ev geneli "hiç salon yok"
-  denetimi; kapalıyken eski davranış), snapshot gidiş-dönüşü. (33)
+  denetimi; kapalıyken eski davranış), tek salonun silinebilmesi (yalnız anahtar
+  açıkken; kapalıyken koruma sürer), snapshot gidiş-dönüşü. (37)
 - `antre-test.js` — vaka-3 D3'te antre eritilip alttan sağ tıkla +ANTRE: yeni antre
   koridora komşu ve cepheye dokunmuyor olmalı (✓/✗ basar).
 

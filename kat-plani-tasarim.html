@@ -2891,6 +2891,10 @@ function regConnected(g){
       const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
   return seen.size===g.cells.length;
 }
+/* TEK salon koruması: katları ayrı planlanan villada kalkar — bir katta salon yeter,
+   ev genelini runChecks denetler ("Evde hiç salon yok"). Diğer her durumda yasal
+   zorunlu piyes olarak korunur. */
+function salonProtected(){ return !(plan&&plan.villa&&floorsOn()); }
 /* bir oda yutulabilir mi? (duvar birleşmesinde donör oda tümüyle alıcıya katılır) */
 function canAbsorb(g){
   if(!g) return false;
@@ -2898,7 +2902,7 @@ function canAbsorb(g){
   const k=unitOfRoom(g.id); if(k<0) return false;
   const u=plan.unitObjs[k];
   if(g===u.antre) return false;                                          // giriş kaybolmasın
-  if(g.type==='salon' && !u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length)) return false; // tek salon kalsın
+  if(g.type==='salon' && salonProtected() && !u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length)) return false; // tek salon kalsın
   return true;
 }
 /* duvarı 1 hücre kaydır: dir=+1 → a büyür (b'den şerit alır), dir=-1 → b büyür.
@@ -3145,8 +3149,8 @@ function removeRoom(g){
   const p=plan, k=unitOfRoom(g.id); if(k<0) return false;
   const u=p.unitObjs[k];
   if(g===u.antre||g.type==='merdiven') return false;       // antre/merdiven silinmez
-  if(g.type==='salon'&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length))
-    return false;                                          // TEK salon ölmez (yasal zorunlu piyes)
+  if(g.type==='salon'&&salonProtected()&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length))
+    return false;                                          // TEK salon ölmez (katları ayrı planlanan villada serbest)
   const cnt=new Map();
   g.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
     [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
@@ -3307,8 +3311,8 @@ function retypeRoom(g, def){
   const p=plan, k=unitOfRoom(g.id); if(k<0) return false;
   const u=p.unitObjs[k];
   if(retypeGuard(g,u)) return false;
-  if(g.type==='salon'&&def.type!=='salon'&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length))
-    return false;                                          // TEK salon tipsizleşemez (yasal zorunlu piyes)
+  if(g.type==='salon'&&def.type!=='salon'&&salonProtected()&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length))
+    return false;                                          // TEK salon tipsizleşemez (katları ayrı planlanan villada serbest)
   editHistory.push({type:'retype', reg:g, name:g.name, rtype:g.type, unit:k, spec:u.spec});
   const s={...u.spec};
   if(g.type==='yatak') s.oda=Math.max(0,s.oda-1);
@@ -3482,7 +3486,7 @@ svg.addEventListener('contextmenu',e=>{
         html+=`<div class="mi" data-acik="1">⌐ Açık mutfağa dönüştür (mutfağı salona kat)</div>`;
       if(u.antre&&u.antre.cells.length&&!antreAdj)
         html+=`<div class="mi" data-extend="1">➜ Antreyi bu odaya uzat (kapı erişimi)</div>`;
-      const onlySalon=g.type==='salon'&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length);
+      const onlySalon=g.type==='salon'&&salonProtected()&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length);
       html+='<hr>'+(onlySalon
         ? `<div class="mi dis" title="Yasal zorunlu piyes">✕ Tek salon silinemez</div>`
         : `<div class="mi del" data-del="1">✕ Odayı sil (komşuya katılır)</div>`);
