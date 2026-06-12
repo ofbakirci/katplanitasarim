@@ -25,6 +25,19 @@ alanı + TAKS + çekme mesafesi denetimi) ve dış duvarlara balkon ekler (vekt�
 katman; hücre motoruna girmez, daire tablosunda açık alan olarak listelenir),
 daire tiplerini girer (oda/salon/ebeveyn banyosu/açık mutfak/adet), "Yerleşimi
 Oluştur" der; motor koridor + çekirdek + daireleri yerleştirir, mevzuat panelinde denetler.
+VİLLA + ≥2 kat: "Katları ayrı planla" anahtarı (md.20) her katı kendi sınırı, oda
+programı ve elle düzenlemeleriyle ayrı planlatır (tuval üstünde kat sekmeleri).
+Kurallar: iç merdiven üst katlarda zemindeki konuma hücre hücre sabitlenir (düşey
+hiza; sınır merdiveni keserse runChecks ihlal yazar); her kat oturumu ≥ zeminin %70'i
+(`REG.katOturumOran`); üst kat alt kattan en çok 1,5 m taşar (çıkma, `REG.cikmaMax`);
+ıslak hacimler düşeyde çakışmıyorsa bilgi notu; TAKS zemin oturumuyla hesaplanır; üst
+kata sokak giriş kapısı çizilmez (erişim iç merdivenden). Kat durumları `villaFloors[k]`'da
+stateSnapshot biçiminde tutulur; SVG dışa aktarım TÜM katları gömer (`st.floors`),
+içe aktarınca sekmeler aynen geri gelir. Villa modunda Oda artık 0 olabilir (salon katı).
+YALNIZ anahtar AÇIKKEN salon=0 SALONSUZ KAT demektir (stüdyo değil: salon da mutfak da
+konmaz, yatak sayısı eksilmez, kat bazlı salon ihlali yazılmaz) — bir katta salon olması
+yeter; hiçbir katta yoksa runChecks "Evde hiç salon yok" ihlali basar (PAİY md.30).
+Anahtar kapalıyken eski davranış (salon hep konur); apartman stüdyo semantiği değişmedi.
 
 ## Mimari (script içi akış)
 1. **Izgara**: 0,5 m hücreler (`M=0.5`), poligon içi test, `cm` Int16Array bölge haritası.
@@ -253,7 +266,11 @@ Oluştur" der; motor koridor + çekirdek + daireleri yerleştirir, mevzuat panel
 2. Balkon ve ışıklık üretimi yok (ışıklık bilinçli kaldırıldı; iç banyo/WC havalandırması
    şaft notuyla geçiliyor).
 3. Çok egzotik taban şekilleri (artı/haç, çentikli) hâlâ "biçimsiz" bayrakları üretebilir.
-4. Tek tip kat: zemin/normal kat ayrımı, otopark, sığınak çizimi yok.
+4. ~~Tek tip kat~~ VİLLADA ÇÖZÜLDÜ (md.20): "Katları ayrı planla" — kat sekmeleri,
+   merdiven düşey hiza kilidi, oturum/çıkma kuralları (bkz. "Ne bu?"). APARTMANDA
+   hâlâ tek tip kat; otopark, sığınak çizimi yok. Kat geçişi editHistory'yi sıfırlar
+   (Geri Al kat içinde çalışır); SVG/PNG indirme aktif katın görüntüsünü verir
+   (durum metadata'sı yine tüm katları taşır).
 5. **Mevzuata otomatik uydurma** (sıradaki büyük iş): kullanıcı elle yapıyor, motor da
    yapabilir. Önerilen yol: slimUnitAntre desenini genelle — "Mevzuata Uydur" düğmesi,
    `runChecks` ihlali kalan odalar için `moveWallStep` adımlarını dener, ihlal sayısı
@@ -278,6 +295,9 @@ Kendi kendine yeten (doğrudan `node tests/<dosya>.js`) testler: `room-edit.js` 
 `etiket.js` (31: retype/swap/split/extendAntreTo + geri al + korumalar),
 `oda-hint.js` (13: hint'li/hintsiz addRoom, yön denetimi, EB. BANYO çift koruması),
 `touch.js` (16: dokunmatik katman — dokunuş/kaydırma/pinch/uzun basış, md.19),
+`villa-kat.js` (33: katları ayrı planla — sekme geçişi, merdiven düşey hizası, oturum
+oranı + çıkma ihlalleri, üst katta giriş kapısı yok, salonsuz yatak katı + ev geneli
+salon denetimi, snapshot gidiş-dönüşü, md.20),
 `import.js` (15: snapshot→restore gidiş-dönüş bölge imzası birebir + eski-SVG geometri
 çözümleyici; 2. bölüm `linkedom` ister, yoksa kendini atlar — `npm i linkedom`).
 DİKKAT (2026-06-10/2): bu makinede `/tmp/app.js` ve `/tmp/plan*.svg` başka kullanıcıya

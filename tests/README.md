@@ -48,6 +48,11 @@ o durumda `$HOME/app.js` gibi farklı yola yazıp test KOPYASINDA yolu sed ile d
   teması + bad ihlal listesi. Motor ayarı sonrası vaka taban karşılaştırması için.
 - `villa-test.js` — 14×11 villa, 4..8 yatak: orta sofa planı monotonluk (istek artınca
   yerleşen azalmamalı) + oda listesi + ihlaller.
+- `villa-kat.js` — villa "katları ayrı planla" (md.20): sekme geçişi + otomatik üst kat
+  üretimi, merdiven düşey hizası, oturum oranı (%70) ve çıkma (1,5 m) ihlalleri, üst
+  katta giriş kapısı çizilmemesi, kat başına program, salonsuz yatak katı (YALNIZ
+  anahtar açıkken salon=0: salon/mutfak konmaz, ihlal yok; ev geneli "hiç salon yok"
+  denetimi; kapalıyken eski davranış), snapshot gidiş-dönüşü. (33)
 - `antre-test.js` — vaka-3 D3'te antre eritilip alttan sağ tıkla +ANTRE: yeni antre
   koridora komşu ve cepheye dokunmuyor olmalı (✓/✗ basar).
 
