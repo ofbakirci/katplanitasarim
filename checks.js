@@ -1,7 +1,7 @@
 'use strict';
 /* ================= mevzuat kontrolleri ================= */
 function collectChecks(){
-  const out=[], add=(s,t,reg)=>out.push({s,t,reg:reg==null?null:reg});
+  const out=[], add=(s,t,reg,unit)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit});
   const p=plan;
   /* piyes ölçüleri — Planlı Alanlar İmar Yönetmeliği md.30 */
   p.unitObjs.forEach((u,k)=>{
@@ -19,20 +19,20 @@ function collectChecks(){
         `${tag} — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü ${fmt(best.area)} m² / ${fmt(best.minSide)} m`, best.id); }
     /* istenen oda programı tam yerleşti mi? (villa + katları ayrı: salon=0 stüdyo değil, yatak eksilmez) */
     const wantBeds=(u.spec.salon===0&&!(p.villa&&floorsOn()))? Math.max(0,u.spec.oda-1) : u.spec.oda;
-    if(beds.length<wantBeds) add('bad', `${tag} — ${wantBeds} yatak odasından ${beds.length} tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).`);
+    if(beds.length<wantBeds) add('bad', `${tag} — ${wantBeds} yatak odasından ${beds.length} tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).`, null, k);
     /* ensuite sözü: spec ebeveyn banyolu ise EB. BANYO var mı + ölçüleri (sessiz kayıp v20'de 4 daireden 3'ünü vurmuştu) */
     if(u.spec.ensuite && wantBeds>0){
       const ebb=u.rooms.find(g=>g.name==='EB. BANYO'&&g.cells.length);
-      if(!ebb) add('bad', `${tag} — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).`);
+      if(!ebb) add('bad', `${tag} — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).`, null, k);
       else add(ebb.area>=REG.banyo.area&&ebb.minSide>=REG.banyo.side?'ok':'bad',
         `${tag} — Eb. banyo: ${fmt(ebb.area)} m² / ${fmt(ebb.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ebb.id);
     }
     const banAll=u.rooms.find(g=>g.type==='banyo');
-    if(!banAll) add('bad', `${tag} — Banyo yerleştirilemedi!`);
+    if(!banAll) add('bad', `${tag} — Banyo yerleştirilemedi!`, null, k);
     const mut=u.rooms.find(g=>g.type==='mutfak');
-    if(!u.spec.acik && u.spec.salon>0 && !mut) add('bad', `${tag} — Ayrı mutfak istendi ama yerleştirilemedi (salonla birleşik sayıldı).`);
+    if(!u.spec.acik && u.spec.salon>0 && !mut) add('bad', `${tag} — Ayrı mutfak istendi ama yerleştirilemedi (salonla birleşik sayıldı).`, null, k);
     if(!salon && !(p.villa&&floorsOn()&&u.spec.salon===0)) // katları ayrı planlanan villada salonsuz kat serbest (ev geneli ayrıca denetlenir)
-      add('bad', `${tag} — Salon/oturma odası yerleştirilemedi (yasal zorunlu piyes)!`);
+      add('bad', `${tag} — Salon/oturma odası yerleştirilemedi (yasal zorunlu piyes)!`, null, k);
     // ince-uzun mutfak uyarısı kaldırıldı (tasarım tercihi, mevzuat sorunu değil)
     if(mut) add(mut.area>=REG.mutfak.area&&mut.minSide>=REG.mutfak.side?'ok':'bad',
       `${tag} — Mutfak: ${fmt(mut.area)} m² / ${fmt(mut.minSide)} m (min ${fmt(REG.mutfak.area)} m², ${fmt(REG.mutfak.side)} m)`, mut.id);
@@ -83,7 +83,7 @@ function collectChecks(){
     if(d.kind==='unit')
       add('bad', d.status==='hidden'
         ? `${tag} — Giriş kapısı silindi! (🚪 Kapı modunda "Geri al" ile geri getirin.)`
-        : `${tag} — Giriş kapısı için uygun duvar yok (antre koridora komşu değil).`);
+        : `${tag} — Giriş kapısı için uygun duvar yok (antre koridora komşu değil).`, null, d.k);
     else
       add('bad', d.status==='hidden'
         ? `${tag} — ${d.reg.name} kapısı silindi; odaya erişim yok. ("Geri al" ile geri getirin.)`
@@ -248,10 +248,12 @@ function renderChecks(out){
   const box=document.getElementById('checks'); box.innerHTML='';
   const IC={ok:'✓',bad:'✗',info:'ℹ'};
   out.forEach(o=>{ const d=document.createElement('div');
-    d.className='chk '+o.s+(o.reg!=null?' click':'');
+    const clickable=o.reg!=null||o.unit!=null;
+    d.className='chk '+o.s+(clickable?' click':'');
     const ic=document.createElement('span'); ic.className='ic'; ic.textContent=IC[o.s]; d.appendChild(ic);
     const msg=document.createElement('span'); msg.textContent=o.t; d.appendChild(msg);
     if(o.reg!=null){ d.title='Plana odaklamak için tıklayın'; d.onclick=()=>focusRegion(o.reg); }
+    else if(o.unit!=null){ d.title='Daireye odaklamak için tıklayın'; d.onclick=()=>focusUnit(o.unit); }
     box.appendChild(d); });
 }
 function runChecks(){
