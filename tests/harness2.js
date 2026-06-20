@@ -17,7 +17,7 @@ function run(label, bina, kat, poly, specs){
   global.window={addEventListener(){}};
   global.XMLSerializer=function(){this.serializeToString=()=>'';};
   global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
-  const src=require('fs').readFileSync('/tmp/app.js','utf-8');
+  const src=require('./support/app-js').readAppScript();
   eval(src + `
   ;unitSpecs=${JSON.stringify(specs)};
   pts=${JSON.stringify(poly)}; closed=true;
@@ -41,11 +41,12 @@ function run(label, bina, kat, poly, specs){
   console.log(' units:',plan.unitObjs.length,'stairs:',plan.stairs.length,'asansor:',plan.nAsansor,'cells:',tot+'/'+ins,'antresiz:',plan.unitObjs.filter(u=>!u.antre).length);
   byId['checks'].children.forEach(d=>{
     const cls=d.className.replace('chk ','');
-    const txt=d._ih.replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim();
+    const txt=nodeText(d);
     if(cls.includes('bad')) console.log('  [FAIL]', txt);
   });
   `);
 }
+const {nodeText}=require('./support/dom-text');
 const rect=[{x:0,y:0},{x:32,y:0},{x:32,y:16},{x:0,y:16}];
 const Lshape=[{x:0,y:0},{x:30,y:0},{x:30,y:10},{x:16,y:10},{x:16,y:16},{x:0,y:16}];
 const small=[{x:0,y:0},{x:12,y:0},{x:12,y:10},{x:0,y:10}];

@@ -1,2 +1,6 @@
 .DS_Store
 snapshots/zi*
+node_modules/
+.test-tmp/
+.claude/
+kat-plani-tasarim.tekdosya.html

@@ -19,9 +19,8 @@ global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
 
-const fs=require('fs');
-const html=fs.readFileSync(__dirname+'/../kat-plani-tasarim.html','utf-8');
-const src=html.slice(html.indexOf('<script>')+8, html.lastIndexOf('</script>'));
+const {extractAppScript}=require('./support/app-js');
+const src=extractAppScript();
 
 let pass=0, fail=0;
 const T=(name,cond)=>{ if(cond){pass++;} else {fail++; console.log('  [FAIL]', name);} };

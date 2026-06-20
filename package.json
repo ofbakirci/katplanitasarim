@@ -1,0 +1,17 @@
+{
+  "name": "kat-plani-tasarim",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turkiye mevzuatina gore sematik kat plani tasarim araci.",
+  "scripts": {
+    "build": "node tools/bundle.js",
+    "test": "node tests/run-all.js",
+    "test:syntax": "node tests/support/app-js.js --check",
+    "test:smoke": "node tests/run-all.js --smoke",
+    "test:diagnostics": "node tests/run-all.js --diagnostics",
+    "prepare:app-js": "node tests/support/app-js.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,6 +1,6 @@
 // Derin taban (70×45) regresyonu: ince şerit daire yok, kaçış mesafesi ≤30 m,
 // doğal ışık denetimi içerideki odaları yakalar, daire sayısı önerisi görünür.
-// Hazırlık: README'deki script çekme adımı (/tmp/app.js); APP_JS ile farklı yol verilebilir.
+// APP_JS ile farklı hazırlanmış app script yolu verilebilir.
 function stubEl(tag){ return {
   tag, attrs:{}, children:[], style:{}, dataset:{}, _ih:'',
   set innerHTML(v){ this._ih=v; this.children=[]; }, get innerHTML(){ return this._ih; },
@@ -17,13 +17,14 @@ global.document={getElementById:getEl,createElement:t=>stubEl(t),createElementNS
 global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){};global.Blob=function(){};global.URL={createObjectURL:()=>''};
+const {nodeText}=require('./support/dom-text');
 function run(label, poly, specs, extra){
-eval(require('fs').readFileSync(process.env.APP_JS||'/tmp/app.js','utf-8') + `
+eval(require('./support/app-js').readAppScript() + `
 ;unitSpecs=${JSON.stringify(specs)};
 pts=${JSON.stringify(poly)}; closed=true;
 generate();
 console.log('--- ${label} ---');
-const msgs=byId['checks'].children.map(d=>({cls:d.className, txt:d._ih.replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim()}));
+const msgs=byId['checks'].children.map(d=>({cls:d.className, txt:nodeText(d)}));
 const bad=s=>msgs.filter(m=>m.cls.includes('bad')&&m.txt.includes(s)).length;
 const info=s=>msgs.filter(m=>m.cls.includes('info')&&m.txt.includes(s)).length;
 const t=(name,ok)=>console.log((ok?' ✓ ':' ✗ FAIL ')+name);

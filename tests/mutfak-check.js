@@ -14,7 +14,7 @@ function run(label,bina,kat,poly,specs){
   global.window={addEventListener(){}};
   global.XMLSerializer=function(){this.serializeToString=()=>'';};
   global.Image=function(){};global.Blob=function(){};global.URL={createObjectURL:()=>''};
-  eval(require('fs').readFileSync('/tmp/app.js','utf-8')+`
+  eval(require('./support/app-js').readAppScript()+`
   ;unitSpecs=${JSON.stringify(specs)}; pts=${JSON.stringify(poly)}; closed=true; generate();
   const ms=[];
   plan.unitObjs.forEach(u=>u.rooms.forEach(g=>{ if(g.type==='mutfak'&&g.cells.length)

@@ -1,5 +1,5 @@
 // Dışa aktarma testi: exportTableGroup (gruplama + sütun sarma) + exportClone (sabit ölçek, font-family)
-// Hazırlık: README'deki script çekme adımı (/tmp/app.js); APP_JS ortam değişkeniyle farklı yol verilebilir.
+// APP_JS ortam değişkeniyle farklı bir hazırlanmış app script yolu verilebilir.
 function stubEl(tag){ const e={
   tag, attrs:{}, children:[], style:{}, dataset:{}, _ih:'',
   set innerHTML(v){ this._ih=v; this.children=[]; }, get innerHTML(){ return this._ih; },
@@ -22,7 +22,7 @@ global.XMLSerializer=function(){this.serializeToString=e=>JSON.stringify(e.attrs
 global.Image=function(){this.onload=null;Object.defineProperty(this,'src',{set(){}});};
 global.Blob=function(){};global.URL={createObjectURL:()=>''};
 function check(label,run){
-  eval(require('fs').readFileSync(process.env.APP_JS||'/tmp/app.js','utf-8') + `
+  eval(require('./support/app-js').readAppScript() + `
 ;unitSpecs=${JSON.stringify(run.specs)};
 pts=${JSON.stringify(run.pts)}; closed=true;
 generate();

@@ -16,10 +16,19 @@ global.document={getElementById:getEl, createElement:t=>stubEl(t), createElement
 global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
-const fs=require('fs');
-const html=fs.readFileSync(''+__dirname+'/../kat-plani-tasarim.html','utf-8');
-const src=html.slice(html.indexOf('<script>')+8, html.lastIndexOf('</script>'));
+const fs=require('fs'), path=require('path');
+const {extractAppScript}=require('./support/app-js');
+const src=extractAppScript();
 function loadState(f){const t=fs.readFileSync(f,'utf8');return JSON.parse(t.match(/<metadata id="kpState">([\s\S]*?)<\/metadata>/)[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'));}
+function resolveCase(v){
+  const raw=v.endsWith('.svg')?v:v+'.svg';
+  const candidates=[
+    path.resolve(process.cwd(), raw),
+    path.join(__dirname,'..','vakalar',raw),
+    path.join(__dirname,'..','vakalar-2',raw)
+  ];
+  return candidates.find(fs.existsSync);
+}
 eval(src+`
 ;global.RUN=(st)=>{
   document.getElementById('binaTipi').value=st.ui.binaTipi||'apartman';
@@ -43,8 +52,15 @@ eval(src+`
   return {out, bads:checks.filter(x=>x.s==='bad').length,
     badList:checks.filter(x=>x.s==='bad').map(x=>x.t||x.msg||JSON.stringify(x)).slice(0,6)};
 };`);
-for(const v of process.argv.slice(2)){
-  const st=loadState(''+__dirname+'/../vakalar/'+v+'.svg');
+const args=process.argv.slice(2);
+const cases=args.length?args:fs.existsSync(path.join(__dirname,'..','vakalar-2'))
+  ? fs.readdirSync(path.join(__dirname,'..','vakalar-2')).filter(f=>f.endsWith('.svg')).map(f=>f.replace(/\.svg$/,''))
+  : [];
+if(!cases.length){ console.log('v22 fixture yok; test atlandi.'); process.exit(0); }
+for(const v of cases){
+  const file=resolveCase(v);
+  if(!file){ console.log('=== '+v+' ATLANDI: fixture bulunamadi'); continue; }
+  const st=loadState(file);
   try{ const r=global.RUN(st);
     console.log('=== '+v+'  (bad: '+r.bads+')');
     console.log('  '+r.out.join('\n  '));

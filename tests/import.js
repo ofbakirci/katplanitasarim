@@ -6,6 +6,7 @@
    Not: 2. bölüm DOMParser ister; `linkedom` yoksa atlanır (npm i linkedom).
 */
 const fs=require('fs');
+const {extractAppScript}=require('./support/app-js');
 let pass=0, fail=0;
 const ok=(c,msg)=>{ if(c){pass++;} else {fail++; console.log('  ✗',msg);} };
 
@@ -31,8 +32,7 @@ global.alert=m=>{ throw new Error('alert: '+m); };
 global.FileReader=function(){};
 try{ global.DOMParser=require('linkedom').DOMParser; }catch(e){}
 
-const html=fs.readFileSync(__dirname+'/../kat-plani-tasarim.html','utf-8');
-const src=html.match(/<script>([\s\S]*)<\/script>/)[1];
+const src=extractAppScript();
 
 eval(src+`
 ;unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:4}];
@@ -60,6 +60,17 @@ ok(plan.unitObjs.every(u=>u.spec&&typeof u.spec.oda==='number'), 'spec kopyalar�
 ok(plan.unitObjs.filter(u=>u.comb).length===2, 'komb işaretleri korunur');
 /* geri yükleme sonrası elle düzenleme çalışmalı: duvar listesi var */
 ok(plan.wallRuns&&plan.wallRuns.length>0, 'wallRuns yeniden hesaplandı');
+const sigRestored=sig(plan);
+const rejects=(bad,msg)=>{
+  let threw=false;
+  try{ restoreState(bad); }catch(e){ threw=/durum geçersiz/.test(e.message); }
+  ok(threw, msg);
+  ok(sig(plan)===sigRestored, msg+' planı değiştirmedi');
+};
+const badCell=JSON.parse(js0); badCell.plan.regions[0].cells=[-1];
+rejects(badCell, 'geçersiz hücre reddedildi');
+const badUi=JSON.parse(js0); delete badUi.ui;
+rejects(badUi, 'eksik ui reddedildi');
 
 /* --- 2) eski SVG geometri çözümleyici --- */
 if(typeof DOMParser==='undefined'){

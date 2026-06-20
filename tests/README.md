@@ -1,20 +1,29 @@
 # Başsız test altyapısı
 
-Tarayıcısız (Node) test: HTML'deki `<script>` çekilir, DOM stub'lanır, `generate()` çağrılır.
+Tarayıcısız (Node) test: uygulama scripti `tests/support/app-js.js` ile okunur, DOM stub'lanır, `generate()` çağrılır.
 
-## Hazırlık (her testten önce)
+## Hızlı kullanım
 ```bash
-python3 -c "
-import re
-html = open('../kat-plani-tasarim.html', encoding='utf-8').read()
-js = re.search(r'<script>(.*)</script>', html, re.S).group(1)
-open('/tmp/app.js','w',encoding='utf-8').write(js)
-"
+npm test
+npm run test:smoke
+npm run test:diagnostics
 ```
-Testler `/tmp/app.js` okur (`wall-drag.js` ayrıca `APP_JS` ortam değişkeniyle farklı yol kabul eder).
+
+`npm test`, `tests/support/app-js.js` üzerinden uygulama scriptlerini otomatik çıkarır,
+syntax kontrolü yapar, HTML'deki script sırasını `.test-tmp/app.js` olarak yazar ve
+testlere `APP_JS` ile verir.
+Elle yalnız script hazırlamak için:
+
+```bash
+npm run prepare:app-js
+```
+
+Tekil testler doğrudan çalıştırılabilir. Hazırlanmış farklı bir script denemek için
+`APP_JS=.test-tmp/app.js node tests/<dosya>.js` kullanılabilir.
 
 ## Dosyalar
 - `harness2.js` — 6 standart senaryo + erişim denetimi (her oda antreye komşu mu, hücre bütünlüğü)
+- `bootstrap.js` — HTML'deki script etiketleri ayrı klasik browser scriptleri gibi sırayla çalışır mı?
 - `test6.js` — 21×18, 4×3+1 (çekirdek yanı daireler)
 - `test9.js` / `test27.js` — geniş/derin bloklar (kol koridorlar)
 - `test10.js` — stüdyo + 2+1 karışık bar (banyosuz daire denetimi)
@@ -23,19 +32,16 @@ Testler `/tmp/app.js` okur (`wall-drag.js` ayrıca `APP_JS` ortam değişkeniyle
 - `mutfak-check.js` — tüm senaryolarda mutfak en/boy ölçüleri
 - `wall-drag.js` — oda duvarı sürükleme: hücre bütünlüğü/bağlantılılık, donör korumaları, dragWallTo canlı denetim zinciri, Geri Al (duvar + ayırıcı, boş drag yazılmaz)
 - `core-shadow.js` — ayırıcı ±4 m taranır: çekirdek gölgesine düşen yatak odası yutulmamalı (dikdörtgen katı, L-şekil bilgi amaçlı)
-- `visual5.js` / `visualL.js` — SVG render üretir (`/tmp/plan*.svg`; cairosvg ile PNG'ye çevrilebilir)
+- `visual5.js` / `visualL.js` — SVG render üretir (sistem geçici klasörüne `plan*.svg`; cairosvg ile PNG'ye çevrilebilir)
 
 Beklenen: FAIL yalnız dürüst kapasite raporları (aşırı program), NO-DOOR/erişimsiz/banyosuz = 0.
 
-DİKKAT (2026-06-10): bu makinede `/tmp/app.js` başka kullanıcıya ait kilitli çıkabilir —
-o durumda `$HOME/app.js` gibi farklı yola yazıp test KOPYASINDA yolu sed ile değiştirin
-(testlerin kendisi değiştirilmez; bkz. DEVIR-NOTU "Test altyapısı").
-
-## Kendi kendine yeten testler (/tmp/app.js gerekmez — `node tests/<dosya>.js`)
+## Kendi kendine yeten testler (`node tests/<dosya>.js`)
 - `antre-slim.js` — antre inceltme: kompaktlık (≤ max(6 m², daire %14)), ince çıkıntı yok, erişim, bütünlük (3 senaryo). (51)
 - `etiket.js` — oda tipi değiştir / takas / böl / antreyi uzat + geri al + korumalar. (31)
 - `room-edit.js` — oda sil/ekle/geri al, bütünlük, spec kopyası, korumalar, villa, EB. BANYO, tek daire/kat (5 ve 12 kat). (55)
 - `oda-hint.js` — hint'li/hintsiz addRoom, yön denetimi, EB. BANYO çift koruması. (13)
+- `touch.js` — dokunmatik katman: dokunuş/kaydırma/pinch/uzun basış. (16)
 - `import.js` — snapshot→restore gidiş-dönüş (bölge imzası birebir) + komb işaretleri;
   2. bölüm eski-SVG geometri çözümleyici (`npm i linkedom` ister, yoksa kendini atlar). (9+)
 
@@ -46,6 +52,8 @@ o durumda `$HOME/app.js` gibi farklı yola yazıp test KOPYASINDA yolu sed ile d
 - `v22-test.js` — `node tests/v22-test.js vaka-1-orta-blok [vaka-2-genis-sig ...]` →
   vakanın GİRDİLERİYLE motoru yeniden koşar; mutfak/salon/yatak alanları + dış cephe
   teması + bad ihlal listesi. Motor ayarı sonrası vaka taban karşılaştırması için.
+  `vakalar/` yoksa mevcut `vakalar-2/` klasörüne de bakar; argümansız çalıştırılırsa
+  `vakalar-2/*.svg` üstünden rapor üretir.
 - `villa-test.js` — 14×11 villa, 4..8 yatak: orta sofa planı monotonluk (istek artınca
   yerleşen azalmamalı) + oda listesi + ihlaller.
 - `villa-kat.js` — villa "katları ayrı planla" (md.20): sekme geçişi + otomatik üst kat
@@ -55,7 +63,8 @@ o durumda `$HOME/app.js` gibi farklı yola yazıp test KOPYASINDA yolu sed ile d
   denetimi; kapalıyken eski davranış), tek salonun silinebilmesi (yalnız anahtar
   açıkken; kapalıyken koruma sürer), snapshot gidiş-dönüşü. (37)
 - `antre-test.js` — vaka-3 D3'te antre eritilip alttan sağ tıkla +ANTRE: yeni antre
-  koridora komşu ve cepheye dokunmuyor olmalı (✓/✗ basar).
+  koridora komşu ve cepheye dokunmuyor olmalı (✓/✗ basar). Bu tarihsel fixture
+  checkout'ta yoksa test açıkça atlanır.
 
 Beklenen taban (2026-06-10 v5): vaka-1/2/5 bad=0; vaka-3 bad=3 (2 bilinçli yatak
 penceresiz + %54 mutfak biçimi, eşiğe 1 hücre); vaka-4 bad=1 (bilinçli). Villa 14×11
