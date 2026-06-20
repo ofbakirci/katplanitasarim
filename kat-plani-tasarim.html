@@ -196,6 +196,9 @@
       <div class="row"><label>Kat sayısı</label><input type="number" id="katSayisi" min="1" max="30" value="5"></div>
       <div class="row"><label>Kat yüksekliği (m)</label><input type="number" id="katYuk" min="2.6" max="4" step="0.1" value="2.9"></div>
       <div class="row" id="katAyriRow" style="display:none"><label>Katları ayrı planla</label><span class="switch"><input type="checkbox" id="katAyri"><i></i></span></div>
+      <div class="row"><label>Koridor yönü</label>
+        <select id="koridorYon"><option value="oto">Otomatik</option><option value="yatay">Yatay</option><option value="dikey">Dikey</option></select>
+      </div>
     </div>
     <div class="sec" id="unitSec">
       <h2 id="unitSecTitle">Daire Tipleri (kat başına)</h2>
@@ -204,6 +207,7 @@
     </div>
     <div class="sec">
       <button class="primary" id="genBtn" style="width:100%" disabled>Yerleşimi Oluştur</button>
+      <button class="small" id="structReset" style="width:100%; margin-top:6px; display:none">🗑 Yapı iskeletini sıfırla</button>
       <div style="display:flex; gap:6px; margin-top:8px;">
         <button class="small" id="svgBtn" style="flex:1" disabled>SVG indir</button>
         <button class="small" id="pngBtn" style="flex:1" disabled>PNG indir</button>
@@ -232,6 +236,7 @@
     <button id="tParcel">⬠ Parsel</button>
     <button id="tBalk">▦ Balkon</button>
     <button id="tDoor">🚪 Kapı</button>
+    <button id="tStruct" title="Yapı katmanı: merdiven / asansör / şaft / yangın merdivenini taşı ve boyutlandır">🏗 Yapı</button>
     <button id="tPan">✋ Kaydır</button>
     <button id="tUndo">↩︎ Geri al</button>
     <button id="tClear">🗑 Temizle</button>
@@ -291,6 +296,7 @@ let unitLayout = {};    // daire başına iç düzen tercihi: k → 'auto'|'flat
 let dragging = null;          // {type:'pan'|'cut'|'wall', ...}
 let hoverWall = null;         // imleç altındaki sürüklenebilir oda duvarı
 let hoverRoomId = null;       // imleç altındaki oda (duvar ölçüsü vurgusu)
+let hoverStruct = null;       // yapı modunda imleç altındaki yapı tutamağı {regId,handle}
 let editHistory = [];         // elle düzenleme geçmişi: {type:'wall',a,b,cellsA,cellsB} | {type:'cut',cuts} | {type:'balk',prev}
 let parcelPts = [];           // parsel poligonu (opsiyonel; bahçe = parsel − bina)
 let parcelClosed = false;
@@ -300,8 +306,10 @@ let doorOverrides = {};       // elle kapı yeri: key -> {h,x,y}; geçersizleşi
 let extraDoors = [];          // çift tıkla eklenen kapılar: {h,x,y}
 let doorHidden = {};          // çift tıkla silinen otomatik kapılar: key -> true
 let hoverDoor = null;         // kapı modunda imleç altındaki kapı kaydı
+let koridorYon = 'oto';       // apartman koridor yönü: 'oto'|'yatay'|'dikey' (manuel override)
 let villaFloors = null;       // villa "katları ayrı planla": kat başına durum anlık görüntüsü (stateSnapshot biçimi) | null
 let activeFloor = 0;          // villaFloors aktifken görüntülenen kat (0 = zemin)
+let lockedCore = null;        // bina iskeleti: kilitli çekirdek öğeleri [{type,name,x0,y0,x1,y1}] (dünya koord, katlar arası ortak) | null
 
 const svg = document.getElementById('svg');
 const NS = 'http://www.w3.org/2000/svg';
@@ -369,7 +377,8 @@ document.getElementById('addUnit').addEventListener('click',()=>{
   if(document.getElementById('binaTipi').value==='villa') return;
   unitSpecs.push({oda:3, salon:1, ensuite:true, acik:false, adet:1}); renderUnits(); resetCuts(); safeGen();
 });
-document.getElementById('binaTipi').addEventListener('change',()=>{ renderUnits(); updateKatAyriUI(); resetCuts(); safeGen(); });
+document.getElementById('binaTipi').addEventListener('change',()=>{ lockedCore=null; updateStructResetBtn(); renderUnits(); updateKatAyriUI(); resetCuts(); safeGen(); });
+document.getElementById('koridorYon').addEventListener('change',e=>{ koridorYon=e.target.value; resetCuts(); safeGen(); });
 ['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ onFloorCountChange(); safeGen(); }));
 ['katSayisi','katYuk'].forEach(id=>makeStepper(document.getElementById(id)));
 
@@ -385,7 +394,6 @@ document.getElementById('binaTipi').addEventListener('change',()=>{ renderUnits(
 function floorsOn(){
   const cb=document.getElementById('katAyri');
   return !!(villaFloors && cb && cb.checked
-    && document.getElementById('binaTipi').value==='villa'
     && (+document.getElementById('katSayisi').value||1)>=2);
 }
 function floorName(k){ return k===0?'Zemin kat':k+'. kat'; }
@@ -412,6 +420,49 @@ function villaForcedStair(){
   const f0=floorState(0);
   return f0? stairBoxOf(f0.plan) : null;
 }
+/* ================= yapı iskeleti (lockedCore) =================
+   Çekirdek (merdiven/asansör/teknik/yangın) bina seviyesinde KİLİTLİ bir iskelettir:
+   dünya koordinatlı dikdörtgenler katlar arası ortak tutulur → tüm çekirdek düşeyde
+   süreklidir. generate() bu öğeleri ÖNCE sahiplenir, kendi çekirdeğini yerleştirmez;
+   daireler iskeletin etrafına dizilir. "Yerleşimi Oluştur" iskeleti korur (lockedCore
+   silinmez); yalnız "Yapı iskeletini sıfırla" temizler. */
+const isCoreReg=g=>STRUCT_TYPES[g.type]&&g.cells&&g.cells.length&&g.name!=='ORTAK DEPO';
+function captureCoreFrom(pl){
+  if(!pl) return null;
+  const cols=pl.cols, minX=pl.minX, minY=pl.minY, out=[];
+  (pl.regions||[]).filter(isCoreReg).forEach(g=>{
+    let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+    g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; r0=Math.min(r0,r);r1=Math.max(r1,r);c0=Math.min(c0,c);c1=Math.max(c1,c);});
+    out.push({type:g.type, name:g.name, x0:minX+c0*M, y0:minY+r0*M, x1:minX+(c1+1)*M, y1:minY+(r1+1)*M});
+  });
+  return out.length? out : null;
+}
+function captureLockedCore(){ lockedCore = captureCoreFrom(plan); }
+/* çekirdek iskeletini verilen ızgaraya çevir: [{type,name,r0,c0,h,w}] (ızgaraya kırpılır).
+   Kaynak: elle lockedCore ÖNCELİKLİ; yoksa otomatik kulak-algılama (autoCore). */
+function coreLockForGrid(minX,minY,rows,cols,autoCore){
+  const src=(lockedCore&&lockedCore.length)? lockedCore : (autoCore&&autoCore.length? autoCore : null);
+  if(!src) return null;
+  const out=[];
+  src.forEach(e=>{
+    let c0=Math.round((e.x0-minX)/M), r0=Math.round((e.y0-minY)/M);
+    let c1=Math.round((e.x1-minX)/M)-1, r1=Math.round((e.y1-minY)/M)-1;
+    c0=Math.max(0,c0); r0=Math.max(0,r0); c1=Math.min(cols-1,c1); r1=Math.min(rows-1,r1);
+    if(c1<c0||r1<r0) return;
+    out.push({type:e.type, name:e.name, r0, c0, h:r1-r0+1, w:c1-c0+1});
+  });
+  return out.length? out : null;
+}
+/* iskeleti temizle → otomatik çekirdek yerleşimine dön */
+function resetLockedCore(){
+  lockedCore=null;
+  if(plan&&closed){ try{ generate(floorsOn()?true:false); }catch(err){ console.error('iskelet sıfırlama:',err); } }
+  updateStructResetBtn();
+}
+function updateStructResetBtn(){
+  const b=document.getElementById('structReset'); if(!b) return;
+  b.style.display = lockedCore? '' : 'none';
+}
 /* poligon kenarları boyunca ~0,5 m aralıklı örnek noktalar (taşma ölçümü) */
 function polySamples(poly){
   const out=[];
@@ -428,12 +479,11 @@ function distToPoly(q, poly){
 }
 /* anahtar satırının görünürlüğü + tip/kat değişiminde özelliğin kapanması */
 function updateKatAyriUI(){
-  const villa=document.getElementById('binaTipi').value==='villa';
   const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
   const row=document.getElementById('katAyriRow');
-  if(row) row.style.display=(villa&&kat>=2)?'':'none';
+  if(row) row.style.display=(kat>=2)?'':'none';   // apartman + villa: çok katlıysa açılabilir
   const cb=document.getElementById('katAyri');
-  if((!villa||kat<2)&&cb&&cb.checked) floorsOff();
+  if(kat<2&&cb&&cb.checked) floorsOff();
   renderFloorTabs();
 }
 /* özelliği kapat: zemin kata dönülür, kat anlık görüntüleri bırakılır */
@@ -467,9 +517,10 @@ function renderFloorTabs(){
   const box=document.getElementById('floorTabs');
   const title=document.getElementById('unitSecTitle');
   if(!box) return;
+  const villa=document.getElementById('binaTipi').value==='villa';
   if(!floorsOn()){
     box.style.display='none';
-    if(title) title.textContent='Daire Tipleri (kat başına)';
+    if(title) title.textContent=villa?'Daire Tipleri (kat başına)':'Daire Tipleri (kat başına)';
     return;
   }
   const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
@@ -484,7 +535,7 @@ function renderFloorTabs(){
     b.addEventListener('click',()=>switchFloor(k));
     box.appendChild(b);
   }
-  if(title) title.textContent='Oda Programı — '+floorName(activeFloor);
+  if(title) title.textContent=(villa?'Oda Programı — ':'Daire Tipleri — ')+floorName(activeFloor);
 }
 function switchFloor(k){
   if(!floorsOn()) return;
@@ -494,7 +545,17 @@ function switchFloor(k){
   const prev=activeFloor; activeFloor=k;
   const snap=villaFloors[k];
   if(snap&&snap.plan){
-    try{ restoreState(snap, {fit:false, keepFloors:true}); }
+    try{
+      restoreState(snap, {fit:false, keepFloors:true});
+      /* iskelet (çekirdek) bu kat kaydedildikten sonra değiştiyse: bayat → iskelete göre yeniden üret */
+      if(!plan.villa && lockedCore){
+        const cur=captureCoreFrom(plan);
+        if(JSON.stringify(cur)!==JSON.stringify(lockedCore)){
+          resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
+          generate(); villaFloors[k]=stateSnapshot(true);
+        }
+      }
+    }
     catch(err){ console.error('kat geçişi:', err); activeFloor=prev; }
   } else if(plan){
     /* ilk ziyaret: sınır, program ve balkonlar bir önceki kattan miras kalır;
@@ -647,6 +708,10 @@ svg.addEventListener('mousemove',e=>{
       generate(true);
     }
     if(dragging.type==='wall'){ dragWallTo(sx,sy); }
+    if(dragging.type==='struct'){ dragStructTo(sx,sy); }
+    if(dragging.type==='bvert'){ pts[dragging.idx]={x:snapG(S2Wx(sx)), y:snapG(S2Wy(sy))};
+      document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+      document.getElementById('stPerim').textContent=fmt(perim(pts))+' m'; render(); }
     if(dragging.type==='door'){
       const wx=S2Wx(sx), wy=S2Wy(sy);
       if(dragging.door.kind==='extra'){
@@ -690,6 +755,15 @@ svg.addEventListener('mousemove',e=>{
     svg.style.cursor = h? 'move' : '';
     if((h?h.key:null)!==(hoverDoor?hoverDoor.key:null)){ hoverDoor=h; render(); }
   }
+  else if(mode==='struct'){
+    if(!plan) return;
+    const h=hitStructHandle(sx,sy);
+    if(h){ svg.style.cursor = h.handle==='move'?'move'
+      : h.handle==='n'||h.handle==='s'?'ns-resize'
+      : h.handle==='e'||h.handle==='w'?'ew-resize'
+      : h.handle==='nw'||h.handle==='se'?'nwse-resize':'nesw-resize'; }
+    else { const bh=hitBoundaryHandle(sx,sy); svg.style.cursor = bh? (bh.kind==='edge'?'copy':'move') : ''; }
+  }
   else if(plan && closed && mode!=='parcel'){ // oda duvarı + oda ölçüsü vurgusu
     const w=(mode==='pan')? null : (hitCutHandle(sx,sy)? null : hitWallRun(sx,sy));
     if(mode!=='pan') svg.style.cursor = w? (w.horiz?'ns-resize':'ew-resize') : '';
@@ -722,6 +796,26 @@ svg.addEventListener('mousedown',e=>{
     if(e.button!==0 || !plan) return;
     const h=hitDoor(sx,sy);
     if(h){ dragging={type:'door', door:h, undo:doorSnapshot()}; e.preventDefault(); }
+    return;
+  }
+  if(mode==='struct'){
+    if(e.button!==0 || !plan) return;
+    const h=hitStructHandle(sx,sy);
+    if(h){ const reg=plan.regions[h.regId];
+      if(reg){ const gc=Math.floor((S2Wx(sx)-plan.minX)/M), gr=Math.floor((S2Wy(sy)-plan.minY)/M);
+        dragging={type:'struct', regId:h.regId, handle:h.handle, box0:regBoxCells(reg), gr, gc,
+          snap:snapshotRegions(), prevCore:lockedCore?lockedCore.map(o=>({...o})):null};
+        e.preventDefault(); }
+      return; }
+    const bh=hitBoundaryHandle(sx,sy);
+    if(bh){
+      const prevPts=pts.map(p=>({...p}));
+      let idx=bh.idx;
+      if(bh.kind==='edge'){ const a=pts[bh.idx], b=pts[(bh.idx+1)%pts.length];
+        pts.splice(bh.idx+1,0,{x:snapG((a.x+b.x)/2), y:snapG((a.y+b.y)/2)}); idx=bh.idx+1; }
+      dragging={type:'bvert', idx, prevPts, prevCore:lockedCore?lockedCore.map(o=>({...o})):null};
+      e.preventDefault(); render();
+    }
     return;
   }
   if(mode==='parcel'){
@@ -773,6 +867,25 @@ function finishDrag(){
   } else if(dragging.type==='wall' && dragging.snap && plan){
     if(snapshotChanged(dragging.snap))
       editHistory.push({type:'wallsnap', snap:dragging.snap});
+  } else if(dragging.type==='struct' && dragging.snap && plan){
+    if(regionsChanged(dragging.snap)){
+      if(plan.villa){ /* villa: tek merdiven üretim-sonrası kalır (yeniden üretmeden) */
+        editHistory.push({type:'wallsnap', snap:dragging.snap});
+        plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable();
+      } else { /* apartman: çekirdeği iskelet olarak kilitle + daireleri etrafına yeniden diz */
+        captureLockedCore();
+        editHistory.push({type:'corelock', prev:dragging.prevCore});
+        generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
+        updateStructResetBtn();
+      }
+    }
+  } else if(dragging.type==='bvert' && plan){
+    /* bina sınırı değişti → çekirdek kilitliyken yeniden diz (kata özel sınır) */
+    editHistory.push({type:'bound', prevPts:dragging.prevPts, prevCore:dragging.prevCore});
+    try{ generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
+    catch(err){ console.error('sınır düzenleme:', err); }
+    document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+    document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   } else if(dragging.type==='door' && dragging.undo){
     if(JSON.stringify(dragging.undo)!==JSON.stringify(doorSnapshot()))
       editHistory.push({type:'door', prev:dragging.undo});
@@ -830,6 +943,16 @@ function undoEdit(){
     if(plan){ const g1=plan.regions[e.a], g2=plan.regions[e.b];
       if(g1&&g2){ const n=g1.name,t=g1.type; g1.name=g2.name; g1.type=g2.type; g2.name=n; g2.type=t; }
       plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); }
+  } else if(e.type==='corelock'){
+    lockedCore=e.prev; // önceki iskelet (null = otomatik)
+    if(plan&&closed){ generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
+    updateStructResetBtn();
+  } else if(e.type==='bound'){
+    pts=e.prevPts.map(p=>({...p})); lockedCore=e.prevCore;
+    if(closed){ try{ generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }catch(err){ console.error(err); } }
+    document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+    document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+    updateStructResetBtn();
   } else if(e.type==='cut'){
     customCutsZ=e.cuts; generate(true);
   } else if(e.type==='ulayout'){
@@ -859,8 +982,8 @@ function finishPoly(){
   render();
 }
 /* araç çubuğu */
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null;
-  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tDoor','door'],['tPan','pan']])
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null;
+  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tDoor','door'],['tStruct','struct'],['tPan','pan']])
     document.getElementById(id).classList.toggle('active',m===mm);
   svg.classList.toggle('panning',m==='pan'); render(); };
 document.getElementById('tbToggle').onclick=()=>{
@@ -874,14 +997,14 @@ document.getElementById('tbToggle').onclick=()=>{
     {t:'Sınırı çizin', h:'<b>✏️ Çiz</b> aracıyla tıklayarak bina dış sınırını oluşturun; kenarlar 15°’ye ve 0,5 m ızgaraya oturur. Başlangıç noktasına tıklayınca sınır kapanır. Hızlı denemek için <b>▭ Örnek sınır</b>.'},
     {t:'Parsel ve balkon', h:'<b>⬠ Parsel</b> ile arsa sınırını çizin; bahçe alanı, TAKS ve çekme mesafeleri hesaplanır. <b>▦ Balkon</b> aracında dış duvara tıklayıp balkon ekleyin (tutamaçlarla boyutlandırın, SAĞ TIK siler).'},
     {t:'Yerleşimi oluşturun', h:'Sol panelden daire tiplerini ayarlayın ve <b>Yerleşimi Oluştur</b>’a basın. Mevzuat paneli her değişiklikte canlı güncellenir.'},
-    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. Dokunmatik ekranda: <b>uzun basış</b> = sağ tık, <b>çift dokunuş</b> = çift tık, <b>iki parmak</b> = yakınlaştır, boşta sürükleme = kaydır. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
+    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. <b>🏗 Yapı</b> aracı çekirdeği (merdiven, asansör, teknik şaft, yangın merdiveni) öne çıkarır: <b>✛</b> ile taşıyın, <b>kare</b> tutamaçlardan boyutlandırın; bina sınırını köşelerinden sürükleyin, <b>+</b> ile yeni köşe ekleyin. Çekirdek bir <b>iskelettir</b>: kilitli kalır, daireler etrafına dizilir, "Yerleşimi Oluştur" onu sıfırlamaz (sıfırlamak için "🗑 Yapı iskeletini sıfırla"). Dokunmatik ekranda: <b>uzun basış</b> = sağ tık, <b>çift dokunuş</b> = çift tık, <b>iki parmak</b> = yakınlaştır, boşta sürükleme = kaydır. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
     {t:'Kontrol ve dışa aktarım', h:'<b>↩︎ Geri al</b> elle yapılan değişiklikleri adım adım geri alır. Mevzuat kontrolleri yeşile dönünce <b>SVG / PNG indir</b> ile dışa aktarın.'}
   ];
   const STEPS_MOBILE=[
     {t:'Sınırı çizin', h:'<b>✏️ Çiz</b> aracında ekrana <b>dokunarak</b> köşe ekleyin; başlangıç noktasına dokununca sınır kapanır. <b>Boşta sürükleme</b> görünümü kaydırır, <b>iki parmak</b> yakınlaştırır. Hızlı denemek için <b>▭ Örnek sınır</b>.'},
     {t:'Parsel ve balkon', h:'<b>⬠ Parsel</b> ile arsa sınırını çizin. <b>▦ Balkon</b> aracında dış duvara dokunup balkon ekleyin; kenar tutamaçlarını parmağınızla sürükleyerek boyutlandırın, <b>uzun basış</b> siler.'},
     {t:'Yerleşimi oluşturun', h:'Sol üstteki <b>☰</b> menüden daire tiplerini girin ve <b>Yerleşimi Oluştur</b>’a basın. Mevzuat kontrolü ve lejant da bu menüde.'},
-    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaç daire ayırıcısını, <b>kare</b> tutamaç oda duvarını taşır — parmağınızla sürükleyin. Bir odaya <b>UZUN BASIN</b>: oda ekle / sil / tipini değiştir / takas / böl. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT DOKUNUŞ</b> kapı ekler, kapıya çift dokunuş siler. Not: Yerleşimi yeniden oluşturmak elle değişiklikleri sıfırlar.'},
+    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaç daire ayırıcısını, <b>kare</b> tutamaç oda duvarını taşır — parmağınızla sürükleyin. Bir odaya <b>UZUN BASIN</b>: oda ekle / sil / tipini değiştir / takas / böl. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT DOKUNUŞ</b> kapı ekler, kapıya çift dokunuş siler. <b>🏗 Yapı</b> aracı çekirdeği (merdiven, asansör, şaft, yangın merd.) öne çıkarır: <b>✛</b> ile taşıyın, kare tutamaçlardan boyutlandırın. Not: Yerleşimi yeniden oluşturmak elle değişiklikleri sıfırlar.'},
     {t:'Kontrol ve dışa aktarım', h:'<b>↩︎ Geri al</b> değişiklikleri adım adım geri alır. Alttaki <b>Daire Tablosu</b> başlığına dokununca açılır. Kontroller yeşile dönünce ☰ menüden <b>SVG / PNG indir</b>.'}
   ];
   const STEPS=(typeof matchMedia==='function'&&matchMedia('(max-width: 700px)').matches)? STEPS_MOBILE : STEPS_DESKTOP;
@@ -911,6 +1034,7 @@ document.getElementById('tDraw').onclick=()=>setMode('draw');
 document.getElementById('tParcel').onclick=()=>setMode('parcel');
 document.getElementById('tBalk').onclick=()=>setMode('balkon');
 document.getElementById('tDoor').onclick=()=>setMode('door');
+document.getElementById('tStruct').onclick=()=>setMode('struct');
 document.getElementById('tPan').onclick=()=>setMode('pan');
 document.getElementById('tUndo').onclick=()=>{
   if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
@@ -920,6 +1044,8 @@ document.getElementById('tUndo').onclick=()=>{
 document.getElementById('tClear').onclick=()=>{ pts=[];closed=false;plan=null;editHistory=[];resetCuts();
   parcelPts=[];parcelClosed=false;balconies=[];hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
+  else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
+  updateStructResetBtn();
   document.getElementById('genBtn').disabled=true; document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true;
   document.getElementById('unitTable').style.display='none';
   document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–'; render(); };
@@ -959,6 +1085,7 @@ function updateZoomUI(){                                   // pxPerM her değiş
 })();
 /* ================= plan üretimi ================= */
 document.getElementById('genBtn').addEventListener('click',()=>{ resetCuts(); generate(); fitView(); });
+document.getElementById('structReset').addEventListener('click',()=>{ resetLockedCore(); });
 
 function generate(keepCuts){
   if(!closed) return;
@@ -1001,6 +1128,162 @@ function generate(keepCuts){
   const zoneUI=[];
   if(!keepCuts){ customCutsZ=null; unitLayout={}; }
 
+  /* --- yapı iskeleti: kata-ayrı apartmanda iskelet yoksa zemin kattan türet
+         (tüm çekirdek düşeyde sürekli olsun); sonra kilitli çekirdeği ÖNCE sahiplen --- */
+  if(!villa && floorsOn() && activeFloor>0 && !lockedCore){
+    const f0=floorState(0); if(f0&&f0.plan) lockedCore=captureCoreFrom(f0.plan);
+  }
+  /* --- otomatik kulak (çıkıntı) çekirdeği: footprint gövdesinden taşan dar çıkıntılar
+         merdiven/asansör/yangın için idealdir. Saf detektör — inside maskesini okur,
+         cm'yi DEĞİŞTİRMEZ; dünya-koordinatlı çekirdek dikdörtgenleri döndürür ve
+         coreLockForGrid ile mevcut pre-claim yoluna beslenir. Elle iskelet (lockedCore)
+         varken, villa/kata-ayrı/tek-dairede DEVRE DIŞI. --- */
+  function detectEarCore(){
+    /* 1) gövde = footprint'e tam sığan EN BÜYÜK dikdörtgen. (Kulaklar dik profili
+          şişirdiği için doluluk-eşiği yöntemi gövdeyi yanlış bulur; maksimal-dikdörtgen
+          — histogramda en büyük alan — sağlamdır: kulaklar dar appendaj olduğundan
+          gövdeden büyük dikdörtgen oluşturamaz.) */
+    let totalIn=0; for(let i=0;i<rows*cols;i++) if(inside[i]) totalIn++;
+    if(totalIn<40) return null;
+    const heights=new Array(cols).fill(0);
+    let bA=0,bR0=-1,bR1=-1,bC0=-1,bC1=-1;
+    for(let r=0;r<rows;r++){
+      for(let c=0;c<cols;c++) heights[c]= inside[r*cols+c]? heights[c]+1 : 0;
+      const stk=[];
+      for(let c=0;c<=cols;c++){
+        const h=c<cols?heights[c]:0; let start=c;
+        while(stk.length && stk[stk.length-1].h>=h){
+          const t=stk.pop(), area=t.h*(c-t.c);
+          if(area>bA){ bA=area; bR0=r-t.h+1; bR1=r; bC0=t.c; bC1=c-1; }
+          start=t.c;
+        }
+        stk.push({h,c:start});
+      }
+    }
+    if(bR1<bR0||bC1<bC0) return null;
+    if(bA < 0.45*totalIn) return null;        // belirgin gövde yok (L/U/egzotik) → band düzeni
+    const inBody=(r,c)=>r>=bR0&&r<=bR1&&c>=bC0&&c<=bC1;
+    /* 2) gövde dikdörtgeni dışındaki bağlı bileşenler = kulak adayları */
+    const seen=new Uint8Array(rows*cols), ears=[];
+    for(let i=0;i<rows*cols;i++){
+      if(seen[i]) continue; seen[i]=1;
+      const sr=(i/cols)|0,sc=i%cols; if(!inside[i]||inBody(sr,sc)) continue;
+      const comp=[i], st=[i];
+      while(st.length){ const j=st.pop(); const r=(j/cols)|0,c=j%cols;
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols)return;
+          const k=rr*cols+cc; if(seen[k]||!inside[k]||inBody(rr,cc))return; seen[k]=1; comp.push(k); st.push(k); }); }
+      let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+      comp.forEach(j=>{const r=(j/cols)|0,c=j%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;});
+      const w=c1-c0+1,h=r1-r0+1;
+      if(Math.min(w,h)>6 || comp.length<24) continue;        // dar (≤3 m) VE yeterli alan (≥6 m²)
+      const dir = c1<bC0?'W' : c0>bC1?'E' : r1<bR0?'N' : r0>bR1?'S' : null; if(!dir) continue;
+      ears.push({r0,r1,c0,c1,w,h,dir});
+    }
+    if(!ears.length) return null;
+    /* 3) çekirdek elemanları (öncelik) — min ızgara boyutları (h×w hücre) */
+    const want=[{type:'merdiven',name:'MERDİVEN',h:5,w:5}];          // 2,5×2,5 (kabul); kulakta büyür
+    if(fireStairNeeded) want.push({type:'yangin',name:'YANGIN MERD.',h:5,w:5});
+    for(let a=0;a<nAsansor;a++) want.push({type:'asansor',name:asansorYeri?'ASANSÖR YERİ':'ASANSÖR',h:6,w:4});
+    if(teknikNeeded) want.push({type:'teknik',name:'TEKNİK / ŞAFT',h:5,w:3});
+    const taken=new Uint8Array(rows*cols);
+    const okRect=(r0,c0,h,w)=>{ if(r0<0||c0<0||r0+h>rows||c0+w>cols)return false;
+      for(let r=r0;r<r0+h;r++)for(let c=c0;c<c0+w;c++){const k=r*cols+c; if(!inside[k]||cm[k]!==-1||taken[k])return false;} return true; };
+    const take=(r0,c0,h,w)=>{ for(let r=r0;r<r0+h;r++)for(let c=c0;c<c0+w;c++) taken[r*cols+c]=1; };
+    const placed=[]; let inEarCount=0;
+    want.forEach(el=>{
+      const dims=[{h:el.h,w:el.w},{h:el.w,w:el.h}];
+      let best=null;
+      /* ASANSÖR + TEK KULAK: merdiven/yangın kulakta kümelendi → asansör gövdenin KARŞI
+         ucuna (iki daireye de adil erişim; A/D-doğru deseni). 2+ kulakta normal yol (E). */
+      if(el.type==='asansor' && ears.length===1){
+        const ed=ears[0].dir;
+        dims.forEach(d=>{
+          if(ed==='W'||ed==='E'){ const c0=ed==='W'?bC1-d.w+1:bC0;
+            for(let r=bR0;r+d.h-1<=bR1;r++) if(okRect(r,c0,d.h,d.w)){ const cost=Math.abs(r-(bR0+bR1)/2); if(!best||cost<best.cost) best={r0:r,c0,h:d.h,w:d.w,cost,inEar:false}; } }
+          else { const r0=ed==='N'?bR1-d.h+1:bR0;
+            for(let c=bC0;c+d.w-1<=bC1;c++) if(okRect(r0,c,d.h,d.w)){ const cost=Math.abs(c-(bC0+bC1)/2); if(!best||cost<best.cost) best={r0,c0:c,h:d.h,w:d.w,cost,inEar:false}; } }
+        });
+      }
+      if(!best) ears.forEach(ear=>dims.forEach(d=>{                  // önce kulak-İÇİ (en düşük cost)
+        for(let r=ear.r0;r+d.h-1<=ear.r1;r++)for(let c=ear.c0;c+d.w-1<=ear.c1;c++)
+          if(okRect(r,c,d.h,d.w)){ const cost=-(d.h*d.w); if(!best||cost<best.cost) best={r0:r,c0:c,h:d.h,w:d.w,cost,inEar:true}; }
+      }));
+      if(!best){                                                     // kulağa sığmaz → gövde-ağzı (case27)
+        ears.forEach(ear=>dims.forEach(d=>{
+          const scan=(r0,c0)=>{ if(okRect(r0,c0,d.h,d.w)){ const cost=1000+d.h*d.w; if(!best||cost<best.cost) best={r0,c0,h:d.h,w:d.w,cost,inEar:false}; } };
+          if(ear.dir==='W'||ear.dir==='E'){ const c0=ear.dir==='W'?bC0:bC1-d.w+1;
+            for(let r=Math.max(0,ear.r0-2);r+d.h-1<=Math.min(rows-1,ear.r1+2);r++) scan(r,c0); }
+          else { const r0=ear.dir==='N'?bR0:bR1-d.h+1;
+            for(let c=Math.max(0,ear.c0-2);c+d.w-1<=Math.min(cols-1,ear.c1+2);c++) scan(r0,c); }
+        }));
+      }
+      if(best){ take(best.r0,best.c0,best.h,best.w); if(best.inEar) inEarCount++;
+        placed.push({type:el.type,name:el.name,r0:best.r0,c0:best.c0,h:best.h,w:best.w}); }
+      else placed.push(null);
+    });
+    if(placed.some(p=>!p)) return null;     // zorunlu eleman yerleşemedi → band düzenine düş
+    if(inEarCount<1) return null;           // hiçbir öğe kulağa girmedi → band daha iyi
+    /* 4) yalnız başına kulakta olan merdiven/yangını kulak boyunca büyüt (2,5×2,5 → 2,5×5) */
+    const stripFree=cells=>cells.every(k=> inside[k]&&cm[k]===-1&&!taken[k]);
+    placed.forEach(p=>{
+      if(p.type!=='merdiven'&&p.type!=='yangin') return;
+      const ear=ears.find(e=>p.r0>=e.r0&&p.c0>=e.c0&&(p.r0+p.h-1)<=e.r1&&(p.c0+p.w-1)<=e.c1);
+      if(!ear) return;
+      let changed=true,guard=0;
+      while(changed&&guard++<60){ changed=false;
+        if(p.r0+p.h-1<ear.r1){ const cells=[]; for(let c=p.c0;c<p.c0+p.w;c++) cells.push((p.r0+p.h)*cols+c);
+          if(stripFree(cells)){ cells.forEach(k=>taken[k]=1); p.h++; changed=true; } }
+        if(p.r0>ear.r0){ const cells=[]; for(let c=p.c0;c<p.c0+p.w;c++) cells.push((p.r0-1)*cols+c);
+          if(stripFree(cells)){ cells.forEach(k=>taken[k]=1); p.r0--; p.h++; changed=true; } }
+        if(p.c0+p.w-1<ear.c1){ const cells=[]; for(let r=p.r0;r<p.r0+p.h;r++) cells.push(r*cols+(p.c0+p.w));
+          if(stripFree(cells)){ cells.forEach(k=>taken[k]=1); p.w++; changed=true; } }
+        if(p.c0>ear.c0){ const cells=[]; for(let r=p.r0;r<p.r0+p.h;r++) cells.push(r*cols+(p.c0-1));
+          if(stripFree(cells)){ cells.forEach(k=>taken[k]=1); p.c0--; p.w++; changed=true; } }
+      }
+    });
+    /* 5) kaçış mesafesi: kulak-çekirdek BYKHY 30 m'yi aşsa BİLE tercih edilir (kullanıcı
+          kararı: ear-core her zaman band'ın çirkin "dev depo + geniş hol" düzenine yeğdir).
+          İhlal varsa runChecks (~2542) kırmızı uyarı yazar — kullanıcı görür, gerekirse
+          Yapı katmanından 2. merdiven ekler. (Eski sert bail kaldırıldı.) */
+    /* koridor ekseni: merdivenin oturduğu kulak ÜST/ALT (N/S) ise koridor DİKEY olmalı
+       (daireler sol/sağ, B-doğru); YAN kulakta (W/E) yatay. */
+    let coreAxis='H';
+    { const mp=placed.find(p=>p.type==='merdiven');
+      if(mp){ const e=ears.find(ea=>mp.r0>=ea.r0-1&&mp.r0<=ea.r1+1&&mp.c0>=ea.c0-1&&mp.c0<=ea.c1+1)||ears[0];
+        if(e&&(e.dir==='N'||e.dir==='S')) coreAxis='V'; } }
+    /* ızgara → dünya koordinatı (lockedCore/captureCoreFrom ile aynı biçim) */
+    const out=placed.map(p=>({type:p.type,name:p.name,
+      x0:minX+p.c0*M, y0:minY+p.r0*M, x1:minX+(p.c0+p.w)*M, y1:minY+(p.r0+p.h)*M}));
+    out.coreAxis=coreAxis;
+    return out;
+  }
+  let autoCore=null;
+  if(!villa && !lockedCore && !floorsOn() && perFloor>=2){
+    try{ autoCore=detectEarCore(); }catch(e){ console.error('kulak algılama:',e); autoCore=null; }
+  }
+  const coreLock = (!villa) ? coreLockForGrid(minX,minY,rows,cols,autoCore) : null;
+  const coreLocked = !!(coreLock && coreLock.length);
+  const earCoreLocked = coreLocked && !!(autoCore && autoCore.length);
+  /* DİKEY koridor: üst/alt kulak çekirdeğinde (B-doğru) koridor dikey, daireler sol/sağ.
+     Yatay band yoluna DOKUNMADAN ayrı dikey dal kullanılır (wantV kapısı).
+     Manuel anahtar (koridorYon): 'oto'=mevcut otomatik (byte-aynı), 'yatay'=zorla yatay,
+     'dikey'=çekirdek üst/alttaysa (auto VEYA elle iskelet) zorla dikey. */
+  let coreAxis = (autoCore && autoCore.coreAxis) || null;
+  if(!coreAxis && coreLock && coreLock.length){           // elle iskelet: çekirdek kutusundan eksen türet
+    const merd = coreLock.find(e=>e.type==='merdiven') || coreLock[0];
+    const dTB = Math.min(merd.r0, rows-1-(merd.r0+merd.h-1));
+    const dLR = Math.min(merd.c0, cols-1-(merd.c0+merd.w-1));
+    coreAxis = dTB <= dLR ? 'V' : 'H';
+  }
+  const wantV = (!villa && coreLocked) && (
+    koridorYon==='yatay' ? false :
+    koridorYon==='dikey' ? (coreAxis==='V') :
+    (earCoreLocked && autoCore.coreAxis==='V'));
+  if(coreLocked){
+    coreLock.forEach(e=>{ const g=newReg(e.name,e.type); claimRect(g,e.r0,e.c0,e.h,e.w);
+      if((e.type==='merdiven'||e.type==='yangin')&&g.cells.length) stairs.push({r0:e.r0,c0:e.c0,h:e.h,w:e.w}); });
+  }
+
   /* --- tek daire/kat (apartman): bant koridor İSRAF olur (karşı kanat sahipsiz kalıp
          ORTAK DEPO'ya düşer). Bunun yerine kompakt çekirdek (merdiven+asansör+teknik
          +yangın tek sırada) cepheye yaslanır, önüne 1,5 m lobi konur; dairenin
@@ -1039,7 +1322,7 @@ function generate(keepCuts){
     return false;
   };
 
-  if(!villa && perFloor===1 && trySingleUnit()){
+  if(!villa && perFloor===1 && !coreLocked && trySingleUnit()){
     customCutsZ=[]; // ayırıcı yok; ince ayar duvar sürükleme + oda ekle/sil ile
   } else if(!villa){
     /* --- ortak hol: ana bant --- */
@@ -1047,6 +1330,34 @@ function generate(keepCuts){
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) if(inside[r*cols+c]){ sumR+=r;n++;
       if(r<colMin[c])colMin[c]=r; if(r>colMax[c])colMax[c]=r; }
     const corW=3; // 1,5 m
+    const hol=newReg('APARTMAN HOLÜ','koridor');
+    if(wantV){
+      /* DİKEY KORİDOR (B-doğru): en iyi SÜTUN bandı — yatay seçimin satır↔sütun simetriği.
+         Daireler sol/sağ; zone tespiti (isKorC) ve layoutUnit (E/W) bunu zaten destekler.
+         addBranch + çekirdek-bloğu (if(!coreLocked)) wantV'de ATLANIR. */
+      const rowMin=new Array(rows).fill(1e9), rowMax=new Array(rows).fill(-1e9);
+      let sumC2=0,n2=0;
+      for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) if(inside[r*cols+c]){ sumC2+=c;n2++;
+        if(c<rowMin[r])rowMin[r]=c; if(c>rowMax[r])rowMax[r]=c; }
+      const nValidRows=rowMin.filter(v=>v<1e8).length||1;
+      let bestC=-1,bestCost=1e18;
+      for(let c0=1;c0<=cols-corW-1;c0++){
+        let cover=0,cost=0;
+        for(let r=0;r<rows;r++){
+          if(rowMin[r]>1e8) continue;
+          if(inside[r*cols+c0]&&inside[r*cols+c0+corW-1]) cover++;
+          const dW=c0-rowMin[r], dE=rowMax[r]-(c0+corW-1);
+          if(dW<0||dE<0){ cost+=40; continue; }
+          const pen=d=>(d>0&&d<7)?(60+(7-d)*8):0;
+          cost+=pen(dW)+pen(dE)+Math.abs(dW-dE)*0.4;
+        }
+        if(cover<nValidRows*0.35) continue;
+        if(cost<bestCost){ bestCost=cost; bestC=c0; }
+      }
+      const corC0=bestC>=0? bestC : Math.max(1, Math.round(sumC2/n2)-1), corC1=corC0+corW-1;
+      for(let c=corC0;c<=corC1;c++)for(let r=0;r<rows;r++) claim(hol,r,c);
+      corridorR0=0; corridorR1=rows-1; // metadata: dikey koridor tüm satırları kapsar
+    } else {
     /* hol satırını maliyetle seç: sığ işe yaramaz şeritler bırakmayan konum kazanır */
     const nValidCols=colMin.filter(v=>v<1e8).length||1;
     let bestR=-1, bestCost=1e18;
@@ -1065,9 +1376,10 @@ function generate(keepCuts){
     }
     corridorR0 = bestR>=0? bestR : Math.max(1, Math.round(sumR/n)-1);
     corridorR1 = corridorR0+corW-1;
-    const hol=newReg('APARTMAN HOLÜ','koridor');
     for(let r=corridorR0;r<=corridorR1;r++)for(let c=0;c<cols;c++) claim(hol,r,c);
+    }
 
+    if(!wantV){ /* kanat kolları + yan-kol temizliği yalnız YATAY koridorda; dikeyde atlanır */
     /* --- kanat kolları (çekirdekten ÖNCE): ana bant 8 m'den derin kanatlara L/T uzar --- */
     const addBranch=(north)=>{
       const depth=c=>{ if(colMin[c]>1e8) return 0;
@@ -1115,8 +1427,10 @@ function generate(keepCuts){
         }
       }
     }
+    } /* if(!wantV) — kanat kolları sonu */
 
-    /* --- çekirdek: merdiven + asansör + şaft --- */
+    /* --- çekirdek: merdiven + asansör + şaft (kilitli iskelet yoksa üretici yerleştirir) --- */
+    if(!coreLocked){
     let sumC=0,m2=0; hol.cells.forEach(i=>{sumC+=i%cols;m2++;});
     const cc=Math.round(sumC/m2);
     const stH=6, stW=10; // 3,0 × 5,0 m
@@ -1192,6 +1506,7 @@ function generate(keepCuts){
     });
     /* ışıklık yok: çekirdek arkası komşu dairelerin odalarına (salon vb.) katılır;
        iç banyo/wc havalandırması şaftlarla çözülür (mevzuat notunda hatırlatılır) */
+    } /* if(!coreLocked) */
 
     /* --- bölgeler: atanmamış bitişik bileşenler, hole baktıkları yöne göre --- */
     const comps=[]; { const seen=new Uint8Array(rows*cols);
@@ -1546,7 +1861,11 @@ function generate(keepCuts){
        omurgaya asılır: orta odalar ~depth-1,5 m derinlik, uç odalar (salon / eb. yatak)
        tam derinlik. 10×2,5 salon ve 7×2 mutfak şeritleri böyle ölür. */
     let combU=false;
-    if(depthM-entryD-holD<2.5 && depthM>=4 && fac.length>=1 && !addStair && !studio && !midBeds.length){
+    /* kulak-çekirdekte (earCoreLocked) sığ daireler de OMURGA (combU) kullanır: 3,5 m derin
+       daire normal 2-bantta cepheye 1 satır bırakıp odaları içeri sıkıştırıyor (antre dış
+       duvarı yutuyor — C-daire2 inversiyonu). combU spine odaları tam-derinlik cepheye
+       oturtur. Kulaksız band'da eşik 4 m kalır → harness2 byte-aynı. */
+    if(depthM-entryD-holD<2.5 && depthM>=(earCoreLocked?3:4) && fac.length>=1 && !addStair && !studio && !midBeds.length){
       combU=true;
       for(let j=entry.length-1;j>=0;j--){ const r=entry[j];
         if(r===antreDef) continue;
@@ -2074,7 +2393,7 @@ function generate(keepCuts){
         fireStairNeeded, teknikNeeded, zoneUI};
   hoverWall=null; hoverRoomId=null; hoverDoor=null;
   doorOverrides={}; extraDoors=[]; doorHidden={}; // bölge kimlikleri yeniden doğdu: elle kapı ayarları bayat
-  editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (ulayout tam durum taşır, hayatta kalır)
+  editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (ulayout/corelock/bound tam durum taşır, hayatta kalır)
   plan.wallRuns=computeWallRuns();
   slimAntres(); // antre fazlalığı (kör uç kol, odaya sokulan çıkıntı, şişkin yuva) odalara geri verilir
   /* slim sonrası odalar büyüdü: ilk turda yer bulamayan eb. banyo şimdi sığabilir */
@@ -2084,6 +2403,7 @@ function generate(keepCuts){
   runChecks();
   buildUnitTable();
   renderFloorTabs();
+  updateStructResetBtn();
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
   render();
@@ -2786,8 +3106,8 @@ function renderPlan(){
       if(nb(r,c+1)!==hg.id) hl(x+M,y,x+M,y+M);
     });
   }
-  /* ayırıcı tutamaçları (bölge başına, hole paralel) — kapı modunda gizli */
-  if(!p.villa && p.zoneUI && customCutsZ && mode!=='door'){
+  /* ayırıcı tutamaçları (bölge başına, hole paralel) — kapı/yapı modunda gizli */
+  if(!p.villa && p.zoneUI && customCutsZ && mode!=='door' && mode!=='struct'){
     p.zoneUI.forEach(zu=>{
       (customCutsZ[zu.zi]||[]).forEach((v,idx)=>{
         const cx= zu.horiz? W2Sx(v) : W2Sx(zu.perp);
@@ -2808,7 +3128,7 @@ function renderPlan(){
       g.appendChild(el('line',{x1:W2Sx(s.x1),y1:W2Sy(s.y1),x2:W2Sx(s.x2),y2:W2Sy(s.y2),
         stroke:act.ext?EXTC:'#b35a2e','stroke-width':5,'stroke-linecap':'round',opacity:.85}));
     }
-    if(pxPerM>=9 && mode!=='door'){
+    if(pxPerM>=9 && mode!=='door' && mode!=='struct'){
       p.wallRuns.forEach(rn=>{
         const mx = rn.horiz? p.minX+((rn.lo+rn.hi)/2)*M : p.minX+rn.pos*M;
         const my = rn.horiz? p.minY+rn.pos*M : p.minY+((rn.lo+rn.hi)/2)*M;
@@ -2819,6 +3139,7 @@ function renderPlan(){
       });
     }
   }
+  if(mode==='struct') renderStructLayer();
 }
 function hitCutHandle(sx,sy){
   const hs=svg.querySelectorAll('circle[data-cut]');
@@ -2967,6 +3288,177 @@ function restoreRegions(snap){
   snap.forEach(s=>{ const g=plan.regions[s.id]; if(!g) return;
     g.cells=s.cells.slice(); g.cells.forEach(i=>plan.cm[i]=g.id);
     calcRegionMetrics(g, plan.cols, plan.minX, plan.minY); });
+}
+/* tüm bölgeleri hücre hücre kıyasla (yapı taşımada uzunluklar değişmeden konum
+   değişebilir; snapshotChanged yalnız uzunluğa bakar, burada içeriğe bakılır) */
+function regionsChanged(snap){
+  for(const s of snap){ const g=plan.regions[s.id]; if(!g) return true;
+    if(g.cells.length!==s.cells.length) return true;
+    const a=g.cells.slice().sort((x,y)=>x-y), b=s.cells.slice().sort((x,y)=>x-y);
+    for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return true; }
+  return false;
+}
+
+/* ================= yapı katmanı (struct mode) =================
+   Bina çekirdeği — merdiven / asansör / teknik şaft / yangın merdiveni — üretim
+   sonrasında doğrudan taşınıp boyutlandırılır (tıpkı oda duvarı sürükleme gibi):
+   yapı dikdörtgeni hücre kümesi olarak yeniden tanımlanır; içine giren hücreler
+   komşu bölgelerden alınır, dışında kalan hücreler baskın komşuya devredilir. */
+const STRUCT_TYPES={merdiven:1,asansor:1,yangin:1,teknik:1};
+function isStructReg(g){
+  return !!(g && STRUCT_TYPES[g.type] && g.cells.length && g.name!=='ORTAK DEPO');
+}
+function structRegions(){ return plan? plan.regions.filter(isStructReg) : []; }
+/* bölgenin ızgara kapsayan kutusu (yapı öğeleri dikdörtgendir) */
+function regBoxCells(g){
+  const cols=plan.cols; let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+  g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;});
+  return {r0,r1,c0,c1};
+}
+/* bırakılan hücreleri (yapı küçülünce/kayınca açığa çıkan) baskın komşu bölgeye devret */
+function assignCellsToNeighbor(cells, excludeId){
+  if(!cells.length) return;
+  const p=plan, cols=p.cols, rows=p.rows, rel=new Set(cells);
+  cells.forEach(i=>{ p.cm[i]=-1; });
+  const seen=new Set();
+  cells.forEach(start=>{
+    if(seen.has(start)) return;
+    const comp=[], st=[start]; seen.add(start);
+    while(st.length){ const i=st.pop(); comp.push(i); const r=(i/cols)|0,c=i%cols;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols) return;
+        const j=rr*cols+cc; if(rel.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
+    const cnt=new Map();
+    comp.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols) return;
+        const ow=p.cm[rr*cols+cc];
+        /* boşalan hücreler BAŞKA çekirdeğe gitmez (yoksa merdiven/asansör şişer — A-bozuk hatası);
+           yalnız daire/oda bölgelerine devredilir */
+        if(p.inside[rr*cols+cc]&&ow>=0&&ow!==excludeId&&!isStructReg(p.regions[ow])) cnt.set(ow,(cnt.get(ow)||0)+1); }); });
+    let best=-1,bn=0; cnt.forEach((n,id)=>{ if(n>bn){bn=n;best=id;} });
+    if(best>=0){ comp.forEach(i=>{ p.cm[i]=best; p.regions[best].cells.push(i); }); }
+    /* komşusuz kalırsa hücre boşta (cm=-1) bırakılır — kullanıcı duvar aracıyla toplar */
+  });
+}
+/* yapı bölgesini yeni ızgara dikdörtgenine taşı; komşular yeniden akar */
+function applyStructRect(reg, nr0,nc0,nr1,nc1){
+  const p=plan, cols=p.cols;
+  const want=[];
+  for(let r=nr0;r<=nr1;r++) for(let c=nc0;c<=nc1;c++){
+    if(r<0||c<0||r>=p.rows||c>=cols) continue;
+    const i=r*cols+c; if(p.inside[i]) want.push(i);
+  }
+  if(!want.length) return false;
+  const wantSet=new Set(want), old=reg.cells.slice();
+  want.forEach(i=>{ const ow=p.cm[i]; if(ow===reg.id) return;
+    if(ow>=0){ const g=p.regions[ow]; g.cells=g.cells.filter(x=>x!==i); }
+    p.cm[i]=reg.id; });
+  reg.cells=want.slice();
+  assignCellsToNeighbor(old.filter(i=>!wantSet.has(i)), reg.id);
+  p.regions.forEach(g=>calcRegionMetrics(g,cols,p.minX,p.minY));
+  return true;
+}
+/* sürükleme: tutamağa göre hedef dikdörtgeni hesapla, ızgaraya snap, uygula */
+function dragStructTo(sx,sy){
+  const p=plan, d=dragging;
+  const gc=Math.floor((S2Wx(sx)-p.minX)/M), gr=Math.floor((S2Wy(sy)-p.minY)/M);
+  let {r0,c0,r1,c1}=d.box0; const h=d.handle;
+  if(h==='move'){
+    const dr=gr-d.gr, dc=gc-d.gc; r0+=dr;r1+=dr;c0+=dc;c1+=dc;
+    if(c0<0){c1-=c0;c0=0;} if(r0<0){r1-=r0;r0=0;}
+    if(c1>p.cols-1){c0-=c1-(p.cols-1);c1=p.cols-1;}
+    if(r1>p.rows-1){r0-=r1-(p.rows-1);r1=p.rows-1;}
+  } else {
+    if(h.indexOf('n')>=0) r0=Math.min(gr, r1);
+    if(h.indexOf('s')>=0) r1=Math.max(gr, r0);
+    if(h.indexOf('w')>=0) c0=Math.min(gc, c1);
+    if(h.indexOf('e')>=0) c1=Math.max(gc, c0);
+    r0=Math.max(0,r0);c0=Math.max(0,c0);r1=Math.min(p.rows-1,r1);c1=Math.min(p.cols-1,c1);
+  }
+  const reg=p.regions[d.regId]; if(!reg) return;
+  if(applyStructRect(reg,r0,c0,r1,c1)){
+    p.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render();
+  }
+}
+function hitStructHandle(sx,sy){
+  const hs=svg.querySelectorAll('[data-struct]');
+  for(const h of hs){
+    const dx=sx-(+h.getAttribute('data-hx')), dy=sy-(+h.getAttribute('data-hy'));
+    if(dx*dx+dy*dy<=210*HITSC*HITSC) return JSON.parse(h.dataset.struct);
+  }
+  return null;
+}
+/* yapı modunda bina sınırı tutamağı: köşe (taşı) ya da kenar ortası (anchor ekle) */
+function hitBoundaryHandle(sx,sy){
+  const vs=svg.querySelectorAll('[data-bvert]');
+  for(const h of vs){ const dx=sx-(+h.getAttribute('data-hx')), dy=sy-(+h.getAttribute('data-hy'));
+    if(dx*dx+dy*dy<=210*HITSC*HITSC) return {kind:'vert', idx:+h.dataset.bvert}; }
+  const es=svg.querySelectorAll('[data-bedge]');
+  for(const h of es){ const dx=sx-(+h.getAttribute('data-hx')), dy=sy-(+h.getAttribute('data-hy'));
+    if(dx*dx+dy*dy<=210*HITSC*HITSC) return {kind:'edge', idx:+h.dataset.bedge}; }
+  return null;
+}
+/* yapı katmanını çiz: dış soluk perde + çekirdek öğeleri belirgin + tutamaçlar */
+function renderStructLayer(){
+  const p=plan; if(!p) return;
+  const vp=exportView||svg.getBoundingClientRect();
+  const sg=el('g',{}); svg.appendChild(sg);
+  sg.appendChild(el('rect',{x:0,y:0,width:vp.width,height:vp.height,fill:'#fbf9f4',opacity:0.6,'clip-path':'url(#planClip)'}));
+  const cs=M*pxPerM, wx=c=>W2Sx(p.minX+c*M), wy=r=>W2Sy(p.minY+r*M);
+  const regs=structRegions();
+  regs.forEach(reg=>{
+    reg.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+      sg.appendChild(el('rect',{x:wx(c),y:wy(r),width:cs+0.5,height:cs+0.5,fill:COLORS[reg.type]||'#fff'})); });
+  });
+  regs.forEach(reg=>{
+    const b=regBoxCells(reg);
+    /* belirgin çerçeve */
+    sg.appendChild(el('rect',{x:wx(b.c0),y:wy(b.r0),width:(b.c1-b.c0+1)*cs,height:(b.r1-b.r0+1)*cs,
+      fill:'none',stroke:'#2b2620','stroke-width':Math.max(2.5,pxPerM*0.18)}));
+    /* etiket + ölçü */
+    const cx=wx((b.c0+b.c1+1)/2), cy=wy((b.r0+b.r1+1)/2);
+    const fs=Math.max(8,Math.min(13,pxPerM*0.6));
+    const t=el('text',{x:cx,y:cy-fs*0.2,'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
+    t.textContent=reg.name; sg.appendChild(t);
+    const t2=el('text',{x:cx,y:cy+fs,'text-anchor':'middle','font-size':fs*0.85,fill:'#6b5e4d'});
+    t2.textContent=fmt((b.c1-b.c0+1)*M)+' × '+fmt((b.r1-b.r0+1)*M)+' m'; sg.appendChild(t2);
+    /* tutamaçlar: 4 köşe + 4 kenar (kare) + merkez (taşı, yuvarlak) */
+    const HS=Math.max(5,pxPerM*0.32);
+    const sq=(hx,hy,handle,cur)=>{
+      const e=el('rect',{x:hx-HS,y:hy-HS,width:HS*2,height:HS*2,rx:1.5,fill:'#fff',stroke:'#2f6f8f','stroke-width':2,cursor:cur,'data-hx':hx,'data-hy':hy});
+      e.dataset.struct=JSON.stringify({regId:reg.id,handle}); sg.appendChild(e);
+    };
+    const eW=wx(b.c0), eE=wx(b.c1+1), eN=wy(b.r0), eS=wy(b.r1+1), mC=wx((b.c0+b.c1+1)/2), mR=wy((b.r0+b.r1+1)/2);
+    sq(eW,eN,'nw','nwse-resize'); sq(eE,eN,'ne','nesw-resize');
+    sq(eW,eS,'sw','nesw-resize'); sq(eE,eS,'se','nwse-resize');
+    sq(mC,eN,'n','ns-resize'); sq(mC,eS,'s','ns-resize');
+    sq(eW,mR,'w','ew-resize'); sq(eE,mR,'e','ew-resize');
+    const mv=el('circle',{cx:mC,cy:mR,r:HS*1.5,fill:'#2f6f8f',stroke:'#fff','stroke-width':2,cursor:'move','data-hx':mC,'data-hy':mR});
+    mv.dataset.struct=JSON.stringify({regId:reg.id,handle:'move'}); sg.appendChild(mv);
+    const mvt=el('text',{x:mC,y:mR+fs*0.35,'text-anchor':'middle','font-size':fs,fill:'#fff','font-weight':'700','pointer-events':'none'});
+    mvt.textContent='✛'; sg.appendChild(mvt);
+  });
+  /* --- bina sınırı: köşe tutamakları (taşı) + kenar ortası (+ anchor ekle) --- */
+  if(closed && pts.length>=3){
+    const bg=el('g',{}); sg.appendChild(bg);
+    bg.appendChild(el('path',{d:'M'+pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z',
+      fill:'none', stroke:'#b35a2e', 'stroke-width':Math.max(2.5,pxPerM*0.16), opacity:0.9}));
+    const er=Math.max(4,pxPerM*0.22), vr=Math.max(5,pxPerM*0.3);
+    for(let i=0;i<pts.length;i++){
+      const a=pts[i], b=pts[(i+1)%pts.length], mx=W2Sx((a.x+b.x)/2), my=W2Sy((a.y+b.y)/2);
+      const e=el('circle',{cx:mx,cy:my,r:er,fill:'#fff',stroke:'#b35a2e','stroke-width':1.5,'stroke-dasharray':'2 2',cursor:'copy','data-hx':mx,'data-hy':my});
+      e.dataset.bedge=i; bg.appendChild(e);
+      const t=el('text',{x:mx,y:my+er*0.55,'text-anchor':'middle','font-size':er*1.4,fill:'#b35a2e','font-weight':'700','pointer-events':'none'}); t.textContent='+'; bg.appendChild(t);
+    }
+    pts.forEach((p,i)=>{
+      const cx=W2Sx(p.x), cy=W2Sy(p.y);
+      const e=el('circle',{cx,cy,r:vr,fill:'#b35a2e',stroke:'#fff','stroke-width':2,cursor:'move','data-hx':cx,'data-hy':cy});
+      e.dataset.bvert=i; bg.appendChild(e);
+    });
+  }
+  if(!regs.length){
+    const t=el('text',{x:vp.width/2,y:36,'text-anchor':'middle','font-size':13,fill:'#9c8e76','font-weight':'600'});
+    t.textContent='Çekirdek öğesi yok — bina sınırını köşelerinden düzenleyebilir, + ile yeni köşe ekleyebilirsiniz.'; svg.appendChild(t);
+  }
 }
 /* dış (daire sınırı) duvarının tüm doğrusal parçaları: aynı yön + aynı konum +
    aynı daire-ikilisi → birlikte taşınır (apartman sınırı bütün olarak hareket eder) */
@@ -3661,7 +4153,7 @@ function stateSnapshot(bare){
   if(!plan) return null;
   const el2=id=>document.getElementById(id).value;
   const st={v:1, app:'kat-plani-tasarim',
-    ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk')},
+    ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk'), koridorYon:koridorYon},
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
     parcelClosed, balconies:balconies.map(b=>({...b})),
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ, unitLayout:Object.assign({},unitLayout),
@@ -3682,6 +4174,7 @@ function stateSnapshot(bare){
     villaFloors[activeFloor]=stateSnapshot(true);
     st.katAyri=true; st.activeFloor=activeFloor; st.floors=villaFloors.slice();
   }
+  if(!bare && lockedCore) st.lockedCore=lockedCore.map(o=>({...o})); // bina iskeleti (katlar arası ortak)
   return st;
 }
 function restoreState(st, opt){
@@ -3689,6 +4182,7 @@ function restoreState(st, opt){
   document.getElementById('binaTipi').value=st.ui.binaTipi;
   document.getElementById('katSayisi').value=st.ui.katSayisi;
   document.getElementById('katYuk').value=st.ui.katYuk;
+  koridorYon=st.ui.koridorYon||'oto'; { const ky=document.getElementById('koridorYon'); if(ky) ky.value=koridorYon; }
   pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
   parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed;
   balconies=(st.balconies||[]).map(b=>({...b}));
@@ -3707,6 +4201,8 @@ function restoreState(st, opt){
     villaFloors=null; activeFloor=0;
     if(ka) ka.checked=false;
   }
+  /* bina iskeleti yalnız TAM durum geri-yüklemesinde (dosya/ulayout) gelir; kat geçişinde global kalır */
+  if(!opt||!opt.keepFloors) lockedCore = st.lockedCore? st.lockedCore.map(o=>({...o})) : null;
   const sp=st.plan;
   const regions=sp.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice()}));
   const cm=new Int16Array(sp.rows*sp.cols); cm.fill(-1);
@@ -3733,7 +4229,7 @@ function restoreState(st, opt){
   /* durum çubuğu: içe aktarılan sınırın alan/çevresi (eski değer asılı kalmasın) */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
-  updateKatAyriUI();
+  updateKatAyriUI(); updateStructResetBtn();
   runChecks(); buildUnitTable(); renderFloorTabs(); if(!opt||opt.fit!==false) fitView(); render();
 }
 function exportSVG(){
