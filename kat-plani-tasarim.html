@@ -336,7 +336,7 @@ function renderUnits(){
   unitSpecs.forEach((u,i)=>{
     const d=document.createElement('div'); d.className='unitCard';
     d.innerHTML = `<div class="head"><span class="tag">${unitTag(u)}</span>${(!villa&&unitSpecs.length>1)?`<button class="del" data-i="${i}" title="Sil">×</button>`:''}</div>
-      <div class="frow"><label>Oda</label><input type="number" min="${villa?0:1}" max="5" value="${u.oda}" data-i="${i}" data-k="oda"></div>
+      <div class="frow"><label>Oda</label><input type="number" min="${villa?0:1}" max="20" value="${u.oda}" data-i="${i}" data-k="oda"></div>
       <div class="frow"><label>Salon <small>(0 = stüdyo)</small></label><input type="number" min="0" max="2" value="${u.salon}" data-i="${i}" data-k="salon"></div>
       <div class="frow"><label>Ebeveyn banyosu</label><span class="switch"><input type="checkbox" ${u.ensuite?'checked':''} data-i="${i}" data-k="ensuite"><i></i></span></div>
       <div class="frow"><label>Açık mutfak</label><span class="switch"><input type="checkbox" ${u.acik?'checked':''} data-i="${i}" data-k="acik"><i></i></span></div>
