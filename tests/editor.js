@@ -1,5 +1,5 @@
 // Editör testleri: daire iç düzen tercihi (unitLayout) + dış (sınır) duvar sürükleme.
-// Hazırlık: README'deki script çekme adımı (/tmp/app.js); APP_JS ile farklı yol verilebilir.
+// APP_JS ile farklı hazırlanmış app script yolu verilebilir.
 function stubEl(tag){ return {
   tag, attrs:{}, children:[], style:{}, dataset:{}, _ih:'',
   set innerHTML(v){ this._ih=v; this.children=[]; }, get innerHTML(){ return this._ih; },
@@ -16,7 +16,7 @@ global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){};global.Blob=function(){};global.URL={createObjectURL:()=>''};
 const t=(name,ok)=>console.log((ok?' ✓ ':' ✗ FAIL ')+name);
-eval(require('fs').readFileSync(process.env.APP_JS||'/tmp/app.js','utf-8') + `
+eval(require('./support/app-js').readAppScript() + `
 ;unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:5},{oda:1,salon:1,ensuite:false,acik:true,adet:8}];
 pts=[{x:0,y:0},{x:40,y:0},{x:40,y:30},{x:0,y:30}]; closed=true;
 generate();

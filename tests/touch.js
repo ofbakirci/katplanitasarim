@@ -28,9 +28,8 @@ let lpCb=null; const realST=setTimeout, realCT=clearTimeout;
 global.setTimeout=(cb,ms)=>{ if(ms===500){ lpCb=cb; return {lp:1}; } return realST(cb,ms); };
 global.clearTimeout=id=>{ if(id&&id.lp) lpCb=null; else realCT(id); };
 
-const fs=require('fs');
-const html=fs.readFileSync(__dirname+'/../kat-plani-tasarim.html','utf-8');
-const src=html.slice(html.indexOf('<script>')+8, html.lastIndexOf('</script>'));
+const {extractAppScript}=require('./support/app-js');
+const src=extractAppScript();
 
 let pass=0, fail=0;
 const T=(name,cond)=>{ if(cond){pass++;} else {fail++; console.log('  [FAIL]', name);} };

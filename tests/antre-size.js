@@ -18,9 +18,8 @@ global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
 
-const fs=require('fs');
-const html=fs.readFileSync(__dirname+'/../kat-plani-tasarim.html','utf-8');
-const src=html.slice(html.indexOf('<script>')+8, html.lastIndexOf('</script>'));
+const {extractAppScript}=require('./support/app-js');
+const src=extractAppScript();
 
 const scenarios=[
   {name:'32x16  2+1eb / 1+1',   specs:[{oda:2,salon:1,ensuite:true,acik:false,adet:2},{oda:1,salon:1,ensuite:false,acik:true,adet:2}], pts:[{x:0,y:0},{x:32,y:0},{x:32,y:16},{x:0,y:16}]},

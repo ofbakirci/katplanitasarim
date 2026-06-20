@@ -15,9 +15,8 @@ global.document={getElementById:getEl, createElement:t=>stubEl(t), createElement
 global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
-const fs=require('fs');
-const html=fs.readFileSync(''+__dirname+'/../kat-plani-tasarim.html','utf-8');
-const src=html.slice(html.indexOf('<script>')+8, html.lastIndexOf('</script>'));
+const {extractAppScript}=require('./support/app-js');
+const src=extractAppScript();
 eval(src+`
 ;global.RUNV=(nb)=>{
   pts=[{x:0,y:0},{x:14,y:0},{x:14,y:11},{x:0,y:11}]; closed=true;

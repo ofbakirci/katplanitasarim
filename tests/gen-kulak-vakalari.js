@@ -2,7 +2,7 @@
    Çeşitli footprint'leri motordan geçirip içe-aktarılabilir kpState'li SVG yazar.
    Kullanıcı bu dosyaları araca "SVG içe aktar" ile yükler, ideal yerleşimi çizer,
    tekrar dışa aktarıp geri verir → kulak algılama kalibre edilir.
-   Çalıştır:  node tests/gen-kulak-vakalari.js   (/tmp/app.js gerekir) */
+   Çalıştır:  node tests/gen-kulak-vakalari.js */
 const fs=require('fs'), path=require('path');
 
 function stubEl(tag){ return {
@@ -27,7 +27,7 @@ global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL
 global.localStorage={getItem(){return null;},setItem(){}};
 global.requestAnimationFrame=fn=>fn&&fn();
 
-const src=fs.readFileSync('/tmp/app.js','utf-8');
+const src=require('./support/app-js').readAppScript();
 /* eval-içi fonksiyon/değişkenler dışarı sızmaz; motor scope'una bir yardımcı enjekte
    edip globalThis üzerinden çağırıyoruz (harness2 deseni). */
 eval(src + `

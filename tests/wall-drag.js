@@ -18,7 +18,7 @@ function run(label, bina, kat, poly, specs){
   global.window={addEventListener(){}};
   global.XMLSerializer=function(){this.serializeToString=()=>'';};
   global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
-  const src=require('fs').readFileSync(process.env.APP_JS||'/tmp/app.js','utf-8');
+  const src=require('./support/app-js').readAppScript();
   eval(src + `
   ;unitSpecs=${JSON.stringify(specs)};
   pts=${JSON.stringify(poly)}; closed=true;

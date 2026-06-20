@@ -1,7 +1,7 @@
 /* Ground-truth replay: kullanıcının "-doğru" layoutlarını motora YENİDEN ürettirip
    karşılaştırır. KRİTİK: lockedCore SİLİNİR — yoksa import motoru baypas eder, test
    daima "geçer" (yanıltıcı yeşil). Motorun TAHMİNİ ile kullanıcının İDEALİ kıyaslanır.
-   Çalıştır:  node tests/replay-kulak.js   (/tmp/app.js gerekir) */
+   Çalıştır:  node tests/replay-kulak.js */
 const fs=require('fs'), path=require('path');
 
 function stubEl(tag){ return {
@@ -24,7 +24,7 @@ global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL
 global.localStorage={getItem(){return null;},setItem(){}};
 global.requestAnimationFrame=fn=>fn&&fn();
 
-eval(fs.readFileSync('/tmp/app.js','utf-8') + `
+eval(require('./support/app-js').readAppScript() + `
 ;globalThis.__replay=function(ptsArr, specs, katv){
   lockedCore=null; villaFloors=null; activeFloor=0;
   balconies=[]; parcelPts=[]; parcelClosed=false;

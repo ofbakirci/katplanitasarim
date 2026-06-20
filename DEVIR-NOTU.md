@@ -288,7 +288,7 @@ ve apartmanda eski korumalar aynen geçerli.
    ~~Çalışma ağacı HEAD'den ilerideydi~~ ÇÖZÜLDÜ (2026-06-10 v5): her şey commit'li
    (f429a7d, motor v22 + vakalar + testler). Yeni oturumda taban = `git show HEAD:`
    GÜVENİLİR. Kural: oturum sonunda commit at; .git/*.lock kalıntısı görürsen
-   (çökmüş süreçten, 0 bayt) silmek güvenlidir. .gitignore: .DS_Store, snapshots/zi*.
+   (çökmüş süreçten, 0 bayt) silmek güvenlidir. .gitignore: .DS_Store, snapshots/zi*, node_modules/, .test-tmp/, .claude/.
 
 ## Test altyapısı
 Ayrıntılı liste `tests/README.md`'de (v22 vaka/tanı araçları dâhil: diff-vaka.js,
@@ -301,19 +301,27 @@ Kendi kendine yeten (doğrudan `node tests/<dosya>.js`) testler: `room-edit.js` 
 `villa-kat.js` (37: katları ayrı planla — sekme geçişi, merdiven düşey hizası, oturum
 oranı + çıkma ihlalleri, üst katta giriş kapısı yok, salonsuz yatak katı + ev geneli
 salon denetimi, snapshot gidiş-dönüşü, md.20),
-`import.js` (15: snapshot→restore gidiş-dönüş bölge imzası birebir + eski-SVG geometri
+`import.js` (9+: snapshot→restore gidiş-dönüş bölge imzası birebir + eski-SVG geometri
 çözümleyici; 2. bölüm `linkedom` ister, yoksa kendini atlar — `npm i linkedom`).
-DİKKAT (2026-06-10/2): bu makinede `/tmp/app.js` ve `/tmp/plan*.svg` başka kullanıcıya
-ait kilitli dosyalar — eski testleri koşarken yolları sed ile değiştirilen KOPYALAR
-kullanıldı (`sed s|/tmp/app.js|$HOME/app.js|`); testlerin kendisi değiştirilmedi.
+GUNCEL (2026-06-20): `core.js` DOM-free sabit/geometri yardimcilarini, `app.js`
+uygulama durumu, daire tipi UI'i, villa katlari ve cekirdek kilidi yardimcilarini,
+`planner.js` ana plan uretim motorunu,
+`doors.js` kapi aday/secim/vurus hesaplarini, `walls.js` duvar/metrik/anlik goruntu
+yardimcilarini, `structure.js` cekirdek + bina siniri duzenleme katmanini, `rooms.js`
+antre/oda duzenleme menulerini, `render.js` odaklama/tablo/SVG cizimi, `checks.js`
+mevzuat denetimi toplama + panel basimini, `interaction.js` cizim/parsel/balkon/kapi/
+duvar/arac cubugu/zoom etkilesimini, `io.js` durum/ice-disari aktarma akisini,
+`mobile.js` dokunmatik + mobil cekmece akisini, `boot.js` ilk baslatmayi tasir. Testler
+artik `tests/support/app-js.js` uzerinden script etiketlerini sirayla okur.
+`npm test` script etiketlerindeki uygulama JS'lerini `.test-tmp/app.js` olarak hazirlar ve alt sureclere `APP_JS` verir; tekil testler de
+dogrudan calisir. `/tmp/app.js` hazirligi artik gerekmez.
 DİKKAT (2026-06-10): runChecks'te mutfak oran denetimi kaldırılırken açık kalan
 `if(...){` bloğu TÜM script'i SyntaxError'la kırıyordu (uygulama hiç açılmıyordu) —
 düzeltildi. Şüpheli bozulmada ilk bakılacak yer: script'i çekip `node --check`.
-Diğerleri `/tmp/app.js` ister (hazırlık komutu tests/README.md'de).
 `tests/room-edit.js` artık depoda ve kendi kendine yeter (`node tests/room-edit.js`):
 oda sil/ekle/geri al, bütünlük (hücre toplamı + cm tutarlılığı), spec kopyası,
 korumalar, villa senaryosu, EB. BANYO, tek daire/kat düzeni (5 ve 12 kat) — 55 denetim. Diğerleri sohbet içinde kurulmuştu:
-Node ile başsız test: HTML'den `<script>` çekilir, DOM stub'lanır, `generate()` çağrılır;
+Node ile başsız test: uygulama scripti `tests/support/app-js.js` ile okunur, DOM stub'lanır, `generate()` çağrılır;
 senaryolar: 32×16 standart, 21×18 4×3+1, L-şekil, 48×27 derin blok, villa, stüdyolar.
 Denetimler: hücre bütünlüğü, her odanın antreye komşuluğu, banyosuz/salonsuz daire,
 mutfak boyutları. Yeni sohbette aynı yöntem hızla yeniden kurulabilir.

@@ -14,13 +14,14 @@ global.document={getElementById:getEl,createElement:t=>stubEl(t),createElementNS
 global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){};global.Blob=function(){};global.URL={createObjectURL:()=>''};
+const {nodeText}=require('./support/dom-text');
 function ser(e){
   if(e.tag==='text') return `<text ${Object.entries(e.attrs).map(([k,v])=>`${k}="${v}"`).join(' ')}>${(e.textContent||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</text>`;
   const a=Object.entries(e.attrs).map(([k,v])=>`${k}="${v}"`).join(' ');
   if(!e.children.length) return `<${e.tag} ${a}/>`;
   return `<${e.tag} ${a}>${e.children.map(ser).join('')}</${e.tag}>`;
 }
-eval(require('fs').readFileSync('/tmp/app.js','utf-8') + `
+eval(require('./support/app-js').readAppScript() + `
 ;unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:3},{oda:1,salon:1,ensuite:false,acik:true,adet:4}];
 pts=[{x:0,y:0},{x:14,y:0},{x:14,y:9},{x:34,y:9},{x:34,y:17},{x:0,y:17}]; closed=true;
 generate(); fitView();
@@ -29,7 +30,7 @@ plan.unitObjs.forEach((u,k)=>{
   console.log('D'+(k+1), (u.spec.oda+'+'+u.spec.salon).padEnd(4), a.toFixed(0).padStart(3)+' m² |', u.rooms.filter(g=>g.cells.length).map(g=>g.name.split(' ')[0]+' '+g.area.toFixed(1)).join(', '));
 });
 const bads=byId['checks'].children.filter(d=>d.className.includes('bad'));
-console.log('FAILs:', bads.length?bads.map(d=>d._ih.replace(/<[^>]+>/g,' ').trim()).join(' || '):'yok');
+console.log('FAILs:', bads.length?bads.map(nodeText).join(' || '):'yok');
 const body=byId['svg'].children.map(ser).join('');
 require('fs').writeFileSync('/tmp/planL.svg','<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000"><rect width="1400" height="1000" fill="#faf8f3"/>'+body+'</svg>');
 `);

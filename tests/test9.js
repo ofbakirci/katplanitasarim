@@ -20,7 +20,7 @@ function ser(e){
   if(!e.children.length) return `<${e.tag} ${a}/>`;
   return `<${e.tag} ${a}>${e.children.map(ser).join('')}</${e.tag}>`;
 }
-eval(require('fs').readFileSync('/tmp/app.js','utf-8') + `
+eval(require('./support/app-js').readAppScript() + `
 ;unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:3},{oda:1,salon:1,ensuite:false,acik:true,adet:3}];
 pts=[{x:0,y:0},{x:48,y:0},{x:48,y:16},{x:0,y:16}]; closed=true;
 generate(); fitView();

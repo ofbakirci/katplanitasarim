@@ -15,7 +15,8 @@ global.document={getElementById:getEl,createElement:t=>stubEl(t),createElementNS
 global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){};global.Blob=function(){};global.URL={createObjectURL:()=>''};
-eval(require('fs').readFileSync('/tmp/app.js','utf-8') + `
+const {nodeText}=require('./support/dom-text');
+eval(require('./support/app-js').readAppScript() + `
 ;unitSpecs=[{oda:1,salon:0,ensuite:false,acik:true,adet:5},{oda:2,salon:1,ensuite:true,acik:false,adet:5}];
 pts=[{x:0,y:0},{x:44,y:0},{x:44,y:15},{x:0,y:15}]; closed=true;
 generate();
@@ -26,5 +27,5 @@ plan.unitObjs.forEach((u,k)=>{
 plan.regions.forEach(g=>{ if(g.cells.length&&(g.name==='ŞAFT'||g.name==='TEKNİK / ŞAFT')) saftlar.push(g.name+' '+g.area.toFixed(1)); });
 console.log('banyosuz daire:', banyosuz, '| şaft bölgeleri:', saftlar.join(', ')||'-');
 const bads=byId['checks'].children.filter(d=>d.className.includes('bad'));
-console.log('FAILs:', bads.length? bads.map(d=>d._ih.replace(/<[^>]+>/g,' ').trim()).join(' || ') : 'yok');
+console.log('FAILs:', bads.length? bads.map(nodeText).join(' || ') : 'yok');
 `);

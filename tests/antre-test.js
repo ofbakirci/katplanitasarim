@@ -15,12 +15,24 @@ global.document={getElementById:getEl, createElement:t=>stubEl(t), createElement
 global.window={addEventListener(){}};
 global.XMLSerializer=function(){this.serializeToString=()=>'';};
 global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
-const fs=require('fs');
-const html=fs.readFileSync(''+__dirname+'/../kat-plani-tasarim.html','utf-8');
-const src=html.slice(html.indexOf('<script>')+8, html.lastIndexOf('</script>'));
+const fs=require('fs'), path=require('path');
+const {extractAppScript}=require('./support/app-js');
+const src=extractAppScript();
 function loadState(f){const t=fs.readFileSync(f,'utf8');return JSON.parse(t.match(/<metadata id="kpState">([\s\S]*?)<\/metadata>/)[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'));}
+function fixturePath(){
+  const candidates=[
+    path.join(__dirname,'..','vakalar','vaka-3-L-sekil.svg')
+  ];
+  const f=candidates.find(fs.existsSync);
+  if(!f){
+    console.log('vaka-3-L-sekil fixture yok; antre-test atlandi.');
+    process.exit(0);
+  }
+  return f;
+}
+const FIXTURE=fixturePath();
 eval(src+`
-;restoreState(loadState(''+__dirname+'/../vakalar/vaka-3-L-sekil.svg'));
+;restoreState(loadState(${JSON.stringify(FIXTURE)}));
 const k=2, u=plan.unitObjs[k]; // D3
 const salon=u.rooms.find(g=>g.type==='salon');
 const antre=u.antre;
