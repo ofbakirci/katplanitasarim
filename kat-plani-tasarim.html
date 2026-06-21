@@ -22,7 +22,8 @@
       <div class="row"><label>Bina tipi</label>
         <select id="binaTipi"><option value="apartman">Apartman</option><option value="villa">Müstakil Villa</option></select>
       </div>
-      <div class="row"><label>Kat sayısı</label><input type="number" id="katSayisi" min="1" max="30" value="5"></div>
+      <div class="row"><label>Kat sayısı <small>(zemin + üst)</small></label><input type="number" id="katSayisi" min="1" max="30" value="5"></div>
+      <div class="row" id="bodrumRow"><label>Bodrum sayısı <small>(eksi katlar)</small></label><input type="number" id="bodrumSayisi" min="0" max="4" value="0"></div>
       <div class="row"><label>Kat yüksekliği (m)</label><input type="number" id="katYuk" min="2.6" max="4" step="0.1" value="2.9"></div>
       <div class="row" id="katAyriRow" style="display:none"><label>Katları ayrı planla</label><span class="switch"><input type="checkbox" id="katAyri"><i></i></span></div>
       <div class="row"><label>Koridor yönü</label>

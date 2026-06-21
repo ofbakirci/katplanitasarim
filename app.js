@@ -26,7 +26,9 @@ let hoverDoor = null;         // kapı modunda imleç altındaki kapı kaydı
 let koridorYon = 'oto';       // apartman koridor yönü: 'oto'|'yatay'|'dikey' (manuel override)
 let katKullanim = 'konut';    // AKTİF katın kullanım tipi (apartman + katları ayrı): 'konut'|'ticari'|'otopark'|'siginak'
 let villaFloors = null;       // villa "katları ayrı planla": kat başına durum anlık görüntüsü (stateSnapshot biçimi) | null
-let activeFloor = 0;          // villaFloors aktifken görüntülenen kat (0 = zemin)
+let activeFloor = 0;          // villaFloors aktifken görüntülenen kat İNDEKSİ (0 = en alt bodrum; zemin = bodrumSayisi)
+let bodrumSayisi = 0;         // bodrum (eksi) kat sayısı; toplam kat = bodrum + üst. villaFloors indeksi: 0=en alt bodrum, zeminIdx()=zemin
+let villaOffset = 0;          // villaFloors dizisinin kurulduğu bodrum sayısı (sayaç değişiminde indeks kaymasını yönetmek için)
 let lockedCore = null;        // bina iskeleti: kilitli çekirdek öğeleri [{type,name,x0,y0,x1,y1}] (dünya koord, katlar arası ortak) | null
 let exportView = null;        // io.js dışa aktarımı sırasında render() için geçici görünüm
 
@@ -92,6 +94,12 @@ document.getElementById('binaTipi').addEventListener('change',()=>{ lockedCore=n
 document.getElementById('koridorYon').addEventListener('change',e=>{ koridorYon=e.target.value; resetCuts(); safeGen(); });
 ['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ onFloorCountChange(); safeGen(); }));
 ['katSayisi','katYuk'].forEach(id=>makeStepper(document.getElementById(id)));
+document.getElementById('bodrumSayisi').addEventListener('change',()=>{
+  const bi=document.getElementById('bodrumSayisi');
+  bodrumSayisi=Math.max(0,Math.min(4,+bi.value||0)); bi.value=String(bodrumSayisi); // global ÖNCE güncellenir (reflow okur)
+  onFloorCountChange(); safeGen();
+});
+makeStepper(document.getElementById('bodrumSayisi'));
 
 /* ================= villa: katları ayrı planla =================
    Müstakil evde her kat kendi sınırı (oturumu), oda programı ve elle düzenlemeleriyle
@@ -102,12 +110,26 @@ document.getElementById('koridorYon').addEventListener('change',e=>{ koridorYon=
    3. Çıkma sınırı: üst kat, bir alt kattan en çok 1,5 m taşabilir (REG.cikmaMax, PAİY).
    Kat durumları villaFloors[k]'da stateSnapshot biçiminde saklanır; sekme geçişinde
    aktif kat kaydedilip hedef kat aynen geri kurulur (elle düzenlemeler dâhil). */
+/* üst (zemin dahil) kat sayısı, bodrum sayısı, toplam, zemin indeksi, indeks→seviye */
+function ustKat(){ return Math.max(1,+document.getElementById('katSayisi').value||1); }
+function totalFloors(){ return bodrumSayisi + ustKat(); }
+function zeminIdx(){ return bodrumSayisi; }              // villaFloors içinde zemin katın indeksi
+function floorLevel(k){ return k - bodrumSayisi; }       // <0 bodrum, 0 zemin, >0 üst kat
 function floorsOn(){
   const cb=document.getElementById('katAyri');
-  return !!(villaFloors && cb && cb.checked
-    && (+document.getElementById('katSayisi').value||1)>=2);
+  return !!(villaFloors && cb && cb.checked && totalFloors()>=2);
 }
-function floorName(k){ return k===0?'Zemin kat':k+'. kat'; }
+function floorName(k){ const L=floorLevel(k); return L<0?(-L)+'. bodrum':(L===0?'Zemin kat':L+'. kat'); }
+/* sayaç (kat/bodrum) değişiminde villaFloors'u SEVİYE koruyarak yeniden indeksle.
+   villaOffset = dizinin eski bodrum sayısı; yeni indeks = seviye + bodrumSayisi. */
+function reflowFloors(){
+  if(!villaFloors){ villaOffset=bodrumSayisi; return; }
+  const oldB=villaOffset, total=totalFloors(), old=villaFloors, next=new Array(total).fill(null);
+  for(let i=0;i<old.length;i++){ if(!old[i]) continue;
+    const ni=(i-oldB)+bodrumSayisi; if(ni>=0&&ni<total) next[ni]=old[i]; }
+  let na=(activeFloor-oldB)+bodrumSayisi; if(na<0||na>=total) na=zeminIdx();
+  villaFloors=next; activeFloor=na; villaOffset=bodrumSayisi;
+}
 /* ================= kat kullanım tipi (apartman + katları ayrı) =================
    Her kat ayrı bir kullanıma ayrılabilir: 🏠 Konut (varsayılan, daire yerleşimi),
    🏪 Ticari (zemin dükkânlar), 🅿️ Otopark (bodrum araç), 🛡️ Sığınak (bodrum sığınak).
@@ -130,8 +152,8 @@ function usageOf(k){
 /* binada (tüm katlarda) verilen kullanımda kat var mı? — sığınak/ticari zorunluluk denetimi */
 function buildingHasUsage(u){
   if(!usageEnabled()) return katKullanim===u;
-  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
-  for(let k=0;k<kat;k++) if(usageOf(k)===u) return true;
+  const total=totalFloors();
+  for(let k=0;k<total;k++) if(usageOf(k)===u) return true;
   return false;
 }
 /* ----- bina geneli otopark gereksinimi (Otopark Yönetmeliği Ek-1, konut) ----- */
@@ -164,9 +186,9 @@ function parkingForArea(net){
 /* binada gereken toplam otopark (tüm konut katları) */
 function requiredParking(){
   if(!usageEnabled()) return 0;
-  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
+  const total=totalFloors();
   let sum=0;
-  for(let k=0;k<kat;k++) floorDwellingAreas(k).forEach(a=>{ sum+=parkingForArea(a); });
+  for(let k=0;k<total;k++) floorDwellingAreas(k).forEach(a=>{ sum+=parkingForArea(a); });
   return Math.ceil(sum-1e-9);
 }
 /* k. kattaki çizili park yeri (bay) sayısı — gerçek yerleşimden (yollar dahil) */
@@ -179,9 +201,9 @@ function floorParkingCount(k){
 /* binadaki otopark/sığınak katlarının sağladığı toplam park yeri (çizili) */
 function providedParking(){
   if(!usageEnabled()) return 0;
-  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
+  const total=totalFloors();
   let cap=0;
-  for(let k=0;k<kat;k++){ const u=usageOf(k);
+  for(let k=0;k<total;k++){ const u=usageOf(k);
     if(u==='otopark'||u==='siginak') cap+=floorParkingCount(k); }
   return cap;
 }
@@ -190,15 +212,22 @@ function syncKatKullanimUI(){
   const row=document.getElementById('katKullanimRow');
   const sel=document.getElementById('katKullanim');
   const hint=document.getElementById('katKullanimHint');
-  const on=usageEnabled();
-  if(row) row.style.display=on?'':'none';
-  if(sel && on) sel.value=katKullanim;
+  const apt=document.getElementById('binaTipi').value==='apartman';
+  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
+  const active=usageEnabled();          // «Katları ayrı planla» açık (floorsOn + apartman)
+  const showRow=apt && kat>=2;          // çok katlı apartmanda HER ZAMAN görünür (keşfedilebilir); switch'e kadar pasif
+  if(row) row.style.display=showRow?'':'none';
+  if(sel){ sel.disabled=!active; sel.value=active?katKullanim:'konut'; }
   /* konut dışı katta daire tipi editörü gizlenir (uygulanmaz) */
-  const nonKonut = on && katKullanim!=='konut';
+  const nonKonut = active && katKullanim!=='konut';
   const list=document.getElementById('unitList'), add=document.getElementById('addUnit');
   if(list) list.style.display=nonKonut?'none':'';
   if(add) add.style.display=nonKonut?'none':'';
-  if(hint){ hint.style.display=nonKonut?'':'none'; hint.textContent=nonKonut?(USAGE_HINT[katKullanim]||''):''; }
+  if(hint){
+    if(nonKonut){ hint.style.display=''; hint.textContent=USAGE_HINT[katKullanim]||''; }
+    else if(showRow && !active){ hint.style.display=''; hint.textContent='“Katları ayrı planla” açılınca her kata ayrı kullanım (ticari / otopark / sığınak) verebilirsiniz.'; }
+    else hint.style.display='none';
+  }
   if(typeof updateParkBtn==='function') updateParkBtn();
 }
 document.getElementById('katKullanim').addEventListener('change',e=>{
@@ -229,8 +258,8 @@ function stairBoxOf(pl){
 }
 /* üst kat üretilirken merdivenin sabitleneceği dünya dikdörtgeni (zemin kattan) */
 function villaForcedStair(){
-  if(!floorsOn()||activeFloor===0) return null;
-  const f0=floorState(0);
+  if(!floorsOn()||activeFloor===zeminIdx()) return null;
+  const f0=floorState(zeminIdx());
   return f0? stairBoxOf(f0.plan) : null;
 }
 /* ================= yapı iskeleti (lockedCore) =================
@@ -292,38 +321,44 @@ function distToPoly(q, poly){
 }
 /* anahtar satırının görünürlüğü + tip/kat değişiminde özelliğin kapanması */
 function updateKatAyriUI(){
-  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
+  const apt=document.getElementById('binaTipi').value==='apartman';
+  /* bodrum yalnız apartmanda; villaya geçince sıfırlanır */
+  const br=document.getElementById('bodrumRow');
+  if(br) br.style.display=apt?'':'none';
+  if(!apt && bodrumSayisi!==0){ bodrumSayisi=0; const bi=document.getElementById('bodrumSayisi'); if(bi) bi.value='0'; reflowFloors(); }
   const row=document.getElementById('katAyriRow');
-  if(row) row.style.display=(kat>=2)?'':'none';   // apartman + villa: çok katlıysa açılabilir
+  if(row) row.style.display=(totalFloors()>=2)?'':'none';   // apartman + villa: çok katlıysa (bodrum dahil) açılabilir
   const cb=document.getElementById('katAyri');
-  if(kat<2&&cb&&cb.checked) floorsOff();
+  if(totalFloors()<2&&cb&&cb.checked) floorsOff();
   renderFloorTabs();
 }
 /* özelliği kapat: zemin kata dönülür, kat anlık görüntüleri bırakılır */
 function floorsOff(){
-  if(villaFloors && activeFloor!==0 && villaFloors[0] && villaFloors[0].plan){
-    activeFloor=0;
-    try{ restoreState(villaFloors[0], {fit:false, keepFloors:true}); }
+  const zi=zeminIdx();
+  if(villaFloors && activeFloor!==zi && villaFloors[zi] && villaFloors[zi].plan){
+    activeFloor=zi;
+    try{ restoreState(villaFloors[zi], {fit:false, keepFloors:true}); }
     catch(err){ console.error('kat kapatma:', err); }
   }
-  villaFloors=null; activeFloor=0; katKullanim='konut';
+  villaFloors=null; activeFloor=0; katKullanim='konut'; villaOffset=bodrumSayisi;
   const cb=document.getElementById('katAyri'); if(cb) cb.checked=false;
   renderFloorTabs();
 }
-/* kat sayısı değişti: anlık görüntüler güncel kat/yükseklikle damgalanır, dizi boyu uyarlanır */
+/* kat/bodrum sayısı değişti: dizi SEVİYE koruyarak yeniden indekslenir, anlık görüntüler
+   güncel kat/yükseklikle damgalanır, aktif katın canlı durumu hedefe getirilir */
 function onFloorCountChange(){
+  if(villaFloors && plan) villaFloors[activeFloor]=stateSnapshot(true); // canlıyı kaydet (kaymadan önce)
   updateKatAyriUI();
-  if(!villaFloors) return;
-  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
+  if(!villaFloors){ villaOffset=bodrumSayisi; return; }
+  reflowFloors();
+  const kat=ustKat();
   const katYuk=+document.getElementById('katYuk').value||2.9;
-  if(activeFloor>=kat){
-    const z=villaFloors[0]; activeFloor=0;
-    if(z&&z.plan){ try{ restoreState(z,{fit:false,keepFloors:true}); }catch(err){ console.error(err); } }
-  }
-  villaFloors.length=kat;
   villaFloors.forEach(f=>{ if(!f) return;
-    f.ui.katSayisi=String(kat); f.ui.katYuk=String(katYuk);
+    f.ui.katSayisi=String(kat); f.ui.katYuk=String(katYuk); f.ui.bodrumSayisi=String(bodrumSayisi);
     if(f.plan){ f.plan.kat=kat; f.plan.binaYuk=kat*katYuk; } });
+  /* aktif kat (kaymış olabilir) canlı globallere getirilir */
+  const snap=villaFloors[activeFloor];
+  if(snap&&snap.plan){ try{ restoreState(snap,{fit:false,keepFloors:true}); }catch(err){ console.error(err); } }
   renderFloorTabs();
 }
 function renderFloorTabs(){
@@ -334,11 +369,12 @@ function renderFloorTabs(){
   if(!floorsOn()){
     box.style.display='none';
     if(title) title.textContent=villa?'Daire Tipleri (kat başına)':'Daire Tipleri (kat başına)';
+    syncKatKullanimUI();   // switch kapalıyken de kullanım satırını (pasif) tazele
     return;
   }
-  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
+  const total=totalFloors();
   box.style.display='flex'; box.innerHTML='';
-  for(let k=0;k<kat;k++){
+  for(let k=total-1;k>=0;k--){   // üstten alta: en üst kat solda, bodrumlar sağda (kat istifi gibi)
     const b=document.createElement('button');
     const st=floorState(k);
     const u=(!villa)?usageOf(k):'konut';
@@ -346,7 +382,7 @@ function renderFloorTabs(){
     b.textContent=ico+floorName(k)+(st?' · '+fmt(shoelace(st.pts))+' m²':'');
     if(k===activeFloor) b.className='active';
     else if(!st) b.className='empty';
-    b.title=st?(u!=='konut'?USAGE_TR[u]+' katı':''):'Henüz planlanmadı — geçince bir alt katın sınırıyla başlar';
+    b.title=st?(u!=='konut'?USAGE_TR[u]+' katı':''):'Henüz planlanmadı — geçince komşu katın sınırıyla başlar';
     b.addEventListener('click',()=>switchFloor(k));
     box.appendChild(b);
   }
@@ -355,8 +391,7 @@ function renderFloorTabs(){
 }
 function switchFloor(k){
   if(!floorsOn()) return;
-  const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
-  if(k<0||k>=kat||k===activeFloor) return;
+  if(k<0||k>=totalFloors()||k===activeFloor) return;
   if(plan) villaFloors[activeFloor]=stateSnapshot(true);
   const prev=activeFloor; activeFloor=k;
   const snap=villaFloors[k];
@@ -374,9 +409,9 @@ function switchFloor(k){
     }
     catch(err){ console.error('kat geçişi:', err); activeFloor=prev; }
   } else if(plan){
-    /* ilk ziyaret: sınır, program ve balkonlar bir önceki kattan miras kalır;
-       merdiven zemindeki konumuna sabitlenerek yeni kat üretilir. Yeni kat konut başlar. */
-    katKullanim='konut';
+    /* ilk ziyaret: sınır, program ve balkonlar komşu kattan miras kalır; merdiven
+       zemindeki konumuna sabitlenir. Bodrum katı otopark başlar (mimari varsayılan), üstü konut. */
+    katKullanim = (floorLevel(k)<0 && document.getElementById('binaTipi').value==='apartman') ? 'otopark' : 'konut';
     resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
     try{ generate(); villaFloors[k]=stateSnapshot(true); }
     catch(err){ console.error('kat üretimi:', err); }
@@ -385,9 +420,9 @@ function switchFloor(k){
 }
 document.getElementById('katAyri').addEventListener('change',e=>{
   if(e.target.checked){
-    const kat=Math.max(1,+document.getElementById('katSayisi').value||1);
-    villaFloors=new Array(kat).fill(null); activeFloor=0;
-    if(plan){ villaFloors[0]=stateSnapshot(true); runChecks(); render(); }
+    katKullanim='konut'; // kata-ayrı öncesi tek plan = zemin (konut); bayat global sızmasın
+    villaFloors=new Array(totalFloors()).fill(null); activeFloor=zeminIdx(); villaOffset=bodrumSayisi;
+    if(plan){ villaFloors[zeminIdx()]=stateSnapshot(true); runChecks(); render(); } // mevcut plan = zemin kat
   } else {
     floorsOff();
     if(plan){ runChecks(); render(); }

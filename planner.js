@@ -107,8 +107,8 @@ function generate(keepCuts){
 
   /* --- yapı iskeleti: kata-ayrı apartmanda iskelet yoksa zemin kattan türet
          (tüm çekirdek düşeyde sürekli olsun); sonra kilitli çekirdeği ÖNCE sahiplen --- */
-  if(!villa && floorsOn() && activeFloor>0 && !lockedCore){
-    const f0=floorState(0); if(f0&&f0.plan) lockedCore=captureCoreFrom(f0.plan);
+  if(!villa && floorsOn() && activeFloor!==zeminIdx() && !lockedCore){
+    const f0=floorState(zeminIdx()); if(f0&&f0.plan) lockedCore=captureCoreFrom(f0.plan); // bodrum dahil her kat çekirdeği zeminden alır
   }
   /* --- otomatik kulak (çıkıntı) çekirdeği: footprint gövdesinden taşan dar çıkıntılar
          merdiven/asansör/yangın için idealdir. Saf detektör — inside maskesini okur,

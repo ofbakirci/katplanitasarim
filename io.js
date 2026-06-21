@@ -76,7 +76,7 @@ function stateSnapshot(bare){
   if(!plan) return null;
   const el2=id=>document.getElementById(id).value;
   const st={v:1, app:'kat-plani-tasarim',
-    ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk'), koridorYon:koridorYon},
+    ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk'), koridorYon:koridorYon, bodrumSayisi:String(bodrumSayisi)},
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
     parcelClosed, balconies:balconies.map(b=>({...b})),
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ, unitLayout:Object.assign({},unitLayout),
@@ -146,6 +146,8 @@ function restoreState(st, opt){
   document.getElementById('katSayisi').value=st.ui.katSayisi;
   document.getElementById('katYuk').value=st.ui.katYuk;
   koridorYon=st.ui.koridorYon||'oto'; { const ky=document.getElementById('koridorYon'); if(ky) ky.value=koridorYon; }
+  bodrumSayisi=Math.max(0,+(st.ui.bodrumSayisi||0)||0); villaOffset=bodrumSayisi; // floors dizisi bu offsetle kurulur
+  { const bi=document.getElementById('bodrumSayisi'); if(bi) bi.value=String(bodrumSayisi); }
   katKullanim=(st.plan&&st.plan.katKullanim)||'konut'; // bu katın kullanım tipi (per-kat)
   pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
   parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed;

@@ -256,7 +256,7 @@ function collectChecks(){
   /* parsel / bahçe */
   if(parcelClosed && parcelPts.length>=3 && closed){
     /* katları ayrı planlanan villada taban alanı = ZEMİN kat oturumu (aktif kat değil) */
-    const zf=(p.villa&&floorsOn())? floorState(0) : null;
+    const zf=(p.villa&&floorsOn())? floorState(zeminIdx()) : null;
     const pa=shoelace(parcelPts), ba=shoelace(zf?zf.pts:pts);
     add('info',`Parsel ${fmt(pa)} m² · bina taban alanı ${fmt(ba)} m² · bahçe ${fmt(Math.max(0,pa-ba))} m².`);
     if(pts.some(q=>!pip(q.x,q.y,parcelPts)))
