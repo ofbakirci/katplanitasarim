@@ -86,6 +86,8 @@ function stateSnapshot(bare){
       kat:plan.kat, binaYuk:plan.binaYuk, perFloor:plan.perFloor, villa:plan.villa,
       nAsansor:plan.nAsansor, asansorYeri:plan.asansorYeri,
       fireStairNeeded:plan.fireStairNeeded, teknikNeeded:plan.teknikNeeded,
+      katKullanim:plan.katKullanim||'konut',
+      parking:plan.parking? JSON.parse(JSON.stringify(plan.parking)) : undefined, // park yerleşimi (elle düzenlemeler dahil)
       inside:Array.from(plan.inside, v=>v?1:0),
       stairs:plan.stairs.map(s=>({...s})), zoneUI:plan.zoneUI||[],
       regions:plan.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice()})),
@@ -144,6 +146,7 @@ function restoreState(st, opt){
   document.getElementById('katSayisi').value=st.ui.katSayisi;
   document.getElementById('katYuk').value=st.ui.katYuk;
   koridorYon=st.ui.koridorYon||'oto'; { const ky=document.getElementById('koridorYon'); if(ky) ky.value=koridorYon; }
+  katKullanim=(st.plan&&st.plan.katKullanim)||'konut'; // bu katın kullanım tipi (per-kat)
   pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
   parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed;
   balconies=(st.balconies||[]).map(b=>({...b}));
@@ -179,8 +182,12 @@ function restoreState(st, opt){
     villa:!!sp.villa, kat:sp.kat, binaYuk:sp.binaYuk, perFloor:sp.perFloor,
     nAsansor:sp.nAsansor, asansorYeri:sp.asansorYeri,
     fireStairNeeded:sp.fireStairNeeded, teknikNeeded:sp.teknikNeeded,
+    katKullanim:sp.katKullanim||'konut',
     zoneUI:sp.zoneUI||[]};
   regions.forEach(g=>calcRegionMetrics(g, plan.cols, plan.minX, plan.minY));
+  /* park yerleşimi: kayıtta varsa (elle düzenlemeler dahil) aynen geri yükle, yoksa yeniden kur */
+  if(sp.parking) plan.parking=JSON.parse(JSON.stringify(sp.parking));
+  else if(regions.some(g=>g.type==='otopark')) plan.parking=parkingForPlan(plan);
   hoverWall=null; hoverRoomId=null; hoverDoor=null; hoverBalk=null; hoverP=null;
   plan.wallRuns=computeWallRuns();
   document.getElementById('genBtn').disabled=false;

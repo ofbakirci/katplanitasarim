@@ -31,6 +31,15 @@
     </div>
     <div class="sec" id="unitSec">
       <h2 id="unitSecTitle">Daire Tipleri (kat başına)</h2>
+      <div class="row" id="katKullanimRow" style="display:none"><label>Bu katın kullanımı</label>
+        <select id="katKullanim">
+          <option value="konut">🏠 Konut</option>
+          <option value="ticari">🏪 Ticari (dükkân)</option>
+          <option value="otopark">🅿️ Otopark</option>
+          <option value="siginak">🛡️ Sığınak</option>
+        </select>
+      </div>
+      <div id="katKullanimHint" style="display:none; font-size:11px; color:#9c8e76; line-height:1.35; margin:2px 0 8px"></div>
       <div id="unitList"></div>
       <button class="small" id="addUnit">+ Daire tipi ekle</button>
     </div>
@@ -66,6 +75,7 @@
     <button id="tBalk">▦ Balkon</button>
     <button id="tDoor">🚪 Kapı</button>
     <button id="tStruct" title="Yapı katmanı: merdiven / asansör / şaft / yangın merdivenini taşı ve boyutlandır">🏗 Yapı</button>
+    <button id="tPark" title="Park düzenle: park yerine tıkla=sil, boş yere tıkla=ekle, sürükle=taşı (yalnız otopark/sığınak katı)" style="display:none">🅿️ Park</button>
     <button id="tPan">✋ Kaydır</button>
     <button id="tUndo">↩︎ Geri al</button>
     <button id="tClear">🗑 Temizle</button>
@@ -73,6 +83,14 @@
     <button id="tSample">▭ Örnek sınır</button>
   </div>
   <div id="floorTabs"></div>
+  <div id="parkBar" style="display:none">
+    <span class="pl">🅿️ Park düzeni:</span>
+    <button data-orient="auto" class="active">Oto</button>
+    <button data-orient="h">Yatay</button>
+    <button data-orient="v">Dikey</button>
+    <button id="parkReset" title="Otomatik düzene dön">↺ Sıfırla</button>
+    <span class="ph">tıkla=ekle/sil · sürükle=taşı</span>
+  </div>
   <div id="onb">
     <div id="onbHead">💡<span>Nasıl kullanılır? <em id="onbStep"></em></span><button id="onbClose" title="Kapat">×</button></div>
     <div id="onbBody"></div>

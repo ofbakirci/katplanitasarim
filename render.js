@@ -212,6 +212,34 @@ function renderPlan(){
           gc.appendChild(el('rect',{x:W2Sx(p.minX+(c+dc)*M),y:W2Sy(p.minY+(r+dr)*M),width:cs+0.5,height:cs+0.5,fill,opacity:dash?0.45:1}));
     });
   });
+  /* otopark: gerçek park yerleri (2,5×5 m cepler, dünya koord, ang derece) + sürüş yolları.
+     Park modunda: imleç altındaki yer kırmızı (sil), eklenecek boş yer kesik hayalet. */
+  if(p.parking && p.parking.bays){
+    const pg=el('g',{}); gc.appendChild(pg);
+    const lw=Math.max(0.7,pxPerM*0.05);
+    (p.parking.aisles||[]).forEach(a=>{
+      const horiz=a.w>=a.h;
+      const x1=horiz? a.x : a.x+a.w/2, y1=horiz? a.y+a.h/2 : a.y;
+      const x2=horiz? a.x+a.w : x1,    y2=horiz? y1 : a.y+a.h;
+      pg.appendChild(el('line',{x1:W2Sx(x1),y1:W2Sy(y1),x2:W2Sx(x2),y2:W2Sy(y2),
+        stroke:'#aab6c2','stroke-width':Math.max(1,pxPerM*0.06),'stroke-dasharray':(pxPerM*0.45)+' '+(pxPerM*0.4)}));
+    });
+    p.parking.bays.forEach((b,bi)=>{
+      const hov = mode==='park' && hoverBay===bi;
+      const r=el('rect',{x:W2Sx(b.x),y:W2Sy(b.y),width:b.w*pxPerM,height:b.h*pxPerM,
+        fill:hov?'#ffdada':'#ffffff','fill-opacity':hov?0.9:0.5,
+        stroke:hov?'#c0392b':'#6f8499','stroke-width':hov?lw*1.8:lw});
+      if(b.ang){ const cx=W2Sx(b.x+b.w/2), cy=W2Sy(b.y+b.h/2); r.setAttribute('transform',`rotate(${b.ang} ${cx} ${cy})`); }
+      pg.appendChild(r);
+    });
+    if(mode==='park' && parkGhost){
+      const b=parkGhost;
+      const r=el('rect',{x:W2Sx(b.x),y:W2Sy(b.y),width:b.w*pxPerM,height:b.h*pxPerM,
+        fill:'#2e7d32','fill-opacity':0.18,stroke:'#2e7d32','stroke-width':lw*1.6,'stroke-dasharray':(pxPerM*0.3)+' '+(pxPerM*0.25)});
+      if(b.ang){ const cx=W2Sx(b.x+b.w/2), cy=W2Sy(b.y+b.h/2); r.setAttribute('transform',`rotate(${b.ang} ${cx} ${cy})`); }
+      pg.appendChild(r);
+    }
+  }
   /* duvarlar */
   const id=(r,c)=>(r<0||c<0||r>=p.rows||c>=p.cols)?-9:(p.inside[r*p.cols+c]?p.cm[r*p.cols+c]:-9);
   /* nokta poligon kenarı üzerinde mi? (eğik kenarda ızgara dış duvarı çizilmez; sınır çizgisi duvardır) */

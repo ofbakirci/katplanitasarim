@@ -1,5 +1,39 @@
 'use strict';
 /* ================= mevzuat kontrolleri ================= */
+/* konut dışı kat (ticari/otopark/sığınak) denetimleri — daire/piyes kuralları yerine
+   kullanıma özel notlar; çekirdek (düşey sirkülasyon) sürekliliği kontrol edilir */
+function collectUsageChecks(add, p){
+  const areaOf=t=>p.regions.filter(g=>g.type===t).reduce((s,g)=>s+g.area,0);
+  const ad=floorName(activeFloor);
+  if(p.katKullanim==='otopark'){
+    const a=areaOf('otopark'), bays=(p.parking&&p.parking.bays)?p.parking.bays.length:0;
+    add('info',`${ad} — Otopark: ${a>0?fmt(a)+' m² alana ':''}${bays} araçlık yer çizildi (2,5×5 m dik park + 5 m manevra yolu; çift yüklü, rampa hariç).`);
+    add('info','Araç rampası eğimi en çok %15 (kapalı otopark), kapı önü ilk 5 m'+"'"+'de daha düşük; rampayı 🏗 Yapı katmanında konumlandırın (Otopark Yönetmeliği).');
+  } else if(p.katKullanim==='ticari'){
+    const n=p.regions.filter(g=>g.type==='dukkan'&&g.cells.length).length, a=areaOf('dukkan');
+    add('info',`${ad} — Ticari: ${n} dükkân birimi, toplam ${fmt(a)} m². Zemin ticaride her birimde ıslak hacim, vitrin cephesi ve konuttan AYRI giriş aranır.`);
+    add('info','Ticari kullanım için ayrıca yangın çıkışı, engelli erişimi (rampa/asansör) ve işyeri açma ruhsatı koşulları geçerlidir.');
+  } else if(p.katKullanim==='siginak'){
+    const a=areaOf('siginak');
+    add(a>=REG.siginakMinM2?'ok':'bad',`${ad} — Sığınak alanı ${fmt(a)} m² (en az ${fmt(REG.siginakMinM2)} m²; kişi başı ${fmt(REG.siginakKisiM2)} m² — asıl alan bağımsız bölüm/kişi sayısına bağlıdır).`);
+    add('info','Sığınak: betonarme kabuk, ayrı havalandırma (gazsızlandırma) ve en az iki çıkış aranır (Sığınak Yönetmeliği). Bu şematik gösterimdir.');
+    if(areaOf('otopark')>0) add('info',`Sığınak dışı kalan ${fmt(areaOf('otopark'))} m² bodrum otopark/depo olarak değerlendirildi.`);
+  }
+  parkingSummaryCheck(add);
+  const hasStair=p.regions.some(g=>g.type==='merdiven'&&g.cells.length);
+  add(hasStair?'ok':'bad', hasStair
+    ? `${ad} — Düşey sirkülasyon (merdiven) bu katta da sürüyor; çekirdek düşeyde korunur.`
+    : `${ad} — Merdiven yok: düşey sirkülasyon kesiliyor. 🏗 Yapı katmanında çekirdeği kilitleyin ya da zemin katı yeniden üretin.`);
+}
+/* bina geneli otopark gereksinimi vs planlanan kapasite (yalnız katları ayrı planlanırken) */
+function parkingSummaryCheck(add){
+  if(!(typeof floorsOn==='function' && floorsOn())) return;
+  const req=(typeof requiredParking==='function')?requiredParking():0;
+  if(req<=0) return;
+  const cap=(typeof providedParking==='function')?providedParking():0;
+  add(cap>=req?'ok':'bad',
+    `Otopark gereksinimi (Otopark Yön. Ek-1, konut): bina genelinde en az ≈ ${req} araçlık yer gerekli; planlanan otopark/sığınak katları ≈ ${cap} araç sığdırıyor. ${cap>=req? 'Yeterli ✓' : ('EKSİK — '+(req-cap)+' araçlık yer daha gerekli (bir bodrum katını “Otopark” yapın ya da tabanı büyütün).')}`);
+}
 function collectChecks(){
   const out=[], add=(s,t,reg,unit)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit});
   const p=plan;
@@ -89,7 +123,9 @@ function collectChecks(){
         ? `${tag} — ${d.reg.name} kapısı silindi; odaya erişim yok. ("Geri al" ile geri getirin.)`
         : `${tag} — ${d.reg.name} için uygun kapı yeri yok: duvar teması 1 m'den kısa. Duvarı sürükleyin.`, d.reg.id);
   });
-  if(!p.villa){
+  if(p.katKullanim && p.katKullanim!=='konut'){
+    collectUsageChecks(add, p);
+  } else if(!p.villa){
     add('ok',`Ortak hol genişliği 1,50 m olarak yerleştirildi (min ${REG.koridorMin.toLocaleString('tr-TR')} m).`);
     add('ok',`Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ ${REG.merdivenMin.toLocaleString('tr-TR')} m (konut).`);
     /* asansör */
@@ -115,9 +151,15 @@ function collectChecks(){
       else p.unitObjs.forEach(u=>{ if(u.antre) meas(u.antre.cx, u.antre.cy, u.antre.id); });
       add(worst<=REG.kacisMesafe?'ok':'bad',`En uzak daire kapısı → merdiven kaçış mesafesi ≈ ${fmt(worst)} m (max ${REG.kacisMesafe} m).`, worstReg);
     }
-    /* sığınak + teknik */
+    /* sığınak + teknik — bina genelinde bir kat SIĞINAK olarak planlandıysa karşılanmış sayılır */
     const toplam=p.perFloor*p.kat;
-    if(toplam>REG.siginakDaire) add('info',`Toplam ${toplam} bağımsız bölüm > ${REG.siginakDaire} → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı.`);
+    if(toplam>REG.siginakDaire){
+      const sigVar = (typeof buildingHasUsage==='function') && buildingHasUsage('siginak');
+      add(sigVar?'ok':'info', sigVar
+        ? `Toplam ${toplam} bağımsız bölüm > ${REG.siginakDaire} → sığınak gerekli; bir kat SIĞINAK olarak planlandı. ✓`
+        : `Toplam ${toplam} bağımsız bölüm > ${REG.siginakDaire} → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı (bir katın kullanımını “Sığınak” yapın).`);
+    }
+    parkingSummaryCheck(add); // katları ayrı planlanırken otopark gereksinimi konut katında da görünür
     if(p.teknikNeeded) add('ok',`Katta ${p.perFloor} daire ≥ ${REG.teknikOdaDaire} → teknik/tesisat şaftı çekirdeğe eklendi.`);
     const saftReg=p.regions.find(g=>g.name==='ŞAFT'&&g.cells.length);
     if(saftReg) add('info',`Çekirdek arkasındaki ${fmt(saftReg.area)} m² cep, ulaşılamaz alan kalmaması için tesisat şaftına dönüştürüldü.`);

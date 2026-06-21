@@ -94,6 +94,9 @@ svg.addEventListener('mousemove',e=>{
     }
     if(dragging.type==='wall'){ dragWallTo(sx,sy); }
     if(dragging.type==='struct'){ dragStructTo(sx,sy); }
+    if(dragging.type==='park'){ const b=plan&&plan.parking&&plan.parking.bays[dragging.idx];
+      if(b){ const nx=snapG(S2Wx(sx)-dragging.gx), ny=snapG(S2Wy(sy)-dragging.gy);
+        if(nx!==b.x||ny!==b.y){ b.x=nx; b.y=ny; dragging.moved=true; render(); } } }
     if(dragging.type==='bvert'){ pts[dragging.idx]={x:snapG(S2Wx(sx)), y:snapG(S2Wy(sy))};
       document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
       document.getElementById('stPerim').textContent=fmt(perim(pts))+' m'; render(); }
@@ -148,6 +151,17 @@ svg.addEventListener('mousemove',e=>{
       : h.handle==='e'||h.handle==='w'?'ew-resize'
       : h.handle==='nw'||h.handle==='se'?'nwse-resize':'nesw-resize'; }
     else { const bh=hitBoundaryHandle(sx,sy); svg.style.cursor = bh? (bh.kind==='edge'?'copy':'move') : ''; }
+  }
+  else if(mode==='park'){
+    if(!plan||!plan.parking) return;
+    const hb=hitBay(sx,sy);
+    const ghost = (hb==null)? parkGhostAt(sx,sy) : null;
+    const gKey=g=>g?g.x+','+g.y+','+g.w:'';
+    if(hb!==hoverBay || gKey(ghost)!==gKey(parkGhost)){
+      hoverBay=hb; parkGhost=ghost;
+      svg.style.cursor = hb!=null? 'pointer' : (ghost?'copy':'not-allowed');
+      render();
+    }
   }
   else if(plan && closed && mode!=='parcel'){ // oda duvarı + oda ölçüsü vurgusu
     const w=(mode==='pan')? null : (hitCutHandle(sx,sy)? null : hitWallRun(sx,sy));
@@ -209,6 +223,18 @@ svg.addEventListener('mousedown',e=>{
     if(p.closing){ parcelClosed=true; hoverP=null; balkChecksRefresh(); render(); return; }
     if(parcelPts.length && p.x===parcelPts[parcelPts.length-1].x && p.y===parcelPts[parcelPts.length-1].y) return;
     parcelPts.push({x:p.x,y:p.y}); render(); return;
+  }
+  if(mode==='park'){
+    if(e.button!==0||!plan||!plan.parking) return;
+    const hb=hitBay(sx,sy);
+    if(hb!=null){ const b=plan.parking.bays[hb];
+      dragging={type:'park', idx:hb, gx:S2Wx(sx)-b.x, gy:S2Wy(sy)-b.y, undo:parkSnapshot(), moved:false};
+      e.preventDefault();
+    } else { const g=parkGhostAt(sx,sy);
+      if(g){ editHistory.push({type:'park', prev:parkSnapshot()});
+        plan.parking.bays.push(g); parkGhost=null; parkEditRefresh(); }
+    }
+    return;
   }
   if(plan && e.button===0){ // ayırıcı tutamacı? oda duvarı?
     const h=hitCutHandle(sx,sy);
@@ -278,6 +304,15 @@ function finishDrag(){
     if(JSON.stringify(dragging.undo)!==JSON.stringify(balkSnapshot()))
       editHistory.push({type:'balk', prev:dragging.undo});
     balkChecksRefresh();
+  } else if(dragging.type==='park' && plan && plan.parking){
+    if(!dragging.moved){ /* hareketsiz = tık → park yerini sil */
+      plan.parking.bays.splice(dragging.idx,1);
+      editHistory.push({type:'park', prev:dragging.undo});
+      hoverBay=null; parkEditRefresh();
+    } else { /* taşındı → değişikliği geçmişe yaz */
+      editHistory.push({type:'park', prev:dragging.undo});
+      parkEditRefresh();
+    }
   }
   dragging=null;
 }
@@ -289,6 +324,8 @@ function undoEdit(){
     balkChecksRefresh(); render(); return true;
   }
   if(e.type==='door'){ doorRestore(e.prev); hoverDoor=null; if(plan) runChecks(); render(); return true; }
+  if(e.type==='park'){ if(plan&&e.prev){ plan.parking=e.prev; hoverBay=null; parkGhost=null;
+    runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); } return true; }
   if(e.type==='wallsnap'){
     if(!plan) return true;
     restoreRegions(e.snap);
@@ -366,10 +403,75 @@ function finishPoly(){
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   render();
 }
+/* ================= park yeri düzenleme (otopark/sığınak katı) =================
+   Park modunda: park yerine tık=sil, boş uygun yere tık=ekle, park yerini sürükle=taşı.
+   Düzen çubuğundan yön (Oto/Yatay/Dikey) ve Sıfırla. Elle dokununca manual=true →
+   otomatik yeniden hesap bunu ezmez; kat geçişi/kayıt taşır; Geri Al adım adım çözer. */
+function parkSnapshot(){ return (plan&&plan.parking)? JSON.parse(JSON.stringify(plan.parking)) : null; }
+/* dünya noktası b park yerinin (ang derece) içinde mi */
+function hitBay(sx,sy){
+  if(!plan||!plan.parking) return null;
+  const wx=S2Wx(sx), wy=S2Wy(sy), bays=plan.parking.bays;
+  for(let i=bays.length-1;i>=0;i--){ const b=bays[i];
+    let px=wx-(b.x+b.w/2), py=wy-(b.y+b.h/2);
+    if(b.ang){ const a=-b.ang*Math.PI/180, c=Math.cos(a), s=Math.sin(a); const nx=px*c-py*s, ny=px*s+py*c; px=nx; py=ny; }
+    if(Math.abs(px)<=b.w/2+0.02 && Math.abs(py)<=b.h/2+0.02) return i;
+  }
+  return null;
+}
+/* park yeri tümüyle otopark alanında mı (çekirdek/duvar/dış değil) — ekleme/önizleme denetimi */
+function bayAreaOk(b){
+  if(!plan) return false;
+  const a=(b.ang||0)*Math.PI/180, c=Math.cos(a), s=Math.sin(a), cx=b.x+b.w/2, cy=b.y+b.h/2;
+  for(let dx=-b.w/2+0.25; dx<b.w/2; dx+=0.5)
+    for(let dy=-b.h/2+0.25; dy<b.h/2; dy+=0.5){
+      const wx=cx+dx*c-dy*s, wy=cy+dx*s+dy*c;
+      const col=Math.floor((wx-plan.minX)/M), row=Math.floor((wy-plan.minY)/M);
+      if(row<0||col<0||row>=plan.rows||col>=plan.cols) return false;
+      const j=row*plan.cols+col;
+      if(!plan.inside[j]||plan.cm[j]<0||plan.regions[plan.cm[j]].type!=='otopark') return false;
+    }
+  return true;
+}
+/* imleç altında eklenebilecek boş park yeri (yöne göre yatay/dikey) | null */
+function parkGhostAt(sx,sy){
+  if(!plan||!plan.parking) return null;
+  const vert=!!plan.parking.vertical;
+  const w=(vert?REG.parkBayLen:REG.parkBayWid), h=(vert?REG.parkBayWid:REG.parkBayLen);
+  const b={x:snapG(S2Wx(sx)-w/2), y:snapG(S2Wy(sy)-h/2), w, h, ang:0};
+  return bayAreaOk(b)? b : null;
+}
+function parkEditRefresh(){ if(!plan||!plan.parking) return;
+  plan.parking.manual=true; runChecks(); render();
+  if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
+}
+function setParkOrient(o){
+  if(!plan||!plan.parking) return;
+  editHistory.push({type:'park', prev:parkSnapshot()}); // yön/sıfırla da geri alınabilir olsun
+  const np=parkingForPlan(plan, o==='auto'?undefined:(o==='v'));
+  np.orient=o; np.manual=false; plan.parking=np;
+  hoverBay=null; parkGhost=null;
+  runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
+  showParkBar();
+}
+function showParkBar(){
+  const bar=document.getElementById('parkBar'); if(!bar||!bar.querySelectorAll) return;
+  const o=(plan&&plan.parking&&plan.parking.orient)||'auto';
+  bar.querySelectorAll('button[data-orient]').forEach(b=>b.classList.toggle('active', b.dataset.orient===o));
+}
+/* otopark/sığınak katında 🅿️ Park butonunu göster; başka kata geçince park modundan çık */
+function updateParkBtn(){
+  const pk=document.getElementById('tPark'); if(!pk) return;
+  const ok = !!(plan && plan.parking && usageEnabled() && (katKullanim==='otopark'||katKullanim==='siginak'));
+  pk.style.display = ok? '' : 'none';
+  if(!ok && mode==='park') setMode('draw');
+}
 /* araç çubuğu */
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null;
-  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tDoor','door'],['tStruct','struct'],['tPan','pan']])
-    document.getElementById(id).classList.toggle('active',m===mm);
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null;
+  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tDoor','door'],['tStruct','struct'],['tPark','park'],['tPan','pan']]){
+    const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
+  const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
+  if(m==='park') showParkBar();
   svg.classList.toggle('panning',m==='pan'); render(); };
 document.getElementById('tbToggle').onclick=()=>{
   const tb=document.getElementById('toolbar');
@@ -420,7 +522,12 @@ document.getElementById('tParcel').onclick=()=>setMode('parcel');
 document.getElementById('tBalk').onclick=()=>setMode('balkon');
 document.getElementById('tDoor').onclick=()=>setMode('door');
 document.getElementById('tStruct').onclick=()=>setMode('struct');
+document.getElementById('tPark').onclick=()=>setMode('park');
 document.getElementById('tPan').onclick=()=>setMode('pan');
+/* park düzeni çubuğu: yön + sıfırla */
+if(typeof document.querySelectorAll==='function')
+  document.querySelectorAll('#parkBar button[data-orient]').forEach(b=>b.onclick=()=>setParkOrient(b.dataset.orient));
+{ const pr=document.getElementById('parkReset'); if(pr) pr.onclick=()=>setParkOrient('auto'); }
 document.getElementById('tUndo').onclick=()=>{
   if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
   if(undoEdit()) return; // önce elle duvar/ayırıcı/balkon düzenlemeleri

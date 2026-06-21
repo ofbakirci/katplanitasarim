@@ -11,15 +11,22 @@ const REG = {
   asansorYeriKat:3, asansorKat:4, ikiAsansorKat:11,
   yanginYukseklik:21.5, kacisMesafe:30, siginakDaire:8, teknikOdaDaire:6,
   cikmaMax:1.5, balkonMinD:1.2, taksMax:0.4, yanBahce:3.0,
-  katOturumOran:0.7 // katları ayrı planlanan villada her kat oturumu ≥ zeminin %70'i
+  katOturumOran:0.7, // katları ayrı planlanan villada her kat oturumu ≥ zeminin %70'i
+  parkBayLen:5.0, parkBayWid:2.5, parkAisle:5.0, // dik (90°) park yeri 2,5×5 m + manevra yolu 5 m (Otopark Yön.)
+  siginakMinM2:12.0, siginakKisiM2:1.0,
+  /* Otopark Yönetmeliği (Ek-1, konut/mesken) — daire brüt alanına göre asgari otopark */
+  otoparkBrutKats:1.25,       // şematik net daire alanı → brüt yaklaşığı
+  otoparkKonut:[{max:80, oto:1/3}, {max:120, oto:1/2}, {max:180, oto:1}, {max:1e9, oto:2}]
 };
 const COLORS = {
   salon:'#ffe7c2', yatak:'#d8e8f7', mutfak:'#ffd9cc', banyo:'#d4eee5', wc:'#d4eee5',
   antre:'#f1ecdf', oda:'#e9e3f3', koridor:'#ece4d2', merdiven:'#fdf0b0', asansor:'#e6d9f6',
-  teknik:'#dededa', yangin:'#f7cfc9'
+  teknik:'#dededa', yangin:'#f7cfc9',
+  otopark:'#d9e2ea', siginak:'#f4d6a8', dukkan:'#ffd6e7', depo:'#e6e1d6'
 };
 const TYPE_TR = {salon:'Salon', yatak:'Yatak odası', mutfak:'Mutfak', banyo:'Banyo', wc:'WC',
-  antre:'Antre', oda:'Oda (nötr)', koridor:'Ortak hol', merdiven:'Merdiven', asansor:'Asansör', teknik:'Teknik/Şaft', yangin:'Yangın merd.'};
+  antre:'Antre', oda:'Oda (nötr)', koridor:'Ortak hol', merdiven:'Merdiven', asansor:'Asansör', teknik:'Teknik/Şaft', yangin:'Yangın merd.',
+  otopark:'Otopark', siginak:'Sığınak', dukkan:'Dükkan (ticari)', depo:'Depo'};
 
 /* ================= ortak yardımcılar ================= */
 const fmt = v => (Math.round(v*100)/100).toLocaleString('tr-TR');

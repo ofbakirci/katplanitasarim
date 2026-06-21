@@ -3,6 +3,67 @@
 document.getElementById('genBtn').addEventListener('click',()=>{ resetCuts(); generate(); fitView(); });
 document.getElementById('structReset').addEventListener('click',()=>{ resetLockedCore(); });
 
+/* ================= otopark yerleşimi (gerçek park yerleri + sürüş yolları) =================
+   Verilen otopark hücreleri (avail) modüllere bölünür: 5 m derin park sırası — 5 m manevra
+   yolu — 5 m park sırası … (çift yüklü). Park yeri 2,5×5 m. Uzun kenar yön belirler.
+   Dönüş: {bays:[{r0,c0,h,w}], aisles:[{r0,c0,h,w}], vertical} — hücre ızgarasında. */
+function computeParkingLayout(avail, rows, cols, forceVertical){
+  const empty={bays:[], aisles:[], vertical:false};
+  if(!avail||!avail.size) return empty;
+  const BAY=Math.round(REG.parkBayLen/M), WIDE=Math.round(REG.parkBayWid/M), AISLE=Math.round(REG.parkAisle/M);
+  let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+  avail.forEach(i=>{ const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c; });
+  const H=r1-r0+1, W=c1-c0+1;
+  const fits=(rr,cc,h,w)=>{ for(let r=rr;r<rr+h;r++)for(let c=cc;c<cc+w;c++){
+    if(r<0||c<0||r>=rows||c>=cols||!avail.has(r*cols+c)) return false; } return true; };
+  /* tek bir bant dizilimi kur: yön (vertical), başlangıç kayması (start) ve ilk bandın
+     yol-mu-park-mı (firstAisle) parametreleriyle. Bant deseni park–yol–park–yol… */
+  const build=(vertical, start, firstAisle)=>{
+    const bays=[], aisles=[];
+    if(!vertical){
+      let r=r0+start, band=firstAisle?1:0;
+      while(r<=r1){ const isA=band%2===1, chunk=isA?AISLE:BAY;
+        if(r+chunk-1>r1) break;
+        if(isA) aisles.push({r0:r,c0,h:AISLE,w:W});
+        else for(let c=c0;c+WIDE-1<=c1;c+=WIDE) if(fits(r,c,BAY,WIDE)) bays.push({r0:r,c0:c,h:BAY,w:WIDE});
+        r+=chunk; band++; }
+    } else {
+      let c=c0+start, band=firstAisle?1:0;
+      while(c<=c1){ const isA=band%2===1, chunk=isA?AISLE:BAY;
+        if(c+chunk-1>c1) break;
+        if(isA) aisles.push({r0,c0:c,h:H,w:AISLE});
+        else for(let r=r0;r+WIDE-1<=r1;r+=WIDE) if(fits(r,c,WIDE,BAY)) bays.push({r0:r,c0:c,h:WIDE,w:BAY});
+        c+=chunk; band++; }
+    }
+    /* gereksiz yolları buda: hiçbir park sırasına komşu olmayan manevra bandı çizilmesin */
+    const near=(a)=>bays.some(b=> vertical
+      ? (b.r0<a.r0+a.h && b.r0+b.h>a.r0) && (b.c0+b.w===a.c0 || a.c0+a.w===b.c0)
+      : (b.c0<a.c0+a.w && b.c0+b.w>a.c0) && (b.r0+b.h===a.r0 || a.r0+a.h===b.r0));
+    return {bays, aisles:aisles.filter(near), vertical};
+  };
+  /* iki yönelim × başlangıç kayması × ilk-bant tipi taranır → en çok park yeri çıkan seçilir
+     (çekirdek tabanı ortadan kestiğinde faz kaydırma boşlukları daha iyi değerlendirir) */
+  let best={bays:[], aisles:[], vertical:false};
+  const orients = forceVertical===undefined ? [false,true] : [!!forceVertical];
+  for(const v of orients)
+    for(let s=0;s<=AISLE;s++)
+      for(const fa of [false,true]){
+        const L=build(v,s,fa);
+        if(L.bays.length>best.bays.length) best=L;
+      }
+  return best;
+}
+/* bir plan nesnesindeki OTOPARK bölge(ler)inden park yerleşimi → DÜNYA koordinatlı,
+   düzenlenebilir biçim: bays/aisles = {x,y,w,h,ang} (metre, ang derece). manual=false
+   (otomatik). Elle düzenlenince manual=true olur ve otomatik yeniden hesap bunu ezmez. */
+function parkingForPlan(pl, vertical){
+  if(!pl||!pl.regions) return {bays:[], aisles:[], vertical:false, manual:false};
+  const avail=new Set();
+  pl.regions.forEach(g=>{ if(g.type==='otopark') (g.cells||[]).forEach(i=>avail.add(i)); });
+  const L = computeParkingLayout(avail, pl.rows, pl.cols, vertical);
+  const toW = b => ({x:pl.minX+b.c0*M, y:pl.minY+b.r0*M, w:b.w*M, h:b.h*M, ang:0});
+  return {bays:L.bays.map(toW), aisles:L.aisles.map(toW), vertical:L.vertical, manual:false};
+}
 function generate(keepCuts){
   if(!closed) return;
   const villa = document.getElementById('binaTipi').value==='villa';
@@ -198,6 +259,76 @@ function generate(keepCuts){
   if(coreLocked){
     coreLock.forEach(e=>{ const g=newReg(e.name,e.type); claimRect(g,e.r0,e.c0,e.h,e.w);
       if((e.type==='merdiven'||e.type==='yangin')&&g.cells.length) stairs.push({r0:e.r0,c0:e.c0,h:e.h,w:e.w}); });
+  }
+
+  /* ================= KAT KULLANIM TİPİ (konut dışı) =================
+     Apartman + katları ayrı planlanırken bu kat ticari/otopark/sığınak olabilir.
+     Çekirdek (merdiven/asansör/yangın/teknik) yukarıda zaten sahiplenildi (lockedCore var
+     ya da zemin kattan türetildi); yoksa ensureUsageCore kompakt bir çekirdek yerleştirir.
+     Kalan taban kullanıma göre doldurulur. KONUT yoluna HİÇ girilmez — kendi planını kurup
+     erken döner; bu yüzden fixOrphans/repairUnits/purgeSlivers gibi konut sonrası-işlemleri
+     usage katına dokunamaz. */
+  if(!villa && floorsOn() && katKullanim!=='konut'){
+    const freeCells=()=>{ const a=[]; for(let i=0;i<rows*cols;i++) if(inside[i]&&cm[i]===-1) a.push(i); return a; };
+    /* lockedCore yoksa (ör. zemin katı doğrudan ticari) kompakt çekirdeği biz koy */
+    const ensureUsageCore=()=>{
+      if(regions.some(g=>g.type==='merdiven'&&g.cells.length)) return;
+      const elems=[{nm:'MERDİVEN',tp:'merdiven',w:10,stair:true}];
+      for(let a=0;a<nAsansor;a++) elems.push({nm:asansorYeri?'ASANSÖR YERİ':'ASANSÖR',tp:'asansor',w:4});
+      if(teknikNeeded) elems.push({nm:'TEKNİK / ŞAFT',tp:'teknik',w:3});
+      if(fireStairNeeded) elems.push({nm:'YANGIN MERD.',tp:'yangin',w:5,stair:true});
+      const stH=6, coreW=elems.reduce((s,e)=>s+e.w,0);
+      for(let r0=0;r0<=rows-stH;r0++) for(let c0=0;c0<=cols-coreW;c0++)
+        if(rectFree(r0,c0,stH,coreW)){
+          let c=c0; elems.forEach(e=>{ const g=newReg(e.nm,e.tp); claimRect(g,r0,c,stH,e.w);
+            if(e.stair) stairs.push({r0,c0:c,h:stH,w:e.w}); c+=e.w; });
+          return;
+        }
+    };
+    /* serbest hücrelerde hedefe yakın ~kare bir dikdörtgen bul → bölge yap */
+    const placeBestRect=(name,type,target)=>{
+      let best=null, maxH=Math.min(rows, Math.ceil(Math.sqrt(target))+8);
+      for(let h=3;h<=maxH;h++){ const w=Math.max(3,Math.round(target/h));
+        for(let r0=0;r0<=rows-h;r0++) for(let c0=0;c0<=cols-w;c0++)
+          if(rectFree(r0,c0,h,w)){ const sc=Math.abs(h-w); if(!best||sc<best.sc) best={r0,c0,h,w,sc}; }
+      }
+      if(!best) return null;
+      const g=newReg(name,type); claimRect(g,best.r0,best.c0,best.h,best.w); return g;
+    };
+    ensureUsageCore();
+    if(katKullanim==='otopark'){
+      const g=newReg('OTOPARK','otopark'); freeCells().forEach(i=>claim(g,(i/cols)|0,i%cols));
+    } else if(katKullanim==='ticari'){
+      const fc=freeCells();
+      if(fc.length){
+        let cMin=1e9,cMax=-1e9; fc.forEach(i=>{ const c=i%cols; if(c<cMin)cMin=c; if(c>cMax)cMax=c; });
+        const span=cMax-cMin+1, N=Math.max(2,Math.min(6,Math.round(span*M/5))); // ~5 m'lik dükkânlar
+        const dk=[]; for(let k2=0;k2<N;k2++) dk.push(newReg('DÜKKAN '+(k2+1),'dukkan'));
+        fc.forEach(i=>{ const c=i%cols; let k2=Math.floor((c-cMin)/span*N); if(k2<0)k2=0; if(k2>=N)k2=N-1; claim(dk[k2],(i/cols)|0,c); });
+      }
+    } else if(katKullanim==='siginak'){
+      const fc=freeCells();
+      if(fc.length){
+        const target=Math.max(Math.round(REG.siginakMinM2/(M*M)), Math.round(fc.length*0.30));
+        placeBestRect('SIĞINAK','siginak',target);
+        const g=newReg('OTOPARK','otopark'); freeCells().forEach(i=>claim(g,(i/cols)|0,i%cols)); // kalan = bodrum otopark
+      }
+    }
+    /* --- sonlandır: konut sonrası-işleme (fixOrphans/repair/purge...) ATLANIR --- */
+    regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
+    plan={regions, cm, inside, rows, cols, minX, minY, corridorR0:-1, corridorR1:-1,
+          stairs, unitObjs:[], villa:false, kat, binaYuk, perFloor, nAsansor, asansorYeri,
+          fireStairNeeded, teknikNeeded, zoneUI, katKullanim};
+    plan.parking=parkingForPlan(plan); // gerçek park yerleri + sürüş yolları (çizim + sayım)
+    hoverWall=null; hoverRoomId=null; hoverDoor=null;
+    doorOverrides={}; extraDoors=[]; doorHidden={};
+    editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound');
+    plan.wallRuns=computeWallRuns();
+    runChecks(); buildUnitTable(); renderFloorTabs(); updateStructResetBtn();
+    document.getElementById('svgBtn').disabled=false;
+    document.getElementById('pngBtn').disabled=false;
+    render();
+    return;
   }
 
   /* --- tek daire/kat (apartman): bant koridor İSRAF olur (karşı kanat sahipsiz kalıp
