@@ -269,11 +269,16 @@ ve apartmanda eski korumalar aynen geçerli.
 2. Balkon ve ışıklık üretimi yok (ışıklık bilinçli kaldırıldı; iç banyo/WC havalandırması
    şaft notuyla geçiliyor).
 3. Çok egzotik taban şekilleri (artı/haç, çentikli) hâlâ "biçimsiz" bayrakları üretebilir.
-4. ~~Tek tip kat~~ VİLLADA ÇÖZÜLDÜ (md.20): "Katları ayrı planla" — kat sekmeleri,
-   merdiven düşey hiza kilidi, oturum/çıkma kuralları (bkz. "Ne bu?"). APARTMANDA
-   hâlâ tek tip kat; otopark, sığınak çizimi yok. Kat geçişi editHistory'yi sıfırlar
-   (Geri Al kat içinde çalışır); SVG/PNG indirme aktif katın görüntüsünü verir
-   (durum metadata'sı yine tüm katları taşır).
+4. ~~Tek tip kat~~ ÇÖZÜLDÜ (md.20 villa + 2026-06-21 apartman): "Katları ayrı planla" —
+   kat sekmeleri, merdiven düşey hiza kilidi, oturum/çıkma kuralları (bkz. "Ne bu?").
+   ~~APARTMANDA hâlâ tek tip kat; otopark, sığınak çizimi yok~~ → APARTMANDA KAT KULLANIM
+   TİPİ ÇÖZÜLDÜ (2026-06-21): her kata 🏠 Konut / 🏪 Ticari / 🅿️ Otopark / 🛡️ Sığınak;
+   otopark gerçek park yerleşimi (2,5×5 m + 5 m yol) + manuel park editörü (🅿️ Park modu:
+   ekle/sil/taşı/yön); Otopark Yön. Ek-1 gereksinim denetimi; BODRUM (eksi) katlar
+   (zeminIdx offset, bodrum→otopark varsayılan). Detay: hafıza [[kat-kullanim-tipi]].
+   Kat geçişi editHistory'yi sıfırlar (Geri Al kat içinde çalışır); SVG/PNG indirme aktif
+   katın görüntüsünü verir (durum metadata'sı yine tüm katları taşır).
+   CANLI: https://ofbakirci.github.io/katplanitasarim/ (GitHub Pages, master kökü).
 5. **Mevzuata otomatik uydurma** (sıradaki büyük iş): kullanıcı elle yapıyor, motor da
    yapabilir. Önerilen yol: slimUnitAntre desenini genelle — "Mevzuata Uydur" düğmesi,
    `runChecks` ihlali kalan odalar için `moveWallStep` adımlarını dener, ihlal sayısı
