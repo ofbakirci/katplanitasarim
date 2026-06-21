@@ -1,4 +1,6 @@
 'use strict';
 /* ================= başlat ================= */
+mountIcons();
 renderUnits(); updateKatAyriUI(); render();
-window.addEventListener('resize',render);
+positionOnb();
+window.addEventListener('resize',()=>{ render(); positionOnb(); });

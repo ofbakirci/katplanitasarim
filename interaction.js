@@ -472,6 +472,7 @@ const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStr
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
   if(m==='park') showParkBar();
+  positionOnb();
   svg.classList.toggle('panning',m==='pan'); render(); };
 document.getElementById('tbToggle').onclick=()=>{
   const tb=document.getElementById('toolbar');
@@ -481,18 +482,18 @@ document.getElementById('tbToggle').onclick=()=>{
 /* ---- onboarding stepper ---- */
 (()=>{
   const STEPS_DESKTOP=[
-    {t:'Sınırı çizin', h:'<b>✏️ Çiz</b> aracıyla tıklayarak bina dış sınırını oluşturun; kenarlar 15°’ye ve 0,5 m ızgaraya oturur. Başlangıç noktasına tıklayınca sınır kapanır. Hızlı denemek için <b>▭ Örnek sınır</b>.'},
-    {t:'Parsel ve balkon', h:'<b>⬠ Parsel</b> ile arsa sınırını çizin; bahçe alanı, TAKS ve çekme mesafeleri hesaplanır. <b>▦ Balkon</b> aracında dış duvara tıklayıp balkon ekleyin (tutamaçlarla boyutlandırın, SAĞ TIK siler).'},
+    {t:'Sınırı çizin', h:'<b>'+icon('draw','inl')+' Çiz</b> aracıyla tıklayarak bina dış sınırını oluşturun; kenarlar 15°’ye ve 0,5 m ızgaraya oturur. Başlangıç noktasına tıklayınca sınır kapanır. Hızlı denemek için <b>'+icon('sample','inl')+' Örnek sınır</b>.'},
+    {t:'Parsel ve balkon', h:'<b>'+icon('parcel','inl')+' Parsel</b> ile arsa sınırını çizin; bahçe alanı, TAKS ve çekme mesafeleri hesaplanır. <b>'+icon('balcony','inl')+' Balkon</b> aracında dış duvara tıklayıp balkon ekleyin (tutamaçlarla boyutlandırın, SAĞ TIK siler).'},
     {t:'Yerleşimi oluşturun', h:'Sol panelden daire tiplerini ayarlayın ve <b>Yerleşimi Oluştur</b>’a basın. Mevzuat paneli her değişiklikte canlı güncellenir.'},
-    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. <b>🏗 Yapı</b> aracı çekirdeği (merdiven, asansör, teknik şaft, yangın merdiveni) öne çıkarır: <b>✛</b> ile taşıyın, <b>kare</b> tutamaçlardan boyutlandırın; bina sınırını köşelerinden sürükleyin, <b>+</b> ile yeni köşe ekleyin. Çekirdek bir <b>iskelettir</b>: kilitli kalır, daireler etrafına dizilir, "Yerleşimi Oluştur" onu sıfırlamaz (sıfırlamak için "🗑 Yapı iskeletini sıfırla"). Dokunmatik ekranda: <b>uzun basış</b> = sağ tık, <b>çift dokunuş</b> = çift tık, <b>iki parmak</b> = yakınlaştır, boşta sürükleme = kaydır. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
-    {t:'Kontrol ve dışa aktarım', h:'<b>↩︎ Geri al</b> elle yapılan değişiklikleri adım adım geri alır. Mevzuat kontrolleri yeşile dönünce <b>SVG / PNG indir</b> ile dışa aktarın.'}
+    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>'+icon('door','inl')+' Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. <b>'+icon('structure','inl')+' Yapı</b> aracı çekirdeği (merdiven, asansör, teknik şaft, yangın merdiveni) öne çıkarır: <b>✛</b> ile taşıyın, <b>kare</b> tutamaçlardan boyutlandırın; bina sınırını köşelerinden sürükleyin, <b>+</b> ile yeni köşe ekleyin. Çekirdek bir <b>iskelettir</b>: kilitli kalır, daireler etrafına dizilir, "Yerleşimi Oluştur" onu sıfırlamaz (sıfırlamak için "'+icon('clear','inl')+' Yapı iskeletini sıfırla"). Dokunmatik ekranda: <b>uzun basış</b> = sağ tık, <b>çift dokunuş</b> = çift tık, <b>iki parmak</b> = yakınlaştır, boşta sürükleme = kaydır. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
+    {t:'Kontrol ve dışa aktarım', h:'<b>'+icon('undo','inl')+' Geri al</b> elle yapılan değişiklikleri adım adım geri alır. Mevzuat kontrolleri yeşile dönünce <b>SVG / PNG indir</b> ile dışa aktarın.'}
   ];
   const STEPS_MOBILE=[
-    {t:'Sınırı çizin', h:'<b>✏️ Çiz</b> aracında ekrana <b>dokunarak</b> köşe ekleyin; başlangıç noktasına dokununca sınır kapanır. <b>Boşta sürükleme</b> görünümü kaydırır, <b>iki parmak</b> yakınlaştırır. Hızlı denemek için <b>▭ Örnek sınır</b>.'},
-    {t:'Parsel ve balkon', h:'<b>⬠ Parsel</b> ile arsa sınırını çizin. <b>▦ Balkon</b> aracında dış duvara dokunup balkon ekleyin; kenar tutamaçlarını parmağınızla sürükleyerek boyutlandırın, <b>uzun basış</b> siler.'},
-    {t:'Yerleşimi oluşturun', h:'Sol üstteki <b>☰</b> menüden daire tiplerini girin ve <b>Yerleşimi Oluştur</b>’a basın. Mevzuat kontrolü ve lejant da bu menüde.'},
-    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaç daire ayırıcısını, <b>kare</b> tutamaç oda duvarını taşır — parmağınızla sürükleyin. Bir odaya <b>UZUN BASIN</b>: oda ekle / sil / tipini değiştir / takas / böl. <b>🚪 Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT DOKUNUŞ</b> kapı ekler, kapıya çift dokunuş siler. <b>🏗 Yapı</b> aracı çekirdeği (merdiven, asansör, şaft, yangın merd.) öne çıkarır: <b>✛</b> ile taşıyın, kare tutamaçlardan boyutlandırın. Not: Yerleşimi yeniden oluşturmak elle değişiklikleri sıfırlar.'},
-    {t:'Kontrol ve dışa aktarım', h:'<b>↩︎ Geri al</b> değişiklikleri adım adım geri alır. Alttaki <b>Daire Tablosu</b> başlığına dokununca açılır. Kontroller yeşile dönünce ☰ menüden <b>SVG / PNG indir</b>.'}
+    {t:'Sınırı çizin', h:'<b>'+icon('draw','inl')+' Çiz</b> aracında ekrana <b>dokunarak</b> köşe ekleyin; başlangıç noktasına dokununca sınır kapanır. <b>Boşta sürükleme</b> görünümü kaydırır, <b>iki parmak</b> yakınlaştırır. Hızlı denemek için <b>'+icon('sample','inl')+' Örnek sınır</b>.'},
+    {t:'Parsel ve balkon', h:'<b>'+icon('parcel','inl')+' Parsel</b> ile arsa sınırını çizin. <b>'+icon('balcony','inl')+' Balkon</b> aracında dış duvara dokunup balkon ekleyin; kenar tutamaçlarını parmağınızla sürükleyerek boyutlandırın, <b>uzun basış</b> siler.'},
+    {t:'Yerleşimi oluşturun', h:'Sol üstteki <b>'+icon('menu','inl')+'</b> menüden daire tiplerini girin ve <b>Yerleşimi Oluştur</b>’a basın. Mevzuat kontrolü ve lejant da bu menüde.'},
+    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaç daire ayırıcısını, <b>kare</b> tutamaç oda duvarını taşır — parmağınızla sürükleyin. Bir odaya <b>UZUN BASIN</b>: oda ekle / sil / tipini değiştir / takas / böl. <b>'+icon('door','inl')+' Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT DOKUNUŞ</b> kapı ekler, kapıya çift dokunuş siler. <b>'+icon('structure','inl')+' Yapı</b> aracı çekirdeği (merdiven, asansör, şaft, yangın merd.) öne çıkarır: <b>✛</b> ile taşıyın, kare tutamaçlardan boyutlandırın. Not: Yerleşimi yeniden oluşturmak elle değişiklikleri sıfırlar.'},
+    {t:'Kontrol ve dışa aktarım', h:'<b>'+icon('undo','inl')+' Geri al</b> değişiklikleri adım adım geri alır. Alttaki <b>Daire Tablosu</b> başlığına dokununca açılır. Kontroller yeşile dönünce ☰ menüden <b>SVG / PNG indir</b>.'}
   ];
   const STEPS=(typeof matchMedia==='function'&&matchMedia('(max-width: 700px)').matches)? STEPS_MOBILE : STEPS_DESKTOP;
   const onb=document.getElementById('onb'), body=document.getElementById('onbBody'),
@@ -505,7 +506,7 @@ document.getElementById('tbToggle').onclick=()=>{
     step.textContent=(i+1)+'/'+STEPS.length;
     [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));
     prev.style.visibility=i?'visible':'hidden';
-    next.textContent=i===STEPS.length-1?'Bitti ✓':'İleri ›';
+    next.innerHTML=i===STEPS.length-1?'Bitti '+icon('check','inl'):'İleri ›';
   };
   const close=()=>{onb.classList.add('collapsed'); try{localStorage.setItem('kpOnboardSeen','1');}catch(e){}};
   prev.onclick=()=>{if(i>0){i--;render();}};

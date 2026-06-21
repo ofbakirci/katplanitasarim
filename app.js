@@ -135,7 +135,7 @@ function reflowFloors(){
    🏪 Ticari (zemin dükkânlar), 🅿️ Otopark (bodrum araç), 🛡️ Sığınak (bodrum sığınak).
    Aktif katın tipi global `katKullanim`'dadır; diğer katlarınki kendi anlık görüntüsünde
    (villaFloors[k].plan.katKullanim) saklanır. Yalnız apartmanda + katları ayrı açıkken. */
-const USAGE_ICON = {konut:'🏠', ticari:'🏪', otopark:'🅿️', siginak:'🛡️'};
+/* kullanım ikonu icon() ile gelir (icons.js): icon('ticari'|'otopark'|'siginak'|'konut') */
 const USAGE_TR   = {konut:'Konut', ticari:'Ticari', otopark:'Otopark', siginak:'Sığınak'};
 const USAGE_HINT = {
   ticari:'Bu kat dükkân (ticari) olarak planlanır — daire tipleri uygulanmaz. Çekirdek (merdiven/asansör) düşeyde korunur.',
@@ -370,6 +370,7 @@ function renderFloorTabs(){
     box.style.display='none';
     if(title) title.textContent=villa?'Daire Tipleri (kat başına)':'Daire Tipleri (kat başına)';
     syncKatKullanimUI();   // switch kapalıyken de kullanım satırını (pasif) tazele
+    positionOnb();
     return;
   }
   const total=totalFloors();
@@ -378,8 +379,8 @@ function renderFloorTabs(){
     const b=document.createElement('button');
     const st=floorState(k);
     const u=(!villa)?usageOf(k):'konut';
-    const ico=(u&&u!=='konut')?USAGE_ICON[u]+' ':'';
-    b.textContent=ico+floorName(k)+(st?' · '+fmt(shoelace(st.pts))+' m²':'');
+    const ico=(u&&u!=='konut')?icon(u,'inl'):'';
+    b.innerHTML=ico+floorName(k)+(st?' · '+fmt(shoelace(st.pts))+' m²':'');
     if(k===activeFloor) b.className='active';
     else if(!st) b.className='empty';
     b.title=st?(u!=='konut'?USAGE_TR[u]+' katı':''):'Henüz planlanmadı — geçince komşu katın sınırıyla başlar';
@@ -388,6 +389,19 @@ function renderFloorTabs(){
   }
   if(title) title.textContent=(villa?'Oda Programı — ':'Daire Tipleri — ')+floorName(activeFloor);
   syncKatKullanimUI();
+  positionOnb();
+}
+/* "Nasıl kullanılır?" kartını (onb) sol-üst yığına göre konumlandır: kat sekmeleri ve/veya
+   park çubuğu görünürken kartı onların ALTINA kaydır — yoksa kart (ampul) en üst kat sekmesinin
+   üstünü örter. Hiçbiri görünmüyorsa inline top'u temizle → CSS varsayılanı (masaüstü 60 / mobil 74). */
+function positionOnb(){
+  if(typeof getComputedStyle!=='function') return; // tarayıcı dışı (test) ortamı: atla
+  const onb=document.getElementById('onb'); if(!onb||!onb.style) return;
+  const seen=e=>e && e.offsetParent!==null && getComputedStyle(e).display!=='none';
+  const ft=document.getElementById('floorTabs'), pb=document.getElementById('parkBar');
+  if(seen(pb))      onb.style.top=(pb.offsetTop+pb.offsetHeight+8)+'px';
+  else if(seen(ft)) onb.style.top=(ft.offsetTop+ft.offsetHeight+8)+'px';
+  else              onb.style.top='';
 }
 function switchFloor(k){
   if(!floorsOn()) return;

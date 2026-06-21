@@ -8,7 +8,7 @@ function collectUsageChecks(add, p){
   if(p.katKullanim==='otopark'){
     const a=areaOf('otopark'), bays=(p.parking&&p.parking.bays)?p.parking.bays.length:0;
     add('info',`${ad} — Otopark: ${a>0?fmt(a)+' m² alana ':''}${bays} araçlık yer çizildi (2,5×5 m dik park + 5 m manevra yolu; çift yüklü, rampa hariç).`);
-    add('info','Araç rampası eğimi en çok %15 (kapalı otopark), kapı önü ilk 5 m'+"'"+'de daha düşük; rampayı 🏗 Yapı katmanında konumlandırın (Otopark Yönetmeliği).');
+    add('info','Araç rampası eğimi en çok %15 (kapalı otopark), kapı önü ilk 5 m'+"'"+'de daha düşük; rampayı Yapı katmanında konumlandırın (Otopark Yönetmeliği).');
   } else if(p.katKullanim==='ticari'){
     const n=p.regions.filter(g=>g.type==='dukkan'&&g.cells.length).length, a=areaOf('dukkan');
     add('info',`${ad} — Ticari: ${n} dükkân birimi, toplam ${fmt(a)} m². Zemin ticaride her birimde ıslak hacim, vitrin cephesi ve konuttan AYRI giriş aranır.`);
@@ -23,7 +23,7 @@ function collectUsageChecks(add, p){
   const hasStair=p.regions.some(g=>g.type==='merdiven'&&g.cells.length);
   add(hasStair?'ok':'bad', hasStair
     ? `${ad} — Düşey sirkülasyon (merdiven) bu katta da sürüyor; çekirdek düşeyde korunur.`
-    : `${ad} — Merdiven yok: düşey sirkülasyon kesiliyor. 🏗 Yapı katmanında çekirdeği kilitleyin ya da zemin katı yeniden üretin.`);
+    : `${ad} — Merdiven yok: düşey sirkülasyon kesiliyor. Yapı katmanında çekirdeği kilitleyin ya da zemin katı yeniden üretin.`);
 }
 /* bina geneli otopark gereksinimi vs planlanan kapasite (yalnız katları ayrı planlanırken) */
 function parkingSummaryCheck(add){
@@ -32,7 +32,7 @@ function parkingSummaryCheck(add){
   if(req<=0) return;
   const cap=(typeof providedParking==='function')?providedParking():0;
   add(cap>=req?'ok':'bad',
-    `Otopark gereksinimi (Otopark Yön. Ek-1, konut): bina genelinde en az ≈ ${req} araçlık yer gerekli; planlanan otopark/sığınak katları ≈ ${cap} araç sığdırıyor. ${cap>=req? 'Yeterli ✓' : ('EKSİK — '+(req-cap)+' araçlık yer daha gerekli (bir bodrum katını “Otopark” yapın ya da tabanı büyütün).')}`);
+    `Otopark gereksinimi (Otopark Yön. Ek-1, konut): bina genelinde en az ≈ ${req} araçlık yer gerekli; planlanan otopark/sığınak katları ≈ ${cap} araç sığdırıyor. ${cap>=req? 'Yeterli' : ('EKSİK — '+(req-cap)+' araçlık yer daha gerekli (bir bodrum katını “Otopark” yapın ya da tabanı büyütün).')}`);
 }
 function collectChecks(){
   const out=[], add=(s,t,reg,unit)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit});
@@ -116,7 +116,7 @@ function collectChecks(){
     const tag=(p.villa?(floorsOn()?'Villa '+floorName(activeFloor).toLowerCase():'Villa'):'Daire '+(d.k+1));
     if(d.kind==='unit')
       add('bad', d.status==='hidden'
-        ? `${tag} — Giriş kapısı silindi! (🚪 Kapı modunda "Geri al" ile geri getirin.)`
+        ? `${tag} — Giriş kapısı silindi! (Kapı modunda "Geri al" ile geri getirin.)`
         : `${tag} — Giriş kapısı için uygun duvar yok (antre koridora komşu değil).`, null, d.k);
     else
       add('bad', d.status==='hidden'
@@ -156,7 +156,7 @@ function collectChecks(){
     if(toplam>REG.siginakDaire){
       const sigVar = (typeof buildingHasUsage==='function') && buildingHasUsage('siginak');
       add(sigVar?'ok':'info', sigVar
-        ? `Toplam ${toplam} bağımsız bölüm > ${REG.siginakDaire} → sığınak gerekli; bir kat SIĞINAK olarak planlandı. ✓`
+        ? `Toplam ${toplam} bağımsız bölüm > ${REG.siginakDaire} → sığınak gerekli; bir kat SIĞINAK olarak planlandı.`
         : `Toplam ${toplam} bağımsız bölüm > ${REG.siginakDaire} → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı (bir katın kullanımını “Sığınak” yapın).`);
     }
     parkingSummaryCheck(add); // katları ayrı planlanırken otopark gereksinimi konut katında da görünür
@@ -288,11 +288,11 @@ function collectChecks(){
 }
 function renderChecks(out){
   const box=document.getElementById('checks'); box.innerHTML='';
-  const IC={ok:'✓',bad:'✗',info:'ℹ'};
+  const IC={ok:'check',bad:'cross',info:'info'};
   out.forEach(o=>{ const d=document.createElement('div');
     const clickable=o.reg!=null||o.unit!=null;
     d.className='chk '+o.s+(clickable?' click':'');
-    const ic=document.createElement('span'); ic.className='ic'; ic.textContent=IC[o.s]; d.appendChild(ic);
+    const ic=document.createElement('span'); ic.className='ic'; ic.innerHTML=icon(IC[o.s]); d.appendChild(ic);
     const msg=document.createElement('span'); msg.textContent=o.t; d.appendChild(msg);
     if(o.reg!=null){ d.title='Plana odaklamak için tıklayın'; d.onclick=()=>focusRegion(o.reg); }
     else if(o.unit!=null){ d.title='Daireye odaklamak için tıklayın'; d.onclick=()=>focusUnit(o.unit); }
