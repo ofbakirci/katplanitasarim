@@ -18,6 +18,7 @@ const strictTests = [
   'tests/acik-mutfak.js',
   'tests/editor.js',
   'tests/export.js',
+  'tests/ai-temiz.js',
   'tests/test27.js',
   'tests/antre-test.js'
 ];
