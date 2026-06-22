@@ -15,8 +15,16 @@
    CORS: cbsapi.tkgm.gov.tr `*` verir → tarayıcıdan doğrudan çağrılır.
    ============================================================ */
 
-const TKGM_PARSEL_URL = (lat, lng) =>
-  'https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api/parsel/' + lat + '/' + lng;
+const TKGM_API = 'https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api';
+const TKGM_PARSEL_URL = (lat, lng) => TKGM_API + '/parsel/' + lat + '/' + lng;
+const TKGM_URL = {
+  ilce:    id => TKGM_API + '/idariYapi/ilceListe/' + id,
+  mahalle: id => TKGM_API + '/idariYapi/mahalleListe/' + id,
+  parsel:  (m,a,p) => TKGM_API + '/parsel/' + m + '/' + encodeURIComponent(a) + '/' + encodeURIComponent(p)
+};
+/* İl listesi statik gömülü: TKGM il ucu yalnız `app://parselsorgu` (Electron)
+   origin'ine CORS verir; tarayıcıdan bloklu. {i:id, t:ad} × 81. */
+const TKGM_ILLER = [{"i":23,"t":"Adana"},{"i":24,"t":"Adıyaman"},{"i":25,"t":"Afyonkarahisar"},{"i":26,"t":"Ağrı"},{"i":90,"t":"Aksaray"},{"i":27,"t":"Amasya"},{"i":28,"t":"Ankara"},{"i":29,"t":"Antalya"},{"i":97,"t":"Ardahan"},{"i":30,"t":"Artvin"},{"i":31,"t":"Aydın"},{"i":32,"t":"Balıkesir"},{"i":96,"t":"Bartın"},{"i":94,"t":"Batman"},{"i":91,"t":"Bayburt"},{"i":33,"t":"Bilecik"},{"i":34,"t":"Bingöl"},{"i":35,"t":"Bitlis"},{"i":36,"t":"Bolu"},{"i":37,"t":"Burdur"},{"i":38,"t":"Bursa"},{"i":39,"t":"Çanakkale"},{"i":40,"t":"Çankırı"},{"i":41,"t":"Çorum"},{"i":42,"t":"Denizli"},{"i":43,"t":"Diyarbakır"},{"i":103,"t":"Düzce"},{"i":44,"t":"Edirne"},{"i":45,"t":"Elazığ"},{"i":46,"t":"Erzincan"},{"i":47,"t":"Erzurum"},{"i":48,"t":"Eskişehir"},{"i":49,"t":"Gaziantep"},{"i":50,"t":"Giresun"},{"i":51,"t":"Gümüşhane"},{"i":52,"t":"Hakkari"},{"i":53,"t":"Hatay"},{"i":98,"t":"Iğdır"},{"i":54,"t":"Isparta"},{"i":56,"t":"İstanbul"},{"i":57,"t":"İzmir"},{"i":68,"t":"Kahramanmaraş"},{"i":100,"t":"Karabük"},{"i":92,"t":"Karaman"},{"i":58,"t":"Kars"},{"i":59,"t":"Kastamonu"},{"i":60,"t":"Kayseri"},{"i":93,"t":"Kırıkkale"},{"i":61,"t":"Kırklareli"},{"i":62,"t":"Kırşehir"},{"i":101,"t":"Kilis"},{"i":63,"t":"Kocaeli"},{"i":64,"t":"Konya"},{"i":65,"t":"Kütahya"},{"i":66,"t":"Malatya"},{"i":67,"t":"Manisa"},{"i":69,"t":"Mardin"},{"i":55,"t":"Mersin"},{"i":70,"t":"Muğla"},{"i":71,"t":"Muş"},{"i":72,"t":"Nevşehir"},{"i":73,"t":"Niğde"},{"i":74,"t":"Ordu"},{"i":102,"t":"Osmaniye"},{"i":75,"t":"Rize"},{"i":76,"t":"Sakarya"},{"i":77,"t":"Samsun"},{"i":78,"t":"Siirt"},{"i":79,"t":"Sinop"},{"i":80,"t":"Sivas"},{"i":85,"t":"Şanlıurfa"},{"i":95,"t":"Şırnak"},{"i":81,"t":"Tekirdağ"},{"i":82,"t":"Tokat"},{"i":83,"t":"Trabzon"},{"i":84,"t":"Tunceli"},{"i":86,"t":"Uşak"},{"i":87,"t":"Van"},{"i":99,"t":"Yalova"},{"i":88,"t":"Yozgat"},{"i":89,"t":"Zonguldak"}];
 
 /* "41.0082, 28.9784" düz koordinatı ya da bir Google Maps URL'sinden
    {lat,lng} çıkar. Öncelik: yer (!3d!4d) > sorgu (q/ll) > kamera (@) > düz. */
@@ -160,6 +168,29 @@ function initParselSorgu(){
     return r.json();
   }
 
+  // ortak: TKGM yanıtından parseli yükle + bilgi göster (koordinat ve ada/parsel akışı)
+  function applyData(data, adaF, parF){
+    const ring = tkgmExtractRing(data);
+    if(!ring){ setMsg('Parsel sınır geometrisi bulunamadı.', 'err'); return false; }
+    const world = tkgmGeoToWorld(ring);
+    if(!world || world.length < 3){ setMsg('Parsel geometrisi çözümlenemedi.', 'err'); return false; }
+    tkgmLoadParcel(world);
+    const imar = document.getElementById('psImar'); if(imar) imar.style.display = 'block';
+    const p = data.properties || {};
+    const konum = [p.ilAd, p.ilceAd, p.mahalleAd].filter(Boolean).join(' / ');
+    const ada = p.adaNo || adaF || '–', par = p.parselNo || parF || '–';
+    const alanR = tkgmParseAlan(p.alan);
+    const alan = (alanR!=null) ? fmt(alanR)+' m² <span class="ps-dim">(TKGM)</span>'
+                               : '≈ '+fmt(shoelace(parcelPts))+' m²';
+    setMsg('✓ Parsel yüklendi'
+      + (konum ? '<br><b>'+escapeHtml(konum)+'</b>' : '')
+      + '<br>Ada <b>'+escapeHtml(ada)+'</b> · Parsel <b>'+escapeHtml(par)+'</b>'
+      + '<br>Alan '+alan
+      + (p.nitelik ? '<br><span class="ps-dim">'+escapeHtml(p.nitelik)+'</span>' : ''),
+      'ok');
+    return true;
+  }
+
   async function sorgula(){
     const raw = inp.value;
     const ll = tkgmParseLatLng(raw);
@@ -173,25 +204,7 @@ function initParselSorgu(){
     setMsg('Parsel sorgulanıyor… <span class="ps-dim">('+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+')</span>', 'load');
     try{
       const data = await getJson(TKGM_PARSEL_URL(ll.lat, ll.lng));
-      const ring = tkgmExtractRing(data);
-      if(!ring){ setMsg('Bu konumda parsel sınırı bulunamadı.', 'err'); return; }
-      const world = tkgmGeoToWorld(ring);
-      if(!world || world.length < 3){ setMsg('Parsel geometrisi çözümlenemedi.', 'err'); return; }
-      tkgmLoadParcel(world);
-      var imar=document.getElementById('psImar'); if(imar) imar.style.display='block';
-
-      const p = data.properties || {};
-      const konum = [p.ilAd, p.ilceAd, p.mahalleAd].filter(Boolean).join(' / ');
-      const ada = p.adaNo || '–', par = p.parselNo || '–';
-      const alanR = tkgmParseAlan(p.alan);
-      const alan = (alanR!=null) ? fmt(alanR)+' m² <span class="ps-dim">(TKGM)</span>'
-                                 : '≈ '+fmt(shoelace(parcelPts))+' m²';
-      setMsg('✓ Parsel yüklendi'
-        + (konum ? '<br><b>'+escapeHtml(konum)+'</b>' : '')
-        + '<br>Ada <b>'+escapeHtml(ada)+'</b> · Parsel <b>'+escapeHtml(par)+'</b>'
-        + '<br>Alan '+alan
-        + (p.nitelik ? '<br><span class="ps-dim">'+escapeHtml(p.nitelik)+'</span>' : ''),
-        'ok');
+      applyData(data);
     }catch(e){
       setMsg(e.status===404
         ? 'Bu konumda kayıtlı parsel yok (yol / deniz / orman olabilir). Noktayı parselin içine alıp tekrar deneyin.'
@@ -199,6 +212,60 @@ function initParselSorgu(){
     }finally{
       updateBtn();
     }
+  }
+
+  /* ---- alternatif giriş: il/ilçe/mahalle + ada/parsel ---- */
+  const ilSel=$('psIl'), ilceSel=$('psIlce'), mahSel=$('psMah'),
+        adaIn=$('psAda'), parIn=$('psParsel'), btn2=$('psFetch2'),
+        altToggle=$('psAltToggle'), altBox=$('psAltBox');
+
+  function resetSel(sel, ph){ if(sel){ sel.innerHTML='<option value="">'+ph+'</option>'; sel.disabled=true; } }
+  function fillSel(sel, items){
+    if(!items.length){ sel.innerHTML='<option value="">(kayıt yok)</option>'; sel.disabled=true; return; }
+    sel.innerHTML='<option value="">Seçiniz…</option>';
+    items.forEach(it=>{ const o=document.createElement('option'); o.value=it.properties.id; o.textContent=it.properties.text; sel.appendChild(o); });
+    sel.disabled=false;
+  }
+  function updateBtn2(){ if(btn2) btn2.disabled = !(mahSel && mahSel.value && adaIn.value.trim() && parIn.value.trim()); }
+
+  async function sorgulaAP(){
+    const m=mahSel.value, a=adaIn.value.trim(), p=parIn.value.trim();
+    if(!m||!a||!p) return;
+    btn2.disabled=true;
+    setMsg('Parsel sorgulanıyor… <span class="ps-dim">'+escapeHtml(mahSel.options[mahSel.selectedIndex].text)+' '+escapeHtml(a)+'/'+escapeHtml(p)+'</span>', 'load');
+    try{ applyData(await getJson(TKGM_URL.parsel(m,a,p)), a, p); }
+    catch(e){ setMsg(e.status===404 ? 'Bu ada/parsel bulunamadı (numaraları kontrol edin).'
+                                     : 'Sorgu başarısız: '+escapeHtml(e.message||'ağ hatası')+'.', 'err'); }
+    finally{ updateBtn2(); }
+  }
+
+  if(ilSel){
+    ilSel.innerHTML='<option value="">Seçiniz…</option>';
+    TKGM_ILLER.forEach(il=>{ const o=document.createElement('option'); o.value=il.i; o.textContent=il.t; ilSel.appendChild(o); });
+    resetSel(ilceSel,'Önce il seçin'); resetSel(mahSel,'Önce ilçe seçin');
+
+    altToggle.addEventListener('click', ()=>{
+      const open = altBox.style.display==='none';
+      altBox.style.display = open ? 'block' : 'none';
+      altToggle.classList.toggle('open', open);
+    });
+    ilSel.addEventListener('change', async ()=>{
+      resetSel(ilceSel,'Yükleniyor…'); resetSel(mahSel,'Önce ilçe seçin'); updateBtn2();
+      if(!ilSel.value){ resetSel(ilceSel,'Önce il seçin'); return; }
+      try{ const d=await getJson(TKGM_URL.ilce(ilSel.value)); fillSel(ilceSel, d.features||[]); }
+      catch(e){ resetSel(ilceSel,'Hata'); setMsg('İlçeler alınamadı: '+escapeHtml(e.message),'err'); }
+    });
+    ilceSel.addEventListener('change', async ()=>{
+      resetSel(mahSel,'Yükleniyor…'); updateBtn2();
+      if(!ilceSel.value){ resetSel(mahSel,'Önce ilçe seçin'); return; }
+      try{ const d=await getJson(TKGM_URL.mahalle(ilceSel.value)); fillSel(mahSel, d.features||[]); }
+      catch(e){ resetSel(mahSel,'Hata'); setMsg('Mahalleler alınamadı: '+escapeHtml(e.message),'err'); }
+    });
+    mahSel.addEventListener('change', updateBtn2);
+    adaIn.addEventListener('input', updateBtn2);
+    parIn.addEventListener('input', updateBtn2);
+    parIn.addEventListener('keydown', e=>{ if(e.key==='Enter' && !btn2.disabled) sorgulaAP(); });
+    btn2.addEventListener('click', sorgulaAP);
   }
 
   inp.addEventListener('input', updateBtn);
