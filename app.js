@@ -500,9 +500,53 @@ function siteGrossTotal(){
 function saveActiveBlock(){
   if(blocks && plan){ try{ blocks[activeBlock]=stateSnapshot(false); }catch(err){ console.error('blok kaydı:', err); } }
 }
+/* Site (genel görünüm) düğmesi yalnız site modunda görünür */
+function updateSiteBtn(){
+  const sb=document.getElementById('tSite'); if(!sb) return;
+  const ok=siteOn();
+  sb.style.display = ok? '' : 'none';
+  if(!ok && mode==='site' && typeof setMode==='function') setMode('draw');
+}
+/* site genel görünümü için tüm blokların çizim verisi (aktif=canlı, diğerleri=anlık görüntü) */
+function siteBlocksData(){
+  const out=[];
+  if(!siteOn()) return out;
+  blocks.forEach((b,i)=>{
+    if(i===activeBlock){
+      if(closed) out.push({idx:i, name:blockName(i), pts, regions:(plan&&plan.regions)||[],
+        minX:plan&&plan.minX, minY:plan&&plan.minY, cols:plan&&plan.cols, kat:ustKat(), active:true});
+    } else if(b && b.pts && b.pts.length>=3){
+      out.push({idx:i, name:blockName(i), pts:b.pts, regions:(b.plan&&b.plan.regions)||[],
+        minX:b.plan&&b.plan.minX, minY:b.plan&&b.plan.minY, cols:b.plan&&b.plan.cols,
+        kat:Math.max(1,+((b.ui&&b.ui.katSayisi))||1), active:false});
+    }
+  });
+  return out;
+}
+/* imleç altındaki blok indeksi (site modunda taşı/seç) */
+function hitBlock(wx,wy){
+  const data=siteBlocksData();
+  for(let i=0;i<data.length;i++) if(pip(wx,wy,data[i].pts)) return data[i].idx;
+  return -1;
+}
+/* bir snapshot'ı (dx,dy) kadar çevir — yalnız dünya-koordinatlı alanlar; ızgara (hücre/merdiven)
+   minX/minY ile taşınır; parsel site-ortak (çevrilmez); ayırıcılar sıfırlanır (yeniden üretimde otomatik) */
+function translateStateObj(st, dx, dy){
+  const o=JSON.parse(JSON.stringify(st));
+  o.pts=(o.pts||[]).map(p=>({x:p.x+dx,y:p.y+dy}));
+  if(o.courtyards) o.courtyards=o.courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x+dx,y:p.y+dy}))}));
+  if(o.plan){ o.plan.minX+=dx; o.plan.minY+=dy; }
+  if(o.doors){
+    if(o.doors.ov){ const ov={}; for(const k in o.doors.ov){ const d=o.doors.ov[k]; ov[k]={...d, x:d.x+dx, y:d.y+dy}; } o.doors.ov=ov; }
+    if(o.doors.extra) o.doors.extra=o.doors.extra.map(d=>({...d, x:d.x+dx, y:d.y+dy}));
+  }
+  o.cuts=null;
+  return o;
+}
 function renderBlockTabs(){
   const box=document.getElementById('blockTabs');
   if(!box) return;
+  updateSiteBtn();
   if(!siteOn()){ box.style.display='none'; positionOnb(); return; }
   box.style.display='flex'; box.innerHTML='';
   const lbl=document.createElement('span'); lbl.className='bl'; lbl.textContent='BLOK'; box.appendChild(lbl);
@@ -528,6 +572,7 @@ function renderBlockTabs(){
 }
 function switchBlock(k){
   if(!siteOn()||k<0||k>=blocks.length||k===activeBlock) return;
+  if(mode==='site'&&typeof setMode==='function') setMode('draw');
   saveActiveBlock();
   const prev=activeBlock; activeBlock=k;
   const snap=blocks[k];
@@ -541,6 +586,7 @@ function switchBlock(k){
 }
 function addBlock(){
   if(!siteOn()) return;
+  if(mode==='site'&&typeof setMode==='function') setMode('draw');
   saveActiveBlock();
   blocks.push(null);
   activeBlock=blocks.length-1;

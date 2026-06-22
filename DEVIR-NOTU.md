@@ -276,10 +276,22 @@ ve apartmanda eski korumalar aynen geçerli.
     Düzenlenmeyen bloklar tuvalde soluk hayalet + harf (render.js otherBlockGhosts) —
     tek-blok düzenleme modelinin konumsal körlüğünü kapatır. `positionOnb` artık
     blok→kat→park→onb sol yığınını sırayla konumlandırır.
-    Test: `tests/avlu-blok.js` (19: avlu oyma/merkez/snapshot, blok adı A..AB, site
-    snapshot çevrimsiz JSON + restore + footprint/emsal toplamı). Sonraki adım (faz-2):
-    parselde blokları aynı anda yerleştirip sürükleme (site genel görünümü); avlu
-    asgari ölçü denetimi (PAİY iç avlu yüksekliğe bağlı).
+    *Faz-2 (2026-06-22)*: **Site genel görünümü** — araç çubuğu 🏢 Site (yalnız siteOn,
+    `mode='site'`): TÜM bloklar parselde aynı anda hücre döşemesi + sınır + "Blok X ·
+    alan · kat" etiketiyle çizilir (render.js siteBlocksData; site modunda aktif planın
+    tekil çizimi/pts-poligonu/avlu/balkon overlay'i bastırılır — döşemeler her şeyi
+    temsil eder, avlu boşluğu hücre boşluğu olarak görünür). Bloğa **tıkla=düzenle**
+    (switchBlock + draw), **sürükle=parselde taşı**. Taşıma (`translateStateObj` saf /
+    aktif blok canlı): yalnız dünya-koordinatlı alanlar çevrilir — pts, courtyards,
+    plan.minX/minY, kapı override/extra; hücre/merdiven ızgara-göreli (minX/minY ile
+    taşınır), parsel site-ortak (çevrilmez), ayırıcılar sıfırlanır. Geri Al:
+    `{type:'sitemove'}`. **Avlu asgari ölçü** (checks.js, REG.avluMinKisa=1,5 /
+    avluIsikOran=0,25): kısa kenar <1,5 m → bad (hava bacası), <binaYük×0,25 → info
+    (ışık önerisi), değilse ok. Mobil: site modu dokunmatik blok taşı/seç (mobile.js).
+    Test: `tests/avlu-blok.js` (31: avlu oyma/merkez/snapshot, blok adı A..AB, site
+    snapshot çevrimsiz JSON + restore + footprint/emsal, translateStateObj saflık/alan,
+    avlu dar/geniş denetim). Kalan (faz-3 fikri): bloklar arası mesafe/yangın denetimi,
+    blok kopyala, site SVG'sinde tüm blokların tek tuvalde dışa aktarımı.
 
 ## Bilerek verilen kararlar
 - Salon "emici"dir: program alanı doldurmuyorsa artık alan salona gider (her alternatif

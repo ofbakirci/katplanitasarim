@@ -110,7 +110,7 @@ function render(){
   for(let y=Y0;y<r.height;y+=big) g0.appendChild(el('line',{x1:0,y1:y,x2:r.width,y2:y,stroke:'#ddd5c4','stroke-width':1}));
 
   /* site: diğer blokların sınırları (bağlamsal hayalet — düzenlenemez, yalnız konum bilgisi) */
-  if(typeof otherBlockGhosts==='function'){
+  if(mode!=='site' && typeof otherBlockGhosts==='function'){
     const ghosts=otherBlockGhosts();
     if(ghosts.length){
       const g=el('g',{opacity:0.5}); svg.appendChild(g);
@@ -141,9 +141,33 @@ function render(){
     }
   }
 
-  if(plan){ renderPlan(); }
-  /* bina poligonu */
-  if(pts.length){
+  if(plan && mode!=='site'){ renderPlan(); }
+  /* SİTE GENEL GÖRÜNÜMÜ: tüm bloklar parselde aynı anda (hücre tint + sınır + etiket).
+     Aktif blok belirgin (mavi sınır, tam opaklık), diğerleri soluk. tıkla=düzenle, sürükle=taşı. */
+  if(mode==='site' && typeof siteBlocksData==='function'){
+    const data=siteBlocksData(), g=el('g',{}), cs=M*pxPerM; svg.appendChild(g);
+    data.forEach(bd=>{
+      if(bd.regions && bd.regions.length && bd.cols && bd.minX!=null){
+        bd.regions.forEach(rg=>{ const col=COLORS[rg.type]||'#ece4d2';
+          (rg.cells||[]).forEach(i=>{ const r=(i/bd.cols)|0, c=i%bd.cols;
+            g.appendChild(el('rect',{x:W2Sx(bd.minX+c*M), y:W2Sy(bd.minY+r*M), width:cs+0.5, height:cs+0.5,
+              fill:col, opacity:bd.active?0.95:0.55})); }); });
+      } else {
+        g.appendChild(el('path',{d:'M'+bd.pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z', fill:'rgba(47,111,143,.08)'}));
+      }
+      g.appendChild(el('path',{d:'M'+bd.pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z', fill:'none',
+        stroke:bd.active?'#2f6f8f':'#6b5e4d', 'stroke-width':bd.active?Math.max(3,pxPerM*0.2):2, 'stroke-linejoin':'miter'}));
+      const cen=centroidOf(bd.pts), area=shoelace(bd.pts), fs=Math.max(11,Math.min(22,pxPerM*1.0));
+      const t=el('text',{x:W2Sx(cen.x), y:W2Sy(cen.y)-fs*0.2, 'text-anchor':'middle','dominant-baseline':'middle',
+        'font-size':fs, 'font-weight':'800', fill:bd.active?'#2f6f8f':'#3b332a'});
+      t.textContent='Blok '+bd.name; g.appendChild(t);
+      const t2=el('text',{x:W2Sx(cen.x), y:W2Sy(cen.y)+fs*0.9, 'text-anchor':'middle','dominant-baseline':'middle',
+        'font-size':fs*0.7, fill:'#6b5e4d'});
+      t2.textContent=fmt(area)+' m² · '+bd.kat+' kat'; g.appendChild(t2);
+    });
+  }
+  /* bina poligonu (site genel görünümünde döşemeler sınırı çizer) */
+  if(pts.length && mode!=='site'){
     const g=el('g',{}); svg.appendChild(g);
     let d='M'+pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
     if(closed) d+='Z';
@@ -153,7 +177,7 @@ function render(){
   }
 
   /* iç avlular (footprint'ten oyulmuş açık boşluk) + avlu modunda sürükleme önizlemesi */
-  if(closed && ((courtyards&&courtyards.length) || (mode==='avlu'&&avluGhost))){
+  if(closed && mode!=='site' && ((courtyards&&courtyards.length) || (mode==='avlu'&&avluGhost))){
     const g=el('g',{}); svg.appendChild(g);
     const drawA=(av,ghost)=>{
       const poly=av.poly; if(!poly||poly.length<3) return;
@@ -177,7 +201,7 @@ function render(){
   }
 
   /* balkonlar */
-  if(closed && (balconies.length || (mode==='balkon'&&hoverBalk&&hoverBalk.ghost))){
+  if(closed && mode!=='site' && (balconies.length || (mode==='balkon'&&hoverBalk&&hoverBalk.ghost))){
     const g=el('g',{}); svg.appendChild(g);
     const wallW=plan?Math.max(3,pxPerM*0.22):2.5;
     const drawB=(b,ghost)=>{

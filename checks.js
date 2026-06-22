@@ -284,6 +284,17 @@ function collectChecks(){
   if(typeof courtyards!=='undefined' && courtyards && courtyards.length && closed){
     const tot=courtyards.reduce((s,av)=>s+shoelace(av.poly),0);
     add('info',`${courtyards.length} iç avlu, toplam ${fmt(tot)} m² (footprint'ten oyuldu; avluya bakan oda kenarları cephe/doğal havalandırma sayılır).`);
+    const binaYuk=(p&&p.binaYuk)||(Math.max(1,+document.getElementById('katSayisi').value||1)*(+document.getElementById('katYuk').value||2.9));
+    const oneri=binaYuk*REG.avluIsikOran;
+    courtyards.forEach((av,i)=>{
+      const bb=bboxOf(av.poly), kisa=Math.min(bb.maxX-bb.minX, bb.maxY-bb.minY);
+      if(kisa < REG.avluMinKisa)
+        add('bad',`Avlu ${i+1}: kısa kenar ${fmt(kisa)} m < ${fmt(REG.avluMinKisa)} m (şematik asgari hava bacası — havalandırma yetersiz).`);
+      else if(kisa < oneri)
+        add('info',`Avlu ${i+1}: kısa kenar ${fmt(kisa)} m; alt katlara ışık için önerilen ≈ ${fmt(oneri)} m (bina yük. ${fmt(binaYuk)} m × ${fmt(REG.avluIsikOran)} — imar durumuna göre).`);
+      else
+        add('ok',`Avlu ${i+1}: kısa kenar ${fmt(kisa)} m yeterli (≥ önerilen ${fmt(oneri)} m).`);
+    });
   }
   /* balkonlar */
   if(balconies.length){

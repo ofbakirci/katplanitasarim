@@ -89,6 +89,33 @@ const fpA=40*12, fpB=20*10;
 ok(Math.abs(siteFootprintTotal()-(fpA+fpB))<1e-6, 'siteFootprintTotal = A+B ('+siteFootprintTotal()+')');
 /* aktif blok (A) kat = katSayisi input (5), blok B = 3 */
 ok(Math.abs(siteGrossTotal()-(fpA*5+fpB*3))<1e-6, 'siteGrossTotal = ΣTaban×kat ('+siteGrossTotal()+')');
+
+/* ===== D) Blok taşıma (translateStateObj, saf) ===== */
+const t0={pts:[{x:0,y:0},{x:10,y:0},{x:10,y:5},{x:0,y:5}], parcelPts:[{x:-5,y:-5}],
+  courtyards:[{poly:[{x:2,y:2},{x:4,y:2},{x:4,y:4},{x:2,y:4}]}],
+  plan:{minX:0,minY:0,regions:[{cells:[0,1,2]}]},
+  doors:{ov:{'k':{h:true,x:3,y:1}}, extra:[{h:false,x:7,y:2}]}, cuts:[[1,2]]};
+const t1=translateStateObj(t0,10,5);
+ok(t1.pts[0].x===10 && t1.pts[0].y===5, 'taşıma: pts çevrildi');
+ok(t1.courtyards[0].poly[0].x===12 && t1.courtyards[0].poly[0].y===7, 'taşıma: avlu çevrildi');
+ok(t1.plan.minX===10 && t1.plan.minY===5, 'taşıma: plan.minX/minY çevrildi (hücreler ızgaradan taşınır)');
+ok(t1.doors.ov.k.x===13 && t1.doors.ov.k.y===6, 'taşıma: kapı override çevrildi');
+ok(t1.doors.extra[0].x===17 && t1.doors.extra[0].y===7, 'taşıma: ekstra kapı çevrildi');
+ok(t1.cuts===null, 'taşıma: ayırıcılar sıfırlandı');
+ok(JSON.stringify(t1.plan.regions[0].cells)===JSON.stringify([0,1,2]), 'taşıma: hücre indeksleri değişmedi');
+ok(JSON.stringify(t1.parcelPts)===JSON.stringify(t0.parcelPts), 'taşıma: parsel çevrilmedi (site-ortak)');
+ok(t0.pts[0].x===0 && t0.cuts!==null, 'taşıma: orijinal snapshot mutasyona uğramadı (saf)');
+const sh=p=>{let a=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];a+=p[i].x*q.y-q.x*p[i].y;}return Math.abs(a)/2;};
+ok(Math.abs(sh(t1.pts)-sh(t0.pts))<1e-9, 'taşıma: alan korunur');
+
+/* ===== E) Avlu asgari ölçü denetimi ===== */
+getEl('siteMod').checked=false; blocks=null;                 // site kapat (tek bina avlu denetimi)
+courtyards=[{poly:[{x:18,y:4},{x:19,y:4},{x:19,y:8},{x:18,y:8}]}]; // 1×4 m → kısa kenar 1 m < 1,5
+generate();
+ok(runChecks().some(x=>x.s==='bad' && /Avlu/.test(x.t)), 'dar avlu (kısa kenar 1 m) bad denetim üretir');
+courtyards=[{poly:[{x:14,y:3},{x:24,y:3},{x:24,y:9},{x:14,y:9}]}]; // 10×6 m → kısa kenar 6 m ≥ önerilen
+generate();
+ok(!runChecks().some(x=>x.s==='bad' && /Avlu/.test(x.t)), 'geniş avlu (kısa kenar 6 m) avlu bad üretmez');
 `);
 
 console.log((fail? '  '+fail+' BAŞARISIZ, ':'✓ ')+'tüm avlu/blok testleri '+(fail?'':'geçti ')+'('+pass+')');
