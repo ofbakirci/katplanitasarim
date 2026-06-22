@@ -444,7 +444,7 @@ function generate(keepCuts){
     runChecks(); buildUnitTable(); renderFloorTabs(); updateStructResetBtn();
     document.getElementById('svgBtn').disabled=false;
     document.getElementById('pngBtn').disabled=false;
-    document.getElementById('aiPaintBtn').disabled=false;
+    document.getElementById('aiOutputBtn').disabled=false;
     render();
     return;
   }
@@ -1572,6 +1572,6 @@ function generate(keepCuts){
   updateStructResetBtn();
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
-  document.getElementById('aiPaintBtn').disabled=false;
+  document.getElementById('aiOutputBtn').disabled=false;
   render();
 }
