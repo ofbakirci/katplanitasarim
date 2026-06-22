@@ -61,18 +61,22 @@ function tkgmExtractRing(data){
   return (Array.isArray(ring) && Array.isArray(ring[0])) ? ring : null;
 }
 
+let psProj = null;    // {lng0,lat0,mLng,mLat,dx,dy,ring} — geo↔dünya projeksiyonu (uydu için)
+let psSatOn = false;  // uydu arka planı açık mı
+
 /* WGS84 halkasını ([[lng,lat],...]) yerel metre düzlemine çevir:
-   merkez orijinde, kuzey yukarı (enlem artarsa ekran y'si küçülür). */
+   merkez orijinde, kuzey yukarı (enlem artarsa ekran y'si küçülür). Projeksiyonu psProj'e yazar. */
 function tkgmGeoToWorld(ring){
   let r = ring.filter(c => Array.isArray(c) && c.length>=2 && isFinite(c[0]) && isFinite(c[1]));
   r = r.filter((c,i)=> i===0 || Math.abs(c[0]-r[i-1][0])>1e-12 || Math.abs(c[1]-r[i-1][1])>1e-12); // ardışık tekrarları ayıkla
   if(r.length>=2){ const a=r[0], b=r[r.length-1];
     if(Math.abs(a[0]-b[0])<1e-9 && Math.abs(a[1]-b[1])<1e-9) r = r.slice(0,-1); }               // kapanış noktasını at
-  if(r.length < 3) return null;
+  if(r.length < 3){ psProj=null; return null; }
   let lng0=0, lat0=0; r.forEach(c=>{ lng0+=c[0]; lat0+=c[1]; }); lng0/=r.length; lat0/=r.length;
   const phi = lat0*Math.PI/180;
   const mLat = 111132.954 - 559.822*Math.cos(2*phi) + 1.175*Math.cos(4*phi); // m / derece enlem
   const mLng = 111319.488*Math.cos(phi);                                     // m / derece boylam
+  psProj = {lng0, lat0, mLng, mLat, dx:0, dy:0, ring:r};   // dx/dy: bina hizalama kaydırması (tkgmLoadParcel doldurur)
   return r.map(c => ({
     x: Math.round((c[0]-lng0)*mLng*1000)/1000,
     y: Math.round((lat0-c[1])*mLat*1000)/1000
@@ -86,12 +90,63 @@ function tkgmLoadParcel(world){
     const bc = centroidOf(pts), pc = centroidOf(world);
     const dx = bc.x-pc.x, dy = bc.y-pc.y;
     world = world.map(q=>({ x:Math.round((q.x+dx)*1000)/1000, y:Math.round((q.y+dy)*1000)/1000 }));
+    if(psProj){ psProj.dx=dx; psProj.dy=dy; }
   }
   parcelPts = world;
   parcelClosed = true;
   psComputeSetback();
+  psUpdateSatellite();
   if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
   fitView();
+}
+
+/* ---- uydu arka planı (Esri World Imagery export, anahtarsız, CORS:*) ---- */
+/* Parselin geo bbox'ı (+ kenar payı). */
+function psGeoBbox(){
+  if(!psProj) return null;
+  let mnLng=1e9, mxLng=-1e9, mnLat=1e9, mxLat=-1e9;
+  psProj.ring.forEach(c=>{ mnLng=Math.min(mnLng,c[0]); mxLng=Math.max(mxLng,c[0]); mnLat=Math.min(mnLat,c[1]); mxLat=Math.max(mxLat,c[1]); });
+  const wM=(mxLng-mnLng)*psProj.mLng, hM=(mxLat-mnLat)*psProj.mLat, maxM=Math.max(wM,hM);
+  /* Toplam görünüm ≥180 m: küçük bbox + ince çözünürlük Esri export'ta 500 verir
+     (bölgenin max LOD'u). Büyük parselde 2.2×; parsel çevresiyle bağlam olarak görünür. */
+  const view=Math.max(180, maxM*2.2), marM=(view-maxM)/2;
+  const dLng=marM/psProj.mLng, dLat=marM/psProj.mLat;
+  return {minLng:mnLng-dLng, maxLng:mxLng+dLng, minLat:mnLat-dLat, maxLat:mxLat+dLat};
+}
+/* Geo bbox → Esri export PNG → blob URL → dünya dikdörtgeni (parcelSat). render() çizer.
+   NOT: SVG <image> dış cross-origin href'i (bu tarayıcıda) boyamıyor; görüntüyü crossOrigin
+   ile çekip canvas→blob URL'e çeviriyoruz (Esri ACAO:* → taint yok, blob URL kısa → render ucuz). */
+let psSatToken = 0;
+function psUpdateSatellite(){
+  if(parcelSat && parcelSat._u){ URL.revokeObjectURL(parcelSat._u); }   // eski blob'u bırak
+  psSatToken++;
+  if(!psSatOn || !psProj){ parcelSat=null; return; }
+  const gb=psGeoBbox(); if(!gb){ parcelSat=null; return; }
+  const {lng0,lat0,mLng,mLat,dx,dy}=psProj;
+  const x0=(gb.minLng-lng0)*mLng+dx, x1=(gb.maxLng-lng0)*mLng+dx;
+  const y0=(lat0-gb.maxLat)*mLat+dy, y1=(lat0-gb.minLat)*mLat+dy;   // kuzey yukarı: maxLat → küçük y
+  const w=x1-x0, h=y1-y0;
+  if(!(w>0 && h>0)){ parcelSat=null; return; }
+  let sw=Math.round(w/0.30), sh=Math.round(h/0.30);                 // ~0,30 m/px (daha incede Esri 500)
+  const mxd=Math.max(sw,sh); if(mxd>700){ const k=700/mxd; sw=Math.round(sw*k); sh=Math.round(sh*k); }
+  sw=Math.max(64,sw); sh=Math.max(64,sh);
+  const reqUrl='https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export'
+    + '?bbox=' + gb.minLng + ',' + gb.minLat + ',' + gb.maxLng + ',' + gb.maxLat
+    + '&bboxSR=4326&imageSR=4326&size=' + sw + ',' + sh + '&format=png&f=image';
+  parcelSat = {url:null, x:x0, y:y0, w, h, _u:null};                // dikdörtgen hemen; görüntü asenkron
+  const token=psSatToken, img=new Image(); img.crossOrigin='anonymous';
+  img.onload=function(){
+    if(token!==psSatToken || !parcelSat) return;                   // eskimiş istek/iptal
+    try{
+      const cv=document.createElement('canvas'); cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+      cv.getContext('2d').drawImage(img,0,0);
+      cv.toBlob(function(b){
+        if(token!==psSatToken || !parcelSat || !b) return;
+        parcelSat._u=URL.createObjectURL(b); parcelSat.url=parcelSat._u; render();
+      },'image/png');
+    }catch(e){ /* taint vs. — atla */ }
+  };
+  img.src=reqUrl;
 }
 
 /* ---- imar çekme (yapı yaklaşma sınırı) ---- */
@@ -273,5 +328,7 @@ function initParselSorgu(){
   btn.addEventListener('click', sorgula);
   var cek=document.getElementById('psCekme');
   if(cek) cek.addEventListener('input', function(){ psComputeSetback(); render(); });
+  var sat=document.getElementById('psSat');
+  if(sat) sat.addEventListener('change', function(){ psSatOn=sat.checked; psUpdateSatellite(); render(); });
   updateBtn();
 }

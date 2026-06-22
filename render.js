@@ -126,6 +126,17 @@ function render(){
     }
   }
 
+  /* uydu arka planı — en altta, yalnız ekranda (dışa aktarımda gizli) */
+  if(parcelSat && parcelSat.url && parcelPts.length>=3 && typeof exportView!=='undefined' && !exportView){
+    const g=el('g',{}); svg.appendChild(g);
+    const im=el('image',{x:W2Sx(parcelSat.x), y:W2Sy(parcelSat.y),
+      width:Math.max(0,parcelSat.w*pxPerM), height:Math.max(0,parcelSat.h*pxPerM),
+      preserveAspectRatio:'none', opacity:0.95});
+    im.setAttribute('href', parcelSat.url);                                  // SVG2
+    im.setAttributeNS('http://www.w3.org/1999/xlink','href', parcelSat.url); // eski tarayıcı yedeği
+    g.appendChild(im);
+  }
+
   /* parsel (bahçe) — plan katmanlarının altında */
   if(parcelPts.length){
     const g=el('g',{}); svg.appendChild(g);
