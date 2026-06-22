@@ -3,6 +3,7 @@
 const EXPORT_FONT="'Helvetica Neue',Helvetica,Arial,sans-serif"; // sayfa CSS'i dışa aktarılan SVG'ye taşınmaz; font belirtilmezse tarayıcı varsayılan serif (Times) kullanır
 let aiPaintMode=false; // AI boyama export modu: EN etiket, daire tablosu yok (balkon KORUNUR, m² KALIR)
 let edgeMaskMode=false; // ControlNet/Flux-Canny duvar-kenar export modu: beyaz zemin + saf siyah SÜREKLİ duvarlar; etiket/renk/m²/mobilya/grid/balkon/ölçü YOK
+let aiCleanMode=false;  // AI boyama TEMİZ modu: SADECE oda dolgusu + duvar + kapı boşluğu + EN oda etiketi. Düğüm/m²/ölçü/D-rozet/grid/parsel/balkon/seçim YOK. Kadraj kenar-maskesiyle birebir (bd=0 → iki PNG üst üste biner).
 function exportTableGroup(x0,maxH){
   /* yüzen daire tablosunun SVG kopyası — özdeş daireler gruplanır, plan yüksekliğini aşınca yeni sütuna sarar */
   if(!plan||!plan.unitObjs.length) return null;
@@ -58,7 +59,7 @@ function exportClone(){
     a=a.concat(parcelPts); if(a.length>=3) allPts=a;
   }
   const bb=bboxOf(allPts);
-  const bd=edgeMaskMode?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0); // kenar modunda balkon çizilmez → taşma payı yok (kadraj tam dikdörtgen). AI boyama balkonu KORUR → pay kalır.
+  const bd=(edgeMaskMode||aiCleanMode)?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0); // kenar maskesi VE AI-temiz: balkon çizilmez → taşma payı yok (kadraj tam dikdörtgen, iki PNG üst üste biner).
   const marg=2.5+bd; // ölçü yazıları + balkon taşması (m)
   const w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
   const S=Math.max(site?14:22,Math.min(45,2200/w)); // ≥22 px/m (site daha büyük olabilir → ≥14)
@@ -256,12 +257,14 @@ function exportPNG(){
     const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani.png'; a.click(); };
   img.src=data;
 }
-/* AI boyama (Higgsfield / nano-banana) tabanı: EN etiket, daire tablosu yok,
-   balkon korunur, m² odanın içinde kalır, temiz beyaz zemin. */
+/* AI boyama (Higgsfield / nano-banana) tabanı — TEMİZ: SADECE oda dolgu rengi + net siyah
+   duvar/oda sınırı + görünür kapı boşluğu + İngilizce oda etiketi. Düğüm/tutamaç, m² değerleri,
+   duvar ölçüleri, D1–D6 rozetleri, grid, parsel/bahçe, balkon ve seçim/hover göstergeleri ÇİZİLMEZ.
+   Kadraj kenar-maskesiyle (controlnet-edges) BİREBİR aynı (bd=0) → iki PNG üst üste tam çakışır. */
 function exportAIPaintPNG(){
-  aiPaintMode=true;
+  aiPaintMode=true; aiCleanMode=true;    // aiPaintMode → EN etiket; aiCleanMode → gürültü katmanlarını ATLA + bd=0 kadraj
   try {
-    const {clone,W,H}=exportClone();   // aiPaintMode true → exportClone tabloyu atlar
+    const {clone,W,H}=exportClone();   // aiCleanMode true → tablo + balkon payı atlanır, kadraj kenar-maskesiyle birebir
     const data='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(clone))));
     const img=new Image();
     img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
@@ -269,7 +272,7 @@ function exportAIPaintPNG(){
       ctx.scale(2,2); ctx.drawImage(img,0,0);
       const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani-AI-boyama.png'; a.click(); };
     img.src=data;
-  } finally { aiPaintMode=false; render(); } // ekrandaki planı TR etiketle geri çiz
+  } finally { aiPaintMode=false; aiCleanMode=false; render(); } // ekrandaki planı TR etiketle, tüm katmanlarla geri çiz
 }
 /* ControlNet / Flux-Canny duvar-kenar haritası: beyaz zemin + saf siyah SÜREKLİ duvarlar.
    AI Boyama PNG ile BİREBİR aynı kadraj/ölçek (aynı exportClone) → iki PNG üst üste tam çakışır;

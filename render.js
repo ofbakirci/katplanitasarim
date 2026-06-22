@@ -130,20 +130,23 @@ function render(){
   svg.innerHTML='';
   const r=exportView||svg.getBoundingClientRect();
   if(typeof edgeMaskMode!=='undefined' && edgeMaskMode){ drawWallEdgeMask(r); return; } // ControlNet kenar maskesi: yalnız beyaz zemin + siyah duvarlar; başka HİÇBİR şey çizme
-  /* ızgara */
-  const g0=el('g',{}); svg.appendChild(g0);
-  const step=M*pxPerM, big=5*pxPerM;
-  if(step>5){
-    const x0=panX%step, y0=panY%step;
-    for(let x=x0;x<r.width;x+=step) g0.appendChild(el('line',{x1:x,y1:0,x2:x,y2:r.height,stroke:'#eae5d9','stroke-width':1}));
-    for(let y=y0;y<r.height;y+=step) g0.appendChild(el('line',{x1:0,y1:y,x2:r.width,y2:y,stroke:'#eae5d9','stroke-width':1}));
+  const clean = typeof aiCleanMode!=='undefined' && aiCleanMode; // AI temiz mod: gürültü katmanlarını (grid/parsel/balkon/düğüm/m²/ölçü/seçim) atla
+  /* ızgara (AI temiz modda çizilmez) */
+  if(!clean){
+    const g0=el('g',{}); svg.appendChild(g0);
+    const step=M*pxPerM, big=5*pxPerM;
+    if(step>5){
+      const x0=panX%step, y0=panY%step;
+      for(let x=x0;x<r.width;x+=step) g0.appendChild(el('line',{x1:x,y1:0,x2:x,y2:r.height,stroke:'#eae5d9','stroke-width':1}));
+      for(let y=y0;y<r.height;y+=step) g0.appendChild(el('line',{x1:0,y1:y,x2:r.width,y2:y,stroke:'#eae5d9','stroke-width':1}));
+    }
+    const X0=panX%big, Y0=panY%big;
+    for(let x=X0;x<r.width;x+=big) g0.appendChild(el('line',{x1:x,y1:0,x2:x,y2:r.height,stroke:'#ddd5c4','stroke-width':1}));
+    for(let y=Y0;y<r.height;y+=big) g0.appendChild(el('line',{x1:0,y1:y,x2:r.width,y2:y,stroke:'#ddd5c4','stroke-width':1}));
   }
-  const X0=panX%big, Y0=panY%big;
-  for(let x=X0;x<r.width;x+=big) g0.appendChild(el('line',{x1:x,y1:0,x2:x,y2:r.height,stroke:'#ddd5c4','stroke-width':1}));
-  for(let y=Y0;y<r.height;y+=big) g0.appendChild(el('line',{x1:0,y1:y,x2:r.width,y2:y,stroke:'#ddd5c4','stroke-width':1}));
 
   /* site: diğer blokların sınırları (bağlamsal hayalet — düzenlenemez, yalnız konum bilgisi) */
-  if(mode!=='site' && typeof otherBlockGhosts==='function'){
+  if(mode!=='site' && !clean && typeof otherBlockGhosts==='function'){
     const ghosts=otherBlockGhosts();
     if(ghosts.length){
       const g=el('g',{opacity:0.5}); svg.appendChild(g);
@@ -159,8 +162,8 @@ function render(){
     }
   }
 
-  /* parsel (bahçe) — plan katmanlarının altında */
-  if(parcelPts.length){
+  /* parsel (bahçe) + ölçüleri + "BAHÇE m²" etiketi — AI temiz modda çizilmez (bina dışı, dış ölçü gürültüsü) */
+  if(parcelPts.length && !clean){
     const g=el('g',{}); svg.appendChild(g);
     let d='M'+parcelPts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
     if(parcelClosed) d+='Z';
@@ -177,7 +180,7 @@ function render(){
   if(plan && mode!=='site'){ renderPlan(); }
   /* SİTE GENEL GÖRÜNÜMÜ: tüm bloklar parselde aynı anda (hücre tint + sınır + etiket).
      Aktif blok belirgin (mavi sınır, tam opaklık), diğerleri soluk. tıkla=düzenle, sürükle=taşı. */
-  if(mode==='site' && typeof siteBlocksData==='function'){
+  if(mode==='site' && !clean && typeof siteBlocksData==='function'){
     const data=siteBlocksData(), g=el('g',{}), cs=M*pxPerM; svg.appendChild(g);
     data.forEach(bd=>{
       if(bd.regions && bd.regions.length && bd.cols && bd.minX!=null){
@@ -206,7 +209,7 @@ function render(){
     if(closed) d+='Z';
     g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?Math.max(3,pxPerM*0.22):2.5,'stroke-linejoin':'miter'}));
     if(!plan||!closed) pts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#b35a2e','stroke-width':2})));
-    polyDims(g, pts, closed, '#6b5e4d');
+    if(!clean) polyDims(g, pts, closed, '#6b5e4d'); // dış kenar ölçüleri ("32 m"/"16 m") AI temiz modda yok
   }
 
   /* iç avlular (footprint'ten oyulmuş açık boşluk) + avlu modunda sürükleme önizlemesi */
@@ -219,7 +222,7 @@ function render(){
         stroke:'#2f6f8f','stroke-width':ghost?1.4:1.8,'stroke-dasharray':ghost?'5 4':'4 3','stroke-linejoin':'miter'}));
       if(ghost) return;
       const bb=bboxOf(poly), cx=(bb.minX+bb.maxX)/2, cy=(bb.minY+bb.maxY)/2;
-      if(pxPerM>6){
+      if(pxPerM>6 && !clean){ /* AVLU etiketi + ölçüsü AI temiz modda yok (boşluk dolgusu kalır) */
         const fs=Math.max(8,Math.min(13,pxPerM*0.6));
         const t=el('text',{x:W2Sx(cx),y:W2Sy(cy)-fs*0.25,'text-anchor':'middle','dominant-baseline':'middle',
           'font-size':fs,fill:'#2f6f8f','font-weight':'700'});
@@ -234,7 +237,7 @@ function render(){
   }
 
   /* balkonlar */
-  if(closed && mode!=='site' && (balconies.length || (mode==='balkon'&&hoverBalk&&hoverBalk.ghost))){
+  if(closed && mode!=='site' && !clean && (balconies.length || (mode==='balkon'&&hoverBalk&&hoverBalk.ghost))){ /* balkon AI temiz modda çizilmez → kadraj kenar-maskesiyle birebir */
     const g=el('g',{}); svg.appendChild(g);
     const wallW=plan?Math.max(3,pxPerM*0.22):2.5;
     const drawB=(b,ghost)=>{
@@ -275,7 +278,7 @@ function render(){
 
   /* aktif poligon çizimi (bina veya parsel) */
   const act=activePoly();
-  if(hoverP && !act.cl && (mode==='draw'||mode==='parcel')){
+  if(hoverP && !act.cl && !clean && (mode==='draw'||mode==='parcel')){
     const g=el('g',{}); svg.appendChild(g);
     const col=mode==='parcel'?'#4a7c4a':'#b35a2e';
     const l=act.arr[act.arr.length-1];
@@ -291,6 +294,7 @@ function render(){
 function renderPlan(){
   const p=plan, g=el('g',{}); svg.appendChild(g);
   const cs=M*pxPerM;
+  const clean = typeof aiCleanMode!=='undefined' && aiCleanMode; // AI temiz mod: m²/ölçü/düğüm/D-rozet/seçim atla; dolgu+duvar+kapı boşluğu+EN etiket kalır
   /* sınır poligonuna kırpma: ızgara basamakları arsa sınırı dışına taşmasın (eğik kenarlar) */
   const defs=el('defs',{}); g.appendChild(defs);
   const cp=el('clipPath',{id:'planClip'}); defs.appendChild(cp);
@@ -370,18 +374,20 @@ function renderPlan(){
         bx=W2Sx(e.x+0.45); by=W2Sy(e.y); }
       else { g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y-0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.95),stroke:'#faf8f3','stroke-width':w}));
         bx=W2Sx(e.x); by=W2Sy(e.y+0.45); }
-      const fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
-      g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05,fill:'#b35a2e',stroke:'#fff','stroke-width':1.5}));
-      const tb=el('text',{x:bx,y:by+fs2*0.35,'text-anchor':'middle','font-size':fs2,fill:'#fff','font-weight':'700'});
-      tb.textContent='D'+(dr.k+1); g.appendChild(tb);
-      if(mode==='door') /* rozet etrafında halka tutamaç */
-        g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05+3,fill:'none',stroke:'#b35a2e',
-          'stroke-width':hov?2.5:1.5,'stroke-dasharray':hov?'none':'3 3'}));
+      if(!clean){ /* D1–D6 rozeti + tutamaç: AI temiz modda yok → kapı boşluğu (yukarıdaki #faf8f3 çizgi) açıkta kalır */
+        const fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
+        g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05,fill:'#b35a2e',stroke:'#fff','stroke-width':1.5}));
+        const tb=el('text',{x:bx,y:by+fs2*0.35,'text-anchor':'middle','font-size':fs2,fill:'#fff','font-weight':'700'});
+        tb.textContent='D'+(dr.k+1); g.appendChild(tb);
+        if(mode==='door') /* rozet etrafında halka tutamaç */
+          g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05+3,fill:'none',stroke:'#b35a2e',
+            'stroke-width':hov?2.5:1.5,'stroke-dasharray':hov?'none':'3 3'}));
+      }
     } else {
       const w=Math.max(1.5,pxPerM*0.12);
       if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.85),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
       else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.85),stroke:'#faf8f3','stroke-width':w}));
-      if(mode==='door'){ /* kare tutamaç */
+      if(mode==='door' && !clean){ /* kare tutamaç: AI temiz modda yok */
         const m2=doorMid(e);
         g.appendChild(el('rect',{x:m2.x-4.5,y:m2.y-4.5,width:9,height:9,
           fill:hov?'#b35a2e':'#fff',stroke:'#b35a2e','stroke-width':2}));
@@ -391,7 +397,7 @@ function renderPlan(){
   /* duvar uzunlukları: yakınlaşınca hepsi, imleç bir odanın üzerindeyken o oda her ölçekte.
      Aynı duvarı iki oda da etiketliyorsa teke iner ve duvarın ÜSTÜNE (haleyle) yazılır;
      hover'da yalnız o odanın ölçüleri belirgin kalır, diğerleri soluklaşır. */
-  if(pxPerM>=22 || hoverRoomId!=null){
+  if(!clean && (pxPerM>=22 || hoverRoomId!=null)){ /* duvar uzunlukları (7,5 / 3 / 4,5…) AI temiz modda yok */
     const fsW=Math.max(8.5,Math.min(12,Math.max(pxPerM,22)*0.32));
     const allRuns=[]; // {h, pos, lo, hi, d, owner}
     p.regions.forEach(reg=>{
@@ -440,12 +446,12 @@ function renderPlan(){
     const fs=Math.max(8,Math.min(13,pxPerM*0.62));
     const t=el('text',{x:W2Sx(reg.cx),y:W2Sy(reg.cy)-fs*0.25,'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
     t.textContent=(typeof aiPaintMode!=='undefined' && aiPaintMode)?regLabelEN(reg):reg.name; g.appendChild(t);
-    if(reg.area>=2){
+    if(reg.area>=2 && !clean){ /* m² değeri AI temiz modda yok; oda EN etiketi kalır */
       const t2=el('text',{x:W2Sx(reg.cx),y:W2Sy(reg.cy)+fs*0.95,'text-anchor':'middle','font-size':fs*0.9,fill:'#6b5e4d'});
       t2.textContent=fmt(reg.area)+' m²'; g.appendChild(t2); }
   });
-  /* vurgulanan bölge */
-  if(highlightId!=null && p.regions[highlightId] && p.regions[highlightId].cells.length){
+  /* vurgulanan bölge (seçim göstergesi) — AI temiz modda yok */
+  if(highlightId!=null && !clean && p.regions[highlightId] && p.regions[highlightId].cells.length){
     const hg=p.regions[highlightId];
     hg.cells.forEach(i=>{ const r=(i/p.cols)|0, c=i%p.cols;
       g.appendChild(el('rect',{x:W2Sx(p.minX+c*M),y:W2Sy(p.minY+r*M),width:cs+0.5,height:cs+0.5,fill:'rgba(179,90,46,.20)'})); });
@@ -460,7 +466,7 @@ function renderPlan(){
     });
   }
   /* ayırıcı tutamaçları (bölge başına, hole paralel) — kapı/yapı modunda gizli */
-  if(!p.villa && p.zoneUI && customCutsZ && mode!=='door' && mode!=='struct'){
+  if(!clean && !p.villa && p.zoneUI && customCutsZ && mode!=='door' && mode!=='struct'){
     p.zoneUI.forEach(zu=>{
       (customCutsZ[zu.zi]||[]).forEach((v,idx)=>{
         const cx= zu.horiz? W2Sx(v) : W2Sx(zu.perp);
@@ -471,8 +477,8 @@ function renderPlan(){
       });
     });
   }
-  /* oda duvarı tutamaçları (kare) + vurgulanan duvar */
-  if(p.wallRuns){
+  /* oda duvarı tutamaçları (kare/yuvarlak topçuklar) + vurgulanan duvar — AI temiz modda yok */
+  if(p.wallRuns && !clean){
     const act = dragging&&dragging.type==='wall'? dragging.run
               : (hoverWall&&p.wallRuns.includes(hoverWall)? hoverWall : null);
     const EXTC='#2f6f8f'; // dış (daire sınırı / hol) duvar rengi — iç duvar turuncu
@@ -492,7 +498,7 @@ function renderPlan(){
       });
     }
   }
-  if(mode==='struct') renderStructLayer();
+  if(mode==='struct' && !clean) renderStructLayer();
 }
 function hitCutHandle(sx,sy){
   const hs=svg.querySelectorAll('circle[data-cut]');
