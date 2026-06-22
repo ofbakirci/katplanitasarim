@@ -77,8 +77,13 @@ function generate(keepCuts){
   const cols=Math.max(1,Math.round((Math.ceil(bb.maxX/M)*M-minX)/M));
   const rows=Math.max(1,Math.round((Math.ceil(bb.maxY/M)*M-minY)/M));
   const inside=new Uint8Array(rows*cols);
-  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++)
-    if(pip(minX+(c+.5)*M, minY+(r+.5)*M, pts)) inside[r*cols+c]=1;
+  /* iç avlular footprint'ten oyulur: merkezi avluda kalan hücre dışarı sayılır →
+     motor avlunun etrafına sarar, avluya bakan oda kenarları cephe (komşu !inside) olur */
+  const avlus=(typeof courtyards!=='undefined' && courtyards)? courtyards.filter(av=>av&&av.poly&&av.poly.length>=3) : [];
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const cx=minX+(c+.5)*M, cy=minY+(r+.5)*M;
+    if(pip(cx,cy,pts) && !avlus.some(av=>pip(cx,cy,av.poly))) inside[r*cols+c]=1;
+  }
   const cm=new Int16Array(rows*cols).fill(-1);
   const regions=[];
   const newReg=(name,type,unit)=>{const g={id:regions.length,name,type,unit:unit==null?-1:unit,cells:[]};regions.push(g);return g;};

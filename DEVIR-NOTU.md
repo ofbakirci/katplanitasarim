@@ -253,6 +253,34 @@ ve apartmanda eski korumalar aynen geçerli.
    Test: `tests/touch.js` (16: dinleyiciler, nokta/kaydırma ayrımı, pinch, uzun basış
    menüsü + iptali, vurgu). Görsel doğrulama: 390px Chrome — çekmece, kompakt düzen OK.
 
+21. **Avlu (iç boşluk) + Site (çoklu blok)** (2026-06-22):
+    *Avlu* (`courtyards` global, `{poly:[...]}` dünya koord; araç çubuğu 🔲 Avlu →
+    `mode='avlu'`): bina sınırı içine sürüklenerek dikdörtgen avlu oyulur, sağ tık
+    siler. TEK motor kancası: `planner.js` `inside` doldurulurken avlu hücreleri
+    çıkarılır (`!avlus.some(av=>pip(...))`) → motor avlunun etrafına sarar, avluya
+    bakan oda kenarları cephe (komşu `!inside`) olur; oda/duvar/kapı/cephe mantığı
+    hepsi `inside`'a baktığından kendiliğinden çalışır. Avlu eklenince footprint
+    değişir → `generate()` yeniden üretir (avluChanged); snapshot'a (`st.courtyards`)
+    girer, kat geçişinde korunur. Geri Al: `{type:'avlu', prev}`. Render: açık boşluk
+    + "AVLU" etiketi (render.js). checks.js avlu özeti + parsel taşma yok.
+    *Site* (`blocks` global = stateSnapshot(false) dizisi, `activeBlock`; sol panel
+    "Site (çoklu blok)" anahtarı): villaFloors deseninin BİR ÜST SEVİYESİ — her blok
+    KENDİ tam durumudur (kendi katları + çekirdeği dâhil). `switchBlock` = aktif bloğu
+    kaydet + hedefi `restoreState` (tıpkı switchFloor). Otomatik ad: `blockName(i)` →
+    A,B,C…,Z,AA,AB. `+ Blok` boş blok ekler (parsel SİTE-ORTAK: yeni blok devralır).
+    Üst sekme şeridi `#blockTabs` (kat sekmelerinin üstünde, mavi aksan). Snapshot:
+    `stateSnapshot(false,true)` çevrimsiz `st.blocks` üretir (wrap = blok-st sığ kopya;
+    blok-st'nin kendisi `.blocks` İÇERMEZ); `restoreState` `st.blocks`'u kurar,
+    `{keepBlocks:true}` blok geçişinde diziyi korur. Export tüm siteyi gömer. TAKS =
+    Σ blok taban / parsel, KAKS(emsal) = Σ(taban×kat)/parsel (checks.js, `siteOn()`).
+    Düzenlenmeyen bloklar tuvalde soluk hayalet + harf (render.js otherBlockGhosts) —
+    tek-blok düzenleme modelinin konumsal körlüğünü kapatır. `positionOnb` artık
+    blok→kat→park→onb sol yığınını sırayla konumlandırır.
+    Test: `tests/avlu-blok.js` (19: avlu oyma/merkez/snapshot, blok adı A..AB, site
+    snapshot çevrimsiz JSON + restore + footprint/emsal toplamı). Sonraki adım (faz-2):
+    parselde blokları aynı anda yerleştirip sürükleme (site genel görünümü); avlu
+    asgari ölçü denetimi (PAİY iç avlu yüksekliğe bağlı).
+
 ## Bilerek verilen kararlar
 - Salon "emici"dir: program alanı doldurmuyorsa artık alan salona gider (her alternatif
   daha kötüydü: şişen banyolar, dev kiler, sahte odalar).
@@ -266,8 +294,9 @@ ve apartmanda eski korumalar aynen geçerli.
    ~~Elle değişiklikler yeniden üretimde kaybolur~~ ÇÖZÜLDÜ (md.16): SVG indir →
    içe aktar döngüsü tam durumu saklar; generate() yine sıfırlar (bilinçli).
    Eksik kalan: duvar yalnız kendi doğrultusunda kayar (L-duvar köşesi taşınamaz).
-2. Balkon ve ışıklık üretimi yok (ışıklık bilinçli kaldırıldı; iç banyo/WC havalandırması
-   şaft notuyla geçiliyor).
+2. ~~Işıklık/avlu üretimi yok~~ AVLU EKLENDİ (md.21): elle iç boşluk oyulur, motor
+   etrafına sarar, avluya bakan oda cephe sayılır. Otomatik ışıklık ÜRETİMİ yine yok
+   (kullanıcı avluyu kendi konumlandırır); iç banyo/WC havalandırması şaft notuyla geçiliyor.
 3. Çok egzotik taban şekilleri (artı/haç, çentikli) hâlâ "biçimsiz" bayrakları üretebilir.
 4. ~~Tek tip kat~~ ÇÖZÜLDÜ (md.20 villa + 2026-06-21 apartman): "Katları ayrı planla" —
    kat sekmeleri, merdiven düşey hiza kilidi, oturum/çıkma kuralları (bkz. "Ne bu?").

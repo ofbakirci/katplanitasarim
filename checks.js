@@ -255,20 +255,35 @@ function collectChecks(){
   }
   /* parsel / bahçe */
   if(parcelClosed && parcelPts.length>=3 && closed){
+    const site=(typeof siteOn==='function')&&siteOn();
     /* katları ayrı planlanan villada taban alanı = ZEMİN kat oturumu (aktif kat değil) */
     const zf=(p.villa&&floorsOn())? floorState(zeminIdx()) : null;
-    const pa=shoelace(parcelPts), ba=shoelace(zf?zf.pts:pts);
-    add('info',`Parsel ${fmt(pa)} m² · bina taban alanı ${fmt(ba)} m² · bahçe ${fmt(Math.max(0,pa-ba))} m².`);
-    if(pts.some(q=>!pip(q.x,q.y,parcelPts)))
-      add('bad','Bina sınırı parsel dışına taşıyor!');
+    const pa=shoelace(parcelPts);
+    const ba=site? siteFootprintTotal() : shoelace(zf?zf.pts:pts);
+    add('info', site
+      ? `Parsel ${fmt(pa)} m² · ${blocks.length} blok toplam taban ${fmt(ba)} m² · bahçe ${fmt(Math.max(0,pa-ba))} m².`
+      : `Parsel ${fmt(pa)} m² · bina taban alanı ${fmt(ba)} m² · bahçe ${fmt(Math.max(0,pa-ba))} m².`);
+    /* tüm blok sınırları (site) ya da aktif bina (tek) parsel içinde mi? */
+    const polys = site
+      ? blocks.map((b,i)=> i===activeBlock? pts : (b&&b.pts)||[]).filter(a=>a.length>=3)
+      : [pts];
+    if(polys.some(poly=> poly.some(q=>!pip(q.x,q.y,parcelPts))))
+      add('bad', site? 'Bir blok sınırı parsel dışına taşıyor!' : 'Bina sınırı parsel dışına taşıyor!');
     else{
       const taks=ba/pa;
       add(taks<=REG.taksMax?'ok':'bad',`TAKS ≈ ${fmt(taks)} (örnek max ${fmt(REG.taksMax)} — imar durumuna göre değişir).`);
+      if(site){ const kaks=siteGrossTotal()/pa;
+        add('info',`KAKS (emsal) ≈ ${fmt(kaks)} (Σ blok taban × kat sayısı / parsel — imar durumuna göre değişir).`); }
       let minD=1e9;
-      pts.forEach(q=>{ for(let i=0;i<parcelPts.length;i++){ const A=parcelPts[i],B=parcelPts[(i+1)%parcelPts.length];
-        minD=Math.min(minD, distSeg(q.x,q.y,A.x,A.y,B.x,B.y)); }});
+      polys.forEach(poly=> poly.forEach(q=>{ for(let i=0;i<parcelPts.length;i++){ const A=parcelPts[i],B=parcelPts[(i+1)%parcelPts.length];
+        minD=Math.min(minD, distSeg(q.x,q.y,A.x,A.y,B.x,B.y)); }}));
       add(minD>=REG.yanBahce?'ok':'info',`En küçük çekme mesafesi ≈ ${fmt(minD)} m (yan bahçe min ${fmt(REG.yanBahce)} m, ön bahçe imar durumuna bağlı).`);
     }
+  }
+  /* iç avlular */
+  if(typeof courtyards!=='undefined' && courtyards && courtyards.length && closed){
+    const tot=courtyards.reduce((s,av)=>s+shoelace(av.poly),0);
+    add('info',`${courtyards.length} iç avlu, toplam ${fmt(tot)} m² (footprint'ten oyuldu; avluya bakan oda kenarları cephe/doğal havalandırma sayılır).`);
   }
   /* balkonlar */
   if(balconies.length){

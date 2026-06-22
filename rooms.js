@@ -433,6 +433,13 @@ svg.addEventListener('contextmenu',e=>{
       balconies.splice(h.i,1); hoverBalk=null; balkChecksRefresh(); render(); }
     return;
   }
+  if(mode==='avlu'){
+    const rb=svg.getBoundingClientRect();
+    const h=hitAvlu(S2Wx(e.clientX-rb.left), S2Wy(e.clientY-rb.top));
+    if(h){ editHistory.push({type:'avlu', prev:courtyardsSnapshot()});
+      courtyards.splice(h.i,1); avluGhost=null; avluChanged(); }
+    return;
+  }
   if(mode==='door'){ /* SAĞ TIK: kapıyı otomatik yerine döndür */
     if(!plan) return;
     const rb=svg.getBoundingClientRect();

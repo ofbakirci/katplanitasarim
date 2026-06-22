@@ -2,7 +2,7 @@
 
 Tarayicida calisan kat plani tasarim uygulamasi. Ana kabuk `kat-plani-tasarim.html`, davranis katmanlari ayri JS/CSS dosyalarindadir.
 
-Uygulama, Turkiye mevzuat kontrollerini de gosteren sematik apartman/villa kat plani uretir. Bina siniri, parsel, balkon, cekirdek, oda duvari duzenleme, SVG/PNG disari aktarma ve SVG durum geri yukleme desteklenir.
+Uygulama, Turkiye mevzuat kontrollerini de gosteren sematik apartman/villa kat plani uretir. Bina siniri, parsel, balkon, ic avlu (footprint'ten oyulan aydinlik bosluk), cekirdek, oda duvari duzenleme, SVG/PNG disari aktarma ve SVG durum geri yukleme desteklenir. Coklu bina icin "Site (coklu blok)" modu: her blok ayri planlanir, adlar otomatik (A B C D), TAKS/KAKS parsel geneli hesaplanir.
 
 ## Calistirma
 

@@ -28,6 +28,7 @@ if(typeof MouseEvent!=='undefined'){
     let grab=false;
     if(mode==='pan') grab=true;
     else if(mode==='balkon'){ const h=hitBalk(S2Wx(sx),S2Wy(sy)); grab=!!(h&&h.part!=='body'); }
+    else if(mode==='avlu'){ grab=!!(closed && pip(S2Wx(sx),S2Wy(sy),pts) && !hitAvlu(S2Wx(sx),S2Wy(sy))); }
     else if(mode==='door'){ grab=!!(plan&&hitDoor(sx,sy)); }
     else if(plan&&closed&&mode!=='parcel'){ grab=!!(hitCutHandle(sx,sy)||hitWallRun(sx,sy)); }
     if(grab){ synth('mousedown',t.clientX,t.clientY); T.drag=true; }

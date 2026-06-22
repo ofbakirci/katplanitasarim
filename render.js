@@ -109,6 +109,23 @@ function render(){
   for(let x=X0;x<r.width;x+=big) g0.appendChild(el('line',{x1:x,y1:0,x2:x,y2:r.height,stroke:'#ddd5c4','stroke-width':1}));
   for(let y=Y0;y<r.height;y+=big) g0.appendChild(el('line',{x1:0,y1:y,x2:r.width,y2:y,stroke:'#ddd5c4','stroke-width':1}));
 
+  /* site: diğer blokların sınırları (bağlamsal hayalet — düzenlenemez, yalnız konum bilgisi) */
+  if(typeof otherBlockGhosts==='function'){
+    const ghosts=otherBlockGhosts();
+    if(ghosts.length){
+      const g=el('g',{opacity:0.5}); svg.appendChild(g);
+      ghosts.forEach(gh=>{
+        if(!gh.pts||gh.pts.length<3) return;
+        g.appendChild(el('path',{d:'M'+gh.pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z',
+          fill:'rgba(47,111,143,.05)',stroke:'#2f6f8f','stroke-width':1.5,'stroke-dasharray':'7 5','stroke-linejoin':'miter'}));
+        const cen=centroidOf(gh.pts);
+        const t=el('text',{x:W2Sx(cen.x),y:W2Sy(cen.y),'text-anchor':'middle','dominant-baseline':'middle',
+          'font-size':Math.max(11,Math.min(20,pxPerM*1.1)),fill:'#2f6f8f','font-weight':'700',opacity:0.7});
+        t.textContent='Blok '+gh.name; g.appendChild(t);
+      });
+    }
+  }
+
   /* parsel (bahçe) — plan katmanlarının altında */
   if(parcelPts.length){
     const g=el('g',{}); svg.appendChild(g);
@@ -133,6 +150,30 @@ function render(){
     g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?Math.max(3,pxPerM*0.22):2.5,'stroke-linejoin':'miter'}));
     if(!plan||!closed) pts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#b35a2e','stroke-width':2})));
     polyDims(g, pts, closed, '#6b5e4d');
+  }
+
+  /* iç avlular (footprint'ten oyulmuş açık boşluk) + avlu modunda sürükleme önizlemesi */
+  if(closed && ((courtyards&&courtyards.length) || (mode==='avlu'&&avluGhost))){
+    const g=el('g',{}); svg.appendChild(g);
+    const drawA=(av,ghost)=>{
+      const poly=av.poly; if(!poly||poly.length<3) return;
+      const d='M'+poly.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z';
+      g.appendChild(el('path',{d,fill:ghost?'rgba(47,111,143,.10)':'rgba(120,160,190,.16)',
+        stroke:'#2f6f8f','stroke-width':ghost?1.4:1.8,'stroke-dasharray':ghost?'5 4':'4 3','stroke-linejoin':'miter'}));
+      if(ghost) return;
+      const bb=bboxOf(poly), cx=(bb.minX+bb.maxX)/2, cy=(bb.minY+bb.maxY)/2;
+      if(pxPerM>6){
+        const fs=Math.max(8,Math.min(13,pxPerM*0.6));
+        const t=el('text',{x:W2Sx(cx),y:W2Sy(cy)-fs*0.25,'text-anchor':'middle','dominant-baseline':'middle',
+          'font-size':fs,fill:'#2f6f8f','font-weight':'700'});
+        t.textContent='AVLU'; g.appendChild(t);
+        const t2=el('text',{x:W2Sx(cx),y:W2Sy(cy)+fs*0.9,'text-anchor':'middle','dominant-baseline':'middle',
+          'font-size':fs*0.82,fill:'#3f6f8f'});
+        t2.textContent=fmt(bb.maxX-bb.minX)+' × '+fmt(bb.maxY-bb.minY)+' m'; g.appendChild(t2);
+      }
+    };
+    if(courtyards) courtyards.forEach(av=>drawA(av,false));
+    if(mode==='avlu'&&avluGhost) drawA(avluGhost,true);
   }
 
   /* balkonlar */

@@ -11,6 +11,7 @@ const strictTests = [
   'tests/touch.js',
   'tests/villa-kat.js',
   'tests/import.js',
+  'tests/avlu-blok.js',
   'tests/wall-drag.js',
   'tests/core-shadow.js',
   'tests/acik-mutfak.js',

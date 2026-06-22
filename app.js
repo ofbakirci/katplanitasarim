@@ -19,12 +19,16 @@ let parcelPts = [];           // parsel poligonu (opsiyonel; bahçe = parsel −
 let parcelClosed = false;
 let balconies = [];           // {ei, t0, t1, depth}: pts[ei]→pts[ei+1] kenarında, dışa doğru
 let hoverBalk = null;         // balkon modu önizleme {ei,t0,t1,depth} | tutamaç vurgusu
+let courtyards = [];          // iç avlular: {poly:[{x,y}...]} (dünya koord). generate() bunları footprint'ten oyar
+let avluGhost = null;         // avlu modunda sürüklenen yeni avlu önizlemesi {poly:[...]} | null
 let doorOverrides = {};       // elle kapı yeri: key -> {h,x,y}; geçersizleşirse otomatiğe düşer
 let extraDoors = [];          // çift tıkla eklenen kapılar: {h,x,y}
 let doorHidden = {};          // çift tıkla silinen otomatik kapılar: key -> true
 let hoverDoor = null;         // kapı modunda imleç altındaki kapı kaydı
 let koridorYon = 'oto';       // apartman koridor yönü: 'oto'|'yatay'|'dikey' (manuel override)
 let katKullanim = 'konut';    // AKTİF katın kullanım tipi (apartman + katları ayrı): 'konut'|'ticari'|'otopark'|'siginak'
+let blocks = null;            // site "çoklu blok": blok başına TAM durum anlık görüntüsü (stateSnapshot biçimi, kendi katlarını içerir) | null
+let activeBlock = 0;          // blocks aktifken düzenlenen blok indeksi (0 = Blok A)
 let villaFloors = null;       // villa "katları ayrı planla": kat başına durum anlık görüntüsü (stateSnapshot biçimi) | null
 let activeFloor = 0;          // villaFloors aktifken görüntülenen kat İNDEKSİ (0 = en alt bodrum; zemin = bodrumSayisi)
 let bodrumSayisi = 0;         // bodrum (eksi) kat sayısı; toplam kat = bodrum + üst. villaFloors indeksi: 0=en alt bodrum, zeminIdx()=zemin
@@ -396,12 +400,16 @@ function renderFloorTabs(){
    üstünü örter. Hiçbiri görünmüyorsa inline top'u temizle → CSS varsayılanı (masaüstü 60 / mobil 74). */
 function positionOnb(){
   if(typeof getComputedStyle!=='function') return; // tarayıcı dışı (test) ortamı: atla
-  const onb=document.getElementById('onb'); if(!onb||!onb.style) return;
   const seen=e=>e && e.offsetParent!==null && getComputedStyle(e).display!=='none';
-  const ft=document.getElementById('floorTabs'), pb=document.getElementById('parkBar');
-  if(seen(pb))      onb.style.top=(pb.offsetTop+pb.offsetHeight+8)+'px';
-  else if(seen(ft)) onb.style.top=(ft.offsetTop+ft.offsetHeight+8)+'px';
-  else              onb.style.top='';
+  /* sol yığın: blok sekmeleri → kat sekmeleri → park çubuğu, her biri bir öncekinin altına.
+     Taban 56px (araç çubuğunun altı); görünür her şerit yığına eklenir. */
+  let top=56, placed=false;
+  ['blockTabs','floorTabs','parkBar'].forEach(id=>{
+    const e=document.getElementById(id);
+    if(e && e.style && seen(e)){ e.style.top=top+'px'; top+=e.offsetHeight+6; placed=true; }
+  });
+  const onb=document.getElementById('onb');
+  if(onb&&onb.style) onb.style.top = placed? (top+2)+'px' : '';
 }
 function switchFloor(k){
   if(!floorsOn()) return;
@@ -442,6 +450,137 @@ document.getElementById('katAyri').addEventListener('change',e=>{
     if(plan){ runChecks(); render(); }
   }
   renderFloorTabs();
+});
+
+/* ================= site: çoklu blok (A B C D…) =================
+   Bir parsele birden çok bina (blok) yerleştirildiğinde her blok KENDİ tam durumudur
+   (sınır + program + katlar + çekirdek). blocks[i] = stateSnapshot(false) biçimi (kendi
+   st.floors'unu içerir; st.blocks İÇERMEZ — özyineleme yok). Aktif blok canlı
+   globallerdedir; blok geçişinde aktif blok kaydedilip hedef blok geri kurulur — tıpkı
+   kat sekmeleri gibi, ama bir üst seviyede. Blok adları konuma göre OTOMATİK: 0→A, 1→B,
+   … (Z sonrası AA, AB…). Parsel site-ortaktır: yeni blok mevcut parseli devralır. */
+function siteOn(){ const cb=document.getElementById('siteMod'); return !!(blocks && cb && cb.checked); }
+function blockName(i){
+  let s=''; i=Math.max(0,i|0);
+  do{ s=String.fromCharCode(65+(i%26))+s; i=Math.floor(i/26)-1; }while(i>=0);
+  return s;
+}
+function courtyardsSnapshot(){ return courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})); }
+/* aktif blok dışındaki blokların sınır poligonları — bağlamsal hayalet çizim için */
+function otherBlockGhosts(){
+  if(!siteOn()) return [];
+  const out=[];
+  blocks.forEach((b,i)=>{ if(i===activeBlock) return;
+    if(b && b.pts && b.pts.length>=3) out.push({name:blockName(i), pts:b.pts}); });
+  return out;
+}
+/* parseldeki tüm blokların toplam taban alanı (aktif blok canlı pts'ten) */
+function siteFootprintTotal(){
+  if(!siteOn()) return closed? shoelace(pts):0;
+  let sum=0;
+  blocks.forEach((b,i)=>{
+    if(i===activeBlock){ if(closed) sum+=shoelace(pts); }
+    else if(b && b.pts && b.pts.length>=3) sum+=shoelace(b.pts);
+  });
+  return sum;
+}
+/* tüm blokların Σ(taban × üst kat sayısı) — KAKS/emsal yaklaşığı (aktif blok canlı UI'den) */
+function siteGrossTotal(){
+  if(!siteOn()) return 0;
+  let sum=0;
+  blocks.forEach((b,i)=>{
+    let fp=0, kat=1;
+    if(i===activeBlock){ fp=closed?shoelace(pts):0; kat=ustKat(); }
+    else if(b && b.pts && b.pts.length>=3){ fp=shoelace(b.pts); kat=Math.max(1,+((b.ui&&b.ui.katSayisi))||1); }
+    sum+=fp*kat;
+  });
+  return sum;
+}
+/* aktif bloğu canlı globallerden anlık görüntüye yaz (plan varsa) */
+function saveActiveBlock(){
+  if(blocks && plan){ try{ blocks[activeBlock]=stateSnapshot(false); }catch(err){ console.error('blok kaydı:', err); } }
+}
+function renderBlockTabs(){
+  const box=document.getElementById('blockTabs');
+  if(!box) return;
+  if(!siteOn()){ box.style.display='none'; positionOnb(); return; }
+  box.style.display='flex'; box.innerHTML='';
+  const lbl=document.createElement('span'); lbl.className='bl'; lbl.textContent='BLOK'; box.appendChild(lbl);
+  blocks.forEach((b,k)=>{
+    const btn=document.createElement('button');
+    const area=(k===activeBlock)? (closed?shoelace(pts):0) : (b&&b.pts&&b.pts.length>=3?shoelace(b.pts):0);
+    btn.innerHTML='Blok '+blockName(k)+(area>0?' · '+fmt(area)+' m²':'')
+      +(blocks.length>1?'<span class="x" title="Bloğu sil" data-del="'+k+'">×</span>':'');
+    if(k===activeBlock) btn.className='active';
+    else if(!b||!b.plan) btn.className='empty';
+    btn.title=(b&&b.plan)?('Blok '+blockName(k)):'Henüz planlanmadı — geçince boş tuvalde sınırını çizin';
+    btn.addEventListener('click',ev=>{
+      if(ev.target&&ev.target.dataset&&ev.target.dataset.del!==undefined){ ev.stopPropagation(); removeBlock(+ev.target.dataset.del); return; }
+      switchBlock(k);
+    });
+    box.appendChild(btn);
+  });
+  const add=document.createElement('button'); add.className='add'; add.textContent='+ Blok';
+  add.title='Yeni blok ekle (otomatik ad: Blok '+blockName(blocks.length)+')';
+  add.addEventListener('click',addBlock);
+  box.appendChild(add);
+  positionOnb();
+}
+function switchBlock(k){
+  if(!siteOn()||k<0||k>=blocks.length||k===activeBlock) return;
+  saveActiveBlock();
+  const prev=activeBlock; activeBlock=k;
+  const snap=blocks[k];
+  if(snap && snap.plan){
+    try{ restoreState(snap, {keepBlocks:true}); }
+    catch(err){ console.error('blok geçişi:', err); activeBlock=prev; renderBlockTabs(); return; }
+  } else {
+    clearCanvasForNewBlock();   // boş blok: tuvali çizime hazırla (bina ayarları + parsel korunur)
+  }
+  renderBlockTabs();
+}
+function addBlock(){
+  if(!siteOn()) return;
+  saveActiveBlock();
+  blocks.push(null);
+  activeBlock=blocks.length-1;
+  clearCanvasForNewBlock();
+  renderBlockTabs();
+}
+function removeBlock(k){
+  if(!siteOn()||blocks.length<=1) return;
+  if(typeof confirm==='function' && !confirm('Blok '+blockName(k)+' silinsin mi?')) return;
+  if(k!==activeBlock) saveActiveBlock();
+  blocks.splice(k,1);
+  if(activeBlock>=blocks.length) activeBlock=blocks.length-1;
+  else if(k<activeBlock) activeBlock--;
+  const snap=blocks[activeBlock];
+  if(snap && snap.plan){ try{ restoreState(snap,{keepBlocks:true}); }catch(err){ console.error(err); } }
+  else clearCanvasForNewBlock();
+  renderBlockTabs();
+}
+/* boş blok için tuvali temizle: yalnız geometri sıfırlanır; bina tipi/kat ayarları VE
+   site parseli (site-ortak) korunur */
+function clearCanvasForNewBlock(){
+  pts=[]; closed=false; plan=null;
+  balconies=[]; courtyards=[]; avluGhost=null; editHistory=[]; resetCuts();
+  doorOverrides={}; extraDoors=[]; doorHidden={};
+  villaFloors=null; activeFloor=0; lockedCore=null;
+  const ka=document.getElementById('katAyri'); if(ka) ka.checked=false;
+  document.getElementById('genBtn').disabled=true;
+  document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true;
+  document.getElementById('unitTable').style.display='none';
+  document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–';
+  updateKatAyriUI(); updateStructResetBtn(); render();
+}
+document.getElementById('siteMod').addEventListener('change',e=>{
+  if(e.target.checked){
+    blocks=[plan? stateSnapshot(false) : null]; activeBlock=0;   // mevcut bina = Blok A
+  } else {
+    blocks=null; activeBlock=0;                                   // aktif blok globallerde kalır
+  }
+  renderBlockTabs();
+  if(plan) runChecks();
 });
 
 /* Custom +/- stepper: wraps a number input with large, easy-to-click buttons.

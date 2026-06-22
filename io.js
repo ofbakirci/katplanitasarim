@@ -72,13 +72,14 @@ function exportClone(){
    girdiler (sınır, parsel, balkon, daire tipleri, ayırıcılar) + bölge hücreleri
    (elle duvar/oda düzenlemeleri dâhil) + kapı ayarları. İçe aktarınca generate()
    ÇAĞRILMADAN plan aynen geri kurulur — elle düzenlemeler kalıcılaşır. */
-function stateSnapshot(bare){
+function stateSnapshot(bare, withBlocks){
   if(!plan) return null;
   const el2=id=>document.getElementById(id).value;
   const st={v:1, app:'kat-plani-tasarim',
     ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk'), koridorYon:koridorYon, bodrumSayisi:String(bodrumSayisi)},
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
     parcelClosed, balconies:balconies.map(b=>({...b})),
+    courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ, unitLayout:Object.assign({},unitLayout),
     doors:{ov:doorOverrides, extra:extraDoors, hidden:doorHidden},
     plan:{rows:plan.rows, cols:plan.cols, minX:plan.minX, minY:plan.minY,
@@ -100,6 +101,14 @@ function stateSnapshot(bare){
     st.katAyri=true; st.activeFloor=activeFloor; st.floors=villaFloors.slice();
   }
   if(!bare && lockedCore) st.lockedCore=lockedCore.map(o=>({...o})); // bina iskeleti (katlar arası ortak)
+  /* site blokları: TAM site durumunda her blok (kendi katlarıyla) gömülür. wrap = blok-seviyesi
+     st'nin sığ kopyası + st.blocks; st'nin kendisi .blocks İÇERMEZ → çevrim/özyineleme yok. */
+  if(!bare && withBlocks && typeof siteOn==='function' && siteOn()){
+    blocks[activeBlock]=st;
+    const wrap=Object.assign({}, st);
+    wrap.site=true; wrap.activeBlock=activeBlock; wrap.blocks=blocks.slice();
+    return wrap;
+  }
   return st;
 }
 function validateState(st){
@@ -152,6 +161,7 @@ function restoreState(st, opt){
   pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
   parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed;
   balconies=(st.balconies||[]).map(b=>({...b}));
+  courtyards=(st.courtyards||[]).map(av=>({poly:(av.poly||[]).map(p=>({x:p.x,y:p.y}))})); avluGhost=null;
   unitSpecs=st.specs.map(s=>({...s})); renderUnits();
   customCutsZ=st.cuts||null; unitLayout=st.unitLayout||{};
   doorOverrides=(st.doors&&st.doors.ov)||{};
@@ -166,6 +176,15 @@ function restoreState(st, opt){
   } else if(!opt||!opt.keepFloors){
     villaFloors=null; activeFloor=0;
     if(ka) ka.checked=false;
+  }
+  /* site blokları: dosyadan TAM site durumu geliyorsa diziyi kur; blok geçişinde (keepBlocks) dokunma */
+  const sm=document.getElementById('siteMod');
+  if(st.blocks){
+    blocks=st.blocks.slice(); activeBlock=st.activeBlock||0;
+    if(sm) sm.checked=true;
+  } else if(!opt||!opt.keepBlocks){
+    blocks=null; activeBlock=0;
+    if(sm) sm.checked=false;
   }
   /* bina iskeleti yalnız TAM durum geri-yüklemesinde (dosya/ulayout) gelir; kat geçişinde global kalır */
   if(!opt||!opt.keepFloors) lockedCore = st.lockedCore? st.lockedCore.map(o=>({...o})) : null;
@@ -200,12 +219,13 @@ function restoreState(st, opt){
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   updateKatAyriUI(); updateStructResetBtn();
-  runChecks(); buildUnitTable(); renderFloorTabs(); if(!opt||opt.fit!==false) fitView(); render();
+  runChecks(); buildUnitTable(); renderFloorTabs(); if(typeof renderBlockTabs==='function') renderBlockTabs();
+  if(!opt||opt.fit!==false) fitView(); render();
 }
 function exportSVG(){
   const {clone}=exportClone();
   clone.setAttribute('style','background:#faf8f3');
-  const st=stateSnapshot();
+  const st=stateSnapshot(false, true);   // site açıksa TÜM bloklar gömülür
   if(st){
     const md=document.createElementNS('http://www.w3.org/2000/svg','metadata');
     md.setAttribute('id','kpState');
