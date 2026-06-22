@@ -269,49 +269,103 @@ function generate(keepCuts){
   /* ================= KAT KULLANIM TİPİ (konut dışı) =================
      Apartman + katları ayrı planlanırken bu kat ticari/otopark/sığınak olabilir.
      Çekirdek (merdiven/asansör/yangın/teknik) yukarıda zaten sahiplenildi (lockedCore var
-     ya da zemin kattan türetildi); yoksa ensureUsageCore kompakt bir çekirdek yerleştirir.
-     Kalan taban kullanıma göre doldurulur. KONUT yoluna HİÇ girilmez — kendi planını kurup
+     ya da zemin kattan türetildi); yoksa placeUsageCore çekirdeği KONUT katıyla aynı düzende
+     (koridor bandı + banda komşu çekirdek + uca yangın) yerleştirir → katlar arası hol/çekirdek
+     erişimi süreklidir. Kalan taban kullanıma göre doldurulur. KONUT yoluna HİÇ girilmez — kendi planını kurup
      erken döner; bu yüzden fixOrphans/repairUnits/purgeSlivers gibi konut sonrası-işlemleri
      usage katına dokunamaz. */
   if(!villa && floorsOn() && katKullanim!=='konut'){
     const freeCells=()=>{ const a=[]; for(let i=0;i<rows*cols;i++) if(inside[i]&&cm[i]===-1) a.push(i); return a; };
-    /* lockedCore yoksa (ör. zemin katı doğrudan ticari) kompakt çekirdeği biz koy.
-       Önemli: çekirdek CEPHEYE yaslı + yatay ORTALI konur (KÖŞEYE sıkıştırma yok) — konut
-       katları bu çekirdeği zeminden miras alır, köşe konum tüm bina çekirdeğini bozardı. */
-    const ensureUsageCore=()=>{
-      if(regions.some(g=>g.type==='merdiven'&&g.cells.length)) return;
-      const elems=[{nm:'MERDİVEN',tp:'merdiven',w:10,stair:true}];
-      for(let a=0;a<nAsansor;a++) elems.push({nm:asansorYeri?'ASANSÖR YERİ':'ASANSÖR',tp:'asansor',w:4});
-      if(teknikNeeded) elems.push({nm:'TEKNİK / ŞAFT',tp:'teknik',w:3});
-      if(fireStairNeeded) elems.push({nm:'YANGIN MERD.',tp:'yangin',w:5,stair:true});
-      const stH=6, coreW=elems.reduce((s,e)=>s+e.w,0);
-      const claimCore=(r0,c0)=>{ let c=c0; elems.forEach(e=>{ const g=newReg(e.nm,e.tp); claimRect(g,r0,c,stH,e.w);
-        if(e.stair) stairs.push({r0,c0:c,h:stH,w:e.w}); c+=e.w; }); };
-      const ctr=Math.round((cols-coreW)/2);
-      const tryRow=r0=>{ if(r0<0||r0+stH>rows) return false;
-        for(let d=0;d<=cols;d++) for(const c0 of (d===0?[ctr]:[ctr-d,ctr+d]))
-          if(c0>=0&&c0+coreW<=cols&&rectFree(r0,c0,stH,coreW)){ claimCore(r0,c0); return true; }
-        return false; };
-      if(tryRow(0)||tryRow(rows-stH)) return;        // üst, sonra alt cephe (ortadan dışa)
-      for(let r0=0;r0<=rows-stH;r0++) for(let c0=0;c0<=cols-coreW;c0++)  // egzotik taban: ilk sığan
-        if(rectFree(r0,c0,stH,coreW)){ claimCore(r0,c0); return; }
-    };
-    /* çekirdek (merdiven/asansör/yangın/teknik) bölgelerinin kapsayan ızgara kutusu */
-    const coreBox=()=>{ let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9,any=false;
-      regions.forEach(g=>{ if(STRUCT_TYPES[g.type]&&g.cells.length){ any=true; g.cells.forEach(i=>{
-        const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c; }); } });
-      return any?{r0,c0,r1,c1}:null; };
-    /* TİCARİ: çekirdeğin iç yanına APARTMAN HOLÜ (lobi); en yakın yan dış duvara uzanır →
-       bina girişi (BİNA GİRİŞİ kapısı) o duvarda, dükkânlardan AYRI. Çekirdek lobiye komşu. */
-    const placeTicariLobby=()=>{
-      const cb=coreBox(); if(!cb) return;
-      const lobH=3;                                  // 1,5 m apartman holü
-      let lr0 = (cb.r0<=0) ? cb.r1+1 : (cb.r1>=rows-1 ? cb.r0-lobH : cb.r1+1);
-      lr0=Math.max(0,Math.min(rows-lobH,lr0));
-      const toLeft = cb.c0 <= (cols-1-cb.c1);        // en yakın yan duvar
-      const ec0 = toLeft?0:cb.c0, ec1 = toLeft?cb.c1:cols-1;
+    /* lockedCore yoksa (ör. zemin katı doğrudan ticari) çekirdeği KONUT katıyla AYNI
+       düzende koy: koridor bandı maliyetle seçilir, çekirdek (merdiven/asansör/teknik)
+       banda komşu, yangın merdiveni bandın UCUNA konur. Bu kattan miras alınan çekirdek
+       böylece üst konut katlarının koridor bandıyla AYNI dünya konumuna düşer → her katta
+       APARTMAN HOLÜ ↔ merdiven/asansör/yangın erişimi korunur. (Eski kenar-yapışık kompakt
+       çekirdek bandın dışında kalıp hol erişimini kesiyordu — "yapı elemanları yukarı attı".) */
+    const corW=3;                                    // 1,5 m koridor bandı (konutla aynı)
+    const placeUsageCore=()=>{
+      /* 1) koridor bandı satırını seç — konut yatay-koridor maliyet fonksiyonuyla birebir */
+      const colMin=new Array(cols).fill(1e9), colMax=new Array(cols).fill(-1e9);
+      let sumR=0,n=0;
+      for(let r=0;r<rows;r++)for(let c=0;c<cols;c++) if(inside[r*cols+c]){ sumR+=r;n++;
+        if(r<colMin[c])colMin[c]=r; if(r>colMax[c])colMax[c]=r; }
+      const nValidCols=colMin.filter(v=>v<1e8).length||1;
+      let bestR=-1,bestCost=1e18;
+      for(let r0=1;r0<=rows-corW-1;r0++){
+        let cover=0,cost=0;
+        for(let c=0;c<cols;c++){
+          if(colMin[c]>1e8) continue;
+          if(inside[r0*cols+c]&&inside[(r0+corW-1)*cols+c]) cover++;
+          const dN=r0-colMin[c], dS=colMax[c]-(r0+corW-1);
+          if(dN<0||dS<0){ cost+=40; continue; }
+          const pen=d=>(d>0&&d<7)?(60+(7-d)*8):0;
+          cost+=pen(dN)+pen(dS)+Math.abs(dN-dS)*0.4;
+        }
+        if(cover<nValidCols*0.35) continue;
+        if(cost<bestCost){ bestCost=cost; bestR=r0; }
+      }
+      corridorR0 = bestR>=0? bestR : Math.max(1, Math.round(sumR/Math.max(1,n))-1);
+      corridorR1 = corridorR0+corW-1;
+      /* 2) bandı APARTMAN HOLÜ (koridor) yap — bina genişliği boyunca, boş+iç hücreler */
       const hol=newReg('APARTMAN HOLÜ','koridor');
-      for(let r=lr0;r<lr0+lobH;r++) for(let c=ec0;c<=ec1;c++) claim(hol,r,c);
+      for(let r=corridorR0;r<=corridorR1;r++)for(let c=0;c<cols;c++) claim(hol,r,c);
+      /* çekirdek zaten varsa (üst kattan/lockedCore miras) yalnız bandı kurduk → çık */
+      if(regions.some(g=>g.type==='merdiven'&&g.cells.length)) return hol;
+      /* 3) çekirdeği banda komşu yerleştir (konut place() deseni: önce K, sonra G) */
+      let sumC=0,m2=0; hol.cells.forEach(i=>{sumC+=i%cols;m2++;});
+      const cc=Math.round(sumC/Math.max(1,m2));
+      const stH=6, stW=10;                           // merdiven 3,0 × 5,0 m
+      const place=(g,h,w,prefC)=>{
+        for(const r0 of [corridorR0-h, corridorR1+1]){
+          for(let off=0;off<cols;off++){ for(const s of [1,-1]){
+            const c0=prefC+s*off; if(rectFree(r0,c0,h,w)){ claimRect(g,r0,c0,h,w); return {r0,c0,h,w}; } } } }
+        return null; };
+      const merd=newReg('MERDİVEN','merdiven');
+      const mPos=place(merd,stH,stW,cc-Math.floor(stW/2));
+      if(mPos) stairs.push(mPos);
+      let nextC = mPos? mPos.c0+stW : cc;
+      for(let a=0;a<nAsansor;a++){
+        const as=newReg(asansorYeri?'ASANSÖR YERİ':'ASANSÖR','asansor');
+        const p=place(as,stH,4,nextC); if(p) nextC=p.c0+4;
+      }
+      if(teknikNeeded){ const tk=newReg('TEKNİK / ŞAFT','teknik'); place(tk,stH,3,nextC); }
+      if(fireStairNeeded){                           // yangın merdiveni KORİDORUN UCUNA
+        const yg=newReg('YANGIN MERD.','yangin');
+        let west=cols, east=-1;
+        for(let c=0;c<cols;c++){ for(let r=corridorR0;r<=corridorR1;r++) if(cm[r*cols+c]>=0){ west=Math.min(west,c); east=Math.max(east,c); break; } }
+        const fH=7,fW=5; let p=null;
+        const target=(cc-west>east-cc)?west:east-fW+1;
+        for(let off=0;off<cols&&!p;off++){ for(const r0 of [corridorR0-fH, corridorR1+1]){
+          for(const s of [1,-1]){ const c0=target+s*off;
+            if(rectFree(r0,c0,fH,fW)){ claimRect(yg,r0,c0,fH,fW); p={r0,c0,h:fH,w:fW}; break; } } if(p)break; } }
+        if(p) stairs.push(p);
+      }
+      /* kaçış mesafesi (BYKHY): holün her noktasına bir merdiven ≤ 30 m kalana dek
+         uca ek yangın merdiveni — konut yoluyla birebir */
+      if(kat>=2){
+        const stD=(r,c)=>{ let best=1e9; stairs.forEach(s=>{
+          best=Math.min(best,(Math.abs(s.c0+s.w/2-(c+0.5))+Math.abs(s.r0+s.h/2-(r+0.5)))*M); }); return best; };
+        const fH=7,fW=5;
+        for(let extra=0; extra<4; extra++){
+          let worst=0,wr=-1,wc2=-1;
+          hol.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols; const d=stD(r,c); if(d>worst){worst=d;wr=r;wc2=c;} });
+          if(worst<=REG.kacisMesafe-3) break;
+          let best=null,bd=1e9;
+          for(let r0=0;r0<=rows-fH;r0++)for(let c0=0;c0<=cols-fW;c0++){
+            if(!rectFree(r0,c0,fH,fW)) continue;
+            let touch=false;
+            for(let c=c0;c<c0+fW&&!touch;c++) touch=(r0>0&&cm[(r0-1)*cols+c]===hol.id)||(r0+fH<rows&&cm[(r0+fH)*cols+c]===hol.id);
+            for(let r=r0;r<r0+fH&&!touch;r++) touch=(c0>0&&cm[r*cols+c0-1]===hol.id)||(c0+fW<cols&&cm[r*cols+c0+fW]===hol.id);
+            if(!touch) continue;
+            const d=Math.abs(r0+fH/2-wr)+Math.abs(c0+fW/2-wc2);
+            if(d<bd){bd=d;best={r0,c0};}
+          }
+          if(!best) break;
+          const yg=newReg('YANGIN MERD.','yangin'); claimRect(yg,best.r0,best.c0,fH,fW);
+          stairs.push({r0:best.r0,c0:best.c0,h:fH,w:fW});
+        }
+      }
+      return hol;
     };
     /* serbest hücreleri BAĞLI bileşenlere ayır; her bileşeni ~5 m'lik dükkânlara böl
        (çekirdek/lobi araya girdiğinde kopuk dükkân doğmasın). Küçük erişimsiz cepler
@@ -324,19 +378,34 @@ function generate(keepCuts){
     const fillShops=()=>{
       const fc=freeCells(); if(!fc.length) return;
       const fset=new Set(fc), seen=new Set(); let no=0;
+      /* serbest hücreleri BAĞLI bileşenlere (dükkân kuşağı) ayır — index sırası kararlı */
+      const comps=[];
       fc.forEach(start=>{ if(seen.has(start)) return;
         const comp=[], stk=[start]; seen.add(start);
         while(stk.length){ const i=stk.pop(); comp.push(i); const r=(i/cols)|0,c=i%cols;
           [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols) return;
             const j=rr*cols+cc; if(fset.has(j)&&!seen.has(j)){ seen.add(j); stk.push(j); } }); }
+        comps.push(comp);
+      });
+      /* her kuşağı sütun ekseninde ~5 m vitrinlere böl; sınırlar splitZone + customCutsZ
+         ile KONUT ayırıcıları gibi SÜRÜKLENEBİLİR (zoneUI tutamaçları). Küçük erişimsiz
+         cepler (< ~9 m²) komşu hol/dükkâna katılır — sliver dükkân doğmaz. */
+      if(!customCutsZ || customCutsZ.length!==comps.length) customCutsZ=comps.map(()=>null);
+      comps.forEach((comp,zi)=>{
         if(comp.length*M*M < 9){               // küçük cep: lobiye, yoksa komşu dükkâna kat
           let t=adjReg(comp,'koridor'); if(t<0) t=adjReg(comp,'dukkan');
-          if(t>=0){ const g=regions[t]; comp.forEach(i=>{ cm[i]=g.id; g.cells.push(i); }); return; }
+          if(t>=0){ const g=regions[t]; comp.forEach(i=>{ cm[i]=g.id; g.cells.push(i); }); }
+          customCutsZ[zi]=[]; return;
         }
-        let cMin=1e9,cMax=-1e9; comp.forEach(i=>{ const c=i%cols; if(c<cMin)cMin=c; if(c>cMax)cMax=c; });
+        let cMin=1e9,cMax=-1e9,rMin=1e9,rMax=-1e9;
+        comp.forEach(i=>{ const r=(i/cols)|0,c=i%cols; if(c<cMin)cMin=c; if(c>cMax)cMax=c; if(r<rMin)rMin=r; if(r>rMax)rMax=r; });
         const span=cMax-cMin+1, N=Math.max(1,Math.min(6,Math.round(span*M/5)));  // ~5 m vitrin
+        const sp=splitZone(comp, new Array(N).fill(1), customCutsZ[zi], i=>i%cols, minX, 3); // min 3 m vitrin
+        customCutsZ[zi]=sp.cuts;
         const dk=[]; for(let k2=0;k2<N;k2++) dk.push(newReg('DÜKKAN '+(++no),'dukkan'));
-        comp.forEach(i=>{ const c=i%cols; let k2=Math.floor((c-cMin)/span*N); if(k2<0)k2=0; if(k2>=N)k2=N-1; claim(dk[k2],(i/cols)|0,c); });
+        sp.parts.forEach((cells,k2)=>{ cells.forEach(i=>claim(dk[k2],(i/cols)|0,i%cols)); });
+        /* ayırıcı tutamaçları (dikey çizgi; kuşağın düşey ortasında çizilir) */
+        zoneUI.push({zi, horiz:true, perp:minY+((rMin+rMax)/2)*M, min:minX+(cMin+2)*M, max:minX+(cMax-1)*M});
       });
     };
     /* serbest hücrelerde hedefe yakın ~kare bir dikdörtgen bul → bölge yap */
@@ -349,12 +418,11 @@ function generate(keepCuts){
       if(!best) return null;
       const g=newReg(name,type); claimRect(g,best.r0,best.c0,best.h,best.w); return g;
     };
-    ensureUsageCore();
+    placeUsageCore();       // koridor bandı (APARTMAN HOLÜ) + banda komşu çekirdek + uca yangın
     if(katKullanim==='otopark'){
       const g=newReg('OTOPARK','otopark'); freeCells().forEach(i=>claim(g,(i/cols)|0,i%cols));
     } else if(katKullanim==='ticari'){
-      placeTicariLobby();   // çekirdeğe komşu apartman holü + yan duvarda bina girişi
-      fillShops();          // kalan taban: bağlı, ~5 m vitrinli dükkânlar (lobiye dokunmaz)
+      fillShops();          // kalan taban: bağlı, ~5 m vitrinli dükkânlar (sürüklenebilir sınır)
     } else if(katKullanim==='siginak'){
       const fc=freeCells();
       if(fc.length){
@@ -365,7 +433,7 @@ function generate(keepCuts){
     }
     /* --- sonlandır: konut sonrası-işleme (fixOrphans/repair/purge...) ATLANIR --- */
     regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
-    plan={regions, cm, inside, rows, cols, minX, minY, corridorR0:-1, corridorR1:-1,
+    plan={regions, cm, inside, rows, cols, minX, minY, corridorR0, corridorR1,
           stairs, unitObjs:[], villa:false, kat, binaYuk, perFloor, nAsansor, asansorYeri,
           fireStairNeeded, teknikNeeded, zoneUI, katKullanim};
     plan.parking=parkingForPlan(plan); // gerçek park yerleri + sürüş yolları (çizim + sayım)
@@ -751,7 +819,7 @@ function generate(keepCuts){
     return unit;
   }
 
-  function splitZone(zoneCells, weights, custom, alOf, base){
+  function splitZone(zoneCells, weights, custom, alOf, base, minFront){
     const parts=weights.map(()=>[]); if(!weights.length) return {parts,cuts:[]};
     const colA=new Map(); zoneCells.forEach(i=>{const a=alOf(i); colA.set(a,(colA.get(a)||0)+1);});
     const als=[...colA.keys()].sort((a,b)=>a-b);
@@ -771,8 +839,9 @@ function generate(keepCuts){
         let bi=0,bd=1e9; bounds.forEach((b,j)=>{ const d=Math.abs(b-gb); if(d<bd){bd=d;bi=j;} });
         bounds[bi]=gb; });
       bounds.sort((a,b)=>a-b);
-      /* her daire asgari cepheyi (5,5 m) alsın — ince şerit daire kalmasın (iki yönlü garanti) */
-      const minC=Math.round(5.5/M);
+      /* her parça asgari cepheyi alsın — ince şerit kalmasın (iki yönlü garanti).
+         Konut dairesi 5,5 m (varsayılan); ticari dükkân daha dar olabilir (minFront ile) */
+      const minC=Math.round((minFront||5.5)/M);
       for(let j=0;j<bounds.length;j++){
         const lo=(j===0?als[0]:bounds[j-1])+minC;
         if(bounds[j]<lo) bounds[j]=lo; }

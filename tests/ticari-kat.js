@@ -31,6 +31,12 @@ eval(src+`
   const cellsOf=type=>plan.regions.filter(g=>g.type===type&&g.cells.length);
   const coreMinCol=()=>{ let c0=1e9; ['merdiven','asansor','yangin','teknik'].forEach(t=>
     cellsOf(t).forEach(g=>g.cells.forEach(i=>{ const c=i%plan.cols; if(c<c0)c0=c; }))); return c0; };
+  /* ANA çekirdek (merdiven/asansör/teknik) — yangın HARİÇ: yangın bilerek koridorun
+     UCUNA (cepheye) konur, ana çekirdek ise koridor bandının ortasına yakındır */
+  const mainCoreMinCol=()=>{ let c0=1e9; ['merdiven','asansor','teknik'].forEach(t=>
+    cellsOf(t).forEach(g=>g.cells.forEach(i=>{ const c=i%plan.cols; if(c<c0)c0=c; }))); return c0; };
+  const yanginAtCorridorEnd=()=>{ let yMin=1e9,yMax=-1e9; cellsOf('yangin').forEach(g=>g.cells.forEach(i=>{
+    const c=i%plan.cols; if(c<yMin)yMin=c; if(c>yMax)yMax=c; })); return yMin<=1 || yMax>=plan.cols-2; };
   const adjacent=(typeA,typeB)=>{ const setB=new Set();
     cellsOf(typeB).forEach(g=>g.cells.forEach(i=>setB.add(i)));
     return cellsOf(typeA).some(g=>g.cells.some(i=>{ const r=(i/plan.cols)|0,c=i%plan.cols;
@@ -48,9 +54,11 @@ eval(src+`
 
   /* --- Part A: ticari düzen --- */
   T('ticari: merdiven çekirdeği var', cellsOf('merdiven').length>0);
-  T('ticari: çekirdek KÖŞEYE sıkışmadı (c0>0, ortalı)', coreMinCol()>0);
+  T('ticari: ana çekirdek KÖŞEYE sıkışmadı (merdiven/asansör ortada)', mainCoreMinCol()>0);
+  T('ticari: yangın merdiveni koridorun UCUNDA (cephede)', !cellsOf('yangin').length || yanginAtCorridorEnd());
   T('ticari: APARTMAN HOLÜ (koridor) var', cellsOf('koridor').length>0);
   T('ticari: hol çekirdeğe (merdiven) komşu', adjacent('koridor','merdiven'));
+  T('ticari: hol yangın merdivenine komşu', !cellsOf('yangin').length || adjacent('koridor','yangin'));
   T('ticari: dükkânlar var', cellsOf('dukkan').length>0);
   T('ticari: sliver dükkân yok (her dükkân ≥ ~9 m²)',
     cellsOf('dukkan').every(g=>g.cells.length*M*M >= 9 - 1e-9));
@@ -66,8 +74,13 @@ eval(src+`
   /* --- üst konut katı: ortalı çekirdeği miras alır --- */
   switchFloor(1);
   T('1. kat konut: plan + daire var', !!plan && plan.unitObjs.length>=1);
-  T('1. kat: çekirdek zeminden ortalı miras (c0 aynı)', Math.abs(coreMinCol()-zeminCoreC0)<=1);
-  T('1. kat: çekirdek yine köşede değil', coreMinCol()>0);
+  T('1. kat: çekirdek zeminden miras (c0 aynı)', Math.abs(coreMinCol()-zeminCoreC0)<=1);
+  T('1. kat: ana çekirdek yine köşede değil', mainCoreMinCol()>0);
+  /* ASIL HATA DÜZELTMESİ: ticari zeminden miras çekirdek, konut katının koridor bandıyla
+     AYNI konumda olmalı → apartman holünden merdiven/asansör/yangına erişim KESİLMEMELİ */
+  T('1. kat: hol → merdiven erişimi var', adjacent('koridor','merdiven'));
+  T('1. kat: hol → yangın merdiveni erişimi var', !cellsOf('yangin').length || adjacent('koridor','yangin'));
+  T('1. kat: hol → asansör erişimi var', !cellsOf('asansor').length || adjacent('koridor','asansor'));
 
   /* --- Part B: kat düzeni kopyala → uygula --- */
   switchFloor(2); switchFloor(1);                 // 1,2. kat ziyaret edildi; 1. kat aktif
