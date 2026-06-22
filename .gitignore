@@ -5,3 +5,5 @@ node_modules/
 .test-tmp/
 .claude/
 kat-plani-tasarim.tekdosya.html
+design-system/
+SESSION_NOTU_planboyama.md
