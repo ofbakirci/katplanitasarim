@@ -52,10 +52,24 @@
       <div id="psMsg" class="ps-msg" style="display:none"></div>
       <div id="psImar" style="display:none">
         <div class="row" style="margin-top:10px"><label>İmar çekme (m) <small>(her kenardan)</small></label><input type="number" id="psCekme" min="0" max="50" step="0.5" value="3"></div>
+        <div class="ps-rot-wrap">
+          <label>Döndür <small>(eksene hizala)</small></label>
+          <div class="ps-rot">
+            <button type="button" id="psRotL" title="−1°">⟲</button>
+            <input type="range" id="psRotRange" min="-180" max="180" step="0.5" value="0">
+            <button type="button" id="psRotR" title="+1°">⟳</button>
+            <input type="number" id="psRotNum" min="-180" max="180" step="0.5" value="0"><span class="ps-dim">°</span>
+          </div>
+          <div class="ps-rot-btns">
+            <button type="button" id="psRotAuto" class="ps-link">Otomatik hizala</button>
+            <button type="button" id="psRotEdge" class="ps-link">Kenara çevir</button>
+            <button type="button" id="psRotReset" class="ps-link">Kuzey ↑</button>
+          </div>
+        </div>
         <div class="row"><label>Uydu görüntüsü <small>(arka plan)</small></label><span class="switch"><input type="checkbox" id="psSat"><i></i></span></div>
         <div id="psLive" class="ps-live"></div>
       </div>
-      <div class="ps-hint">Google Maps’te noktaya <b>sağ tık → koordinatı kopyala</b> ya da bağlantıyı yapıştırın. Parselin <b>ada/parsel</b> no’su, alanı ve sınırı TKGM’den otomatik gelir, <b>arsa</b> olarak yüklenir (kuzey yukarı). Bahçe, TAKS ve çekme mesafeleri hesaplanır.</div>
+      <div class="ps-hint">Google Maps’te noktaya <b>sağ tık → koordinatı kopyala</b> ya da bağlantıyı yapıştırın. Parselin <b>ada/parsel</b> no’su, alanı ve sınırı TKGM’den otomatik gelir, <b>arsa</b> olarak yüklenir. Parsel <b>otomatik eksene hizalanır</b> (eğikse düz oturur); gerekirse yukarıdan döndürün. Bina çizerken köşeler parsel/çekme çizgisine <b>yapışır</b>. Bahçe, TAKS ve çekme mesafeleri hesaplanır.</div>
     </div>
     <div class="sec" id="unitSec">
       <h2 id="unitSecTitle">Daire Tipleri (kat başına)</h2>

@@ -4,6 +4,15 @@ function activePoly(){ return mode==='parcel'? {arr:parcelPts, cl:parcelClosed} 
 function snapPoint(sx,sy){
   let x=snapG(S2Wx(sx)), y=snapG(S2Wy(sy));
   const A=activePoly();
+  /* bina çizerken parsel/çekme köşe & kenarlarına yapış ("oturt") — 15° kilidini ezer */
+  if(mode==='draw' && !A.cl && typeof psSnapTarget==='function'){
+    const t=psSnapTarget(S2Wx(sx), S2Wy(sy));
+    if(t){
+      if(A.arr.length>=3){ const f=A.arr[0];
+        if(Math.hypot(t.x-f.x, t.y-f.y) < 0.7) return {x:f.x, y:f.y, closing:true}; }
+      return {x:Math.round(t.x*1000)/1000, y:Math.round(t.y*1000)/1000, snapPS:true};
+    }
+  }
   if((mode==='draw'||mode==='parcel') && A.arr.length && !A.cl){
     /* 15° açı kilidi: kenar açısı 15°'nin katına, uzunluk 0,5 m ızgaraya oturur */
     const l=A.arr[A.arr.length-1], wx=S2Wx(sx), wy=S2Wy(sy);

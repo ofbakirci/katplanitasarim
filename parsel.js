@@ -76,28 +76,174 @@ function tkgmGeoToWorld(ring){
   const phi = lat0*Math.PI/180;
   const mLat = 111132.954 - 559.822*Math.cos(2*phi) + 1.175*Math.cos(4*phi); // m / derece enlem
   const mLng = 111319.488*Math.cos(phi);                                     // m / derece boylam
-  psProj = {lng0, lat0, mLng, mLat, dx:0, dy:0, ring:r};   // dx/dy: bina hizalama kaydırması (tkgmLoadParcel doldurur)
+  psProj = {lng0, lat0, mLng, mLat, dx:0, dy:0, rot:0, ring:r}; // dx/dy: bina hizalama kaydırması; rot: eksene döndürme (rad)
   return r.map(c => ({
     x: Math.round((c[0]-lng0)*mLng*1000)/1000,
     y: Math.round((lat0-c[1])*mLat*1000)/1000
   }));
 }
 
-/* Parseli araca yükle. Bina çizili ise parsel ortasını binaya hizala
-   (bina parselin içinde kalsın), yoksa orijinde bırak; sonra çerçevele. */
-function tkgmLoadParcel(world){
-  if(typeof pts!=='undefined' && pts.length && closed){
-    const bc = centroidOf(pts), pc = centroidOf(world);
-    const dx = bc.x-pc.x, dy = bc.y-pc.y;
-    world = world.map(q=>({ x:Math.round((q.x+dx)*1000)/1000, y:Math.round((q.y+dy)*1000)/1000 }));
-    if(psProj){ psProj.dx=dx; psProj.dy=dy; }
+/* ============================================================
+   Parsel döndürme — eksene hizalama (rotation)
+   ------------------------------------------------------------
+   Parsel gerçek-dünya açısında gelir; plan motoru ekran eksenine
+   hizalı çalıştığından eğik parselde bina garip oturur. Parseli
+   (kendi merkezinde) döndürüp baskın kenarını yatay yaparız;
+   bina ekran-hizalı çizilir ve parsele tam oturur. Çekme + uydu
+   aynı dönüşle döner. parcelPts döndürülmüş haliyle saklanır;
+   psProj.rot kuzey-yukarıdan toplam açıyı tutar (uydu için).
+   ============================================================ */
+/* Bir noktayı (cx,cy) merkezli a radyan döndür (ekran y aşağı). */
+function psRotPt(p, a, cx, cy){
+  const c=Math.cos(a), s=Math.sin(a), dx=p.x-cx, dy=p.y-cy;
+  return {x:cx+dx*c-dy*s, y:cy+dx*s+dy*c};
+}
+/* Poligonu en küçük çevreleyen-dikdörtgene oturtan döndürme (rad).
+   Min-alan dikdörtgeni daima bir kenara paraleldir → her kenar açısını
+   dene, bbox alanı en küçük olanı seç; sonra geniş boyutu yatay yap ve
+   açıyı (-90°,90°] aralığına indir (en az döndürme). */
+function psAutoAngle(poly){
+  if(!poly || poly.length<3) return 0;
+  let best=0, bestArea=Infinity, bw=0, bh=0;
+  for(let i=0;i<poly.length;i++){
+    const a=poly[i], b=poly[(i+1)%poly.length];
+    const ang=Math.atan2(b.y-a.y, b.x-a.x);
+    const c=Math.cos(-ang), s=Math.sin(-ang);
+    let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+    for(let k=0;k<poly.length;k++){ const p=poly[k], x=p.x*c-p.y*s, y=p.x*s+p.y*c;
+      if(x<mnx)mnx=x; if(x>mxx)mxx=x; if(y<mny)mny=y; if(y>mxy)mxy=y; }
+    const w=mxx-mnx, h=mxy-mny, area=w*h;
+    if(area<bestArea-1e-9){ bestArea=area; best=-ang; bw=w; bh=h; }
   }
-  parcelPts = world;
+  if(bh>bw) best+=Math.PI/2;                 // geniş kenar yatay
+  while(best>  Math.PI/2 + 1e-9) best-=Math.PI;
+  while(best<=-Math.PI/2 - 1e-9) best+=Math.PI;
+  return best;
+}
+/* parcelPts'i geo halkasından güncel psProj.rot + dx/dy ile yeniden üret
+   (parsel daima (dx,dy) ekseninde döner; uydu ile birebir hizalı kalır). */
+function psReproject(){
+  if(!psProj) return;
+  const {lng0,lat0,mLng,mLat,dx,dy}=psProj, a=psProj.rot||0, c=Math.cos(a), s=Math.sin(a);
+  parcelPts = psProj.ring.map(g=>{
+    const x0=(g[0]-lng0)*mLng, y0=(lat0-g[1])*mLat;       // kuzey-yukarı, merkez orijinde
+    return {x:Math.round((x0*c-y0*s+dx)*1000)/1000, y:Math.round((x0*s+y0*c+dy)*1000)/1000};
+  });
+}
+/* psProj yokken (kayıttan yüklenen SVG): parcelPts'i kendi merkezi etrafında döndür. */
+function psRotateInPlace(rad){
+  if(parcelPts.length<3) return;
+  const ctr=centroidOf(parcelPts);
+  parcelPts=parcelPts.map(p=>{ const q=psRotPt(p,rad,ctr.x,ctr.y); return {x:Math.round(q.x*1000)/1000,y:Math.round(q.y*1000)/1000}; });
+}
+/* Parsel köşelerini 0,5 m ızgaraya oturt (eksene hizalı parselde dikdörtgeni bozmaz;
+   köşeler grid çizgilerine biner → ona yapışan bina/plan da grid-temiz olur). */
+function psSnapParcelGrid(){
+  if(parcelPts.length<3) return;
+  parcelPts=parcelPts.map(p=>({x:snapG(p.x), y:snapG(p.y)}));
+}
+/* Kayıttan/slider'dan gelen mutlak açıya (derece) döndür. snap=true ise köşeleri
+   ızgaraya oturt (eksen-hizalı işlemlerde: otomatik hizala / kenara çevir / yükleme). */
+function psRotateTo(deg, snap){
+  if(parcelPts.length<3) return;
+  let d=parseFloat(deg); if(!isFinite(d)) return;
+  d=Math.max(-180, Math.min(180, d));
+  const target=d*Math.PI/180, delta=target-(parcelRot||0);
+  if(Math.abs(delta)<1e-6 && !snap){ psSyncRotUI(); return; }
+  parcelRot=target;
+  if(psProj){ psProj.rot=target; psReproject(); } else { psRotateInPlace(delta); }
+  if(snap) psSnapParcelGrid();
+  psComputeSetback(); psUpdateSatellite();
+  if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
+  render(); psSyncRotUI();
+}
+function psRotateBy(deg){ psRotateTo((parcelRot*180/Math.PI)+deg); }
+/* En küçük çevreleyen dikdörtgene otomatik hizala (+ ızgaraya oturt). */
+function psAutoAlign(){
+  if(parcelPts.length<3) return;
+  if(psProj){
+    const {lng0,lat0,mLng,mLat}=psProj;
+    const nu=psProj.ring.map(g=>({x:(g[0]-lng0)*mLng, y:(lat0-g[1])*mLat}));
+    psRotateTo(psAutoAngle(nu)*180/Math.PI, true);
+  } else {
+    psRotateTo((parcelRot + psAutoAngle(parcelPts))*180/Math.PI, true);
+  }
+}
+let psEdgeIdx=0;
+/* Sıradaki parsel kenarını yatay yap (cepheyi seçmek için) + ızgaraya oturt. */
+function psRotEdge(){
+  if(parcelPts.length<3) return;
+  const n=parcelPts.length, i=psEdgeIdx%n, a=parcelPts[i], b=parcelPts[(i+1)%n];
+  const ang=Math.atan2(b.y-a.y, b.x-a.x);
+  psEdgeIdx=(psEdgeIdx+1)%n;
+  psRotateTo((parcelRot - ang)*180/Math.PI, true);
+}
+function psRotReset(){ psRotateTo(0); }
+/* Slider + derece kutusunu güncel açıya eşitle. */
+function psSyncRotUI(){
+  const deg=Math.round((parcelRot*180/Math.PI)*10)/10;
+  const r=document.getElementById('psRotRange'), n=document.getElementById('psRotNum');
+  if(r && document.activeElement!==r) r.value=deg;
+  if(n && document.activeElement!==n) n.value=deg;
+}
+
+/* ---- bina çizimini parsel/çekme köşe & kenarlarına yapıştır ("oturt") ---- */
+function psProjSeg(px,py,a,b){
+  const dx=b.x-a.x, dy=b.y-a.y, l2=dx*dx+dy*dy;
+  let t=l2?((px-a.x)*dx+(py-a.y)*dy)/l2:0; t=Math.max(0,Math.min(1,t));
+  const x=a.x+dx*t, y=a.y+dy*t; return {x,y,d:Math.hypot(px-x,py-y)};
+}
+/* (wx,wy) imlecine yakın parsel/çekme köşesi (öncelik) ya da kenar noktası | null.
+   Çekme sınırı (yasal yapı çizgisi) önce denenir, sonra parsel sınırı. */
+function psSnapTarget(wx,wy){
+  if(!(parcelClosed && parcelPts.length>=3)) return null;
+  const pm=(typeof pxPerM!=='undefined' && pxPerM>0)?pxPerM:16;
+  const tolV=Math.max(0.35, 12/pm), tolE=Math.max(0.25, 8/pm);
+  const rings=[];
+  if(parcelSetback && parcelSetback.length>=3) rings.push(parcelSetback);
+  rings.push(parcelPts);
+  let bv=null;                                       // köşeler (yüksek öncelik)
+  for(let ri=0;ri<rings.length;ri++){ const ring=rings[ri];
+    for(let k=0;k<ring.length;k++){ const p=ring[k], d=Math.hypot(wx-p.x,wy-p.y);
+      if(d<tolV && (!bv||d<bv.d)) bv={x:p.x,y:p.y,d}; } }
+  if(bv) return {x:bv.x, y:bv.y};
+  let be=null;                                       // sonra en yakın kenar noktası
+  for(let ri=0;ri<rings.length;ri++){ const ring=rings[ri];
+    for(let k=0;k<ring.length;k++){ const a=ring[k], b=ring[(k+1)%ring.length], pr=psProjSeg(wx,wy,a,b);
+      if(pr.d<tolE && (!be||pr.d<be.d)) be=pr; } }
+  return be?{x:be.x, y:be.y}:null;
+}
+
+/* Parseli araca yükle. Önce baskın kenarı yatay olacak şekilde EKSENE HİZALA
+   (eğik parselde bina düzgün otursun); bina çizili ise parsel ortasını binaya
+   hizala (bina parselin içinde kalsın); sonra çerçevele. */
+function tkgmLoadParcel(world){
+  const rot = psAutoAngle(world);                       // eksene hizalama açısı
+  parcelRot = rot;
+  if(psProj){
+    psProj.rot = rot; psProj.dx = 0; psProj.dy = 0;
+    psReproject();                                      // parcelPts: döndürülmüş, ~orijin merkezli
+    if(typeof pts!=='undefined' && pts.length && closed){
+      const bc = centroidOf(pts), pc = centroidOf(parcelPts);
+      psProj.dx = bc.x-pc.x; psProj.dy = bc.y-pc.y;
+      psReproject();                                    // binaya ortalanmış
+    }
+  } else {                                              // psProj yoksa (savunmacı): elle döndür + ötele
+    const ctr = centroidOf(world);
+    world = world.map(p=>psRotPt(p, rot, ctr.x, ctr.y));
+    if(typeof pts!=='undefined' && pts.length && closed){
+      const bc = centroidOf(pts), pc = centroidOf(world);
+      world = world.map(q=>({x:q.x+(bc.x-pc.x), y:q.y+(bc.y-pc.y)}));
+    }
+    parcelPts = world.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
+  }
+  psSnapParcelGrid();                                   // köşeleri 0,5 m ızgaraya oturt
   parcelClosed = true;
   psComputeSetback();
   psUpdateSatellite();
   if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
   fitView();
+  psSyncRotUI();
 }
 
 /* ---- uydu arka planı (Esri World Imagery export, anahtarsız, CORS:*) ---- */
@@ -116,24 +262,31 @@ function psGeoBbox(){
 /* Geo bbox → Esri export PNG → blob URL → dünya dikdörtgeni (parcelSat). render() çizer.
    NOT: SVG <image> dış cross-origin href'i (bu tarayıcıda) boyamıyor; görüntüyü crossOrigin
    ile çekip canvas→blob URL'e çeviriyoruz (Esri ACAO:* → taint yok, blob URL kısa → render ucuz). */
-let psSatToken = 0;
+let psSatToken = 0, psSatReq = null;
+function psSatClear(){ if(parcelSat && parcelSat._u) URL.revokeObjectURL(parcelSat._u); parcelSat=null; psSatReq=null; }
 function psUpdateSatellite(){
-  if(parcelSat && parcelSat._u){ URL.revokeObjectURL(parcelSat._u); }   // eski blob'u bırak
-  psSatToken++;
-  if(!psSatOn || !psProj){ parcelSat=null; return; }
-  const gb=psGeoBbox(); if(!gb){ parcelSat=null; return; }
+  if(!psSatOn || !psProj){ psSatClear(); return; }
+  const gb=psGeoBbox(); if(!gb){ psSatClear(); return; }
   const {lng0,lat0,mLng,mLat,dx,dy}=psProj;
   const x0=(gb.minLng-lng0)*mLng+dx, x1=(gb.maxLng-lng0)*mLng+dx;
   const y0=(lat0-gb.maxLat)*mLat+dy, y1=(lat0-gb.minLat)*mLat+dy;   // kuzey yukarı: maxLat → küçük y
   const w=x1-x0, h=y1-y0;
-  if(!(w>0 && h>0)){ parcelSat=null; return; }
+  if(!(w>0 && h>0)){ psSatClear(); return; }
   let sw=Math.round(w/0.30), sh=Math.round(h/0.30);                 // ~0,30 m/px (daha incede Esri 500)
   const mxd=Math.max(sw,sh); if(mxd>700){ const k=700/mxd; sw=Math.round(sw*k); sh=Math.round(sh*k); }
   sw=Math.max(64,sw); sh=Math.max(64,sh);
   const reqUrl='https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export'
     + '?bbox=' + gb.minLng + ',' + gb.minLat + ',' + gb.maxLng + ',' + gb.maxLat
     + '&bboxSR=4326&imageSR=4326&size=' + sw + ',' + sh + '&format=png&f=image';
-  parcelSat = {url:null, x:x0, y:y0, w, h, _u:null};                // dikdörtgen hemen; görüntü asenkron
+  const rot=psProj.rot||0;
+  // bbox/boyut aynı; yalnız döndürme/öteleme değişti → görüntüyü yeniden indirme, açıyı güncelle
+  if(parcelSat && parcelSat.url && psSatReq===reqUrl){
+    parcelSat.x=x0; parcelSat.y=y0; parcelSat.w=w; parcelSat.h=h; parcelSat.rot=rot; parcelSat.cx=dx; parcelSat.cy=dy;
+    render(); return;
+  }
+  if(parcelSat && parcelSat._u) URL.revokeObjectURL(parcelSat._u);   // eski blob'u bırak
+  psSatToken++; psSatReq=reqUrl;
+  parcelSat = {url:null, x:x0, y:y0, w, h, _u:null, rot, cx:dx, cy:dy}; // dikdörtgen hemen; görüntü asenkron
   const token=psSatToken, img=new Image(); img.crossOrigin='anonymous';
   img.onload=function(){
     if(token!==psSatToken || !parcelSat) return;                   // eskimiş istek/iptal
@@ -330,5 +483,15 @@ function initParselSorgu(){
   if(cek) cek.addEventListener('input', function(){ psComputeSetback(); render(); });
   var sat=document.getElementById('psSat');
   if(sat) sat.addEventListener('change', function(){ psSatOn=sat.checked; psUpdateSatellite(); render(); });
+  // ---- döndürme (eksene hizalama) ----
+  var rotR=$('psRotRange'), rotN=$('psRotNum');
+  if(rotR) rotR.addEventListener('input', function(){ psRotateTo(rotR.value); });
+  if(rotN) rotN.addEventListener('input', function(){ psRotateTo(rotN.value); });
+  var bL=$('psRotL'), bR=$('psRotR'), bA=$('psRotAuto'), bE=$('psRotEdge'), bRe=$('psRotReset');
+  if(bL)  bL.addEventListener('click', function(){ psRotateBy(-1); });
+  if(bR)  bR.addEventListener('click', function(){ psRotateBy(1); });
+  if(bA)  bA.addEventListener('click', psAutoAlign);
+  if(bE)  bE.addEventListener('click', psRotEdge);
+  if(bRe) bRe.addEventListener('click', psRotReset);
   updateBtn();
 }

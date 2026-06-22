@@ -18,7 +18,8 @@ let editHistory = [];         // elle düzenleme geçmişi: {type:'wall',a,b,cel
 let parcelPts = [];           // parsel poligonu (opsiyonel; bahçe = parsel − bina)
 let parcelClosed = false;
 let parcelSetback = [];       // imar çekme (yapı yaklaşma) sınırı: parselin içe-ofseti; şematik kılavuz
-let parcelSat = null;         // uydu arka planı: {url, x, y, w, h} (dünya koord.) | null
+let parcelSat = null;         // uydu arka planı: {url, x, y, w, h, rot, cx, cy} (dünya koord.) | null
+let parcelRot = 0;            // parsele uygulanan döndürme (rad, kuzey-yukarıya göre): eksene hizalama
 let balconies = [];           // {ei, t0, t1, depth}: pts[ei]→pts[ei+1] kenarında, dışa doğru
 let hoverBalk = null;         // balkon modu önizleme {ei,t0,t1,depth} | tutamaç vurgusu
 let courtyards = [];          // iç avlular: {poly:[{x,y}...]} (dünya koord). generate() bunları footprint'ten oyar

@@ -129,6 +129,9 @@ function render(){
   /* uydu arka planı — en altta, yalnız ekranda (dışa aktarımda gizli) */
   if(parcelSat && parcelSat.url && parcelPts.length>=3 && typeof exportView!=='undefined' && !exportView){
     const g=el('g',{}); svg.appendChild(g);
+    if(parcelSat.rot){                                                       // parselle birlikte döndür (pivot: dx,dy)
+      const cx=W2Sx(parcelSat.cx||0), cy=W2Sy(parcelSat.cy||0);
+      g.setAttribute('transform','rotate('+(parcelSat.rot*180/Math.PI)+' '+cx+' '+cy+')'); }
     const im=el('image',{x:W2Sx(parcelSat.x), y:W2Sy(parcelSat.y),
       width:Math.max(0,parcelSat.w*pxPerM), height:Math.max(0,parcelSat.h*pxPerM),
       preserveAspectRatio:'none', opacity:0.95});
@@ -272,6 +275,20 @@ function render(){
       const t=el('text',{x:W2Sx((l.x+hoverP.x)/2),y:W2Sy((l.y+hoverP.y)/2)-8,'text-anchor':'middle','font-size':12,fill:col,'font-weight':'700'});
       t.textContent=fmt(L)+' m'; g.appendChild(t); }
     g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:hoverP.closing?'#2e7d4f':col,opacity:.8}));
+    if(hoverP.snapPS) g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:9,fill:'none',stroke:'#2563a8','stroke-width':2})); // parsele yapıştı
+  }
+  /* gerçek kuzey oku — parsel döndürülünce gerçek kuzeyi gösterir (ekran-sabit:
+     ekranda sol-alt [üstte araç çubuğu var], dışa aktarımda sol-üst) */
+  if(parcelPts.length>=3){
+    const VH=(r&&r.height)|| +svg.getAttribute('height')||600;
+    const cx=46, cy=exportView?48:(VH-54), R=15, th=parcelRot||0;
+    const nx=Math.sin(th), ny=-Math.cos(th);        // kuzey yön vektörü (ekran)
+    const wx=-ny, wy=nx;                             // dik (kanatlar için)
+    const g=el('g',{}); svg.appendChild(g);
+    g.appendChild(el('circle',{cx,cy,r:24,fill:'rgba(255,255,255,.84)',stroke:'rgba(43,38,32,.18)','stroke-width':1}));
+    g.appendChild(el('path',{d:'M'+(cx+nx*R)+' '+(cy+ny*R)+'L'+(cx+wx*5.5)+' '+(cy+wy*5.5)+'L'+(cx-wx*5.5)+' '+(cy-wy*5.5)+'Z',fill:'#b35a2e'}));   // kuzey
+    g.appendChild(el('path',{d:'M'+(cx-nx*R)+' '+(cy-ny*R)+'L'+(cx+wx*5.5)+' '+(cy+wy*5.5)+'L'+(cx-wx*5.5)+' '+(cy-wy*5.5)+'Z',fill:'#c9bdab'}));  // güney
+    const t=el('text',{x:cx+nx*(R+6.5),y:cy+ny*(R+6.5)+4,'text-anchor':'middle','font-size':12,fill:'#2b2620','font-weight':'800'}); t.textContent='N'; g.appendChild(t);
   }
   updateZoomUI();
   if(typeof psLiveUpdate==='function') psLiveUpdate();

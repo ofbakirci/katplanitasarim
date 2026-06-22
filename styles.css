@@ -58,6 +58,17 @@
   #parselSec .ps-live .ps-warn{color:var(--bad); font-weight:600;}
   #parselSec .ps-link{background:none; border:none; padding:7px 0 0; margin:0; color:var(--info); font-size:12px; cursor:pointer; width:100%; text-align:left;}
   #parselSec .ps-link:hover{color:var(--acc); border:none; text-decoration:underline;}
+  #parselSec .ps-rot-wrap{margin-bottom:8px;}
+  #parselSec .ps-rot-wrap > label{display:block; font-size:13px; margin-bottom:5px;}
+  #parselSec .ps-rot-wrap > label small{color:var(--muted); font-weight:400;}
+  #parselSec .ps-rot{display:flex; align-items:center; gap:6px;}
+  #parselSec .ps-rot input[type=range]{flex:1; min-width:0; accent-color:var(--acc);}
+  #parselSec .ps-rot #psRotNum{width:52px; padding:4px 5px; border:1px solid var(--line); border-radius:6px; font-size:12px; background:#fff; color:var(--ink); text-align:right;}
+  #parselSec .ps-rot button{flex:none; width:26px; height:26px; padding:0; line-height:1; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); font-size:15px; cursor:pointer;}
+  #parselSec .ps-rot button:hover{border-color:var(--acc); color:var(--acc);}
+  #parselSec .ps-rot .ps-dim{color:var(--muted); font-size:12px;}
+  #parselSec .ps-rot-btns{display:flex; gap:10px; margin-top:2px;}
+  #parselSec .ps-rot-btns .ps-link{width:auto; padding:4px 0 0; font-size:11.5px;}
   #parselSec #psAltBox{margin-top:8px; padding-top:10px; border-top:1px dashed var(--line);}
   #parselSec #psAltBox select{width:100%; padding:5px 7px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff; color:var(--ink);}
   #parselSec #psAltBox select:disabled{opacity:.55; background:#f3efe7; cursor:not-allowed;}
