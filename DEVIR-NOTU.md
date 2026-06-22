@@ -288,10 +288,19 @@ ve apartmanda eski korumalar aynen geçerli.
     `{type:'sitemove'}`. **Avlu asgari ölçü** (checks.js, REG.avluMinKisa=1,5 /
     avluIsikOran=0,25): kısa kenar <1,5 m → bad (hava bacası), <binaYük×0,25 → info
     (ışık önerisi), değilse ok. Mobil: site modu dokunmatik blok taşı/seç (mobile.js).
-    Test: `tests/avlu-blok.js` (31: avlu oyma/merkez/snapshot, blok adı A..AB, site
-    snapshot çevrimsiz JSON + restore + footprint/emsal, translateStateObj saflık/alan,
-    avlu dar/geniş denetim). Kalan (faz-3 fikri): bloklar arası mesafe/yangın denetimi,
-    blok kopyala, site SVG'sinde tüm blokların tek tuvalde dışa aktarımı.
+    *Faz-3 (2026-06-22)*: **Bloklar arası mesafe/çakışma** (checks.js, REG.bloklarArasiMin
+    =6 m): çift blok poligonları arası en küçük mesafe (köşe↔kenar) + çakışma (pip); çakışma
+    → bad, <6 m → bad, değilse ok ("imar/yangın durumuna göre"). **Blok kopyala** (blockTabs
+    "⧉ Kopyala" → copyBlock): aktif bloğu footprint genişliği + 3 m sağa öteler, sıradaki
+    harf otomatik; translateStateObj ile (çok katlı + iskelet dâhil) çevrilir, restoreState'le
+    yeni blok olur. **Tek tuvalde site SVG/PNG** (io.js exportClone site-farkındalıklı):
+    site açıkken bbox tüm blokları kapsar, geçici `mode='site'` ile tüm bloklar tek tuvale
+    çizilir (alt ölçek 14 px/m), daire tablosu atlanır; gömülü durum yine `st.blocks` ile
+    tüm siteyi taşır. translateStateObj artık `floors` + `lockedCore`'u da çevirir (çok katlı
+    blok taşıma/kopyalama doğru); aktif blok taşıma commit'i translateStateObj+restoreState
+    ile tam (görünür kat hafif önizleme). Test: `tests/avlu-blok.js` (44: + bloklar arası
+    yakın/uzak/çakışma, kopyala konum/ad/çakışmama, çok katlı çeviri). Kalan fikirler:
+    blok-bazlı kat sayısı UI'si (şu an sekmesiz blokta kat snapshot'tan), blok döndürme.
 
 ## Bilerek verilen kararlar
 - Salon "emici"dir: program alanı doldurmuyorsa artık alan salona gider (her alternatif

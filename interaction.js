@@ -112,14 +112,14 @@ svg.addEventListener('mousemove',e=>{
     if(dragging.type==='avlu'){ avluGhost={poly:rectPoly(dragging.x0,dragging.y0,S2Wx(sx),S2Wy(sy))}; render(); }
     if(dragging.type==='siteMove'){
       const dx=snapG(S2Wx(sx)-dragging.x0), dy=snapG(S2Wy(sy)-dragging.y0);
-      if(dx||dy) dragging.moved=true;
+      dragging.dx=dx; dragging.dy=dy; if(dx||dy) dragging.moved=true;
       const o=dragging.orig;
-      if(o.active){
-        pts=o.pts.map(p=>({x:p.x+dx,y:p.y+dy}));
-        courtyards=o.courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x+dx,y:p.y+dy}))}));
-        if(plan){ plan.minX=o.minX+dx; plan.minY=o.minY+dy; }
-        const ov={}; for(const k in o.doorOv){ const d=o.doorOv[k]; ov[k]={...d,x:d.x+dx,y:d.y+dy}; } doorOverrides=ov;
-        extraDoors=o.extraDoors.map(d=>({...d,x:d.x+dx,y:d.y+dy}));
+      if(o.active){ const L=o.live;     // hafif önizleme (yalnız görünür kat)
+        pts=L.pts.map(p=>({x:p.x+dx,y:p.y+dy}));
+        courtyards=L.courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x+dx,y:p.y+dy}))}));
+        if(plan){ plan.minX=L.minX+dx; plan.minY=L.minY+dy; }
+        const ov={}; for(const k in L.doorOv){ const d=L.doorOv[k]; ov[k]={...d,x:d.x+dx,y:d.y+dy}; } doorOverrides=ov;
+        extraDoors=L.extraDoors.map(d=>({...d,x:d.x+dx,y:d.y+dy}));
       } else {
         blocks[dragging.idx]=translateStateObj(o.snap, dx, dy);
       }
@@ -287,12 +287,14 @@ svg.addEventListener('mousedown',e=>{
     if(e.button!==0 || !siteOn()) return;
     const wx=S2Wx(sx), wy=S2Wy(sy), idx=hitBlock(wx,wy);
     if(idx<0) return;
+    /* snap = commit için tam durum (çok katlı blok dâhil); live = sürükleme önizlemesi (görünür kat) */
     const orig=(idx===activeBlock)
-      ? {active:true, pts:pts.map(p=>({...p})), courtyards:courtyardsSnapshot(),
-         minX:plan?plan.minX:0, minY:plan?plan.minY:0,
-         doorOv:JSON.parse(JSON.stringify(doorOverrides)), extraDoors:extraDoors.map(d=>({...d}))}
+      ? {active:true, snap:stateSnapshot(false),
+         live:{pts:pts.map(p=>({...p})), courtyards:courtyardsSnapshot(),
+           minX:plan?plan.minX:0, minY:plan?plan.minY:0,
+           doorOv:JSON.parse(JSON.stringify(doorOverrides)), extraDoors:extraDoors.map(d=>({...d}))}}
       : {active:false, snap:JSON.parse(JSON.stringify(blocks[idx]))};
-    dragging={type:'siteMove', idx, x0:wx, y0:wy, orig, moved:false};
+    dragging={type:'siteMove', idx, x0:wx, y0:wy, orig, dx:0, dy:0, moved:false};
     e.preventDefault(); return;
   }
   if(plan && e.button===0){ // ayırıcı tutamacı? oda duvarı?
@@ -375,8 +377,12 @@ function finishDrag(){
   } else if(dragging.type==='siteMove'){
     const d=dragging; dragging=null;
     if(d.moved){
-      editHistory.push({type:'sitemove', idx:d.idx, orig:d.orig});
-      if(d.orig.active) resetCuts();
+      /* commit: aktif blok TAM durumdan (tüm katlar dâhil) yeniden kurulur; inaktif zaten çevrildi */
+      if(d.orig.active){
+        try{ restoreState(translateStateObj(d.orig.snap, d.dx, d.dy), {keepBlocks:true}); }
+        catch(err){ console.error('blok taşı:', err); }
+      }
+      editHistory.push({type:'sitemove', idx:d.idx, active:d.orig.active, snap:d.orig.snap});
       if(plan) runChecks(); renderBlockTabs(); render();
     } else if(typeof switchBlock==='function'){   // hareketsiz tık = bloğa geç (düzenle)
       switchBlock(d.idx); setMode('draw');
@@ -406,12 +412,10 @@ function undoEdit(){
   if(e.type==='park'){ if(plan&&e.prev){ plan.parking=e.prev; hoverBay=null; parkGhost=null;
     runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); } return true; }
   if(e.type==='avlu'){ courtyards=(e.prev||[]).map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})); avluGhost=null; avluChanged(); return true; }
-  if(e.type==='sitemove'){ const o=e.orig;
-    if(o.active){ pts=o.pts.map(p=>({...p})); courtyards=o.courtyards.map(av=>({poly:av.poly.map(p=>({...p}))}));
-      if(plan){ plan.minX=o.minX; plan.minY=o.minY; }
-      doorOverrides=JSON.parse(JSON.stringify(o.doorOv)); extraDoors=o.extraDoors.map(d=>({...d})); }
-    else if(blocks){ blocks[e.idx]=JSON.parse(JSON.stringify(o.snap)); }
-    hoverWall=null; if(plan) runChecks(); renderBlockTabs(); render(); return true; }
+  if(e.type==='sitemove'){
+    if(e.active){ try{ restoreState(e.snap, {keepBlocks:true}); }catch(err){ console.error(err); } }
+    else if(blocks){ blocks[e.idx]=JSON.parse(JSON.stringify(e.snap)); render(); }
+    hoverWall=null; if(typeof renderBlockTabs==='function') renderBlockTabs(); return true; }
   if(e.type==='wallsnap'){
     if(!plan) return true;
     restoreRegions(e.snap);
@@ -570,7 +574,7 @@ document.getElementById('tbToggle').onclick=()=>{
   const STEPS_DESKTOP=[
     {t:'Sınırı çizin', h:'<b>'+icon('draw','inl')+' Çiz</b> aracıyla tıklayarak bina dış sınırını oluşturun; kenarlar 15°’ye ve 0,5 m ızgaraya oturur. Başlangıç noktasına tıklayınca sınır kapanır. Hızlı denemek için <b>'+icon('sample','inl')+' Örnek sınır</b>.'},
     {t:'Parsel, balkon, avlu', h:'<b>'+icon('parcel','inl')+' Parsel</b> ile arsa sınırını çizin; bahçe alanı, TAKS ve çekme mesafeleri hesaplanır. <b>'+icon('balcony','inl')+' Balkon</b> aracında dış duvara tıklayıp balkon ekleyin (SAĞ TIK siler). <b>'+icon('avlu','inl')+' Avlu</b> aracıyla bina sınırı içine sürükleyerek aydınlık avlusu oyun (SAĞ TIK siler) — avluya bakan oda kenarları cephe/havalandırma sayılır.'},
-    {t:'Yerleşim ve site', h:'Sol panelden daire tiplerini ayarlayın ve <b>Yerleşimi Oluştur</b>’a basın; mevzuat paneli canlı güncellenir. Birden çok bina için <b>Site (çoklu blok)</b> anahtarını açın: üstteki <b>Blok A · B · C…</b> sekmelerinden her bloğu ayrı planlayın (adlar otomatik), TAKS/KAKS parsel geneli hesaplanır. Araç çubuğundaki <b>'+icon('blok','inl')+' Site</b> ile genel görünüme geçin — blokları parselde sürükleyerek konumlandırın, bloğa tıklayınca düzenlemeye döner.'},
+    {t:'Yerleşim ve site', h:'Sol panelden daire tiplerini ayarlayın ve <b>Yerleşimi Oluştur</b>’a basın; mevzuat paneli canlı güncellenir. Birden çok bina için <b>Site (çoklu blok)</b> anahtarını açın: üstteki <b>Blok A · B · C…</b> sekmelerinden her bloğu ayrı planlayın (adlar otomatik), TAKS/KAKS parsel geneli hesaplanır. Araç çubuğundaki <b>'+icon('blok','inl')+' Site</b> ile genel görünüme geçin — blokları parselde sürükleyerek konumlandırın, bloğa tıklayınca düzenlemeye döner. <b>⧉ Kopyala</b> aktif bloğu çoğaltır; <b>SVG/PNG indir</b> site açıkken tüm blokları tek tuvalde verir.'},
     {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>'+icon('door','inl')+' Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. <b>'+icon('structure','inl')+' Yapı</b> aracı çekirdeği (merdiven, asansör, teknik şaft, yangın merdiveni) öne çıkarır: <b>✛</b> ile taşıyın, <b>kare</b> tutamaçlardan boyutlandırın; bina sınırını köşelerinden sürükleyin, <b>+</b> ile yeni köşe ekleyin. Çekirdek bir <b>iskelettir</b>: kilitli kalır, daireler etrafına dizilir, "Yerleşimi Oluştur" onu sıfırlamaz (sıfırlamak için "'+icon('clear','inl')+' Yapı iskeletini sıfırla"). Dokunmatik ekranda: <b>uzun basış</b> = sağ tık, <b>çift dokunuş</b> = çift tık, <b>iki parmak</b> = yakınlaştır, boşta sürükleme = kaydır. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
     {t:'Kontrol ve dışa aktarım', h:'<b>'+icon('undo','inl')+' Geri al</b> elle yapılan değişiklikleri adım adım geri alır. Mevzuat kontrolleri yeşile dönünce <b>SVG / PNG indir</b> ile dışa aktarın.'}
   ];

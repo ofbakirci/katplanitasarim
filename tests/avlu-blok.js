@@ -116,6 +116,37 @@ ok(runChecks().some(x=>x.s==='bad' && /Avlu/.test(x.t)), 'dar avlu (kısa kenar 
 courtyards=[{poly:[{x:14,y:3},{x:24,y:3},{x:24,y:9},{x:14,y:9}]}]; // 10×6 m → kısa kenar 6 m ≥ önerilen
 generate();
 ok(!runChecks().some(x=>x.s==='bad' && /Avlu/.test(x.t)), 'geniş avlu (kısa kenar 6 m) avlu bad üretmez');
+
+/* ===== F) Bloklar arası mesafe / çakışma denetimi ===== */
+pts=[{x:0,y:0},{x:20,y:0},{x:20,y:10},{x:0,y:10}]; closed=true; courtyards=[]; generate();
+getEl('siteMod').checked=true; blocks=[stateSnapshot(false), null]; activeBlock=0;
+blocks[1]={pts:[{x:22,y:0},{x:42,y:0},{x:42,y:10},{x:22,y:10}], ui:{katSayisi:'3'}, plan:{minX:22,minY:0,cols:0,regions:[]}};
+ok(runChecks().some(x=>x.s==='bad' && /blok/i.test(x.t) && /aras/i.test(x.t)), 'yakın bloklar (2 m) blok-mesafe bad üretir');
+blocks[1].pts=[{x:30,y:0},{x:50,y:0},{x:50,y:10},{x:30,y:10}]; // 10 m boşluk
+ok(!runChecks().some(x=>x.s==='bad' && /blok/i.test(x.t) && /aras/i.test(x.t)), 'uzak bloklar (10 m) blok-mesafe bad üretmez');
+blocks[1].pts=[{x:10,y:2},{x:30,y:2},{x:30,y:8},{x:10,y:8}]; // A ile çakışır
+ok(runChecks().some(x=>x.s==='bad' && /çakış/.test(x.t)), 'çakışan bloklar bad üretir');
+
+/* ===== G) Blok kopyala ===== */
+pts=[{x:0,y:0},{x:20,y:0},{x:20,y:10},{x:0,y:10}]; closed=true; courtyards=[]; generate();
+getEl('siteMod').checked=true; blocks=[stateSnapshot(false)]; activeBlock=0;
+copyBlock();
+ok(blocks.length===2 && activeBlock===1, 'kopyala yeni bloğu ekledi + aktif yaptı');
+ok(Math.abs(bboxOf(pts).minX-23)<1e-6, 'kopya 23 m sağa ötelendi (footprint 20 + 3)');
+ok(!pts.some(q=>pip(q.x,q.y,blocks[0].pts)) && !blocks[0].pts.some(q=>pip(q.x,q.y,pts)), 'kopya orijinalle çakışmıyor');
+ok(blockName(1)==='B', 'kopya otomatik ad: B');
+
+/* ===== H) translateStateObj çok katlı bloğu çevirir ===== */
+const stF={pts:[{x:0,y:0},{x:10,y:0},{x:10,y:5},{x:0,y:5}], plan:{minX:0,minY:0}, parcelPts:[{x:-5,y:-5}],
+  lockedCore:[{type:'merdiven',x0:1,y0:1,x1:3,y1:4}],
+  floors:[ {pts:[{x:0,y:0},{x:10,y:0}], plan:{minX:0,minY:0}, parcelPts:[{x:-5,y:-5}]}, null ]};
+const tF=translateStateObj(stF,100,50);
+ok(tF.plan.minX===100 && tF.plan.minY===50, 'çok katlı: üst plan çevrildi');
+ok(tF.lockedCore[0].x0===101 && tF.lockedCore[0].y1===54, 'çok katlı: iskelet (lockedCore) çevrildi');
+ok(tF.floors[0].pts[0].x===100 && tF.floors[0].plan.minX===100, 'çok katlı: kat anlık görüntüsü çevrildi');
+ok(JSON.stringify(tF.floors[0].parcelPts)===JSON.stringify(stF.floors[0].parcelPts), 'çok katlı: kat parseli çevrilmedi');
+ok(tF.floors[1]===null, 'çok katlı: boş kat null kaldı');
+ok(JSON.stringify(tF.parcelPts)===JSON.stringify(stF.parcelPts), 'üst parsel çevrilmedi (site-ortak)');
 `);
 
 console.log((fail? '  '+fail+' BAŞARISIZ, ':'✓ ')+'tüm avlu/blok testleri '+(fail?'':'geçti ')+'('+pass+')');

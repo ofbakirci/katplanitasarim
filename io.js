@@ -47,21 +47,29 @@ function exportTableGroup(x0,maxH){
   return {g, w:(col+1)*(W+gap)-gap, h:Math.max(...colHs)+22};
 }
 function exportClone(){
-  /* ekran yakınlığından bağımsız, etiketlerin okunaklı olduğu sabit ölçekte çiz */
-  const bb=bboxOf(pts.concat(parcelPts));
+  const site=(typeof siteOn==='function')&&siteOn();
+  /* ekran yakınlığından bağımsız, sabit ölçekte çiz. bbox: site → TÜM bloklar + parsel;
+     tek bina → aktif sınır + parsel */
+  let allPts=pts.concat(parcelPts);
+  if(site && typeof siteBlocksData==='function'){
+    let a=[]; siteBlocksData().forEach(bd=>{ a=a.concat(bd.pts); });
+    a=a.concat(parcelPts); if(a.length>=3) allPts=a;
+  }
+  const bb=bboxOf(allPts);
   const bd=balconies.reduce((m,b)=>Math.max(m,b.depth||0),0);
   const marg=2.5+bd; // ölçü yazıları + balkon taşması (m)
   const w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
-  const S=Math.max(22,Math.min(45,2200/w)); // ≥22 px/m: oda etiketleri ve duvar ölçüleri görünür
-  const save={p:pxPerM,x:panX,y:panY};
+  const S=Math.max(site?14:22,Math.min(45,2200/w)); // ≥22 px/m (site daha büyük olabilir → ≥14)
+  const save={p:pxPerM,x:panX,y:panY,m:mode};
   exportView={width:Math.round(w*S),height:Math.round(h*S),left:0,top:0};
   pxPerM=S; panX=(marg-bb.minX)*S; panY=(marg-bb.minY)*S;
+  if(site) mode='site';            // tüm blokları aynı tuvalde çiz (genel görünüm)
   render();
   const clone=svg.cloneNode(true);
   const planW=exportView.width, planH=exportView.height;
-  exportView=null; pxPerM=save.p; panX=save.x; panY=save.y; render(); // ekranı eski haline döndür
+  exportView=null; pxPerM=save.p; panX=save.x; panY=save.y; mode=save.m; render(); // ekranı eski haline döndür
   clone.setAttribute('font-family',EXPORT_FONT);
-  const tbl=exportTableGroup(planW+12, planH);
+  const tbl=site? null : exportTableGroup(planW+12, planH);  // site: daire tablosu yok (genel yerleşim planı)
   let W=planW, H=planH;
   if(tbl){ clone.appendChild(tbl.g); W=planW+tbl.w+24; H=Math.max(H,tbl.h+8); }
   clone.setAttribute('width',W); clone.setAttribute('height',H);

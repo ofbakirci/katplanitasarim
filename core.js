@@ -12,6 +12,7 @@ const REG = {
   yanginYukseklik:21.5, kacisMesafe:30, siginakDaire:8, teknikOdaDaire:6,
   cikmaMax:1.5, balkonMinD:1.2, taksMax:0.4, yanBahce:3.0,
   avluMinKisa:1.5, avluIsikOran:0.25, // iç avlu: hava bacası asgari kısa kenar (m); ışık için önerilen ≥ bina yük. × oran
+  bloklarArasiMin:6.0, // site: iki blok arası şematik asgari mesafe (m; imar/yangın durumuna göre değişir)
   katOturumOran:0.7, // katları ayrı planlanan villada her kat oturumu ≥ zeminin %70'i
   parkBayLen:5.0, parkBayWid:2.5, parkAisle:5.0, // dik (90°) park yeri 2,5×5 m + manevra yolu 5 m (Otopark Yön.)
   siginakMinM2:12.0, siginakKisiM2:1.0,

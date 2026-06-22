@@ -530,18 +530,41 @@ function hitBlock(wx,wy){
   return -1;
 }
 /* bir snapshot'ı (dx,dy) kadar çevir — yalnız dünya-koordinatlı alanlar; ızgara (hücre/merdiven)
-   minX/minY ile taşınır; parsel site-ortak (çevrilmez); ayırıcılar sıfırlanır (yeniden üretimde otomatik) */
+   minX/minY ile taşınır; parsel site-ortak (çevrilmez); ayırıcılar sıfırlanır. Çok katlı blokta
+   her kat anlık görüntüsü ve bina iskeleti (lockedCore, dünya koord) de çevrilir. */
 function translateStateObj(st, dx, dy){
   const o=JSON.parse(JSON.stringify(st));
-  o.pts=(o.pts||[]).map(p=>({x:p.x+dx,y:p.y+dy}));
-  if(o.courtyards) o.courtyards=o.courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x+dx,y:p.y+dy}))}));
-  if(o.plan){ o.plan.minX+=dx; o.plan.minY+=dy; }
-  if(o.doors){
-    if(o.doors.ov){ const ov={}; for(const k in o.doors.ov){ const d=o.doors.ov[k]; ov[k]={...d, x:d.x+dx, y:d.y+dy}; } o.doors.ov=ov; }
-    if(o.doors.extra) o.doors.extra=o.doors.extra.map(d=>({...d, x:d.x+dx, y:d.y+dy}));
-  }
-  o.cuts=null;
+  const apply=s=>{
+    if(!s) return;
+    s.pts=(s.pts||[]).map(p=>({x:p.x+dx,y:p.y+dy}));
+    if(s.courtyards) s.courtyards=s.courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x+dx,y:p.y+dy}))}));
+    if(s.plan){ s.plan.minX+=dx; s.plan.minY+=dy; }
+    if(s.doors){
+      if(s.doors.ov){ const ov={}; for(const k in s.doors.ov){ const d=s.doors.ov[k]; ov[k]={...d, x:d.x+dx, y:d.y+dy}; } s.doors.ov=ov; }
+      if(s.doors.extra) s.doors.extra=s.doors.extra.map(d=>({...d, x:d.x+dx, y:d.y+dy}));
+    }
+    if(s.lockedCore) s.lockedCore=s.lockedCore.map(e=>({...e, x0:e.x0+dx, y0:e.y0+dy, x1:e.x1+dx, y1:e.y1+dy}));
+    s.cuts=null;
+  };
+  apply(o);
+  if(o.floors) o.floors=o.floors.map(f=>{ apply(f); return f; }); // villa/apartman katları (parsel hariç)
   return o;
+}
+/* aktif bloğu kopyala: footprint genişliği + 3 m sağa ötele, sıradaki harf otomatik */
+function copyBlock(){
+  if(!siteOn()) return;
+  if(mode==='site'&&typeof setMode==='function') setMode('draw');
+  saveActiveBlock();
+  const src=blocks[activeBlock];
+  if(!src || !src.plan || !src.pts || src.pts.length<3){
+    if(typeof alert==='function') alert('Kopyalanacak planlı bir blok yok — önce aktif bloğu oluşturun.');
+    return;
+  }
+  const bb=bboxOf(src.pts), dx=(bb.maxX-bb.minX)+3;
+  const copy=translateStateObj(src, dx, 0);
+  blocks.push(copy); activeBlock=blocks.length-1;
+  try{ restoreState(copy, {keepBlocks:true}); }catch(err){ console.error('blok kopya:', err); }
+  renderBlockTabs();
 }
 function renderBlockTabs(){
   const box=document.getElementById('blockTabs');
@@ -568,6 +591,10 @@ function renderBlockTabs(){
   add.title='Yeni blok ekle (otomatik ad: Blok '+blockName(blocks.length)+')';
   add.addEventListener('click',addBlock);
   box.appendChild(add);
+  const cp=document.createElement('button'); cp.className='add'; cp.textContent='⧉ Kopyala';
+  cp.title='Aktif bloğu kopyala (Blok '+blockName(activeBlock)+' → Blok '+blockName(blocks.length)+', sağa ötelenir)';
+  cp.addEventListener('click',copyBlock);
+  box.appendChild(cp);
   positionOnb();
 }
 function switchBlock(k){

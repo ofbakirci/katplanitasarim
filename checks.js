@@ -296,6 +296,24 @@ function collectChecks(){
         add('ok',`Avlu ${i+1}: kısa kenar ${fmt(kisa)} m yeterli (≥ önerilen ${fmt(oneri)} m).`);
     });
   }
+  /* site: bloklar arası mesafe / çakışma (yangın + imar şematik) */
+  if((typeof siteOn==='function')&&siteOn() && typeof siteBlocksData==='function'){
+    const polys=siteBlocksData().filter(d=>d.pts&&d.pts.length>=3);
+    if(polys.length>=2){
+      let minD=1e9, overlap=false, worst=null;
+      for(let i=0;i<polys.length;i++) for(let j=i+1;j<polys.length;j++){
+        const A=polys[i].pts, B=polys[j].pts;
+        if(A.some(q=>pip(q.x,q.y,B)) || B.some(q=>pip(q.x,q.y,A))) overlap=true;
+        let d=1e9;
+        A.forEach(q=>{ for(let k=0;k<B.length;k++){ const P=B[k],Q=B[(k+1)%B.length]; d=Math.min(d,distSeg(q.x,q.y,P.x,P.y,Q.x,Q.y)); } });
+        B.forEach(q=>{ for(let k=0;k<A.length;k++){ const P=A[k],Q=A[(k+1)%A.length]; d=Math.min(d,distSeg(q.x,q.y,P.x,P.y,Q.x,Q.y)); } });
+        if(d<minD){ minD=d; worst=[polys[i].name,polys[j].name]; }
+      }
+      if(overlap) add('bad','İki blok çakışıyor (üst üste) — Site görünümünde sürükleyip ayırın.');
+      else if(minD<REG.bloklarArasiMin) add('bad',`En yakın iki blok (${worst[0]}–${worst[1]}) arası ≈ ${fmt(minD)} m < ${fmt(REG.bloklarArasiMin)} m (şematik asgari; imar/yangın durumuna göre).`);
+      else add('ok',`Bloklar arası en küçük mesafe ≈ ${fmt(minD)} m (≥ ${fmt(REG.bloklarArasiMin)} m).`);
+    }
+  }
   /* balkonlar */
   if(balconies.length){
     const tot=balconies.reduce((s,b)=>s+balkArea(b),0);
