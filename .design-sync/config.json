@@ -1,0 +1,7 @@
+{
+  "projectId": "de6a9656-8014-41ce-875c-7dadc0d7bb28",
+  "projectName": "mesken-ds",
+  "shape": "off-script",
+  "note": "Hand-authored CSS design system at design-system/. Repo is a standalone vanilla-JS app (no Storybook, no React/JSX, no compiled dist); the converter (package-build.mjs) does not apply. See .design-sync/NOTES.md. Upload = design-system/ verbatim: @dsCard preview cards + real styles.css + conventions README.md. No _ds_bundle.js / .d.ts / _ds_sync.json (no JS components to compile).",
+  "localDir": "design-system"
+}
