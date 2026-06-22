@@ -631,7 +631,7 @@ document.getElementById('tClear').onclick=()=>{ pts=[];closed=false;plan=null;ed
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
   updateStructResetBtn();
-  document.getElementById('genBtn').disabled=true; document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true;
+  document.getElementById('genBtn').disabled=true; document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true; document.getElementById('aiPaintBtn').disabled=true;
   document.getElementById('unitTable').style.display='none';
   document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–'; render(); };
 document.getElementById('tFit').onclick=fitView;

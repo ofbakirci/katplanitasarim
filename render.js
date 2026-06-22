@@ -224,7 +224,7 @@ function render(){
         const fs=Math.max(8,Math.min(11,pxPerM*0.55));
         const t=el('text',{x:W2Sx(cx),y:W2Sy(cy)-fs*0.35,'text-anchor':'middle','dominant-baseline':'middle',
           'font-size':fs,fill:'#3f5b73','font-weight':'600'});
-        t.textContent='BALKON '+fmt(balkArea(b))+' m²'; g.appendChild(t);
+        t.textContent=((typeof aiPaintMode!=='undefined' && aiPaintMode)?'Balcony ':'BALKON ')+fmt(balkArea(b))+' m²'; g.appendChild(t);
         const t2=el('text',{x:W2Sx(cx),y:W2Sy(cy)+fs*0.75,'text-anchor':'middle','dominant-baseline':'middle',
           'font-size':fs*0.9,fill:'#3f5b73'});
         t2.textContent=fmt(b.t1-b.t0)+' × '+fmt(b.depth)+' m'; g.appendChild(t2);
@@ -406,7 +406,7 @@ function renderPlan(){
     if(!reg.cells.length||reg.area<2.0) return; // kırıntı bölgelere etiket yazma
     const fs=Math.max(8,Math.min(13,pxPerM*0.62));
     const t=el('text',{x:W2Sx(reg.cx),y:W2Sy(reg.cy)-fs*0.25,'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
-    t.textContent=reg.name; g.appendChild(t);
+    t.textContent=(typeof aiPaintMode!=='undefined' && aiPaintMode)?regLabelEN(reg):reg.name; g.appendChild(t);
     if(reg.area>=2){
       const t2=el('text',{x:W2Sx(reg.cx),y:W2Sy(reg.cy)+fs*0.95,'text-anchor':'middle','font-size':fs*0.9,fill:'#6b5e4d'});
       t2.textContent=fmt(reg.area)+' m²'; g.appendChild(t2); }

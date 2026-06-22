@@ -1,6 +1,7 @@
 'use strict';
 /* ================= dışa aktarma ================= */
 const EXPORT_FONT="'Helvetica Neue',Helvetica,Arial,sans-serif"; // sayfa CSS'i dışa aktarılan SVG'ye taşınmaz; font belirtilmezse tarayıcı varsayılan serif (Times) kullanır
+let aiPaintMode=false; // AI boyama export modu: EN etiket, daire tablosu yok (balkon KORUNUR, m² KALIR)
 function exportTableGroup(x0,maxH){
   /* yüzen daire tablosunun SVG kopyası — özdeş daireler gruplanır, plan yüksekliğini aşınca yeni sütuna sarar */
   if(!plan||!plan.unitObjs.length) return null;
@@ -69,7 +70,7 @@ function exportClone(){
   const planW=exportView.width, planH=exportView.height;
   exportView=null; pxPerM=save.p; panX=save.x; panY=save.y; mode=save.m; render(); // ekranı eski haline döndür
   clone.setAttribute('font-family',EXPORT_FONT);
-  const tbl=site? null : exportTableGroup(planW+12, planH);  // site: daire tablosu yok (genel yerleşim planı)
+  const tbl=(site||aiPaintMode)? null : exportTableGroup(planW+12, planH);  // site / AI boyama: daire tablosu yok
   let W=planW, H=planH;
   if(tbl){ clone.appendChild(tbl.g); W=planW+tbl.w+24; H=Math.max(H,tbl.h+8); }
   clone.setAttribute('width',W); clone.setAttribute('height',H);
@@ -222,6 +223,7 @@ function restoreState(st, opt){
   document.getElementById('genBtn').disabled=false;
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
+  document.getElementById('aiPaintBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: içe aktarılan sınırın alan/çevresi (eski değer asılı kalmasın) */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
@@ -253,8 +255,24 @@ function exportPNG(){
     const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani.png'; a.click(); };
   img.src=data;
 }
+/* AI boyama (Higgsfield / nano-banana) tabanı: EN etiket, daire tablosu yok,
+   balkon korunur, m² odanın içinde kalır, temiz beyaz zemin. */
+function exportAIPaintPNG(){
+  aiPaintMode=true;
+  try {
+    const {clone,W,H}=exportClone();   // aiPaintMode true → exportClone tabloyu atlar
+    const data='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(clone))));
+    const img=new Image();
+    img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
+      const ctx=cv.getContext('2d'); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,cv.width,cv.height); // model için temiz beyaz zemin
+      ctx.scale(2,2); ctx.drawImage(img,0,0);
+      const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani-AI-boyama.png'; a.click(); };
+    img.src=data;
+  } finally { aiPaintMode=false; render(); } // ekrandaki planı TR etiketle geri çiz
+}
 document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
+document.getElementById('aiPaintBtn').onclick=exportAIPaintPNG;
 
 /* ================= içe aktarma =================
    1) kpState gömülü SVG / .json → restoreState (birebir geri yükleme)
@@ -457,6 +475,7 @@ function importLegacySvg(txt){
   document.getElementById('genBtn').disabled=false;
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
+  document.getElementById('aiPaintBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: çözümlenen sınırın alan/çevresi */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';

@@ -29,6 +29,52 @@ const COLORS = {
 const TYPE_TR = {salon:'Salon', yatak:'Yatak odası', mutfak:'Mutfak', banyo:'Banyo', wc:'WC',
   antre:'Antre', oda:'Oda (nötr)', koridor:'Ortak hol', merdiven:'Merdiven', asansor:'Asansör', teknik:'Teknik/Şaft', yangin:'Yangın merd.',
   otopark:'Otopark', siginak:'Sığınak', dukkan:'Dükkan (ticari)', depo:'Depo'};
+/* ── AI boyama export için İngilizce etiketler (TYPE_TR ile birebir aynı anahtarlar) ── */
+const TYPE_EN = {
+  salon:'Living Room', yatak:'Bedroom', mutfak:'Kitchen', banyo:'Bathroom', wc:'WC',
+  antre:'Entry', oda:'Room', koridor:'Corridor', merdiven:'Staircase',
+  asansor:'Elevator', teknik:'Shaft', yangin:'Fire Escape Stair',
+  otopark:'Parking', siginak:'Shelter', dukkan:'Shop', depo:'Storage'
+};
+/* reg.name (özel Türkçe ad) → İngilizce. Anahtarlar planner.js / rooms.js / io.js'teki
+   GERÇEK Türkçe `name` stringleridir; kod tarandı, mevcut tüm adlar kapsanır. */
+const NAME_EN = {
+  'SALON + MUTFAK':'Living + Kitchen',   // açık (Amerikan) mutfak — tek bölge
+  'SALON':'Living Room',
+  'MUTFAK':'Kitchen',
+  'OTURMA ODASI':'Living Room',
+  'STÜDYO':'Studio',
+  'YATAK ODASI':'Bedroom',
+  'EB. YATAK ODASI':'Master Bedroom',
+  'BANYO':'Bathroom',
+  'EB. BANYO':'En-suite Bath',
+  'WC':'WC',
+  'ANTRE':'Entry',
+  'KİLER':'Pantry',
+  'ÇALIŞMA ODASI':'Study',
+  'APARTMAN HOLÜ':'Corridor',
+  'MERDİVEN':'Staircase',
+  'ASANSÖR':'Elevator',
+  'ASANSÖR YERİ':'Elevator',
+  'TEKNİK / ŞAFT':'Shaft',
+  'ŞAFT':'Shaft',
+  'YANGIN MERD.':'Fire Escape Stair',
+  'ORTAK DEPO':'Common Storage',
+  'DEPO':'Storage',
+  'OTOPARK':'Parking',
+  'SIĞINAK':'Shelter',
+  'DÜKKAN':'Shop',
+  'ODA':'Room'
+};
+/* Tek kaynak etiket çözümleyici: önce özel ada, yoksa type'a düşer; eşleşmezse
+   orijinal ad döner (asla yanlış İngilizce etiket üretmez). DÜKKAN sondaki ekle
+   gelebildiği için startsWith ile de denenir. */
+function regLabelEN(reg){
+  const nm=(reg.name||'').trim();
+  if(NAME_EN[nm]) return NAME_EN[nm];
+  for(const k in NAME_EN) if(nm.startsWith(k)) return NAME_EN[k];
+  return TYPE_EN[reg.type] || (nm || 'Room');
+}
 
 /* ================= ortak yardımcılar ================= */
 const fmt = v => (Math.round(v*100)/100).toLocaleString('tr-TR');
