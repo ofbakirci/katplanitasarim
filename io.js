@@ -2,6 +2,7 @@
 /* ================= dışa aktarma ================= */
 const EXPORT_FONT="'Helvetica Neue',Helvetica,Arial,sans-serif"; // sayfa CSS'i dışa aktarılan SVG'ye taşınmaz; font belirtilmezse tarayıcı varsayılan serif (Times) kullanır
 let aiPaintMode=false; // AI boyama export modu: EN etiket, daire tablosu yok (balkon KORUNUR, m² KALIR)
+let edgeMaskMode=false; // ControlNet/Flux-Canny duvar-kenar export modu: beyaz zemin + saf siyah SÜREKLİ duvarlar; etiket/renk/m²/mobilya/grid/balkon/ölçü YOK
 function exportTableGroup(x0,maxH){
   /* yüzen daire tablosunun SVG kopyası — özdeş daireler gruplanır, plan yüksekliğini aşınca yeni sütuna sarar */
   if(!plan||!plan.unitObjs.length) return null;
@@ -57,7 +58,7 @@ function exportClone(){
     a=a.concat(parcelPts); if(a.length>=3) allPts=a;
   }
   const bb=bboxOf(allPts);
-  const bd=balconies.reduce((m,b)=>Math.max(m,b.depth||0),0);
+  const bd=edgeMaskMode?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0); // kenar modunda balkon çizilmez → taşma payı yok (kadraj tam dikdörtgen). AI boyama balkonu KORUR → pay kalır.
   const marg=2.5+bd; // ölçü yazıları + balkon taşması (m)
   const w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
   const S=Math.max(site?14:22,Math.min(45,2200/w)); // ≥22 px/m (site daha büyük olabilir → ≥14)
@@ -70,7 +71,7 @@ function exportClone(){
   const planW=exportView.width, planH=exportView.height;
   exportView=null; pxPerM=save.p; panX=save.x; panY=save.y; mode=save.m; render(); // ekranı eski haline döndür
   clone.setAttribute('font-family',EXPORT_FONT);
-  const tbl=(site||aiPaintMode)? null : exportTableGroup(planW+12, planH);  // site / AI boyama: daire tablosu yok
+  const tbl=(site||aiPaintMode||edgeMaskMode)? null : exportTableGroup(planW+12, planH);  // site / AI boyama / kenar maskesi: daire tablosu yok
   let W=planW, H=planH;
   if(tbl){ clone.appendChild(tbl.g); W=planW+tbl.w+24; H=Math.max(H,tbl.h+8); }
   clone.setAttribute('width',W); clone.setAttribute('height',H);
@@ -223,7 +224,7 @@ function restoreState(st, opt){
   document.getElementById('genBtn').disabled=false;
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
-  document.getElementById('aiPaintBtn').disabled=false;
+  document.getElementById('aiOutputBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: içe aktarılan sınırın alan/çevresi (eski değer asılı kalmasın) */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
@@ -270,9 +271,31 @@ function exportAIPaintPNG(){
     img.src=data;
   } finally { aiPaintMode=false; render(); } // ekrandaki planı TR etiketle geri çiz
 }
+/* ControlNet / Flux-Canny duvar-kenar haritası: beyaz zemin + saf siyah SÜREKLİ duvarlar.
+   AI Boyama PNG ile BİREBİR aynı kadraj/ölçek (aynı exportClone) → iki PNG üst üste tam çakışır;
+   render() edgeMaskMode'da yalnız duvar maskesi çizer (etiket/renk/mobilya/grid/balkon/ölçü/kapı yok). */
+function exportEdgeMaskPNG(){
+  edgeMaskMode=true;
+  try {
+    const {clone,W,H}=exportClone();   // edgeMaskMode true → exportClone tabloyu+balkon payını atlar
+    const data='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(clone))));
+    const img=new Image();
+    img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
+      const ctx=cv.getContext('2d'); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,cv.width,cv.height); // saf beyaz zemin (Canny temiz yakalasın)
+      ctx.scale(2,2); ctx.drawImage(img,0,0);
+      const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani-controlnet-edges.png'; a.click(); };
+    img.src=data;
+  } finally { edgeMaskMode=false; render(); } // ekrandaki planı normal geri çiz
+}
+/* AI Output: tek tıkla İKİ dosya — renkli boyama tabanı + duvar kenar haritası (aynı kadraj).
+   Boyama rengi/etiketi verir, kenar haritası geometriyi kilitler → stilli + %100 layout-sadık. */
+function exportAIOutput(){
+  exportAIPaintPNG();                    // 1) kat-plani-AI-boyama.png  (renkli, EN etiket)
+  setTimeout(exportEdgeMaskPNG, 500);    // 2) kat-plani-controlnet-edges.png  (çoklu indirme engeline takılmamak için küçük gecikme)
+}
 document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
-document.getElementById('aiPaintBtn').onclick=exportAIPaintPNG;
+document.getElementById('aiOutputBtn').onclick=exportAIOutput;
 
 /* ================= içe aktarma =================
    1) kpState gömülü SVG / .json → restoreState (birebir geri yükleme)
@@ -475,7 +498,7 @@ function importLegacySvg(txt){
   document.getElementById('genBtn').disabled=false;
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
-  document.getElementById('aiPaintBtn').disabled=false;
+  document.getElementById('aiOutputBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: çözümlenen sınırın alan/çevresi */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';

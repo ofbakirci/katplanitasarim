@@ -94,9 +94,42 @@ function gardenLabelPos(){
   }
   return cand.find(p=>pip(p.x,p.y,parcelPts)&&(!closed||!pip(p.x,p.y,pts)))||null;
 }
+/* ================= ControlNet duvar-kenar maskesi =================
+   Beyaz zemin + saf siyah SÜREKLİ duvarlar. cm komşuluk taraması TÜM oda/daire/çekirdek
+   sınırlarını verir (computeWallRuns yalnız sürüklenebilir duvarları verirdi → çekirdek kaçardı).
+   Kapı/açıklık çizilmez → duvarlar süreklidir (kapı boşluğu yok). Çekirdek (yangın/asansör/şaft/
+   merdiven) sembolleri çizilmez → yalnız kutu sınırı. Dış kabuk pts ile en kalın. */
+function drawWallEdgeMask(r){
+  svg.appendChild(el('rect',{x:0,y:0,width:r.width,height:r.height,fill:'#ffffff'})); // saf beyaz zemin
+  const p=plan; if(!p) return;
+  const EW=Math.max(3,pxPerM*0.18);            // iç bölme kalınlığı (tabanda ~3-4 px, ölçekle büyür)
+  const g=el('g',{stroke:'#000','stroke-linecap':'square','shape-rendering':'crispEdges'}); svg.appendChild(g);
+  const line=(x1,y1,x2,y2,w)=>g.appendChild(el('line',{x1,y1,x2,y2,'stroke-width':w}));
+  const id=(rr,cc)=>(rr<0||cc<0||rr>=p.rows||cc>=p.cols||!p.inside[rr*p.cols+cc])?-9:p.cm[rr*p.cols+cc];
+  /* eğik dış kenarda grid basamağı yerine pts çizgisi kullanılır (staircase gürültüsü olmasın) */
+  const onEdge=(x,y)=>{ for(let i=0;i<pts.length;i++){ const A=pts[i],B=pts[(i+1)%pts.length];
+    if(Math.abs((B.x-A.x)*(y-A.y)-(B.y-A.y)*(x-A.x))>1e-6) continue;
+    const dot=(x-A.x)*(B.x-A.x)+(y-A.y)*(B.y-A.y), l2=(B.x-A.x)**2+(B.y-A.y)**2;
+    if(dot>=-1e-9&&dot<=l2+1e-9) return true; } return false; };
+  for(let rr=0;rr<p.rows;rr++)for(let cc=0;cc<p.cols;cc++){
+    const a=id(rr,cc); if(a===-9) continue;
+    const x=p.minX+cc*M, y=p.minY+rr*M;
+    const seg=(b,x1,y1,x2,y2)=>{ if(a===b) return;                         // aynı bölge → duvar yok
+      if(b===-9 && !(onEdge(x1,y1)&&onEdge(x2,y2))) return;                 // eğik dış kenar → pts kapsar
+      line(W2Sx(x1),W2Sy(y1),W2Sx(x2),W2Sy(y2),EW); };
+    seg(id(rr,cc+1), x+M,y, x+M,y+M);                 // sağ komşu (iç duvar ya da dış kabuk)
+    seg(id(rr+1,cc), x,y+M, x+M,y+M);                 // alt komşu
+    if(cc===0||id(rr,cc-1)===-9) seg(-9, x,y, x,y+M); // sol dış kabuk (iç sol duvar komşunun sağ taramasında çizilir)
+    if(rr===0||id(rr-1,cc)===-9) seg(-9, x,y, x+M,y); // üst dış kabuk
+  }
+  /* dış kabuk: bina sınır poligonu, en kalın siyah (eğik kenarlar dahil tüm sınırı tek sürekli çizgiyle kapatır) */
+  if(pts.length) g.appendChild(el('path',{d:'M'+pts.map(q=>W2Sx(q.x)+','+W2Sy(q.y)).join('L')+(closed?'Z':''),
+    fill:'none',stroke:'#000','stroke-width':EW*1.6,'stroke-linejoin':'miter','shape-rendering':'crispEdges'}));
+}
 function render(){
   svg.innerHTML='';
   const r=exportView||svg.getBoundingClientRect();
+  if(typeof edgeMaskMode!=='undefined' && edgeMaskMode){ drawWallEdgeMask(r); return; } // ControlNet kenar maskesi: yalnız beyaz zemin + siyah duvarlar; başka HİÇBİR şey çizme
   /* ızgara */
   const g0=el('g',{}); svg.appendChild(g0);
   const step=M*pxPerM, big=5*pxPerM;
