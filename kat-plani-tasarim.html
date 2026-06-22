@@ -48,6 +48,15 @@
     <div class="sec">
       <button class="primary" id="genBtn" style="width:100%" disabled>Yerleşimi Oluştur</button>
       <button class="small" id="structReset" style="width:100%; margin-top:6px; display:none" data-ic="clear">Yapı iskeletini sıfırla</button>
+      <button class="small" id="floorCopyBtn" style="width:100%; margin-top:6px; display:none" data-ic="copy">Bu kat düzenini kopyala</button>
+      <div id="floorPastePanel" style="display:none; margin-top:6px; border:1px solid #e6dfce; border-radius:8px; padding:8px 9px; background:#fbf8f1">
+        <div id="floorPasteHead" style="font-size:12px; color:#6b5e4d; line-height:1.35; margin-bottom:7px"></div>
+        <div id="floorPasteList"></div>
+        <div style="display:flex; gap:6px; margin-top:9px">
+          <button class="small primary" id="floorPasteApply" style="flex:1">Uygula</button>
+          <button class="small" id="floorPasteCancel" style="flex:1">Vazgeç</button>
+        </div>
+      </div>
       <div style="display:flex; gap:6px; margin-top:8px;">
         <button class="small" id="svgBtn" style="flex:1" disabled>SVG indir</button>
         <button class="small" id="pngBtn" style="flex:1" disabled>PNG indir</button>

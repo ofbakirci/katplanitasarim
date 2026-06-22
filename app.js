@@ -33,6 +33,7 @@ let villaFloors = null;       // villa "katları ayrı planla": kat başına dur
 let activeFloor = 0;          // villaFloors aktifken görüntülenen kat İNDEKSİ (0 = en alt bodrum; zemin = bodrumSayisi)
 let bodrumSayisi = 0;         // bodrum (eksi) kat sayısı; toplam kat = bodrum + üst. villaFloors indeksi: 0=en alt bodrum, zeminIdx()=zemin
 let villaOffset = 0;          // villaFloors dizisinin kurulduğu bodrum sayısı (sayaç değişiminde indeks kaymasını yönetmek için)
+let floorClip = null;         // kat düzeni kopyala/uygula tamponu: {src, snap} | null
 let lockedCore = null;        // bina iskeleti: kilitli çekirdek öğeleri [{type,name,x0,y0,x1,y1}] (dünya koord, katlar arası ortak) | null
 let exportView = null;        // io.js dışa aktarımı sırasında render() için geçici görünüm
 
@@ -373,6 +374,8 @@ function renderFloorTabs(){
   if(!floorsOn()){
     box.style.display='none';
     if(title) title.textContent=villa?'Daire Tipleri (kat başına)':'Daire Tipleri (kat başına)';
+    const fcb0=document.getElementById('floorCopyBtn'); if(fcb0) fcb0.style.display='none';
+    closeFloorPaste();
     syncKatKullanimUI();   // switch kapalıyken de kullanım satırını (pasif) tazele
     positionOnb();
     return;
@@ -392,6 +395,8 @@ function renderFloorTabs(){
     box.appendChild(b);
   }
   if(title) title.textContent=(villa?'Oda Programı — ':'Daire Tipleri — ')+floorName(activeFloor);
+  const fcb=document.getElementById('floorCopyBtn'); if(fcb) fcb.style.display = (totalFloors()>=2)?'':'none';
+  renderFloorPaste(false);   // panel açıksa not/onay kutularını tazele (kapalıysa gizli kalır)
   syncKatKullanimUI();
   positionOnb();
 }
@@ -414,6 +419,7 @@ function positionOnb(){
 function switchFloor(k){
   if(!floorsOn()) return;
   if(k<0||k>=totalFloors()||k===activeFloor) return;
+  closeFloorPaste();   // kat değişti: kopyala/uygula tamponunu bırak (bağlam değişti)
   if(plan) villaFloors[activeFloor]=stateSnapshot(true);
   const prev=activeFloor; activeFloor=k;
   const snap=villaFloors[k];
@@ -451,6 +457,77 @@ document.getElementById('katAyri').addEventListener('change',e=>{
   }
   renderFloorTabs();
 });
+
+/* ================= kat düzeni kopyala → hedef katlara uygula =================
+   Aktif katın TÜM düzeni (bölgeler + kapılar + elle düzenlemeler) tampona alınır; kullanıcı
+   uyumlu hedef katları onay kutusuyla seçip uygular. Uyumlu = aynı kullanım tipi + (ziyaret
+   edilmemiş ya da aynı taban ızgarası). Çekirdek katlar arası ortak (lockedCore) olduğundan
+   kopyalanan düzenin çekirdeği hedefte zaten hizalıdır. Kat değişiminde tampon temizlenir.
+   (floorClip yukarıda, diğer kat state'iyle birlikte bildirildi.) */
+function floorPasteOK(k){
+  if(!floorClip || k===floorClip.src) return false;
+  if(usageOf(k)!==(floorClip.snap.plan.katKullanim||'konut')) return false;   // aynı kullanım tipi
+  const f=villaFloors&&villaFloors[k];
+  if(!f||!f.plan) return true;                                   // ziyaret edilmemiş kat: düzeni devralır
+  const a=floorClip.snap.plan, b=f.plan;                         // ziyaret edilmiş: taban birebir aynı olmalı
+  if(a.rows!==b.rows||a.cols!==b.cols||a.minX!==b.minX||a.minY!==b.minY) return false;
+  if(!a.inside||!b.inside||a.inside.length!==b.inside.length) return false;
+  for(let i=0;i<a.inside.length;i++) if(!!a.inside[i]!==!!b.inside[i]) return false;
+  return true;
+}
+function copyActiveFloorLayout(){
+  if(!floorsOn()||!plan) return;
+  villaFloors[activeFloor]=stateSnapshot(true);                  // güncel (elle düzenlenmiş) düzeni yakala
+  floorClip={ src:activeFloor, snap:JSON.parse(JSON.stringify(villaFloors[activeFloor])) };
+  renderFloorPaste(true);
+}
+function renderFloorPaste(open){
+  const panel=document.getElementById('floorPastePanel'),
+        list=document.getElementById('floorPasteList'),
+        head=document.getElementById('floorPasteHead');
+  if(!panel||!list||!head) return;
+  if(!floorClip || !floorsOn()){ panel.style.display='none'; return; }
+  if(open) panel.style.display='';
+  head.innerHTML='<b>'+floorName(floorClip.src)+'</b> düzeni kopyalandı — hangi katlara uygulansın?';
+  const total=totalFloors(), buUse=floorClip.snap.plan.katKullanim||'konut';
+  let html='', any=false;
+  for(let k=total-1;k>=0;k--){
+    if(k===floorClip.src) continue;
+    const ok=floorPasteOK(k), visited=!!(villaFloors[k]&&villaFloors[k].plan);
+    const note = ok ? (visited?'üzerine yazılır':'yeni')
+      : (usageOf(k)!==buUse ? (USAGE_TR[usageOf(k)]||'farklı kullanım') : 'farklı taban');
+    if(ok) any=true;
+    html += '<label style="display:flex;align-items:center;gap:7px;font-size:12px;padding:3px 0;'+(ok?'':'opacity:.45')+'">'
+      + '<input type="checkbox" data-k="'+k+'" '+(ok?'checked':'disabled')+'>'
+      + '<span>'+floorName(k)+'</span>'
+      + '<small style="color:#9c8e76;margin-left:auto">'+note+'</small></label>';
+  }
+  list.innerHTML = any? html : '<div style="font-size:12px;color:#9c8e76">Uygulanacak uyumlu kat yok.</div>';
+  const ap=document.getElementById('floorPasteApply'); if(ap) ap.disabled=!any;
+}
+function applyFloorLayout(){
+  if(!floorClip) return;
+  let n=0;
+  document.querySelectorAll('#floorPasteList input[type=checkbox]').forEach(cb=>{
+    if(!cb.checked||cb.disabled) return;
+    const k=+cb.dataset.k;
+    if(!floorPasteOK(k)) return;
+    villaFloors[k]=JSON.parse(JSON.stringify(floorClip.snap));
+    if(k===activeFloor){ try{ restoreState(villaFloors[k],{fit:false,keepFloors:true}); render(); }catch(err){ console.error('yapıştır:',err); } }
+    n++;
+  });
+  if(n) renderFloorTabs();                                   // tablar + panel tazelenir (önce)
+  const head=document.getElementById('floorPasteHead');      // sonucu EN SON yaz (tazeleme ezmesin)
+  if(head) head.innerHTML = n? ('<b>'+n+' kat</b> bu düzene güncellendi ✓') : 'Hiç kat seçilmedi.';
+  if(n) setTimeout(closeFloorPaste, 1300);
+}
+function closeFloorPaste(){ floorClip=null;
+  const p=document.getElementById('floorPastePanel'); if(p) p.style.display='none'; }
+(function wireFloorClip(){
+  const c=document.getElementById('floorCopyBtn'); if(c) c.addEventListener('click',copyActiveFloorLayout);
+  const a=document.getElementById('floorPasteApply'); if(a) a.addEventListener('click',applyFloorLayout);
+  const x=document.getElementById('floorPasteCancel'); if(x) x.addEventListener('click',closeFloorPaste);
+})();
 
 /* ================= site: çoklu blok (A B C D…) =================
    Bir parsele birden çok bina (blok) yerleştirildiğinde her blok KENDİ tam durumudur

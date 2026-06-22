@@ -10,6 +10,7 @@ const strictTests = [
   'tests/oda-hint.js',
   'tests/touch.js',
   'tests/villa-kat.js',
+  'tests/ticari-kat.js',
   'tests/import.js',
   'tests/avlu-blok.js',
   'tests/wall-drag.js',

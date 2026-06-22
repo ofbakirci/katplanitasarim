@@ -275,7 +275,9 @@ function generate(keepCuts){
      usage katına dokunamaz. */
   if(!villa && floorsOn() && katKullanim!=='konut'){
     const freeCells=()=>{ const a=[]; for(let i=0;i<rows*cols;i++) if(inside[i]&&cm[i]===-1) a.push(i); return a; };
-    /* lockedCore yoksa (ör. zemin katı doğrudan ticari) kompakt çekirdeği biz koy */
+    /* lockedCore yoksa (ör. zemin katı doğrudan ticari) kompakt çekirdeği biz koy.
+       Önemli: çekirdek CEPHEYE yaslı + yatay ORTALI konur (KÖŞEYE sıkıştırma yok) — konut
+       katları bu çekirdeği zeminden miras alır, köşe konum tüm bina çekirdeğini bozardı. */
     const ensureUsageCore=()=>{
       if(regions.some(g=>g.type==='merdiven'&&g.cells.length)) return;
       const elems=[{nm:'MERDİVEN',tp:'merdiven',w:10,stair:true}];
@@ -283,12 +285,59 @@ function generate(keepCuts){
       if(teknikNeeded) elems.push({nm:'TEKNİK / ŞAFT',tp:'teknik',w:3});
       if(fireStairNeeded) elems.push({nm:'YANGIN MERD.',tp:'yangin',w:5,stair:true});
       const stH=6, coreW=elems.reduce((s,e)=>s+e.w,0);
-      for(let r0=0;r0<=rows-stH;r0++) for(let c0=0;c0<=cols-coreW;c0++)
-        if(rectFree(r0,c0,stH,coreW)){
-          let c=c0; elems.forEach(e=>{ const g=newReg(e.nm,e.tp); claimRect(g,r0,c,stH,e.w);
-            if(e.stair) stairs.push({r0,c0:c,h:stH,w:e.w}); c+=e.w; });
-          return;
+      const claimCore=(r0,c0)=>{ let c=c0; elems.forEach(e=>{ const g=newReg(e.nm,e.tp); claimRect(g,r0,c,stH,e.w);
+        if(e.stair) stairs.push({r0,c0:c,h:stH,w:e.w}); c+=e.w; }); };
+      const ctr=Math.round((cols-coreW)/2);
+      const tryRow=r0=>{ if(r0<0||r0+stH>rows) return false;
+        for(let d=0;d<=cols;d++) for(const c0 of (d===0?[ctr]:[ctr-d,ctr+d]))
+          if(c0>=0&&c0+coreW<=cols&&rectFree(r0,c0,stH,coreW)){ claimCore(r0,c0); return true; }
+        return false; };
+      if(tryRow(0)||tryRow(rows-stH)) return;        // üst, sonra alt cephe (ortadan dışa)
+      for(let r0=0;r0<=rows-stH;r0++) for(let c0=0;c0<=cols-coreW;c0++)  // egzotik taban: ilk sığan
+        if(rectFree(r0,c0,stH,coreW)){ claimCore(r0,c0); return; }
+    };
+    /* çekirdek (merdiven/asansör/yangın/teknik) bölgelerinin kapsayan ızgara kutusu */
+    const coreBox=()=>{ let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9,any=false;
+      regions.forEach(g=>{ if(STRUCT_TYPES[g.type]&&g.cells.length){ any=true; g.cells.forEach(i=>{
+        const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c; }); } });
+      return any?{r0,c0,r1,c1}:null; };
+    /* TİCARİ: çekirdeğin iç yanına APARTMAN HOLÜ (lobi); en yakın yan dış duvara uzanır →
+       bina girişi (BİNA GİRİŞİ kapısı) o duvarda, dükkânlardan AYRI. Çekirdek lobiye komşu. */
+    const placeTicariLobby=()=>{
+      const cb=coreBox(); if(!cb) return;
+      const lobH=3;                                  // 1,5 m apartman holü
+      let lr0 = (cb.r0<=0) ? cb.r1+1 : (cb.r1>=rows-1 ? cb.r0-lobH : cb.r1+1);
+      lr0=Math.max(0,Math.min(rows-lobH,lr0));
+      const toLeft = cb.c0 <= (cols-1-cb.c1);        // en yakın yan duvar
+      const ec0 = toLeft?0:cb.c0, ec1 = toLeft?cb.c1:cols-1;
+      const hol=newReg('APARTMAN HOLÜ','koridor');
+      for(let r=lr0;r<lr0+lobH;r++) for(let c=ec0;c<=ec1;c++) claim(hol,r,c);
+    };
+    /* serbest hücreleri BAĞLI bileşenlere ayır; her bileşeni ~5 m'lik dükkânlara böl
+       (çekirdek/lobi araya girdiğinde kopuk dükkân doğmasın). Küçük erişimsiz cepler
+       (< ~9 m²) komşu apartman holüne ya da dükkâna katılır — sliver dükkân doğmaz. */
+    const adjReg=(comp,type)=>{ const nb=new Map();
+      comp.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols) return;
+          const id2=cm[rr*cols+cc]; if(id2>=0&&(!type||regions[id2].type===type)) nb.set(id2,(nb.get(id2)||0)+1); }); });
+      let best=-1,bc=-1; nb.forEach((cnt,id2)=>{ if(cnt>bc){ bc=cnt; best=id2; } }); return best; };
+    const fillShops=()=>{
+      const fc=freeCells(); if(!fc.length) return;
+      const fset=new Set(fc), seen=new Set(); let no=0;
+      fc.forEach(start=>{ if(seen.has(start)) return;
+        const comp=[], stk=[start]; seen.add(start);
+        while(stk.length){ const i=stk.pop(); comp.push(i); const r=(i/cols)|0,c=i%cols;
+          [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols) return;
+            const j=rr*cols+cc; if(fset.has(j)&&!seen.has(j)){ seen.add(j); stk.push(j); } }); }
+        if(comp.length*M*M < 9){               // küçük cep: lobiye, yoksa komşu dükkâna kat
+          let t=adjReg(comp,'koridor'); if(t<0) t=adjReg(comp,'dukkan');
+          if(t>=0){ const g=regions[t]; comp.forEach(i=>{ cm[i]=g.id; g.cells.push(i); }); return; }
         }
+        let cMin=1e9,cMax=-1e9; comp.forEach(i=>{ const c=i%cols; if(c<cMin)cMin=c; if(c>cMax)cMax=c; });
+        const span=cMax-cMin+1, N=Math.max(1,Math.min(6,Math.round(span*M/5)));  // ~5 m vitrin
+        const dk=[]; for(let k2=0;k2<N;k2++) dk.push(newReg('DÜKKAN '+(++no),'dukkan'));
+        comp.forEach(i=>{ const c=i%cols; let k2=Math.floor((c-cMin)/span*N); if(k2<0)k2=0; if(k2>=N)k2=N-1; claim(dk[k2],(i/cols)|0,c); });
+      });
     };
     /* serbest hücrelerde hedefe yakın ~kare bir dikdörtgen bul → bölge yap */
     const placeBestRect=(name,type,target)=>{
@@ -304,13 +353,8 @@ function generate(keepCuts){
     if(katKullanim==='otopark'){
       const g=newReg('OTOPARK','otopark'); freeCells().forEach(i=>claim(g,(i/cols)|0,i%cols));
     } else if(katKullanim==='ticari'){
-      const fc=freeCells();
-      if(fc.length){
-        let cMin=1e9,cMax=-1e9; fc.forEach(i=>{ const c=i%cols; if(c<cMin)cMin=c; if(c>cMax)cMax=c; });
-        const span=cMax-cMin+1, N=Math.max(2,Math.min(6,Math.round(span*M/5))); // ~5 m'lik dükkânlar
-        const dk=[]; for(let k2=0;k2<N;k2++) dk.push(newReg('DÜKKAN '+(k2+1),'dukkan'));
-        fc.forEach(i=>{ const c=i%cols; let k2=Math.floor((c-cMin)/span*N); if(k2<0)k2=0; if(k2>=N)k2=N-1; claim(dk[k2],(i/cols)|0,c); });
-      }
+      placeTicariLobby();   // çekirdeğe komşu apartman holü + yan duvarda bina girişi
+      fillShops();          // kalan taban: bağlı, ~5 m vitrinli dükkânlar (lobiye dokunmaz)
     } else if(katKullanim==='siginak'){
       const fc=freeCells();
       if(fc.length){

@@ -67,6 +67,26 @@ function computeDoors(){
       inner(reg,u.antre.id);
     });
   });
+  /* konut-dışı kat (ticari/otopark/sığınak): bina girişi (apartman holü → sokak) +
+     dükkân girişleri. Bölgenin DIŞ duvara (−9) bakan kenarına sokak kapısı verilir. */
+  if(p.katKullanim && p.katKullanim!=='konut' && !p.unitObjs.length){
+    const extDoor=(reg,key)=>{
+      const edges=[];
+      reg.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+        if(id(r-1,c)===-9) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:1});
+        if(id(r+1,c)===-9) edges.push({x:p.minX+c*M, y:p.minY+(r+1)*M, h:1});
+        if(id(r,c-1)===-9) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:0});
+        if(id(r,c+1)===-9) edges.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0}); });
+      if(!edges.length) return;
+      if(doorHidden[key]){ out.push({key, e:null, edges, kind:'ext', status:'hidden'}); return; }
+      const e=resolve(key, edges);
+      if(e) out.push({key, e, edges, kind:'ext', status:'ok'});
+    };
+    p.regions.forEach(g=>{ if(!g.cells.length) return;
+      if(g.type==='koridor')      extDoor(g,'gh'+g.id);   // BİNA GİRİŞİ (apartman holü)
+      else if(g.type==='dukkan')  extDoor(g,'gd'+g.id);   // dükkân girişi (vitrin cephesi)
+    });
+  }
   /* çift tıkla eklenen kapılar (kenar hâlâ iki farklı bölgeyi ayırıyorsa) */
   extraDoors.forEach((d,i)=>{
     const r=Math.round((d.y-p.minY)/M), c=Math.round((d.x-p.minX)/M);
