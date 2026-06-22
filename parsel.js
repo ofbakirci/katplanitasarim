@@ -81,8 +81,59 @@ function tkgmLoadParcel(world){
   }
   parcelPts = world;
   parcelClosed = true;
+  psComputeSetback();
   if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
   fitView();
+}
+
+/* ---- imar çekme (yapı yaklaşma sınırı) ---- */
+/* Parseli her kenardan d metre içe ofsetle (kenar yarım-düzlemlerinin kesişimi;
+   dışbükey parselde tam, içbükeyde şematik/temkinli — sonuç her zaman parsel içinde). */
+function tkgmSetback(poly, d){
+  if(!poly || poly.length<3 || !(d>0)) return [];
+  let p = poly.map(q=>({x:q.x,y:q.y}));
+  let a2=0; for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length]; a2+=p[i].x*q.y-q.x*p[i].y;}
+  if(a2<0) p.reverse();                        // CCW → iç taraf kenarın solu
+  let out=p; const N=p.length;
+  for(let i=0;i<N;i++){
+    const a=p[i], b=p[(i+1)%N];
+    let ex=b.x-a.x, ey=b.y-a.y; const L=Math.hypot(ex,ey)||1; ex/=L; ey/=L;
+    const nx=-ey, ny=ex;                        // sol (içe) normal
+    out = tkgmClipHP(out, a.x+nx*d, a.y+ny*d, nx, ny);
+    if(out.length<3) return [];
+  }
+  return out.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
+}
+function tkgmClipHP(poly, px, py, nx, ny){     // yarım-düzlem: dot(q-(px,py), n) >= 0 tutulur
+  const res=[], n=poly.length, side=q=>(q.x-px)*nx+(q.y-py)*ny;
+  for(let i=0;i<n;i++){
+    const c=poly[i], x=poly[(i+1)%n], sc=side(c), sx=side(x);
+    if(sc>=0) res.push(c);
+    if((sc>=0)!==(sx>=0)){ const t=sc/(sc-sx); res.push({x:c.x+t*(x.x-c.x), y:c.y+t*(x.y-c.y)}); }
+  }
+  return res;
+}
+function psComputeSetback(){
+  const inp=document.getElementById('psCekme');
+  const d=inp?parseFloat(inp.value):NaN;
+  parcelSetback = (parcelPts.length>=3 && parcelClosed && isFinite(d) && d>0) ? tkgmSetback(parcelPts, d) : [];
+}
+/* parsel + bina varsa TAKS/bahçe/çekme-ihlali canlı oku (render her çağrıldığında). */
+function psLiveUpdate(){
+  const live=document.getElementById('psLive'); if(!live) return;
+  if(!(parcelPts.length>=3 && parcelClosed)){ live.innerHTML=''; return; }
+  const pa=shoelace(parcelPts);
+  const ba=(typeof closed!=='undefined' && closed && pts.length>=3) ? shoelace(pts) : 0;
+  let html='<b>Parsel:</b> '+fmt(pa)+' m²';
+  if(parcelSetback.length>=3) html+=' · <b>Yapı alanı:</b> '+fmt(shoelace(parcelSetback))+' m²';
+  if(ba>0){
+    const taks=ba/pa;
+    html+='<br><b>Bina tabanı:</b> '+fmt(ba)+' m² · <b>TAKS:</b> '+fmt(Math.round(taks*100)/100)
+        +' <span class="ps-dim">(≈%'+Math.round(taks*100)+')</span> · <b>Bahçe:</b> '+fmt(Math.max(0,pa-ba))+' m²';
+    if(parcelSetback.length>=3 && pts.some(q=>!pip(q.x,q.y,parcelSetback)))
+      html+='<br><span class="ps-warn">⚠ Bina, imar çekme sınırını aşıyor.</span>';
+  }
+  live.innerHTML=html;
 }
 
 /* ---- panel ---- */
@@ -127,6 +178,7 @@ function initParselSorgu(){
       const world = tkgmGeoToWorld(ring);
       if(!world || world.length < 3){ setMsg('Parsel geometrisi çözümlenemedi.', 'err'); return; }
       tkgmLoadParcel(world);
+      var imar=document.getElementById('psImar'); if(imar) imar.style.display='block';
 
       const p = data.properties || {};
       const konum = [p.ilAd, p.ilceAd, p.mahalleAd].filter(Boolean).join(' / ');
@@ -152,5 +204,7 @@ function initParselSorgu(){
   inp.addEventListener('input', updateBtn);
   inp.addEventListener('keydown', e=>{ if(e.key==='Enter' && !btn.disabled) sorgula(); });
   btn.addEventListener('click', sorgula);
+  var cek=document.getElementById('psCekme');
+  if(cek) cek.addEventListener('input', function(){ psComputeSetback(); render(); });
   updateBtn();
 }

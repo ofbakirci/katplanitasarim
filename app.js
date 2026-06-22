@@ -17,6 +17,7 @@ let parkGhost = null;         // park modunda eklenecek boş park yeri önizleme
 let editHistory = [];         // elle düzenleme geçmişi: {type:'wall',a,b,cellsA,cellsB} | {type:'cut',cuts} | {type:'balk',prev}
 let parcelPts = [];           // parsel poligonu (opsiyonel; bahçe = parsel − bina)
 let parcelClosed = false;
+let parcelSetback = [];       // imar çekme (yapı yaklaşma) sınırı: parselin içe-ofseti; şematik kılavuz
 let balconies = [];           // {ei, t0, t1, depth}: pts[ei]→pts[ei+1] kenarında, dışa doğru
 let hoverBalk = null;         // balkon modu önizleme {ei,t0,t1,depth} | tutamaç vurgusu
 let courtyards = [];          // iç avlular: {poly:[{x,y}...]} (dünya koord). generate() bunları footprint'ten oyar

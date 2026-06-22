@@ -52,6 +52,10 @@
   .ps-msg.ps-err{background:#fbeceb; color:var(--bad); border:1px solid #f0cfcb;}
   .ps-msg.ps-info{background:#eef3fb; color:var(--info); border:1px solid #cdddf2;}
   .ps-msg .ps-dim{color:var(--muted); font-weight:400;}
+  #parselSec #psCekme{width:80px;}
+  #parselSec .ps-live{margin-top:7px; font-size:11.5px; color:var(--ink); line-height:1.55;}
+  #parselSec .ps-live .ps-dim{color:var(--muted);}
+  #parselSec .ps-live .ps-warn{color:var(--bad); font-weight:600;}
   .ps-load::before{content:''; display:inline-block; width:11px; height:11px; margin-right:6px; border:2px solid #d8b98a; border-top-color:transparent; border-radius:50%; vertical-align:-1px; animation:ps-spin .7s linear infinite;}
   @keyframes ps-spin{to{transform:rotate(360deg);}}
   /* ikonlar (emoji yerine inline SVG; stroke=currentColor → hover/aktif rengini izler) */

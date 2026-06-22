@@ -141,6 +141,16 @@ function render(){
     }
   }
 
+  /* imar çekme (yapı yaklaşma) sınırı — parsel içi şematik kılavuz */
+  if(parcelClosed && parcelPts.length>=3 && parcelSetback && parcelSetback.length>=3){
+    const g=el('g',{}); svg.appendChild(g);
+    const ds='M'+parcelSetback.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z';
+    g.appendChild(el('path',{d:ds,fill:'none',stroke:'#2563a8','stroke-width':1.6,'stroke-dasharray':'5 4','stroke-linejoin':'miter',opacity:.92}));
+    if(!closed){ const c=centroidOf(parcelSetback);
+      const t=el('text',{x:W2Sx(c.x),y:W2Sy(c.y),'text-anchor':'middle','font-size':Math.max(9,Math.min(12,pxPerM*0.75)),fill:'#2563a8','font-weight':'600'});
+      t.textContent='Yapı alanı ≈ '+fmt(shoelace(parcelSetback))+' m²'; g.appendChild(t); }
+  }
+
   if(plan && mode!=='site'){ renderPlan(); }
   /* SİTE GENEL GÖRÜNÜMÜ: tüm bloklar parselde aynı anda (hücre tint + sınır + etiket).
      Aktif blok belirgin (mavi sınır, tam opaklık), diğerleri soluk. tıkla=düzenle, sürükle=taşı. */
@@ -253,6 +263,7 @@ function render(){
     g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:hoverP.closing?'#2e7d4f':col,opacity:.8}));
   }
   updateZoomUI();
+  if(typeof psLiveUpdate==='function') psLiveUpdate();
 }
 
 function renderPlan(){
