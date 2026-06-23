@@ -430,6 +430,33 @@ function psLL2Merc(lng, lat){          // WGS84 → EPSG:3857 (Web Mercator)
   const R = 6378137;
   return [R*lng*Math.PI/180, R*Math.log(Math.tan(Math.PI/4 + lat*Math.PI/360))];
 }
+function psMerc2LL(x, y){              // EPSG:3857 → WGS84 [lng,lat]
+  const R = 6378137;
+  return [ x/R*180/Math.PI, (2*Math.atan(Math.exp(y/R)) - Math.PI/2)*180/Math.PI ];
+}
+/* nokta [x,y] ring [[x,y]...] içinde mi (ray-cast). */
+function psPipRing(px, py, ring){
+  let inside=false;
+  for(let i=0,j=ring.length-1;i<ring.length;j=i++){
+    const xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
+    if(((yi>py)!==(yj>py)) && (px < (xj-xi)*(py-yi)/((yj-yi)||1e-12)+xi)) inside=!inside;
+  }
+  return inside;
+}
+/* FALLBACK: TKGM API düştüğünde (İstanbul) e-Plan getbypoint ile parseli yükle.
+   getbypoint çoklu feature döndürür → noktayı İÇEREN poligonu seç; 3857 ring → [lng,lat]
+   → TKGM-uyumlu GeoJSON Feature kur (applyData aynen tüketir). */
+async function eplanParcelFallback(ll){
+  const [x,y] = psLL2Merc(ll.lng, ll.lat);
+  const bp = await eplanPost('/getbypoint', {x, y});
+  const feats = bp.features||[];
+  let f = feats.find(g=> g.geometry && g.geometry.rings && psPipRing(x, y, g.geometry.rings[0])) || feats[0];
+  if(!f || !f.geometry || !f.geometry.rings || !f.geometry.rings[0]) return null;
+  const ring = f.geometry.rings[0].map(p=>psMerc2LL(p[0], p[1]));
+  const a = f.attributes||{};
+  return { geometry:{type:'Polygon', coordinates:[ring]},
+    properties:{ adaNo:a.ADA, parselNo:a.PARSEL, mahalleAd:a.TAPUMAHADI||null, ilceAd:'', ilAd:'İstanbul', alan:null, nitelik:'İBB e-Plan’dan yüklendi (TKGM CBS erişilemedi)' } };
+}
 async function eplanPost(path, body){
   const r = await fetch(EPLAN_BASE+path, {
     method:'POST', referrerPolicy:'no-referrer',
@@ -818,7 +845,17 @@ function initParselSorgu(){
   async function getJson(url){
     // Referer GÖNDERME: TKGM WAF'ı tanımadığı Referer'lı (ör. localhost / kendi
     // domainin) isteği 403'le reddediyor; Referer'sız istek 200 döner.
-    const r = await fetch(url, {headers:{'Accept':'application/json'}, referrerPolicy:'no-referrer'});
+    // Timeout: TKGM API host'u (cbsapi) bazen TCP'yi kabul edip HTTP yanıtı VERMEZ
+    // (askıda) → timeout'suz fetch ~dk'larca asılıp "Load failed" der. 12sn'de kes.
+    const ctl = new AbortController();
+    const to = setTimeout(()=>ctl.abort(), 12000);
+    let r;
+    try{
+      r = await fetch(url, {headers:{'Accept':'application/json'}, referrerPolicy:'no-referrer', signal:ctl.signal});
+    }catch(e){
+      const err = new Error(ctl.signal.aborted ? 'TKGM sunucusu yanıt vermedi (zaman aşımı)' : 'TKGM sunucusuna ulaşılamadı');
+      err.network = true; throw err;
+    }finally{ clearTimeout(to); }
     if(!r.ok){
       let m = 'HTTP '+r.status;
       try{ const j = await r.json(); if(j && j.Message) m = j.Message; }catch(e){}
@@ -866,9 +903,21 @@ function initParselSorgu(){
       const data = await getJson(TKGM_PARSEL_URL(ll.lat, ll.lng));
       applyData(data, null, null, ll);                    // ll: parsel içi kesin nokta (imar sorgusu için)
     }catch(e){
-      setMsg(e.status===404
-        ? 'Bu konumda kayıtlı parsel yok (yol / deniz / orman olabilir). Noktayı parselin içine alıp tekrar deneyin.'
-        : 'Sorgu başarısız: '+escapeHtml(e.message||'ağ hatası')+'.', 'err');
+      if(e.network){
+        // TKGM API host'u düştü → İstanbul ise e-Plan getbypoint'ten parseli dene
+        setMsg('TKGM yanıt vermedi; <b>İBB e-Plan</b>’dan deneniyor… <span class="ps-dim">(İstanbul)</span>', 'load');
+        try{
+          const ep = await eplanParcelFallback(ll);
+          if(ep){ applyData(ep, null, null, ll); return; }
+          setMsg('TKGM CBS erişilemiyor ve bu nokta İstanbul (İBB e-Plan) dışında görünüyor — birkaç dakika sonra tekrar deneyin.', 'err');
+        }catch(e2){
+          setMsg('<b>'+escapeHtml(e.message)+'.</b> TKGM CBS geçici erişilemiyor; İBB e-Plan da yanıt vermedi — birkaç dakika sonra tekrar deneyin.', 'err');
+        }
+      } else {
+        setMsg(e.status===404
+          ? 'Bu konumda kayıtlı parsel yok (yol / deniz / orman olabilir). Noktayı parselin içine alıp tekrar deneyin.'
+          : 'Sorgu başarısız: '+escapeHtml(e.message||'ağ hatası')+'.', 'err');
+      }
     }finally{
       updateBtn();
     }
@@ -895,6 +944,7 @@ function initParselSorgu(){
     setMsg('Parsel sorgulanıyor… <span class="ps-dim">'+escapeHtml(mahSel.options[mahSel.selectedIndex].text)+' '+escapeHtml(a)+'/'+escapeHtml(p)+'</span>', 'load');
     try{ applyData(await getJson(TKGM_URL.parsel(m,a,p)), a, p); }
     catch(e){ setMsg(e.status===404 ? 'Bu ada/parsel bulunamadı (numaraları kontrol edin).'
+                     : e.network ? '<b>'+escapeHtml(e.message)+'.</b> TKGM CBS geçici olarak erişilemiyor olabilir — birkaç dakika sonra tekrar deneyin.'
                                      : 'Sorgu başarısız: '+escapeHtml(e.message||'ağ hatası')+'.', 'err'); }
     finally{ updateBtn2(); }
   }
