@@ -7,6 +7,11 @@
   header{display:flex; align-items:center; gap:14px; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line);}
   header h1{font-size:16px; font-weight:700;}
   header .sub{font-size:12px; color:var(--muted);}
+  /* ---- Görünüm modu: Basit / Profesyonel ---- */
+  #modeSel{margin-left:auto; display:flex; gap:2px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:2px; flex-shrink:0;}
+  #modeSel button{border:0; background:transparent; padding:5px 11px; border-radius:6px; font-size:12px; font-weight:600; color:var(--muted); cursor:pointer; line-height:1.2;}
+  #modeSel button.active{background:#fff; color:var(--acc); box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  body.mode-basic .pro-only{display:none !important;}
   main{flex:1; display:flex; min-height:0;}
   /* Sidebar */
   aside{width:320px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0;}

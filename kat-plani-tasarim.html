@@ -11,6 +11,10 @@
   <button id="menuBtn" title="Paneli aç/kapat" data-ic="menu"></button>
   <h1>Kat Planı Tasarım Aracı</h1>
   <span class="sub">Türkiye mevzuatına göre şematik kat planı üretici — Planlı Alanlar İmar Yönetmeliği &amp; Yangın Yönetmeliği</span>
+  <div id="modeSel" title="Görünüm modu — Basit: sade çizim + daire · Profesyonel: parsel & imar dahil tüm araçlar">
+    <button type="button" id="modeBasic" data-mode="basic">Basit</button>
+    <button type="button" id="modePro" data-mode="pro">Profesyonel</button>
+  </div>
 </header>
 <div id="backdrop"></div>
 <main>
@@ -31,7 +35,7 @@
         <select id="koridorYon"><option value="oto">Otomatik</option><option value="yatay">Yatay</option><option value="dikey">Dikey</option></select>
       </div>
     </div>
-    <div class="sec" id="parselSec">
+    <div class="sec pro-only" id="parselSec">
       <h2>TKGM Parsel Sorgu</h2>
       <div class="ps-field">
         <label for="psInput">Koordinat veya Google Maps linki</label>
@@ -125,7 +129,7 @@
   <div id="toolbar">
     <button id="tbToggle" title="Araç çubuğunu daralt/genişlet">«</button>
     <button id="tDraw" class="active" data-ic="draw">Çiz</button>
-    <button id="tParcel" data-ic="parcel">Parsel</button>
+    <button id="tParcel" class="pro-only" data-ic="parcel">Parsel</button>
     <button id="tBalk" data-ic="balcony">Balkon</button>
     <button id="tAvlu" title="Avlu / iç boşluk: bina sınırı içine sürükleyerek aydınlık avlusu oyun (sağ tık siler). Avluya bakan odalar cephe sayılır." data-ic="avlu">Avlu</button>
     <button id="tDoor" data-ic="door">Kapı</button>
