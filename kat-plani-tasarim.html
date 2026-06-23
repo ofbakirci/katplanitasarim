@@ -31,6 +31,48 @@
         <select id="koridorYon"><option value="oto">Otomatik</option><option value="yatay">Yatay</option><option value="dikey">Dikey</option></select>
       </div>
     </div>
+    <div class="sec" id="parselSec">
+      <h2>TKGM Parsel Sorgu</h2>
+      <div class="ps-field">
+        <label for="psInput">Koordinat veya Google Maps linki</label>
+        <input type="text" id="psInput" placeholder="41.0082, 28.9784  ·  veya Maps linki" autocomplete="off" spellcheck="false">
+      </div>
+      <button class="primary" id="psFetch" style="width:100%" disabled>Parseli Getir</button>
+      <button type="button" id="psAltToggle" class="ps-link">ya da il/ilçe/mahalle + ada/parsel ile ▾</button>
+      <div id="psAltBox" style="display:none">
+        <div class="ps-field"><label for="psIl">İl</label><select id="psIl"></select></div>
+        <div class="ps-field"><label for="psIlce">İlçe</label><select id="psIlce" disabled></select></div>
+        <div class="ps-field"><label for="psMah">Mahalle</label><select id="psMah" disabled></select></div>
+        <div class="ps-ap2">
+          <div class="ps-field"><label for="psAda">Ada No</label><input type="text" id="psAda" inputmode="numeric" placeholder="örn. 48" autocomplete="off"></div>
+          <div class="ps-field"><label for="psParsel">Parsel No</label><input type="text" id="psParsel" inputmode="numeric" placeholder="örn. 21" autocomplete="off"></div>
+        </div>
+        <button class="primary" id="psFetch2" style="width:100%" disabled>Ada/Parsel ile Getir</button>
+      </div>
+      <div id="psMsg" class="ps-msg" style="display:none"></div>
+      <div id="psImar" style="display:none">
+        <div id="psImarBilgi" class="ps-imar" style="display:none"></div>
+        <div class="row" style="margin-top:10px"><label>İmar çekme (m) <small>(her kenardan)</small></label><input type="number" id="psCekme" min="0" max="50" step="0.5" value="3"></div>
+        <button type="button" id="psDrawBld" class="ps-draw-btn">⤿ Parsele yapı sınırı çiz <small>(çekme + TAKS)</small></button>
+        <div class="ps-rot-wrap">
+          <label>Döndür <small>(eksene hizala)</small></label>
+          <div class="ps-rot">
+            <button type="button" id="psRotL" title="−1°">⟲</button>
+            <input type="range" id="psRotRange" min="-180" max="180" step="0.5" value="0">
+            <button type="button" id="psRotR" title="+1°">⟳</button>
+            <input type="number" id="psRotNum" min="-180" max="180" step="0.5" value="0"><span class="ps-dim">°</span>
+          </div>
+          <div class="ps-rot-btns">
+            <button type="button" id="psRotAuto" class="ps-link">Otomatik hizala</button>
+            <button type="button" id="psRotEdge" class="ps-link">Kenara çevir</button>
+            <button type="button" id="psRotReset" class="ps-link">Kuzey ↑</button>
+          </div>
+        </div>
+        <div class="row"><label>Uydu görüntüsü <small>(arka plan)</small></label><span class="switch"><input type="checkbox" id="psSat"><i></i></span></div>
+        <div id="psLive" class="ps-live"></div>
+      </div>
+      <div class="ps-hint">Google Maps’te noktaya <b>sağ tık → koordinatı kopyala</b> ya da bağlantıyı yapıştırın. Parselin <b>ada/parsel</b> no’su, alanı ve sınırı TKGM’den otomatik gelir, <b>arsa</b> olarak yüklenir. Parsel <b>otomatik eksene hizalanır</b> (eğikse düz oturur); gerekirse yukarıdan döndürün. Bina çizerken köşeler parsel/çekme çizgisine <b>yapışır</b>. Bahçe, TAKS ve çekme mesafeleri hesaplanır.</div>
+    </div>
     <div class="sec" id="unitSec">
       <h2 id="unitSecTitle">Daire Tipleri (kat başına)</h2>
       <div class="row" id="katKullanimRow" style="display:none"><label>Bu katın kullanımı</label>
@@ -134,6 +176,7 @@
 <script src="interaction.js"></script>
 <script src="planner.js"></script>
 <script src="io.js"></script>
+<script src="parsel.js"></script>
 <script src="mobile.js"></script>
 <script src="boot.js"></script>
 </body>

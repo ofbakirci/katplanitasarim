@@ -39,6 +39,91 @@
   button.primary:hover{filter:brightness(1.08); color:#fff;}
   button.primary:disabled{opacity:.45; cursor:not-allowed;}
   button.small{padding:3px 8px; font-size:12px;}
+  /* TKGM Parsel Sorgu paneli */
+  #parselSec .ps-field{margin-bottom:8px;}
+  #parselSec .ps-field label{display:block; font-size:12px; color:var(--muted); margin-bottom:3px;}
+  #parselSec input[type=text]{width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff; color:var(--ink);}
+  #parselSec input[type=text]:focus{outline:none; border-color:var(--acc);}
+  #parselSec .ps-hint{margin-top:6px; font-size:11px; color:var(--muted); line-height:1.4;}
+  #parselSec code{background:#f0ebe1; padding:1px 4px; border-radius:4px; font-size:11px;}
+  .ps-msg{margin-top:8px; padding:7px 9px; border-radius:7px; font-size:12px; line-height:1.45; word-break:break-word;}
+  .ps-msg.ps-load{background:#fdf6ec; color:#8a6d3b; border:1px solid #f0e0c4;}
+  .ps-msg.ps-ok{background:#eaf5ee; color:#27684a; border:1px solid #bfe3cc;}
+  .ps-msg.ps-err{background:#fbeceb; color:var(--bad); border:1px solid #f0cfcb;}
+  .ps-msg.ps-info{background:#eef3fb; color:var(--info); border:1px solid #cdddf2;}
+  .ps-msg .ps-dim{color:var(--muted); font-weight:400;}
+  #parselSec #psCekme{width:80px;}
+  #parselSec .ps-live{margin-top:7px; font-size:11.5px; color:var(--ink); line-height:1.55;}
+  #parselSec .ps-live .ps-dim{color:var(--muted);}
+  #parselSec .ps-live .ps-warn{color:var(--bad); font-weight:600;}
+  #parselSec .ps-live .ps-ok{color:var(--ok); font-weight:600;}
+  #parselSec .ps-draw-btn{width:100%; margin-top:8px; padding:7px 10px; border:1px solid var(--acc); border-radius:7px; background:var(--acc); color:#fff; font-size:12.5px; font-weight:600; cursor:pointer;}
+  #parselSec .ps-draw-btn:hover{background:#9c4d27; border-color:#9c4d27; color:#fff;}
+  #parselSec .ps-draw-btn small{font-weight:400; opacity:.85;}
+  /* İBB e-Plan imar durumu kartı */
+  #parselSec .ps-imar{margin-top:9px; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:#faf8f3; font-size:12px; line-height:1.5;}
+  #parselSec .ps-imar-head{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:5px;}
+  #parselSec .ps-imar-head .ps-dim{text-transform:none; letter-spacing:0;}
+  #parselSec .ps-imar-fn{font-weight:700; color:var(--acc); font-size:13px; line-height:1.35; margin-bottom:6px;}
+  #parselSec .ps-imar-grid{display:flex; flex-wrap:wrap; gap:4px 14px; margin-bottom:6px;}
+  #parselSec .ps-imar-row{display:flex; gap:6px; align-items:baseline;}
+  #parselSec .ps-imar-row span{color:var(--muted);}
+  #parselSec .ps-imar-row b{color:var(--ink);}
+  #parselSec .ps-imar-note{color:var(--muted); margin-bottom:6px;}
+  #parselSec .ps-imar-est{margin:4px 0 6px; padding:5px 8px; border:1px dashed var(--line); border-radius:6px; background:#fbf8f2; color:var(--ink); font-size:11.5px;}
+  #parselSec .ps-imar-sub{color:var(--ink);}
+  #parselSec .ps-imar-plan{color:var(--muted); font-size:11px; margin-top:3px; line-height:1.4;}
+  #parselSec .ps-imar-warn{margin-top:5px; font-size:11px; color:var(--bad); line-height:1.4;}
+  #parselSec .ps-imar-btn{margin-top:8px; width:100%; padding:6px 10px; border:1px solid var(--info); border-radius:7px; background:#fff; color:var(--info); font-size:12px; font-weight:600; cursor:pointer;}
+  #parselSec .ps-imar-btn:hover{background:var(--info); color:#fff; border-color:var(--info);}
+  #parselSec .ps-imar-btn:disabled{opacity:.6; cursor:default;}
+  #parselSec .ps-imar-disc{margin-top:7px; font-size:10.5px; line-height:1.4;}
+  #parselSec .ps-imar-load,#parselSec .ps-imar-empty{font-size:11.5px; color:var(--muted);}
+  #parselSec .ps-imar-btn2{margin-top:8px; width:100%; padding:6px 10px; border:1px dashed var(--acc); border-radius:7px; background:#fff; color:var(--acc); font-size:12px; font-weight:600; cursor:pointer;}
+  #parselSec .ps-imar-btn2:hover{background:#fbf2ec;}
+  #parselSec .ps-imar-btn2:disabled{opacity:.6; cursor:default;}
+  #parselSec .ps-imar-scan{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line);}
+  #parselSec .ps-imar-scan-h{font-size:11px; color:var(--muted); margin-bottom:5px;}
+  #parselSec .ps-imar-chiprow{display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:5px;}
+  #parselSec .ps-imar-chiprow > span{color:var(--muted); font-size:11px; min-width:74px;}
+  #parselSec .ps-chip{display:inline-block; padding:2px 8px; border:1px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); font-size:11.5px; cursor:pointer; user-select:none;}
+  #parselSec .ps-chip:hover{border-color:var(--acc); color:var(--acc);}
+  #parselSec .ps-chip.on{background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600;}
+  #parselSec .ps-chip.sug{border-color:var(--info); color:var(--info); background:#eef3fb;}
+  #parselSec .ps-chip.sug.on{background:var(--acc); color:#fff; border-color:var(--acc);}
+  #parselSec .ps-chip.self{border-color:var(--ok); color:#fff; background:var(--ok); font-weight:700;}
+  #parselSec .ps-chip.self.on{background:var(--acc); border-color:var(--acc);}
+  #parselSec .ps-cond-toggle{display:block; margin:6px 0 2px; padding:0; border:none; background:none; color:var(--info); font-size:11px; cursor:pointer; text-align:left;}
+  #parselSec .ps-cond-toggle:hover{color:var(--acc); text-decoration:underline; border:none;}
+  #parselSec .ps-cond-list{margin:2px 0 4px; max-height:170px; overflow:auto; border:1px solid var(--line); border-radius:6px; background:#fff;}
+  #parselSec .ps-cond-item{padding:5px 7px; font-size:10.5px; line-height:1.45; color:var(--muted); border-bottom:1px solid #efeae0;}
+  #parselSec .ps-cond-item:last-child{border-bottom:none;}
+  #parselSec .ps-cond-item b{color:var(--ink);}
+  #parselSec .ps-cond-item.km{background:#f6f9fe;}
+  #parselSec .ps-cond-item.km b{color:var(--info);}
+  #parselSec .ps-chip-static{cursor:default; background:#f3efe7; color:var(--muted);}
+  #parselSec .ps-chip-static:hover{border-color:var(--line); color:var(--muted);}
+  #parselSec .ps-imar-scan-note{margin-top:3px; font-size:10.5px; line-height:1.4;}
+  #parselSec .ps-link{background:none; border:none; padding:7px 0 0; margin:0; color:var(--info); font-size:12px; cursor:pointer; width:100%; text-align:left;}
+  #parselSec .ps-link:hover{color:var(--acc); border:none; text-decoration:underline;}
+  #parselSec .ps-rot-wrap{margin-bottom:8px;}
+  #parselSec .ps-rot-wrap > label{display:block; font-size:13px; margin-bottom:5px;}
+  #parselSec .ps-rot-wrap > label small{color:var(--muted); font-weight:400;}
+  #parselSec .ps-rot{display:flex; align-items:center; gap:6px;}
+  #parselSec .ps-rot input[type=range]{flex:1; min-width:0; accent-color:var(--acc);}
+  #parselSec .ps-rot #psRotNum{width:52px; padding:4px 5px; border:1px solid var(--line); border-radius:6px; font-size:12px; background:#fff; color:var(--ink); text-align:right;}
+  #parselSec .ps-rot button{flex:none; width:26px; height:26px; padding:0; line-height:1; border:1px solid var(--line); border-radius:6px; background:#fff; color:var(--ink); font-size:15px; cursor:pointer;}
+  #parselSec .ps-rot button:hover{border-color:var(--acc); color:var(--acc);}
+  #parselSec .ps-rot .ps-dim{color:var(--muted); font-size:12px;}
+  #parselSec .ps-rot-btns{display:flex; gap:10px; margin-top:2px;}
+  #parselSec .ps-rot-btns .ps-link{width:auto; padding:4px 0 0; font-size:11.5px;}
+  #parselSec #psAltBox{margin-top:8px; padding-top:10px; border-top:1px dashed var(--line);}
+  #parselSec #psAltBox select{width:100%; padding:5px 7px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff; color:var(--ink);}
+  #parselSec #psAltBox select:disabled{opacity:.55; background:#f3efe7; cursor:not-allowed;}
+  #parselSec .ps-ap2{display:flex; gap:8px;}
+  #parselSec .ps-ap2 > .ps-field{flex:1; min-width:0;}
+  .ps-load::before{content:''; display:inline-block; width:11px; height:11px; margin-right:6px; border:2px solid #d8b98a; border-top-color:transparent; border-radius:50%; vertical-align:-1px; animation:ps-spin .7s linear infinite;}
+  @keyframes ps-spin{to{transform:rotate(360deg);}}
   /* ikonlar (emoji yerine inline SVG; stroke=currentColor → hover/aktif rengini izler) */
   svg.ic{display:inline-block; width:1.1em; height:1.1em; flex:0 0 auto; vertical-align:-0.16em; pointer-events:none;} /* global svg{display:block}'u ez */
   svg.ic.inl{width:1em; height:1em; vertical-align:-0.14em;}

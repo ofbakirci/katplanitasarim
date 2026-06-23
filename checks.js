@@ -271,9 +271,16 @@ function collectChecks(){
       add('bad', site? 'Bir blok sınırı parsel dışına taşıyor!' : 'Bina sınırı parsel dışına taşıyor!');
     else{
       const taks=ba/pa;
-      add(taks<=REG.taksMax?'ok':'bad',`TAKS ≈ ${fmt(taks)} (örnek max ${fmt(REG.taksMax)} — imar durumuna göre değişir).`);
+      // İmar durumu (İBB e-Plan) çekildiyse gerçek TAKS/emsal limitine göre denetle, yoksa örnek mevzuat max'ı.
+      const imar = (typeof parcelImar!=='undefined') ? parcelImar : null;
+      const taksMax = (imar && imar.maksTaks>0) ? imar.maksTaks : REG.taksMax;
+      const taksSrc = (imar && imar.maksTaks>0) ? `imar durumu max ${fmt(taksMax)}` : `örnek max ${fmt(REG.taksMax)} — imar durumuna göre değişir`;
+      add(taks<=taksMax+1e-9?'ok':'bad',`TAKS ≈ ${fmt(taks)} (${taksSrc}).`);
       if(site){ const kaks=siteGrossTotal()/pa;
-        add('info',`KAKS (emsal) ≈ ${fmt(kaks)} (Σ blok taban × kat sayısı / parsel — imar durumuna göre değişir).`); }
+        if(imar && imar.emsal>0)
+          add(kaks<=imar.emsal+1e-9?'ok':'bad',`KAKS (emsal) ≈ ${fmt(kaks)} (imar durumu emsal ${fmt(imar.emsal)}).`);
+        else
+          add('info',`KAKS (emsal) ≈ ${fmt(kaks)} (Σ blok taban × kat sayısı / parsel — imar durumuna göre değişir).`); }
       let minD=1e9;
       polys.forEach(poly=> poly.forEach(q=>{ for(let i=0;i<parcelPts.length;i++){ const A=parcelPts[i],B=parcelPts[(i+1)%parcelPts.length];
         minD=Math.min(minD, distSeg(q.x,q.y,A.x,A.y,B.x,B.y)); }}));

@@ -162,7 +162,21 @@ function render(){
     }
   }
 
-  /* parsel (bahçe) + ölçüleri + "BAHÇE m²" etiketi — AI temiz modda çizilmez (bina dışı, dış ölçü gürültüsü) */
+  /* uydu arka planı — en altta, yalnız ekranda (dışa aktarımda gizli) */
+  if(parcelSat && parcelSat.url && parcelPts.length>=3 && typeof exportView!=='undefined' && !exportView){
+    const g=el('g',{}); svg.appendChild(g);
+    if(parcelSat.rot){                                                       // parselle birlikte döndür (pivot: dx,dy)
+      const cx=W2Sx(parcelSat.cx||0), cy=W2Sy(parcelSat.cy||0);
+      g.setAttribute('transform','rotate('+(parcelSat.rot*180/Math.PI)+' '+cx+' '+cy+')'); }
+    const im=el('image',{x:W2Sx(parcelSat.x), y:W2Sy(parcelSat.y),
+      width:Math.max(0,parcelSat.w*pxPerM), height:Math.max(0,parcelSat.h*pxPerM),
+      preserveAspectRatio:'none', opacity:0.95});
+    im.setAttribute('href', parcelSat.url);                                  // SVG2
+    im.setAttributeNS('http://www.w3.org/1999/xlink','href', parcelSat.url); // eski tarayıcı yedeği
+    g.appendChild(im);
+  }
+
+  /* parsel (bahçe) + ölçüleri + "BAHÇE m²" etiketi — plan katmanlarının altında; AI temiz modda çizilmez (bina dışı, dış ölçü gürültüsü) */
   if(parcelPts.length && !clean){
     const g=el('g',{}); svg.appendChild(g);
     let d='M'+parcelPts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
@@ -175,6 +189,16 @@ function render(){
       if(lbl){ const t=el('text',{x:W2Sx(lbl.x),y:W2Sy(lbl.y),'text-anchor':'middle','font-size':Math.max(10,Math.min(14,pxPerM*0.9)),fill:'#4a7c4a','font-weight':'700'});
         t.textContent='BAHÇE · '+fmt(Math.max(0,shoelace(parcelPts)-(closed?shoelace(pts):0)))+' m²'; g.appendChild(t); }
     }
+  }
+
+  /* imar çekme (yapı yaklaşma) sınırı — parsel içi şematik kılavuz */
+  if(parcelClosed && parcelPts.length>=3 && parcelSetback && parcelSetback.length>=3){
+    const g=el('g',{}); svg.appendChild(g);
+    const ds='M'+parcelSetback.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z';
+    g.appendChild(el('path',{d:ds,fill:'none',stroke:'#2563a8','stroke-width':1.6,'stroke-dasharray':'5 4','stroke-linejoin':'miter',opacity:.92}));
+    if(!closed){ const c=centroidOf(parcelSetback);
+      const t=el('text',{x:W2Sx(c.x),y:W2Sy(c.y),'text-anchor':'middle','font-size':Math.max(9,Math.min(12,pxPerM*0.75)),fill:'#2563a8','font-weight':'600'});
+      t.textContent='Yapı alanı ≈ '+fmt(shoelace(parcelSetback))+' m²'; g.appendChild(t); }
   }
 
   if(plan && mode!=='site'){ renderPlan(); }
@@ -287,8 +311,23 @@ function render(){
       const t=el('text',{x:W2Sx((l.x+hoverP.x)/2),y:W2Sy((l.y+hoverP.y)/2)-8,'text-anchor':'middle','font-size':12,fill:col,'font-weight':'700'});
       t.textContent=fmt(L)+' m'; g.appendChild(t); }
     g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:hoverP.closing?'#2e7d4f':col,opacity:.8}));
+    if(hoverP.snapPS) g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:9,fill:'none',stroke:'#2563a8','stroke-width':2})); // parsele yapıştı
+  }
+  /* gerçek kuzey oku — parsel döndürülünce gerçek kuzeyi gösterir (ekran-sabit:
+     ekranda sol-alt [üstte araç çubuğu var], dışa aktarımda sol-üst) */
+  if(parcelPts.length>=3){
+    const VH=(r&&r.height)|| +svg.getAttribute('height')||600;
+    const cx=46, cy=exportView?48:(VH-54), R=15, th=parcelRot||0;
+    const nx=Math.sin(th), ny=-Math.cos(th);        // kuzey yön vektörü (ekran)
+    const wx=-ny, wy=nx;                             // dik (kanatlar için)
+    const g=el('g',{}); svg.appendChild(g);
+    g.appendChild(el('circle',{cx,cy,r:24,fill:'rgba(255,255,255,.84)',stroke:'rgba(43,38,32,.18)','stroke-width':1}));
+    g.appendChild(el('path',{d:'M'+(cx+nx*R)+' '+(cy+ny*R)+'L'+(cx+wx*5.5)+' '+(cy+wy*5.5)+'L'+(cx-wx*5.5)+' '+(cy-wy*5.5)+'Z',fill:'#b35a2e'}));   // kuzey
+    g.appendChild(el('path',{d:'M'+(cx-nx*R)+' '+(cy-ny*R)+'L'+(cx+wx*5.5)+' '+(cy+wy*5.5)+'L'+(cx-wx*5.5)+' '+(cy-wy*5.5)+'Z',fill:'#c9bdab'}));  // güney
+    const t=el('text',{x:cx+nx*(R+6.5),y:cy+ny*(R+6.5)+4,'text-anchor':'middle','font-size':12,fill:'#2b2620','font-weight':'800'}); t.textContent='N'; g.appendChild(t);
   }
   updateZoomUI();
+  if(typeof psLiveUpdate==='function') psLiveUpdate();
 }
 
 function renderPlan(){
