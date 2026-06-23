@@ -4,14 +4,15 @@
 **Önce oku:** `NOTES-parsel.md` (TKGM altyapısı — parsel zaten lat/lng + dünya koord olarak yükleniyor).
 
 ## ▶ DURUM & SİRADAKİLER (buradan devam — 2026-06-23 session sonu)
-İmar özelliği **çalışır + commit'li**: `9f616f9` (ana: e-Plan imar + plan notu tarama + yapı sınırı çiz), `37de6f1` (lejand-gömülü + deferral + emsal tahmini), `ba60dbd` (TKGM düşünce e-Plan fallback + timeout). 17/17 test. Master'a **MERGE EDİLMEDİ**.
+İmar özelliği **çalışır + commit'li**: `9f616f9` (ana: e-Plan imar + plan notu tarama + yapı sınırı çiz), `37de6f1` (lejand-gömülü + deferral + emsal tahmini), `ba60dbd` (TKGM düşünce e-Plan fallback + timeout), **`2f0c5b4` (çok-sağlayıcılı soyutlama + Ankara Başkent CBS)**. 17/17 test. Master'a **MERGE EDİLMEDİ**.
 **Stratejik karar (39-ilçe workflow):** anlık tarama + hedefli 7-ilçe küratör; geniş pre-gömme REDDEDİLDİ (ilçelerin ~%55'i değeri 1/1000 uygulama planına erteliyor).
+**✅ (c) Ankara ABB CBS TAMAM (commit `2f0c5b4`):** İstanbul e-Plan akışı `IMAR_PROVIDERS` soyutlamasına alındı (`match/getParselByPoint/getPlanInfo/getPlanNotuPdf`; PDF-çıkarım+panel+checks ORTAK). Ankara = ArcGIS REST `baskentcbs.ankara.bel.tr` (anonim+CORS+token YOK), parsel içi nokta → MULK_PARSEL + PLAN ADASI spatial query → TAKS/KAKS/Emsal/Kat/yapı düzeni/çekmeler **YAPISAL** (İstanbul'dan zengin; plan-notu PDF taramaya gerek yok). Detay aşağıda "ANKARA — Başkent CBS". Tarayıcıda doğrulandı (Keçiören/Kadıköy/İzmir).
 **SİRADAKİLER (öncelik sırası):**
-1. **(c) Ankara ABB CBS** — İstanbul e-Plan gibi tersine mühendislik (parsel/plan/notu ucu) + **provider soyutlaması** (`getParselByPoint/getPlanInfo/getPlanNotuPdf`; PDF-çıkarım+panel+checks ORTAK). Sonra İzmir. "Kesin yapılacak" denildi.
-2. `plans[]`'te 1/1000 UİP varsa onun notunu çek (bazı "none"ları küratörsüz çözer) + 7-ilçe küratör (Maltepe/Beylikdüzü/Eyüpsultan/Silivri/Zeytinburnu hard-med, Şişli/Bakırköy easy).
-3. Çıkarım iyileştirmeleri: prose-pattern motoru, koşul-ayrıştırıcı {threshold,condition,value}, çok-sütun tablo (x-kümeleme), Hmax çoklu-format normalize.
-4. **master'a PR** (hazır olduğunda).
-Detaylar aşağıda "39-İLÇE KAPSAMA" + "TKGM dayanıklılık" bölümlerinde. Scout/PDF verisi `/tmp/cov/` (geçici).
+1. **İzmir sağlayıcısı** — aynı soyutlamayla (İzmir Büyükşehir CBS'i tersine mühendislik; ArcGIS REST muhtemel). Yeni provider `IMAR_PROVIDERS`'a eklenir, ortak katman aynen.
+2. Ankara iyileştirmeleri: PLAN ADASI boşsa NIP5000/25000'e fallback (fonksiyon/yoğunluk) — `eimar.ankara` app NIP5000Etkin_Goruntuleme/8 + NIP25000/14 kullanıyor; bahçe çekmelerini `psCekme` inputuna ön-doldur (şimdi sadece gösteriliyor).
+3. İstanbul `plans[]`'te 1/1000 UİP varsa onun notunu çek + 7-ilçe küratör (Maltepe/Beylikdüzü/Eyüpsultan/Silivri/Zeytinburnu hard-med, Şişli/Bakırköy easy) + prose-pattern/koşul-ayrıştırıcı çıkarım iyileştirmeleri.
+4. **master'a PR** (kullanıcı söyleyince).
+Detaylar aşağıda "ANKARA — Başkent CBS" + "39-İLÇE KAPSAMA" + "TKGM dayanıklılık" bölümlerinde. Scout/PDF verisi `/tmp/cov/` (geçici).
 
 ## Amaç
 Parsel yüklendikten sonra **imar durumu / plan notu** çek: fonksiyon (konut/ticari…), TAKS, KAKS(emsal), Hmax, ada/parsel, plan adı, plan notu → panelde göster + checks.js'in TAKS/emsal denetimine besle. Hedef: **İstanbul (İBB e-Plan)**.
@@ -91,6 +92,27 @@ Parsel yüklenince imar durumu otomatik çekilip panelde gösteriliyor + checks.
 - İstanbul dışı için zarif mesaj var; başka belediye CBS'leri ileride eklenebilir.
 - Plan notu PDF'ini tarayıcı içinde önizle (şu an indirir) + taranan değeri ilgili plan-notu maddesiyle göster.
 - pdf.js CDN'den geliyor → offline/Capacitor'da scan çalışmaz (imar zaten ağ-bağımlı); istenirse pdf.js bundle'lanabilir.
+
+## ✅ ANKARA — Başkent CBS (commit `2f0c5b4`, 2026-06-23) + PROVIDER SOYUTLAMASI
+**Tersine mühendislik yolu:** cbsbaskent.ankara.bel.tr (WordPress portal) → `/imar-plan-sorgu/` → asıl app **`eimar.ankara.bel.tr`** (Angular; main+chunk JS). Bundle'lardan endpoint çıkarıldı. Plan raporu app içinde **client-side jsPDF/html2canvas** ile üretiliyor → sunucu-taraflı plan-notu PDF ucu **YOK** (gerekmiyor; veri yapısal).
+
+**Backend: ArcGIS REST** `https://baskentcbs.ankara.bel.tr/server/rest/services` — **anonim (token YOK)** + **CORS Origin'i yansıtır** (`access-control-allow-origin: <origin>` + credentials:true). `Content-Type: application/x-www-form-urlencoded` → CORS-simple, preflight YOK. Tarayıcıdan `referrerPolicy:'no-referrer'`.
+
+**Akış (parsel içi lng,lat → ArcGIS spatial query, inSR/outSR=4326, intersects):**
+| Katman | Yol | Döner |
+|---|---|---|
+| MULK_PARSEL | `plan/PlanRaporu/MapServer/0/query` | `ada, parsel, tapu_mah_adi, ilce, alan` (+ parsel-bazlı nc_* imar çoğu null) |
+| PLAN ADASI | `plan/PlanRaporu/MapServer/1/query` | **`taks, kaks, emsal, katadedi, maksbinayukseklik, hmax, yapiduzeni, kullanim, altkullanim, onbahcemesafesi/yanbahcemesafesi/arkabahcemesafesi, baslangictarihi, etkinmi`** |
+
+- **etkinmi domain: 0 = Etkin (AKTİF), 1 = Edilgin (pasif)** — `abbPickAda` etkinmi=0 + sayısal-hakkı-dolu olanı öne alır.
+- `kullanim`(kısa kod 1-8)/`altkullanim`(TUCBS uzun kod)/`yapiduzeni` **kod→ad** çözümü: **`https://planaski.ankara.bel.tr/webgis/rest/services/mobilServis/uipSade/MapServer/142?f=pjson`** → `types[]` (subtype): `id`=kullanim, `name`=ad, `domains.altkullanim.codedValues`, `domains.yapiduzeni.codedValues`. Resmî app'in (`getKullanimVeAltKullanim`) aynı kaynağı. `abbLoadDecode()` TEK-SEFER fetch + cache (~227KB, yalnız Ankara parselinde); gelmezse gömülü `ABB_KULLANIM`(8 üst-tip)+`ABB_YAPIDUZENI` yedeği. Üst-kullanım: 1 Konut, 2 Kentsel Çalışma, 3 Turizm, 4 Açık/Yeşil, 5 Sosyal Altyapı, 6 Teknik Altyapı(Ulaşım), 7 Teknik Altyapı, 8 Mevcut Korunacak.
+- **Veri zenginliği değişken** (1/1000 sayısallaşma): bazı ada TAKS/KAKS/emsal tam (Keçiören 0,4/1,6/1,6; Etimesgut kat4+Blok+çekme), bazı yalnız fonksiyon (Mamak/Pursaklar → `noRights`). İstanbul'un NİP-null derdinin tersine burada YAPISAL geliyor.
+
+**PROVIDER SOYUTLAMASI (parsel.js):** `IMAR_PROVIDERS = {istanbul, ankara}`, her biri `{name, scan, match(il), getParselByPoint(ll,ada,parsel), getPlanInfo(ps,ll,ada,parsel)→normalize parcelImar, getPlanNotuPdf(planId,accept)|null}`. `imarLoad(ll,ada,parsel,il)` il'e göre sağlayıcı seçer (`imarPickProvider`→`match`); ORTAK katman: `imarRender` (başlık/uyarı sağlayıcı-adıyla; scan=false→plan-notu/tara butonları gizli; **yapı nizamı + plan bahçe-çekmesi** satırları eklendi), pdf.js tarama (yalnız İstanbul scan=true), checks.js (`maksTaks/emsal` normalize alanları — değişmedi), io.js (tüm parcelImar+`provider` kaydedilir). `applyData` artık `p.ilAd`'ı geçiyor.
+- **TUZAK (düzeltildi):** Türkçe `'İ'.toLowerCase()` → `'i'+U+0307` birleşik nokta → `indexOf('istanbul')` BOZULUR. `imarIlNorm` = NFKD + `[\u0300-\u036f]` strip + lowercase. (Paylaşılan `imarTrNorm`'a dokunulmadı.)
+- **Doğrulama (preview :8765, gerçek fetch/CORS/DOM):** Kadıköy→İBB e-Plan TAKS 0,35/Hmax 12,5/plan-notu PDF (regresyonsuz); Keçiören 39.9810,32.8690→Ankara "YERLEŞİK KONUT ALANI" TAKS 0,4/Emsal 1,6/Kat 4, ada 30036/2 Güçlükaya; İzmir→"bu il için sorgu yok". Konsol temiz. `npm test` 17/17.
+
+**Diğer keşfedilen Ankara uçları (ileride):** `forms.ankara.bel.tr/api/tkgm/{ilceListe,mahalleListe/{il},parsel/{il}/{ilce}/...}` (TKGM proxy, ada/parsel ile); `eimar` NIP fallback'leri `baskentcbs.../plan/NIP5000Etkin_Goruntuleme/MapServer/8` + `planaski.../mobilServis/NIP25000Etkin/MapServer/14`. ArcGIS servis dizini açık: `…/server/rest/services?f=json` (folders: plan, tasinmaz, kentrehberi, aktifAski…).
 
 ## 39-İLÇE KAPSAMA ANALİZİ + a/b kararı (2026-06-23, workflow)
 37/39 ilçeden örnek parsel → e-Plan pipeline → plan notu (`/tmp/cov/`, scout `cov-scout.js`). 33 plan notu, 34-ajan workflow değerlendirmesi. **autoExtract dağılımı: precise 5 · candidates 10 · manualOnly 7 · none 18.**
