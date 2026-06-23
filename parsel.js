@@ -569,6 +569,7 @@ function imarRender(im){
   // bahçe çekmeleri (plandan; Ankara) — bilgilendirme
   const cek=[im.onCekme!=null?('ön '+fmt(im.onCekme)):'', im.yanCekme!=null?('yan '+fmt(im.yanCekme)):'', im.arkaCekme!=null?('arka '+fmt(im.arkaCekme)):''].filter(Boolean).join(' · ');
   if(cek) h += '<div class="ps-imar-sub">Bahçe çekmesi (plan): '+escapeHtml(cek)+' m</div>';
+  if(im.kosul) h += '<div class="ps-imar-note ps-dim" title="'+escapeHtml(im.kosul).replace(/"/g,'&quot;')+'">Uygulama koşulu: '+escapeHtml(im.kosul.length>180?im.kosul.slice(0,180)+'…':im.kosul)+'</div>';
   if(im.emsalEstimate!=null && im.emsal==null)
     h += '<div class="ps-imar-est">≈ KAKS <b>'+fmt(im.emsalEstimate)+'</b> <span class="ps-dim">(yoğunluktan TÜRETİLMİŞ tahmin · bağlayıcı değil · kesin değer 1/1000 planında)</span></div>';
   const loc = [im.ada?('Ada '+im.ada):'', im.parsel?('Parsel '+im.parsel):''].filter(Boolean).join(' · ');
@@ -825,15 +826,27 @@ const ABB_DECODE_URL = 'https://planaski.ankara.bel.tr/webgis/rest/services/mobi
 const ABB_KULLANIM = {1:'Konut Yerleşme Alanları',2:'Kentsel Çalışma Alanları',3:'Turizm Yerleşme Alanları',4:'Açık ve Yeşil Alanlar',5:'Kentsel Sosyal Altyapı Alanları',6:'Kentsel Teknik Altyapı (Ulaşım)',7:'Kentsel Teknik Altyapı',8:'Bugünkü Arazi Kullanımını Koruyacak Alanlar'};
 const ABB_YAPIDUZENI = {702010101:'Ayrık Düzen',702010102:'Blok Düzen',702010103:'Bitişik Düzen',702010104:'Serbest Düzen',702010107:'İkiz Düzen',702010114:'Avlu',702010115:'Ayrık-İkiz Düzen'};
 
-/* ArcGIS REST katmanına nokta-içeren (intersects) spatial query — WGS84 giriş/çıkış. */
-async function abbQuery(layerPath, ll, outFields){
+/* İzmir — Büyükşehir Kent Rehberi CBS (ArcGIS REST; ANONİM + token YOK + CORS Origin yansıtır).
+   Ankara modelinin neredeyse kopyası; FARK: kullanım/yapı düzeni kod→ad çözümü PLAN ADASI
+   katmanının KENDİ alan-domain'inde (ayrı decode servisi YOK → arcgisLayerDomains). Parsel:
+   CbsRehberMulkiyet/1 (ADANO/PARSELNO). İmar: CbsRehberPlanlar/33 (PLAN ADASI: TAKS/KAKS/EMSAL/
+   KATADEDI/MAKSBINAYUKSEKLIK/YAPIDUZENI/ALTKULLANIM/çekmeler/UYGULAMAKOSULLARI). Kapsam kısmi
+   (eski plan adalarında TAKS/KAKS null/0 olabilir; kat+nizam+fonksiyon genelde dolu). Plan-notu
+   ayrı PDF ucu yok → getPlanNotuPdf null; UYGULAMAKOSULLARI metni panelde not olarak gösterilir.
+   (CbsImarDenetim TOKEN ister — KULLANMA.) */
+const IZMIR_REST = 'https://cbs.izmir.bel.tr/arcgis/rest/services';
+const IZMIR_PLAN_LAYER = IZMIR_REST+'/CbsRehberPlanlar/MapServer/33';
+
+/* GENERIC ArcGIS REST katmanına nokta-içeren (intersects) spatial query — WGS84 giriş/çıkış.
+   Hem Ankara (baskentcbs) hem İzmir (cbs.izmir) aynı imzayı kullanır. layerUrl = tam katman URL'i. */
+async function arcgisQuery(layerUrl, ll, outFields){
   const body = new URLSearchParams({
     f:'json',
     geometry: JSON.stringify({x:ll.lng, y:ll.lat, spatialReference:{wkid:4326}}),
     geometryType:'esriGeometryPoint', inSR:'4326', outSR:'4326',
     spatialRel:'esriSpatialRelIntersects', outFields:outFields||'*', returnGeometry:'false'
   });
-  const r = await fetch(ABB_REST+layerPath+'/query', {
+  const r = await fetch(layerUrl+'/query', {
     method:'POST', referrerPolicy:'no-referrer',
     headers:{'Content-Type':'application/x-www-form-urlencoded', 'Accept':'application/json'},
     body: body.toString()
@@ -842,6 +855,23 @@ async function abbQuery(layerPath, ll, outFields){
   const j = await r.json();
   if(j.error) throw new Error((j.error && j.error.message) || 'ArcGIS hata');
   return j.features||[];
+}
+function abbQuery(layerPath, ll, outFields){ return arcgisQuery(ABB_REST+layerPath, ll, outFields); }
+/* GENERIC: bir ArcGIS katmanının alan coded-value domain'lerini TEK SEFER çek (URL başına cache)
+   → {ALAN_ADI:{kod:ad}}. İzmir kullanım/yapı düzeni decode'u katmanın KENDİ domain'inden (ayrı servis yok). */
+const arcgisDomCache = {};
+function arcgisLayerDomains(layerUrl){
+  if(arcgisDomCache[layerUrl]) return arcgisDomCache[layerUrl];
+  arcgisDomCache[layerUrl] = fetch(layerUrl+'?f=json', {referrerPolicy:'no-referrer', headers:{'Accept':'application/json'}})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d=>{
+      const out={};
+      (d.fields||[]).forEach(f=>{ const cv = f.domain && f.domain.codedValues;
+        if(cv){ const m={}; cv.forEach(c=>{ m[c.code]=c.name; }); out[f.name]=m; } });
+      return out;
+    })
+    .catch(()=>null);
+  return arcgisDomCache[layerUrl];
 }
 /* uipSade/142 subtype metadata'sını TEK SEFER çek → {kul,alt,yd} kod→ad sözlükleri. */
 let abbDecodePromise = null;
@@ -877,6 +907,22 @@ function abbPickAda(feats){
   const act = feats.filter(f=> f.attributes && f.attributes.etkinmi===0);
   const pool = act.length ? act : feats;
   return (pool.find(f=>has(f.attributes)) || pool[0]).attributes;
+}
+/* pozitif sayı (0/boş → null): TAKS/KAKS/emsal/kat/Hmax/alan için (0 = veri yok, geçerli değer değil). */
+function imarPos(v){ const n=imarNum(v); return (n!=null && n>0) ? n : null; }
+/* fonksiyon adı temizle: domain placeholder'ları ("Boş", "-", "Tanımsız"…) → null. */
+function imarFnClean(name){
+  const s = (name==null) ? '' : String(name).trim();
+  if(!s || /^(boş|bos|-+|tanımsız|tanimsiz|belirsiz|yok|null)$/i.test(s)) return null;
+  return s;
+}
+/* İzmir PLAN ADASI seçimi: sayısal hakkı dolu → fonksiyonu (ALTKULLANIM) olan → ilki. */
+function izmirPickAda(feats){
+  if(!feats || !feats.length) return null;
+  const num = a => imarPos(a.TAKS)!=null || imarPos(a.KAKS)!=null || imarPos(a.EMSAL)!=null || imarPos(a.KATADEDI)!=null;
+  return (feats.find(f=>f.attributes && num(f.attributes)) ||
+          feats.find(f=>f.attributes && f.attributes.ALTKULLANIM!=null) ||
+          feats[0]).attributes;
 }
 
 /* ============================================================
@@ -951,6 +997,44 @@ const IMAR_PROVIDERS = {
       return im;
     },
     getPlanNotuPdf:null                                  // Ankara: yapısal veri var, plan-notu PDF ucu yok
+  },
+  izmir: {
+    name:'İzmir Kent Rehberi (CBS)', scan:false,
+    match:(il)=> imarIlNorm(il).indexOf('izmir')>=0,
+    async getParselByPoint(ll){
+      const fs = await arcgisQuery(IZMIR_REST+'/CbsRehberMulkiyet/MapServer/1', ll, 'ADANO,PARSELNO,TAPUYUZOLCUMU');
+      return { parcel: fs.length ? (fs[0].attributes||null) : null };
+    },
+    async getPlanInfo(ps, ll, ada, parsel){
+      const fs = await arcgisQuery(IZMIR_PLAN_LAYER, ll,
+        'KULLANIM,ALTKULLANIM,YAPIDUZENI,TAKS,KAKS,EMSAL,KATADEDI,MAKSBINAYUKSEKLIK,ONBAHCEMESAFESI,YANBAHCEMESAFESI,ARKABAHCEMESAFESI,UYGULAMAKOSULLARI,ONAMATARIHI');
+      const pick = izmirPickAda(fs);
+      const pc = (ps && ps.parcel) || null;
+      if(!pick && !pc) return null;
+      const dom = await arcgisLayerDomains(IZMIR_PLAN_LAYER);     // kullanım/yapı düzeni katmanın KENDİ domain'inden
+      const aa = pick || {};
+      const taks=imarPos(aa.TAKS), kaks=imarPos(aa.KAKS), emsal=imarPos(aa.EMSAL), mbh=imarPos(aa.MAKSBINAYUKSEKLIK);
+      const altName = dom && dom.ALTKULLANIM && dom.ALTKULLANIM[aa.ALTKULLANIM];
+      const yn = dom && dom.YAPIDUZENI && dom.YAPIDUZENI[aa.YAPIDUZENI];
+      const im = {
+        ada: pc&&pc.ADANO!=null?String(pc.ADANO):null, parsel: pc?(pc.PARSELNO||null):null,
+        mahalle:null, ilce:null, alan: pc?imarPos(pc.TAPUYUZOLCUMU):null,
+        fonksiyon: pick ? imarFnClean(altName) : null,
+        yogunluk:null, minTaks:null,
+        maksTaks: taks, emsal: (emsal!=null?emsal:kaks), hmax: mbh,
+        katAdedi: imarPos(aa.KATADEDI), yapiNizami: yn||null,
+        onCekme: imarNum(aa.ONBAHCEMESAFESI), yanCekme: imarNum(aa.YANBAHCEMESAFESI), arkaCekme: imarNum(aa.ARKABAHCEMESAFESI),
+        taksFromLejand:false, emsalFromLejand:false, hmaxFromLejand:false, emsalEstimate:null,
+        planAdi:null, tasdik: aa.ONAMATARIHI||null, planNotuId:null,
+        kosul: (aa.UYGULAMAKOSULLARI && String(aa.UYGULAMAKOSULLARI).trim()) || null,
+        lejandlar:[], scan:null, deferred:false,
+        noRights: (pick==null)
+      };
+      if(ada!=null && parsel!=null && im.ada!=null && im.parsel!=null)
+        im.mismatch = (String(ada)!==String(im.ada) || String(parsel)!==String(im.parsel));
+      return im;
+    },
+    getPlanNotuPdf:null                                  // İzmir: ayrı plan-notu PDF ucu yok (UYGULAMAKOSULLARI metni panelde)
   }
 };
 /* il adına göre sağlayıcı anahtarı (yoksa null → zarif boş-durum). */
