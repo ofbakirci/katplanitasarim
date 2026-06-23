@@ -448,6 +448,17 @@ function psRingCentroidLL(){
   A*=0.5; return {lng:cx/(6*A), lat:cy/(6*A)};
 }
 function imarNum(v){ if(v==null||v==='') return null; const n=parseFloat(String(v).replace(',','.')); return isFinite(n)?n:null; }
+/* Lejand/fonksiyon adına GÖMÜLÜ değerleri ayrıştır (ör. "...(TAKS:0.25 HMAX:12.50M)") — İBB'nin
+   kendi etiketi; öznitelik boşken yüksek-güven kaynak (birçok ilçede değer yalnız burada). */
+function imarLejandValues(lej){
+  if(!lej) return {};
+  const out={}; let m;
+  if(m=/TAKS\s*[:=]\s*(\d?[.,]\d+)/i.exec(lej)) out.taks=imarNum(m[1]);
+  if(m=/(?:KAKS|EMSAL|Emsal)\s*[:=]\s*(\d+(?:[.,]\d+)?)/i.exec(lej)) out.emsal=imarNum(m[1]);
+  if(m=/(?:HMAX|H\s*MAX)\s*[:=]\s*(\d+(?:[.,]\d+)?)/i.exec(lej)) out.hmax=imarNum(m[1]);
+  if(m=/(?:YENÇOK|YENCOK)\s*[:=]?\s*(\d{1,2})\s*kat/i.exec(lej)) out.kat=imarNum(m[1]);
+  return out;
+}
 /* /getparsel yanıtı → düzenli imar nesnesi (parcelImar). */
 function imarParse(gp){
   if(!gp) return null;
@@ -456,24 +467,39 @@ function imarParse(gp){
   // yapılaşma hakkı taşıyan fonksiyonu öne al (TAKS/EMSAL/KAKS/HMAX dolu), yoksa ilki
   const rights = fns.filter(a=> imarNum(a.MAKS_TAKS)!=null || imarNum(a.EMSAL)!=null || imarNum(a.KAKS)!=null || imarNum(a.HMAX)!=null);
   const pr = rights[0] || fns[0] || null;
-  const emsalV = pr ? (imarNum(pr.EMSAL)!=null ? imarNum(pr.EMSAL) : imarNum(pr.KAKS)) : null;
   const plan0 = (((gp.plans||[])[0])||{}).attributes || {};
+  // öznitelik değerleri
+  const aTaks = pr ? imarNum(pr.MAKS_TAKS) : null;
+  const aEmsal = pr ? (imarNum(pr.EMSAL)!=null ? imarNum(pr.EMSAL) : imarNum(pr.KAKS)) : null;
+  const aHmax = pr ? imarNum(pr.HMAX) : null;
+  const aKat  = pr ? imarNum(pr.KAT_ADEDI) : null;
+  // lejand-gömülü değerler — öznitelik boşsa İBB'nin kendi etiketinden al
+  const lv = imarLejandValues(pr ? pr.LEJAND_ADI : null);
+  const maksTaks = aTaks!=null ? aTaks : (lv.taks!=null?lv.taks:null);
+  const emsal    = aEmsal!=null ? aEmsal : (lv.emsal!=null?lv.emsal:null);
+  const hmax     = aHmax!=null ? aHmax : (lv.hmax!=null?lv.hmax:null);
+  const katAdedi = aKat!=null ? aKat : (lv.kat!=null?lv.kat:null);
+  const yog = pr ? imarNum(pr.YOGUNLUK) : null;
+  // yoğunluktan TÜRETİLMİŞ emsal tahmini (bağlayıcı değil): emsal ≈ yoğunluk × ~30 m²/kişi / 10000
+  const emsalEstimate = (emsal==null && yog>0) ? Math.round(yog*30/10000*100)/100 : null;
   return {
     ada: pc.ADA||null, parsel: pc.PARSEL||null,
     mahalle: pc.MAHALLE_ADI||pc.TAPUMAHADI||null, ilce: pc.ILCE_TEXT||null,
     alan: imarNum(pc.TAPUALAN),
     fonksiyon: pr ? (pr.LEJAND_ADI||null) : null,
-    yogunluk: pr ? imarNum(pr.YOGUNLUK) : null,
+    yogunluk: yog,
     minTaks:  pr ? imarNum(pr.MIN_TAKS) : null,
-    maksTaks: pr ? imarNum(pr.MAKS_TAKS) : null,
-    emsal: emsalV,
-    hmax:     pr ? imarNum(pr.HMAX) : null,
-    katAdedi: pr ? imarNum(pr.KAT_ADEDI) : null,
+    maksTaks: maksTaks, emsal: emsal, hmax: hmax, katAdedi: katAdedi,
+    taksFromLejand: aTaks==null && lv.taks!=null,
+    emsalFromLejand: aEmsal==null && lv.emsal!=null,
+    hmaxFromLejand: aHmax==null && lv.hmax!=null,
+    emsalEstimate: emsalEstimate,
     planAdi:  pr ? (pr.PLAN_ADI||null) : (plan0.PLAN_ADI||null),
     tasdik:   pr && pr.TASDIK_TARIHI ? pr.TASDIK_TARIHI : null,
     planNotuId: plan0.PLAN_ID!=null ? plan0.PLAN_ID : (pr && pr.PLAN_ID!=null ? pr.PLAN_ID : null),
     lejandlar: fns.map(a=>a.LEJAND_ADI).filter(Boolean),
-    scan: null                                             // plan notu taranınca {taks[],kaks[],yencok[]}
+    scan: null,                                            // plan notu taranınca {taks[],kaks[],yencok[]}
+    deferred: false                                        // plan notu 1/1000'e ertelemiş mi
   };
 }
 function imarRow(label, val){ return (val==null||val==='') ? '' : '<div class="ps-imar-row"><span>'+label+'</span><b>'+escapeHtml(String(val))+'</b></div>'; }
@@ -497,17 +523,19 @@ function imarRender(im){
   box.style.display='block';
   let h = '<div class="ps-imar-head">İmar Durumu <span class="ps-dim">(İBB e-Plan)</span></div>';
   if(im.fonksiyon) h += '<div class="ps-imar-fn">'+escapeHtml(im.fonksiyon)+'</div>';
-  const taksSrc = im.taksSelf?' (plan notu · rumuz)':(im.taksFromPdf?' (plan notu)':'');
-  const emsalSrc = im.emsalSelf?' (plan notu · rumuz)':(im.emsalFromPdf?' (plan notu)':'');
+  const taksSrc = im.taksSelf?' (plan notu · rumuz)':(im.taksFromPdf?' (plan notu)':(im.taksFromLejand?' (lejand)':''));
+  const emsalSrc = im.emsalSelf?' (plan notu · rumuz)':(im.emsalFromPdf?' (plan notu)':(im.emsalFromLejand?' (lejand)':''));
   const rights = [
     imarRow('TAKS (maks)', im.maksTaks!=null?(fmt(im.maksTaks)+taksSrc):null),
     imarRow('KAKS / Emsal', im.emsal!=null?(fmt(im.emsal)+emsalSrc):null),
-    imarRow('Hmax', im.hmax!=null?(fmt(im.hmax)+' m'):null),
+    imarRow('Hmax', im.hmax!=null?(fmt(im.hmax)+' m'+(im.hmaxFromLejand?' (lejand)':'')):null),
     imarRow('Kat adedi', im.katAdedi!=null?im.katAdedi:null),
     imarRow('Yoğunluk', im.yogunluk!=null?(fmt(im.yogunluk)+' kişi/ha'):null)
   ].filter(Boolean);
   if(rights.length) h += '<div class="ps-imar-grid">'+rights.join('')+'</div>';
   else h += '<div class="ps-imar-note">Bu planda sayısal TAKS/KAKS özniteliği yok (genelde 1/5000 Nazım); bağlayıcı değerler <b>plan notu</b>ndadır — aşağıdan tarayın.</div>';
+  if(im.emsalEstimate!=null && im.emsal==null)
+    h += '<div class="ps-imar-est">≈ KAKS <b>'+fmt(im.emsalEstimate)+'</b> <span class="ps-dim">(yoğunluktan TÜRETİLMİŞ tahmin · bağlayıcı değil · kesin değer 1/1000 planında)</span></div>';
   const loc = [im.ada?('Ada '+im.ada):'', im.parsel?('Parsel '+im.parsel):''].filter(Boolean).join(' · ');
   if(loc) h += '<div class="ps-imar-sub">'+escapeHtml(loc)+(im.alan!=null?(' · '+fmt(im.alan)+' m²'):'')+'</div>';
   if(im.mismatch) h += '<div class="ps-imar-warn">⚠ İBB e-Plan bu noktada <b>farklı parsel</b> gösteriyor (yukarıdaki TKGM parselinden); imar bilgisi İBB parseline aittir.</div>';
@@ -522,7 +550,9 @@ function imarRender(im){
     if(sc.yencok && sc.yencok.length)
       h += '<div class="ps-imar-chiprow"><span>Yençok/Hmax</span> '+sc.yencok.map(v=>'<span class="ps-chip ps-chip-static">'+escapeHtml(v)+'</span>').join('')+'</div>';
     if(!hasAny)
-      h += '<div class="ps-imar-scan-note ps-dim">Plan notunda otomatik tanınan yapılaşma değeri çıkmadı (tablo/biçim); PDF’i açıp inceleyin.</div>';
+      h += '<div class="ps-imar-scan-note ps-dim">'+(im.deferred
+        ? 'Bu <b>1/5000 nazım</b> planı yapılaşma değerlerini <b>1/1000 uygulama imar planına</b> ertelemiş; nazımda yalnızca yoğunluk var. Kesin TAKS/KAKS için ilçe belediyesinin uygulama planına / imar durumu belgesine bakın.'
+        : 'Plan notunda otomatik tanınan yapılaşma değeri çıkmadı (tablo/biçim); PDF’i açıp inceleyin.')+'</div>';
     else{
       if(all.length){
         h += '<button type="button" id="psScanCond" class="ps-cond-toggle">'+(im.showCond?'Koşul metinlerini gizle ▴':'Koşul metinlerini göster ▾')+'</button>';
@@ -691,7 +721,9 @@ function imarScanValues(text, im, lines){
   };
   mergeSelf(taks, self.taks); mergeSelf(kaks, self.kaks);
   self.yencok.forEach(v=>{ yset.delete(v); yset.add('◆ '+v); });   // rumuz-satırı Hmax → ◆ işaretle
-  return { taks, kaks, yencok:[...yset],
+  // deferral: 1/5000 nazım, değeri 1/1000 uygulama planına ertelemiş mi
+  const deferred = /1\s*\/\s*1000[^.\n]{0,90}(belirlen|yapıl|göre|onan)|net\s+parsel\s+üzerinden|uygulama\s+imar\s+plan[a-zçğıöşü]*[^.\n]{0,70}belirlen|avan\s+proje/i.test(text);
+  return { taks, kaks, yencok:[...yset], deferred:deferred,
     suggestedTaks: self.taks.length===1 ? self.taks[0].n : null,
     suggestedKaks: self.kaks.length===1 ? self.kaks[0].n : null };
 }
@@ -705,6 +737,7 @@ async function imarPlanNotuTara(planId){
     const scan = imarScanValues(doc.text, parcelImar, doc.lines);
     if(parcelImar){
       parcelImar.scan = scan;
+      parcelImar.deferred = !!scan.deferred;
       // rumuz-satırı TEK değer = parselin kesin yapılaşma değeri → attribute boşsa OTOMATİK uygula (geri alınabilir)
       if(scan.suggestedTaks!=null && parcelImar.maksTaks==null){ parcelImar.maksTaks=scan.suggestedTaks; parcelImar.taksFromPdf=true; parcelImar.taksSelf=true; }
       if(scan.suggestedKaks!=null && parcelImar.emsal==null){ parcelImar.emsal=scan.suggestedKaks; parcelImar.emsalFromPdf=true; parcelImar.emsalSelf=true; }
