@@ -937,7 +937,7 @@ function izmirPickAda(feats){
 function imarIlNorm(s){ return String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
 const IMAR_PROVIDERS = {
   istanbul: {
-    name:'İBB e-Plan', scan:true,
+    name:'İBB e-Plan', il:'İstanbul', scan:true,
     match:(il)=> imarIlNorm(il).indexOf('istanbul')>=0,
     async getParselByPoint(ll, ada, parsel){
       const [x,y] = psLL2Merc(ll.lng, ll.lat);
@@ -961,7 +961,7 @@ const IMAR_PROVIDERS = {
     }
   },
   ankara: {
-    name:'Ankara Başkent CBS', scan:false,
+    name:'Ankara Başkent CBS', il:'Ankara', scan:false,
     match:(il)=> imarTrNorm(il).indexOf('ankara')>=0,
     async getParselByPoint(ll){
       const fs = await abbQuery('/plan/PlanRaporu/MapServer/0', ll, 'ada,parsel,tapu_mah_adi,ilce,alan');
@@ -999,7 +999,7 @@ const IMAR_PROVIDERS = {
     getPlanNotuPdf:null                                  // Ankara: yapısal veri var, plan-notu PDF ucu yok
   },
   izmir: {
-    name:'İzmir Kent Rehberi (CBS)', scan:false,
+    name:'İzmir Kent Rehberi (CBS)', il:'İzmir', scan:false,
     match:(il)=> imarIlNorm(il).indexOf('izmir')>=0,
     async getParselByPoint(ll){
       const fs = await arcgisQuery(IZMIR_REST+'/CbsRehberMulkiyet/MapServer/1', ll, 'ADANO,PARSELNO,TAPUYUZOLCUMU');
@@ -1055,7 +1055,8 @@ async function imarLoad(ll, tkgmAda, tkgmParsel, il){
   const pkey = imarPickProvider(il);
   if(!pkey){
     imarRender(null);
-    if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">Bu il için otomatik imar sorgusu henüz yok <span class="ps-dim">(şu an İstanbul ve Ankara destekleniyor).</span></div>'; }
+    if(box){ const sup=Object.values(IMAR_PROVIDERS).map(p=>p.il).filter(Boolean).join(', ');
+      box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">Bu il için otomatik imar sorgusu henüz yok <span class="ps-dim">(şu an '+escapeHtml(sup)+' destekleniyor).</span></div>'; }
     return;
   }
   const prov = IMAR_PROVIDERS[pkey];
