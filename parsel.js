@@ -548,7 +548,9 @@ function imarRender(im){
   const box = document.getElementById('psImarBilgi'); if(!box) return;
   if(!im){ box.style.display='none'; box.innerHTML=''; return; }
   box.style.display='block';
-  let h = '<div class="ps-imar-head">İmar Durumu <span class="ps-dim">(İBB e-Plan)</span></div>';
+  const prov = (im.provider && IMAR_PROVIDERS[im.provider]) ? IMAR_PROVIDERS[im.provider] : IMAR_PROVIDERS.istanbul;
+  const provName = prov.name, provScan = !!prov.scan;
+  let h = '<div class="ps-imar-head">İmar Durumu <span class="ps-dim">('+escapeHtml(provName)+')</span></div>';
   if(im.fonksiyon) h += '<div class="ps-imar-fn">'+escapeHtml(im.fonksiyon)+'</div>';
   const taksSrc = im.taksSelf?' (plan notu · rumuz)':(im.taksFromPdf?' (plan notu)':(im.taksFromLejand?' (lejand)':''));
   const emsalSrc = im.emsalSelf?' (plan notu · rumuz)':(im.emsalFromPdf?' (plan notu)':(im.emsalFromLejand?' (lejand)':''));
@@ -557,15 +559,21 @@ function imarRender(im){
     imarRow('KAKS / Emsal', im.emsal!=null?(fmt(im.emsal)+emsalSrc):null),
     imarRow('Hmax', im.hmax!=null?(fmt(im.hmax)+' m'+(im.hmaxFromLejand?' (lejand)':'')):null),
     imarRow('Kat adedi', im.katAdedi!=null?im.katAdedi:null),
+    imarRow('Yapı nizamı', im.yapiNizami||null),
     imarRow('Yoğunluk', im.yogunluk!=null?(fmt(im.yogunluk)+' kişi/ha'):null)
   ].filter(Boolean);
   if(rights.length) h += '<div class="ps-imar-grid">'+rights.join('')+'</div>';
-  else h += '<div class="ps-imar-note">Bu planda sayısal TAKS/KAKS özniteliği yok (genelde 1/5000 Nazım); bağlayıcı değerler <b>plan notu</b>ndadır — aşağıdan tarayın.</div>';
+  else h += '<div class="ps-imar-note">'+(provScan
+    ? 'Bu planda sayısal TAKS/KAKS özniteliği yok (genelde 1/5000 Nazım); bağlayıcı değerler <b>plan notu</b>ndadır — aşağıdan tarayın.'
+    : 'Bu noktada sayısal yapılaşma değeri (TAKS/KAKS/kat) bulunamadı; yalnız kullanım/fonksiyon tanımlı olabilir. Kesin haklar için ilçe belediyesinin <b>imar durumu</b> belgesine bakın.')+'</div>';
+  // bahçe çekmeleri (plandan; Ankara) — bilgilendirme
+  const cek=[im.onCekme!=null?('ön '+fmt(im.onCekme)):'', im.yanCekme!=null?('yan '+fmt(im.yanCekme)):'', im.arkaCekme!=null?('arka '+fmt(im.arkaCekme)):''].filter(Boolean).join(' · ');
+  if(cek) h += '<div class="ps-imar-sub">Bahçe çekmesi (plan): '+escapeHtml(cek)+' m</div>';
   if(im.emsalEstimate!=null && im.emsal==null)
     h += '<div class="ps-imar-est">≈ KAKS <b>'+fmt(im.emsalEstimate)+'</b> <span class="ps-dim">(yoğunluktan TÜRETİLMİŞ tahmin · bağlayıcı değil · kesin değer 1/1000 planında)</span></div>';
   const loc = [im.ada?('Ada '+im.ada):'', im.parsel?('Parsel '+im.parsel):''].filter(Boolean).join(' · ');
   if(loc) h += '<div class="ps-imar-sub">'+escapeHtml(loc)+(im.alan!=null?(' · '+fmt(im.alan)+' m²'):'')+'</div>';
-  if(im.mismatch) h += '<div class="ps-imar-warn">⚠ İBB e-Plan bu noktada <b>farklı parsel</b> gösteriyor (yukarıdaki TKGM parselinden); imar bilgisi İBB parseline aittir.</div>';
+  if(im.mismatch) h += '<div class="ps-imar-warn">⚠ '+escapeHtml(provName)+' bu noktada <b>farklı parsel</b> gösteriyor (yukarıdaki TKGM parselinden); imar bilgisi sorgulanan parsele aittir.</div>';
   if(im.planAdi){ const dt=imarFmtDate(im.tasdik); h += '<div class="ps-imar-plan">'+escapeHtml(im.planAdi)+(dt?(' <span class="ps-dim">('+dt+')</span>'):'')+'</div>'; }
   // plan notu metninden taranan yapılaşma değerleri (varsa) — tıklanan değer imar limitine uygulanır
   if(im.scan){
@@ -592,10 +600,10 @@ function imarRender(im){
       h += '<div class="ps-imar-scan-note ps-dim"><b>◆</b> parselin <b>rumuz satırından</b> (yüksek güven, tek değerse otomatik uygulandı) · <b>★</b> fonksiyonla ilişkili ipucu · işaretsiz = plandaki diğer değerler. Kesin değeri koşul metninden teyit edin.</div>';
     }
     h += '</div>';
-  } else if(im.planNotuId!=null){
+  } else if(provScan && im.planNotuId!=null){
     h += '<button type="button" id="psPlanTara" class="ps-imar-btn2">Plan notundan değerleri tara</button>';
   }
-  if(im.planNotuId!=null) h += '<button type="button" id="psPlanNotu" class="ps-imar-btn">Plan notu (PDF)</button>';
+  if(provScan && im.planNotuId!=null) h += '<button type="button" id="psPlanNotu" class="ps-imar-btn">Plan notu (PDF)</button>';
   h += '<div class="ps-imar-disc ps-dim">Bilgilendirme amaçlıdır; resmî <b>imar durumu belgesi</b> ile teyit edin.</div>';
   box.innerHTML = h;
   const pn = document.getElementById('psPlanNotu');
@@ -613,11 +621,9 @@ async function imarPlanNotu(planId){
   const btn = document.getElementById('psPlanNotu'), label='Plan notu (PDF)';
   if(btn){ btn.disabled=true; btn.textContent='İndiriliyor…'; }
   try{
-    const r = await fetch(EPLAN_BASE+'/getplannotu', {
-      method:'POST', referrerPolicy:'no-referrer',
-      headers:{'Content-Type':'application/json', 'Accept':'application/pdf'},
-      body: JSON.stringify({planId:planId, type:'p'})
-    });
+    const prov = (parcelImar && IMAR_PROVIDERS[parcelImar.provider]) || IMAR_PROVIDERS.istanbul;
+    if(!prov.getPlanNotuPdf) throw new Error('plan notu yok');
+    const r = await prov.getPlanNotuPdf(planId, 'application/pdf');
     if(!r.ok) throw new Error('HTTP '+r.status);
     const b = await r.blob();
     if(b.size < 1000) throw new Error('boş');
@@ -641,11 +647,9 @@ function loadPdfjs(){
    lines: item x/y koordinatlarından SATIR rekonstrüksiyonu (aynı y = aynı satır, x'e göre sıralı)
    → noktalı-liderli tablolar ('TK10.....1.25') tek satıra toplanır (rumuz+değer yan yana). */
 async function eplanPlanNotuDoc(planId){
-  const r = await fetch(EPLAN_BASE+'/getplannotu', {
-    method:'POST', referrerPolicy:'no-referrer',
-    headers:{'Content-Type':'application/json', 'Accept':'application/pdf'},
-    body: JSON.stringify({planId:planId, type:'p'})
-  });
+  const prov = (parcelImar && IMAR_PROVIDERS[parcelImar.provider]) || IMAR_PROVIDERS.istanbul;
+  if(!prov.getPlanNotuPdf) throw new Error('plan notu yok');
+  const r = await prov.getPlanNotuPdf(planId, 'application/pdf');
   if(!r.ok) throw new Error('HTTP '+r.status);
   const buf = await r.arrayBuffer();
   if(buf.byteLength < 1000) throw new Error('boş');
@@ -802,25 +806,186 @@ function imarPickFeature(features, ada, parsel){
   }
   return features[0];
 }
+/* ============================================================
+   Ankara — Başkent CBS (ArcGIS REST; anonim + CORS açık, token YOK)
+   ------------------------------------------------------------
+   Tersine mühendislik: eimar.ankara.bel.tr (Angular) → baskentcbs
+   ArcGIS REST. Parsel içi (lng,lat) ile spatial query (WGS84):
+     • MULK_PARSEL (PlanRaporu/0) → ada/parsel/mahalle/ilçe/alan
+     • PLAN ADASI  (PlanRaporu/1) → TAKS/KAKS/Emsal/Kat/yapı düzeni/
+       bahçe çekmeleri + kullanım kodu (1/1000 UİP yapısal verisi)
+   kullanım/altkullanım/yapı düzeni kodları uipSade/142 metadata'sının
+   coded-value domain'inden çözülür (resmî app ile aynı kaynak, tek-sefer
+   cache). Yapılaşma değerleri YAPISAL geldiğinden plan-notu PDF taramaya
+   GEREK YOK (İstanbul'un aksine). Tarayıcıdan referrerPolicy:'no-referrer'.
+   ============================================================ */
+const ABB_REST = 'https://baskentcbs.ankara.bel.tr/server/rest/services';
+const ABB_DECODE_URL = 'https://planaski.ankara.bel.tr/webgis/rest/services/mobilServis/uipSade/MapServer/142?f=pjson';
+// gömülü yedek (decode servisi gelmezse): üst-kullanım + yapı düzeni kod→ad
+const ABB_KULLANIM = {1:'Konut Yerleşme Alanları',2:'Kentsel Çalışma Alanları',3:'Turizm Yerleşme Alanları',4:'Açık ve Yeşil Alanlar',5:'Kentsel Sosyal Altyapı Alanları',6:'Kentsel Teknik Altyapı (Ulaşım)',7:'Kentsel Teknik Altyapı',8:'Bugünkü Arazi Kullanımını Koruyacak Alanlar'};
+const ABB_YAPIDUZENI = {702010101:'Ayrık Düzen',702010102:'Blok Düzen',702010103:'Bitişik Düzen',702010104:'Serbest Düzen',702010107:'İkiz Düzen',702010114:'Avlu',702010115:'Ayrık-İkiz Düzen'};
+
+/* ArcGIS REST katmanına nokta-içeren (intersects) spatial query — WGS84 giriş/çıkış. */
+async function abbQuery(layerPath, ll, outFields){
+  const body = new URLSearchParams({
+    f:'json',
+    geometry: JSON.stringify({x:ll.lng, y:ll.lat, spatialReference:{wkid:4326}}),
+    geometryType:'esriGeometryPoint', inSR:'4326', outSR:'4326',
+    spatialRel:'esriSpatialRelIntersects', outFields:outFields||'*', returnGeometry:'false'
+  });
+  const r = await fetch(ABB_REST+layerPath+'/query', {
+    method:'POST', referrerPolicy:'no-referrer',
+    headers:{'Content-Type':'application/x-www-form-urlencoded', 'Accept':'application/json'},
+    body: body.toString()
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const j = await r.json();
+  if(j.error) throw new Error((j.error && j.error.message) || 'ArcGIS hata');
+  return j.features||[];
+}
+/* uipSade/142 subtype metadata'sını TEK SEFER çek → {kul,alt,yd} kod→ad sözlükleri. */
+let abbDecodePromise = null;
+function abbLoadDecode(){
+  if(abbDecodePromise) return abbDecodePromise;
+  abbDecodePromise = fetch(ABB_DECODE_URL, {referrerPolicy:'no-referrer', headers:{'Accept':'application/json'}})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(d=>{
+      const kul={}, alt={}, yd={};
+      (d.types||[]).forEach(t=>{
+        kul[t.id]=t.name;
+        (((t.domains||{}).altkullanim||{}).codedValues||[]).forEach(c=>{ alt[c.code]=c.name; });
+        (((t.domains||{}).yapiduzeni||{}).codedValues||[]).forEach(c=>{ yd[c.code]=c.name; });
+      });
+      return {kul, alt, yd};
+    })
+    .catch(()=>null);                    // sözlük gelmezse gömülü tabloya düşülür
+  return abbDecodePromise;
+}
+function abbName(dec, kullanim, altkullanim){
+  const a = dec && dec.alt && dec.alt[altkullanim];
+  if(a) return a;
+  return (dec && dec.kul && dec.kul[kullanim]) || ABB_KULLANIM[kullanim] || null;
+}
+function abbYapiNizami(dec, code){
+  if(code==null) return null;
+  return (dec && dec.yd && dec.yd[code]) || ABB_YAPIDUZENI[code] || null;
+}
+/* birden çok plan adası kesişirse: etkin (etkinmi=0) + sayısal hakkı dolu olanı öne al. */
+function abbPickAda(feats){
+  if(!feats || !feats.length) return null;
+  const has = a => imarNum(a.taks)!=null || imarNum(a.kaks)!=null || imarNum(a.emsal)!=null || imarNum(a.katadedi)!=null;
+  const act = feats.filter(f=> f.attributes && f.attributes.etkinmi===0);
+  const pool = act.length ? act : feats;
+  return (pool.find(f=>has(f.attributes)) || pool[0]).attributes;
+}
+
+/* ============================================================
+   İMAR SAĞLAYICILARI — il'e göre seçilir; üç ortak metot:
+     getParselByPoint(ll, ada, parsel) → sağlayıcıya özel parsel referansı
+     getPlanInfo(ps, ll, ada, parsel)  → NORMALİZE parcelImar nesnesi
+     getPlanNotuPdf(planId, accept)    → plan notu PDF Response | null
+   PDF-çıkarım + panel (imarRender) + checks ORTAK katman; sağlayıcıdan bağımsız.
+   ============================================================ */
+/* il adı normalize (eşleştirme için): Türkçe 'İ'.toLowerCase() → 'i'+U+0307 birleşik nokta
+   üretip indexOf'u bozuyor → NFKD ile aksanları ayır + birleşik işaretleri at, sonra küçült. */
+function imarIlNorm(s){ return String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+const IMAR_PROVIDERS = {
+  istanbul: {
+    name:'İBB e-Plan', scan:true,
+    match:(il)=> imarIlNorm(il).indexOf('istanbul')>=0,
+    async getParselByPoint(ll, ada, parsel){
+      const [x,y] = psLL2Merc(ll.lng, ll.lat);
+      const bp = await eplanPost('/getbypoint', {x, y});
+      const f = imarPickFeature(bp.features, ada, parsel);
+      return f ? {feature:f} : null;
+    },
+    async getPlanInfo(ps, ll, ada, parsel){
+      const gp = await eplanPost('/getparsel', {objectId: ps.feature.attributes.OBJECTID});
+      const im = imarParse(gp);
+      if(im && ada!=null && parsel!=null && im.ada!=null && im.parsel!=null)
+        im.mismatch = (String(ada)!==String(im.ada) || String(parsel)!==String(im.parsel));
+      return im;
+    },
+    getPlanNotuPdf(planId, accept){
+      return fetch(EPLAN_BASE+'/getplannotu', {
+        method:'POST', referrerPolicy:'no-referrer',
+        headers:{'Content-Type':'application/json', 'Accept':accept||'application/pdf'},
+        body: JSON.stringify({planId:planId, type:'p'})
+      });
+    }
+  },
+  ankara: {
+    name:'Ankara Başkent CBS', scan:false,
+    match:(il)=> imarTrNorm(il).indexOf('ankara')>=0,
+    async getParselByPoint(ll){
+      const fs = await abbQuery('/plan/PlanRaporu/MapServer/0', ll, 'ada,parsel,tapu_mah_adi,ilce,alan');
+      return { parcel: fs.length ? (fs[0].attributes||null) : null };
+    },
+    async getPlanInfo(ps, ll, ada, parsel){
+      const fs = await abbQuery('/plan/PlanRaporu/MapServer/1', ll,
+        'taks,kaks,emsal,katadedi,maksbinayukseklik,hmax,yapiduzeni,kullanim,altkullanim,onbahcemesafesi,yanbahcemesafesi,arkabahcemesafesi,baslangictarihi,etkinmi');
+      const a = abbPickAda(fs);
+      const pc = (ps && ps.parcel) || null;
+      if(!a && !pc) return null;                        // ne parsel ne plan adası → boş
+      const dec = await abbLoadDecode();
+      const aa = a || {};
+      const taks=imarNum(aa.taks), kaks=imarNum(aa.kaks), emsal=imarNum(aa.emsal);
+      const mbh=imarNum(aa.maksbinayukseklik), hmaxN=imarNum(aa.hmax);
+      const im = {
+        ada: pc?(pc.ada||null):null, parsel: pc?(pc.parsel||null):null,
+        mahalle: pc?(pc.tapu_mah_adi||null):null, ilce: pc?(pc.ilce||null):null,
+        alan: pc?imarNum(pc.alan):null,
+        fonksiyon: a ? abbName(dec, aa.kullanim, aa.altkullanim) : null,
+        yogunluk:null, minTaks:null,
+        maksTaks: taks, emsal: (emsal!=null?emsal:kaks), hmax: (mbh!=null?mbh:hmaxN),
+        katAdedi: imarNum(aa.katadedi),
+        yapiNizami: abbYapiNizami(dec, aa.yapiduzeni),
+        onCekme: imarNum(aa.onbahcemesafesi), yanCekme: imarNum(aa.yanbahcemesafesi), arkaCekme: imarNum(aa.arkabahcemesafesi),
+        taksFromLejand:false, emsalFromLejand:false, hmaxFromLejand:false, emsalEstimate:null,
+        planAdi:null, tasdik: aa.baslangictarihi||null, planNotuId:null,
+        lejandlar:[], scan:null, deferred:false,
+        noRights: (a==null)                              // parsel var ama bu noktada plan adası yok
+      };
+      if(ada!=null && parsel!=null && im.ada!=null && im.parsel!=null)
+        im.mismatch = (String(ada)!==String(im.ada) || String(parsel)!==String(im.parsel));
+      return im;
+    },
+    getPlanNotuPdf:null                                  // Ankara: yapısal veri var, plan-notu PDF ucu yok
+  }
+};
+/* il adına göre sağlayıcı anahtarı (yoksa null → zarif boş-durum). */
+function imarPickProvider(il){
+  if(!il) return null;
+  return Object.keys(IMAR_PROVIDERS).find(k=> IMAR_PROVIDERS[k].match(il)) || null;
+}
+
+/* Parsel yüklendikten sonra imar durumunu çek (asenkron, fire-and-forget).
+   ll: parsel içi kesin nokta (koordinat akışı), yoksa parsel ağırlık merkezi.
+   il: sağlayıcı seçimi (İstanbul→e-Plan, Ankara→Başkent CBS). Eski istek imarReqId ile iptal. */
 let imarReqId = 0;
-async function imarLoad(ll, tkgmAda, tkgmParsel){
+async function imarLoad(ll, tkgmAda, tkgmParsel, il){
   const box = document.getElementById('psImarBilgi');
   parcelImar = null;
   const pt = (ll && isFinite(ll.lat) && isFinite(ll.lng)) ? ll : psRingCentroidLL();
   if(!pt){ imarRender(null); return; }
+  const pkey = imarPickProvider(il);
+  if(!pkey){
+    imarRender(null);
+    if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">Bu il için otomatik imar sorgusu henüz yok <span class="ps-dim">(şu an İstanbul ve Ankara destekleniyor).</span></div>'; }
+    return;
+  }
+  const prov = IMAR_PROVIDERS[pkey];
   const myId = ++imarReqId;
-  if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-load">İmar durumu sorgulanıyor… <span class="ps-dim">(İBB e-Plan)</span></div>'; }
+  if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-load">İmar durumu sorgulanıyor… <span class="ps-dim">('+escapeHtml(prov.name)+')</span></div>'; }
   try{
-    const [x,y] = psLL2Merc(pt.lng, pt.lat);
-    const bp = await eplanPost('/getbypoint', {x, y});
+    const ps = await prov.getParselByPoint(pt, tkgmAda, tkgmParsel);
     if(myId !== imarReqId) return;                       // eskimiş istek
-    const f = imarPickFeature(bp.features, tkgmAda, tkgmParsel);
-    if(!f){ imarRender(null); if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">Bu parsel için İBB e-Plan’da sayısal imar verisi yok <span class="ps-dim">(yalnız İstanbul).</span></div>'; } return; }
-    const gp = await eplanPost('/getparsel', {objectId: f.attributes.OBJECTID});
+    if(!ps){ if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">Bu parsel için '+escapeHtml(prov.name)+'’de imar verisi bulunamadı.</div>'; } return; }
+    const im = await prov.getPlanInfo(ps, pt, tkgmAda, tkgmParsel);
     if(myId !== imarReqId) return;
-    parcelImar = imarParse(gp);
-    if(tkgmAda!=null && tkgmParsel!=null && parcelImar.ada!=null && parcelImar.parsel!=null)
-      parcelImar.mismatch = (String(tkgmAda)!==String(parcelImar.ada) || String(tkgmParsel)!==String(parcelImar.parsel));
+    if(!im){ if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">Bu noktada '+escapeHtml(prov.name)+'’de sayısal imar verisi yok.</div>'; } return; }
+    im.provider = pkey;
+    parcelImar = im;
     imarRender(parcelImar);
     if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
   }catch(e){
@@ -884,7 +1049,7 @@ function initParselSorgu(){
       + '<br>Alan '+alan
       + (p.nitelik ? '<br><span class="ps-dim">'+escapeHtml(p.nitelik)+'</span>' : ''),
       'ok');
-    imarLoad(ll||null, p.adaNo||adaF||null, p.parselNo||parF||null);   // İBB e-Plan imar durumunu çek (asenkron); TKGM ada/parsel ile eşleştir
+    imarLoad(ll||null, p.adaNo||adaF||null, p.parselNo||parF||null, p.ilAd||'');   // imar durumunu çek (asenkron); il'e göre sağlayıcı (İBB e-Plan / Ankara CBS) + TKGM ada/parsel eşleştir
     return true;
   }
 
