@@ -87,7 +87,7 @@ function stateSnapshot(bare, withBlocks){
   const st={v:1, app:'kat-plani-tasarim',
     ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk'), koridorYon:koridorYon, bodrumSayisi:String(bodrumSayisi)},
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
-    parcelClosed, parcelRot, balconies:balconies.map(b=>({...b})),
+    parcelClosed, parcelRot, parcelImar, balconies:balconies.map(b=>({...b})),
     courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ, unitLayout:Object.assign({},unitLayout),
     doors:{ov:doorOverrides, extra:extraDoors, hidden:doorHidden},
@@ -170,9 +170,10 @@ function restoreState(st, opt){
   pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
   parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed;
   parcelRot=(typeof st.parcelRot==='number' && isFinite(st.parcelRot))?st.parcelRot:0;
+  parcelImar = st.parcelImar || null;                          // imar durumu kayıttan geri yüklenir (yeniden sorgulanmaz)
   psProj=null; psSatReq=null;                                  // kayıttan: geo referansı yok (parcelPts döndürülmüş saklanır)
   if(typeof psComputeSetback==='function') psComputeSetback();
-  if(parcelPts.length>=3 && parcelClosed){ const imar=document.getElementById('psImar'); if(imar) imar.style.display='block'; }
+  if(parcelPts.length>=3 && parcelClosed){ const imar=document.getElementById('psImar'); if(imar) imar.style.display='block'; if(typeof imarRender==='function') imarRender(parcelImar); }
   if(typeof psSyncRotUI==='function') psSyncRotUI();
   balconies=(st.balconies||[]).map(b=>({...b}));
   courtyards=(st.courtyards||[]).map(av=>({poly:(av.poly||[]).map(p=>({x:p.x,y:p.y}))})); avluGhost=null;
@@ -461,7 +462,7 @@ function importLegacySvg(txt){
   unitObjs2.forEach(u=>{ const k2=JSON.stringify({...u.spec, adet:0});
     if(specMap.has(k2)) specMap.get(k2).adet++; else specMap.set(k2,{...u.spec}); });
   pts=poly; closed=true;
-  parcelPts=[]; parcelClosed=false; parcelSetback=[]; parcelRot=0; balconies=[];
+  parcelPts=[]; parcelClosed=false; parcelSetback=[]; parcelRot=0; parcelImar=null; if(typeof imarRender==='function') imarRender(null); balconies=[];
   unitSpecs=[...specMap.values()]; renderUnits();
   customCutsZ=null; unitLayout={};
   doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];

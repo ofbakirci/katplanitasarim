@@ -303,9 +303,14 @@ function psUpdateSatellite(){
 }
 
 /* ---- imar çekme (yapı yaklaşma sınırı) ---- */
-/* Parseli her kenardan d metre içe ofsetle (kenar yarım-düzlemlerinin kesişimi;
-   dışbükey parselde tam, içbükeyde şematik/temkinli — sonuç her zaman parsel içinde). */
+/* Parseli her kenardan d metre içe ofsetle. KONVEKS parselde yarım-düzlem kesişimi KESİN;
+   İÇBÜKEY parselde o yöntem çöker (boş döner) → miter (köşe açıortayı) ofsetine düş. */
 function tkgmSetback(poly, d){
+  const hp = tkgmSetbackHP(poly, d);
+  if(hp.length>=3) return hp;
+  return tkgmSetbackMiter(poly, d);
+}
+function tkgmSetbackHP(poly, d){
   if(!poly || poly.length<3 || !(d>0)) return [];
   let p = poly.map(q=>({x:q.x,y:q.y}));
   let a2=0; for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length]; a2+=p[i].x*q.y-q.x*p[i].y;}
@@ -318,6 +323,30 @@ function tkgmSetback(poly, d){
     out = tkgmClipHP(out, a.x+nx*d, a.y+ny*d, nx, ny);
     if(out.length<3) return [];
   }
+  return out.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
+}
+/* miter iç-ofset: her köşeyi iki komşu kenarın iç-normallerinin açıortayı boyunca d içeri taşır.
+   Konveks+içbükey köşelerde çalışır; sonuç ters dönerse / köşe parsel dışına çıkarsa boş döner. */
+function tkgmSetbackMiter(poly, d){
+  if(!poly || poly.length<3 || !(d>0)) return [];
+  let p = poly.map(q=>({x:q.x,y:q.y}));
+  let a2=0; for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length]; a2+=p[i].x*q.y-q.x*p[i].y;}
+  if(a2<0) p.reverse();
+  const N=p.length, out=[];
+  for(let i=0;i<N;i++){
+    const A=p[(i-1+N)%N], V=p[i], B=p[(i+1)%N];
+    let d1x=V.x-A.x, d1y=V.y-A.y; let L1=Math.hypot(d1x,d1y)||1; d1x/=L1; d1y/=L1;
+    let d2x=B.x-V.x, d2y=B.y-V.y; let L2=Math.hypot(d2x,d2y)||1; d2x/=L2; d2y/=L2;
+    const n1x=-d1y, n1y=d1x, n2x=-d2y, n2y=d2x;      // sol (içe) normaller
+    const denom = 1 + (n1x*n2x + n1y*n2y);
+    let ox, oy;
+    if(denom < 1e-3){ ox=n1x*d; oy=n1y*d; }          // sivri köşe → tek normal
+    else { const f=d/denom; ox=(n1x+n2x)*f; oy=(n1y+n2y)*f; }
+    out.push({x:V.x+ox, y:V.y+oy});
+  }
+  let oa=0; for(let i=0;i<N;i++){const q=out[(i+1)%N]; oa+=out[i].x*q.y-q.x*out[i].y;}
+  if(oa<=1) return [];                                // çöktü/ters döndü
+  for(let i=0;i<N;i++){ if(!pip(out[i].x, out[i].y, p)) return []; }   // köşe parsel dışına taştı → geçersiz
   return out.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
 }
 function tkgmClipHP(poly, px, py, nx, ny){     // yarım-düzlem: dot(q-(px,py), n) >= 0 tutulur
@@ -352,6 +381,395 @@ function psLiveUpdate(){
   live.innerHTML=html;
 }
 
+/* Parsel + çekme (+ varsa imar TAKS'ı) → parsel içine önerilen YAPI SINIRINI bina olarak çiz.
+   Taban = çekme (yapı yaklaşma) zarfı; TAKS biliniyorsa ve zarf alanı TAKS sınırını aşıyorsa
+   merkez etrafında TAKS alanına küçültülür. Sonuç 'Yerleşimi Oluştur'a hazır kapalı bina. */
+function psDrawBuilding(){
+  if(!(parcelPts.length>=3 && parcelClosed)) return;
+  psComputeSetback();
+  const d=parseFloat((document.getElementById('psCekme')||{}).value)||0;
+  let poly = (parcelSetback.length>=3) ? parcelSetback.map(p=>({x:p.x,y:p.y})) : null;
+  if(!poly){
+    // çekme zarfı hesaplanamadı (çok ince/karmaşık parsel) → merkez-ölçekli yaklaşık inset (GÖRÜNÜR bina garantisi)
+    const pa=shoelace(parcelPts), s=Math.sqrt(pa)||1;
+    const k=(d>0 && s>2*d) ? (s-2*d)/s : 0.9;
+    const c=centroidOf(parcelPts);
+    poly = parcelPts.map(p=>({x:c.x+(p.x-c.x)*k, y:c.y+(p.y-c.y)*k}));
+  }
+  const im = (typeof parcelImar!=='undefined') ? parcelImar : null;
+  const taks = (im && im.maksTaks>0) ? im.maksTaks : 0;
+  if(taks>0){
+    const pa=shoelace(parcelPts), cap=pa*taks, cur=shoelace(poly);
+    if(cur>cap && cap>0){                                   // taban TAKS'ı aşıyor → merkez etrafında TAKS alanına küçült
+      const k=Math.sqrt(cap/cur), c=centroidOf(poly);
+      poly = poly.map(p=>({x:c.x+(p.x-c.x)*k, y:c.y+(p.y-c.y)*k}));
+    }
+  }
+  pts = poly.map(p=>({x:Math.round(p.x*1000)/1000, y:Math.round(p.y*1000)/1000}));
+  closed=true; plan=null; balconies=[]; editHistory=[];
+  if(typeof resetCuts==='function') resetCuts();
+  const gb=document.getElementById('genBtn'); if(gb) gb.disabled=false;
+  const ut=document.getElementById('unitTable'); if(ut) ut.style.display='none';
+  const sa=document.getElementById('stArea'); if(sa) sa.textContent=fmt(shoelace(pts))+' m²';
+  const sp=document.getElementById('stPerim'); if(sp) sp.textContent=fmt(perim(pts))+' m';
+  render();
+}
+
+/* ============================================================
+   İBB e-Plan — parselin imar durumu (fonksiyon / TAKS / KAKS / Hmax)
+   ------------------------------------------------------------
+   İBB'nin resmî e-Plan uygulamasının (eplan.ibb.istanbul) kamuya açık
+   backend'i: token GEREKMEZ, CORS *. Akış: parsel iç-noktası (lng,lat)
+   → EPSG:3857 → POST /getbypoint → OBJECTID → POST /getparsel →
+   {parcel, functions, plans}. Yalnız İSTANBUL; başka ilde boş döner.
+   Tarayıcıdan her fetch'te `referrerPolicy:'no-referrer'` ŞART
+   (WAF localhost Referer'ı 403'ler — TKGM kuralının aynısı).
+   ============================================================ */
+const EPLAN_BASE = 'https://eplan.ibb.istanbul/uWxvrTpLQ/backend';
+function psLL2Merc(lng, lat){          // WGS84 → EPSG:3857 (Web Mercator)
+  const R = 6378137;
+  return [R*lng*Math.PI/180, R*Math.log(Math.tan(Math.PI/4 + lat*Math.PI/360))];
+}
+async function eplanPost(path, body){
+  const r = await fetch(EPLAN_BASE+path, {
+    method:'POST', referrerPolicy:'no-referrer',
+    headers:{'Content-Type':'application/json', 'Accept':'application/json'},
+    body: JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+/* psProj.ring (geo [lng,lat]) → poligon ağırlık merkezi {lat,lng} (parsel içi nokta). */
+function psRingCentroidLL(){
+  if(!psProj || !psProj.ring || psProj.ring.length<3) return null;
+  const r = psProj.ring; let A=0, cx=0, cy=0;
+  for(let i=0;i<r.length;i++){ const a=r[i], b=r[(i+1)%r.length]; const f=a[0]*b[1]-b[0]*a[1]; A+=f; cx+=(a[0]+b[0])*f; cy+=(a[1]+b[1])*f; }
+  if(Math.abs(A)<1e-12){ let sx=0, sy=0; r.forEach(c=>{ sx+=c[0]; sy+=c[1]; }); return {lng:sx/r.length, lat:sy/r.length}; }
+  A*=0.5; return {lng:cx/(6*A), lat:cy/(6*A)};
+}
+function imarNum(v){ if(v==null||v==='') return null; const n=parseFloat(String(v).replace(',','.')); return isFinite(n)?n:null; }
+/* /getparsel yanıtı → düzenli imar nesnesi (parcelImar). */
+function imarParse(gp){
+  if(!gp) return null;
+  const pc  = (((gp.parcel||[])[0])||{}).attributes || {};
+  const fns = (gp.functions||[]).map(f=>f.attributes||{});
+  // yapılaşma hakkı taşıyan fonksiyonu öne al (TAKS/EMSAL/KAKS/HMAX dolu), yoksa ilki
+  const rights = fns.filter(a=> imarNum(a.MAKS_TAKS)!=null || imarNum(a.EMSAL)!=null || imarNum(a.KAKS)!=null || imarNum(a.HMAX)!=null);
+  const pr = rights[0] || fns[0] || null;
+  const emsalV = pr ? (imarNum(pr.EMSAL)!=null ? imarNum(pr.EMSAL) : imarNum(pr.KAKS)) : null;
+  const plan0 = (((gp.plans||[])[0])||{}).attributes || {};
+  return {
+    ada: pc.ADA||null, parsel: pc.PARSEL||null,
+    mahalle: pc.MAHALLE_ADI||pc.TAPUMAHADI||null, ilce: pc.ILCE_TEXT||null,
+    alan: imarNum(pc.TAPUALAN),
+    fonksiyon: pr ? (pr.LEJAND_ADI||null) : null,
+    yogunluk: pr ? imarNum(pr.YOGUNLUK) : null,
+    minTaks:  pr ? imarNum(pr.MIN_TAKS) : null,
+    maksTaks: pr ? imarNum(pr.MAKS_TAKS) : null,
+    emsal: emsalV,
+    hmax:     pr ? imarNum(pr.HMAX) : null,
+    katAdedi: pr ? imarNum(pr.KAT_ADEDI) : null,
+    planAdi:  pr ? (pr.PLAN_ADI||null) : (plan0.PLAN_ADI||null),
+    tasdik:   pr && pr.TASDIK_TARIHI ? pr.TASDIK_TARIHI : null,
+    planNotuId: plan0.PLAN_ID!=null ? plan0.PLAN_ID : (pr && pr.PLAN_ID!=null ? pr.PLAN_ID : null),
+    lejandlar: fns.map(a=>a.LEJAND_ADI).filter(Boolean),
+    scan: null                                             // plan notu taranınca {taks[],kaks[],yencok[]}
+  };
+}
+function imarRow(label, val){ return (val==null||val==='') ? '' : '<div class="ps-imar-row"><span>'+label+'</span><b>'+escapeHtml(String(val))+'</b></div>'; }
+function imarFmtDate(ms){ if(!ms) return null; const d=new Date(ms); return isNaN(d.getTime()) ? null : (d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
+/* plan notundan taranan değer satırı (tıklanabilir chip'ler; uygulanan=.on, fonksiyon-ilişkili=.sug ★). */
+function imarChipRow(label, type, items, applied){
+  if(!items || !items.length) return '';
+  const chips = items.map(it=>{
+    const on = (applied!=null && Math.abs(applied-it.n)<1e-6);
+    const tip = it.snippet ? ' title="'+escapeHtml(it.snippet).replace(/"/g,'&quot;')+'"' : '';
+    const mark = it.self ? ' ◆' : (it.km ? ' ★' : '');
+    const cls = 'ps-chip'+(on?' on':'')+(it.self?' self':(it.km?' sug':''));
+    return '<span class="'+cls+'" data-type="'+type+'" data-val="'+it.n+'"'+tip+'>'+fmt(it.n)+mark+'</span>';
+  }).join('');
+  return '<div class="ps-imar-chiprow"><span>'+label+'</span> '+chips+'</div>';
+}
+/* parcelImar → #psImarBilgi paneli. */
+function imarRender(im){
+  const box = document.getElementById('psImarBilgi'); if(!box) return;
+  if(!im){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  let h = '<div class="ps-imar-head">İmar Durumu <span class="ps-dim">(İBB e-Plan)</span></div>';
+  if(im.fonksiyon) h += '<div class="ps-imar-fn">'+escapeHtml(im.fonksiyon)+'</div>';
+  const taksSrc = im.taksSelf?' (plan notu · rumuz)':(im.taksFromPdf?' (plan notu)':'');
+  const emsalSrc = im.emsalSelf?' (plan notu · rumuz)':(im.emsalFromPdf?' (plan notu)':'');
+  const rights = [
+    imarRow('TAKS (maks)', im.maksTaks!=null?(fmt(im.maksTaks)+taksSrc):null),
+    imarRow('KAKS / Emsal', im.emsal!=null?(fmt(im.emsal)+emsalSrc):null),
+    imarRow('Hmax', im.hmax!=null?(fmt(im.hmax)+' m'):null),
+    imarRow('Kat adedi', im.katAdedi!=null?im.katAdedi:null),
+    imarRow('Yoğunluk', im.yogunluk!=null?(fmt(im.yogunluk)+' kişi/ha'):null)
+  ].filter(Boolean);
+  if(rights.length) h += '<div class="ps-imar-grid">'+rights.join('')+'</div>';
+  else h += '<div class="ps-imar-note">Bu planda sayısal TAKS/KAKS özniteliği yok (genelde 1/5000 Nazım); bağlayıcı değerler <b>plan notu</b>ndadır — aşağıdan tarayın.</div>';
+  const loc = [im.ada?('Ada '+im.ada):'', im.parsel?('Parsel '+im.parsel):''].filter(Boolean).join(' · ');
+  if(loc) h += '<div class="ps-imar-sub">'+escapeHtml(loc)+(im.alan!=null?(' · '+fmt(im.alan)+' m²'):'')+'</div>';
+  if(im.mismatch) h += '<div class="ps-imar-warn">⚠ İBB e-Plan bu noktada <b>farklı parsel</b> gösteriyor (yukarıdaki TKGM parselinden); imar bilgisi İBB parseline aittir.</div>';
+  if(im.planAdi){ const dt=imarFmtDate(im.tasdik); h += '<div class="ps-imar-plan">'+escapeHtml(im.planAdi)+(dt?(' <span class="ps-dim">('+dt+')</span>'):'')+'</div>'; }
+  // plan notu metninden taranan yapılaşma değerleri (varsa) — tıklanan değer imar limitine uygulanır
+  if(im.scan){
+    const sc=im.scan, all=(sc.taks||[]).concat(sc.kaks||[]);
+    const hasAny=(sc.taks.length||sc.kaks.length||sc.yencok.length);
+    h += '<div class="ps-imar-scan"><div class="ps-imar-scan-h">Plan notundaki yapılaşma değerleri <span class="ps-dim">(◆ = parselin rumuz satırı · ★ = fonksiyonla ilgili; uygulamak için tıkla)</span></div>';
+    h += imarChipRow('TAKS', 'taks', sc.taks, im.taksFromPdf?im.maksTaks:null);
+    h += imarChipRow('KAKS/Emsal', 'kaks', sc.kaks, im.emsalFromPdf?im.emsal:null);
+    if(sc.yencok && sc.yencok.length)
+      h += '<div class="ps-imar-chiprow"><span>Yençok/Hmax</span> '+sc.yencok.map(v=>'<span class="ps-chip ps-chip-static">'+escapeHtml(v)+'</span>').join('')+'</div>';
+    if(!hasAny)
+      h += '<div class="ps-imar-scan-note ps-dim">Plan notunda otomatik tanınan yapılaşma değeri çıkmadı (tablo/biçim); PDF’i açıp inceleyin.</div>';
+    else{
+      if(all.length){
+        h += '<button type="button" id="psScanCond" class="ps-cond-toggle">'+(im.showCond?'Koşul metinlerini gizle ▴':'Koşul metinlerini göster ▾')+'</button>';
+        if(im.showCond){
+          h += '<div class="ps-cond-list">';
+          all.forEach(it=>{ h += '<div class="ps-cond-item'+(it.km?' km':'')+'"><b>'+fmt(it.n)+(it.km?' ★':'')+'</b> '+escapeHtml(it.snippet||'')+'</div>'; });
+          h += '</div>';
+        }
+      }
+      h += '<div class="ps-imar-scan-note ps-dim"><b>◆</b> parselin <b>rumuz satırından</b> (yüksek güven, tek değerse otomatik uygulandı) · <b>★</b> fonksiyonla ilişkili ipucu · işaretsiz = plandaki diğer değerler. Kesin değeri koşul metninden teyit edin.</div>';
+    }
+    h += '</div>';
+  } else if(im.planNotuId!=null){
+    h += '<button type="button" id="psPlanTara" class="ps-imar-btn2">Plan notundan değerleri tara</button>';
+  }
+  if(im.planNotuId!=null) h += '<button type="button" id="psPlanNotu" class="ps-imar-btn">Plan notu (PDF)</button>';
+  h += '<div class="ps-imar-disc ps-dim">Bilgilendirme amaçlıdır; resmî <b>imar durumu belgesi</b> ile teyit edin.</div>';
+  box.innerHTML = h;
+  const pn = document.getElementById('psPlanNotu');
+  if(pn) pn.addEventListener('click', ()=>imarPlanNotu(im.planNotuId));
+  const pt = document.getElementById('psPlanTara');
+  if(pt) pt.addEventListener('click', ()=>imarPlanNotuTara(im.planNotuId));
+  const sct = document.getElementById('psScanCond');
+  if(sct) sct.addEventListener('click', ()=>{ if(parcelImar){ parcelImar.showCond=!parcelImar.showCond; imarRender(parcelImar); } });
+  box.querySelectorAll('.ps-chip[data-val]').forEach(c=>
+    c.addEventListener('click', ()=>imarApplyVal(c.getAttribute('data-type'), parseFloat(c.getAttribute('data-val')))));
+}
+/* Plan notu PDF'ini indir (type "p" = plan notu metni). */
+async function imarPlanNotu(planId){
+  if(planId==null) return;
+  const btn = document.getElementById('psPlanNotu'), label='Plan notu (PDF)';
+  if(btn){ btn.disabled=true; btn.textContent='İndiriliyor…'; }
+  try{
+    const r = await fetch(EPLAN_BASE+'/getplannotu', {
+      method:'POST', referrerPolicy:'no-referrer',
+      headers:{'Content-Type':'application/json', 'Accept':'application/pdf'},
+      body: JSON.stringify({planId:planId, type:'p'})
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const b = await r.blob();
+    if(b.size < 1000) throw new Error('boş');
+    const u = URL.createObjectURL(b), a = document.createElement('a');
+    a.href=u; a.download='plan_notu_'+planId+'.pdf'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u), 5000);
+    if(btn){ btn.disabled=false; btn.textContent=label; }
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='Plan notu bulunamadı'; setTimeout(()=>{ const b2=document.getElementById('psPlanNotu'); if(b2) b2.textContent=label; }, 2600); }
+  }
+}
+/* pdf.js'i CDN'den TEK SEFER lazy-yükle (yalnız plan notu taranınca; ~app zaten ağ-bağımlı). */
+let pdfjsPromise = null;
+function loadPdfjs(){
+  if(pdfjsPromise) return pdfjsPromise;
+  const V='4.7.76', cdn='https://cdn.jsdelivr.net/npm/pdfjs-dist@'+V+'/build/';
+  pdfjsPromise = import(cdn+'pdf.min.mjs').then(m=>{ m.GlobalWorkerOptions.workerSrc=cdn+'pdf.worker.min.mjs'; return m; });
+  return pdfjsPromise;
+}
+/* Plan notu PDF'ini indir → pdf.js ile {text, lines} üret.
+   lines: item x/y koordinatlarından SATIR rekonstrüksiyonu (aynı y = aynı satır, x'e göre sıralı)
+   → noktalı-liderli tablolar ('TK10.....1.25') tek satıra toplanır (rumuz+değer yan yana). */
+async function eplanPlanNotuDoc(planId){
+  const r = await fetch(EPLAN_BASE+'/getplannotu', {
+    method:'POST', referrerPolicy:'no-referrer',
+    headers:{'Content-Type':'application/json', 'Accept':'application/pdf'},
+    body: JSON.stringify({planId:planId, type:'p'})
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const buf = await r.arrayBuffer();
+  if(buf.byteLength < 1000) throw new Error('boş');
+  const pdfjs = await loadPdfjs();
+  const doc = await pdfjs.getDocument({data:buf}).promise;
+  const lines=[]; let txt='';
+  for(let i=1;i<=doc.numPages;i++){
+    const pg=await doc.getPage(i); const tc=await pg.getTextContent();
+    const rows=new Map();                                       // y(yuvarlanmış) → item[]
+    tc.items.forEach(it=>{ if(!it.str || !it.transform) return; const y=Math.round(it.transform[5]);
+      if(!rows.has(y)) rows.set(y, []); rows.get(y).push(it); });
+    [...rows.keys()].sort((a,b)=>b-a).forEach(y=>{               // yukarıdan aşağı (PDF y yukarı artar)
+      const line=rows.get(y).sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str).join(' ').replace(/\s+/g,' ').trim();
+      if(line){ lines.push(line); txt+=line+'\n'; }
+    });
+  }
+  return { text: txt.replace(/[ \t]+/g,' '), lines };
+}
+/* Parselin RUMUZUNU içeren satırlardan ETİKETLİ yapılaşma değerlerini çıkar (parselin KENDİ değeri,
+   yüksek güven). Satır rekonstrüksiyonu sayesinde 'TK10= ... E=1.25' / 'TK10.....1.25' tek satırda. */
+function imarRumuzRows(lines, keys){
+  const found={taks:[], kaks:[], yencok:[]};
+  if(!lines || !keys.rumuz.length) return found;
+  const rumuzRe = keys.rumuz.map(r=> new RegExp('\\b'+r.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/-/g,'-?')+'\\b'));
+  lines.forEach(line=>{
+    const ln=imarTrNorm(line);
+    if(!rumuzRe.some(re=>re.test(ln))) return;
+    const snip=line.replace(/\.{3,}/g,' … ').replace(/\s+/g,' ').trim().slice(0,200);
+    let m;
+    const reT=/TAKS\s*[:=]?\s*(\d?[.,]\d+)/ig; while(m=reT.exec(line)) found.taks.push({n:parseFloat(m[1].replace(',','.')), snippet:snip});
+    const reK=/(?:KAKS|EMSAL|Emsal|\bE)\s*[:=]\s*(\d+(?:[.,]\d+)?)/ig; while(m=reK.exec(line)) found.kaks.push({n:parseFloat(m[1].replace(',','.')), snippet:snip});
+    const reH=/(?:Hmax|H\s*max)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/ig; while(m=reH.exec(line)) found.yencok.push(m[1].replace(',','.')+' m');
+  });
+  const dedup=arr=>{ const s=new Set(),o=[]; arr.forEach(v=>{ const k=v.n.toFixed(2); if(!s.has(k)){s.add(k);o.push(v);} }); return o; };
+  return { taks:dedup(found.taks), kaks:dedup(found.kaks), yencok:[...new Set(found.yencok)] };
+}
+/* Türkçe normalize (eşleştirme için): küçük harf + aksan sadeleştir. */
+function imarTrNorm(s){ return String(s||'').toLowerCase()
+  .replace(/ı/g,'i').replace(/İ/g,'i').replace(/ş/g,'s').replace(/ğ/g,'g').replace(/ü/g,'u').replace(/ö/g,'o').replace(/ç/g,'c'); }
+/* Değerin geçtiği yerin çevresinden koşul-metni (madde) penceresi (~koşul değerden önce gelir). */
+function imarSnippet(text, start, end){
+  let s=Math.max(0,start-175), e=Math.min(text.length,end+70);
+  if(s>0){ const sp=text.indexOf(' ', s); if(sp>=0 && sp<start) s=sp+1; }
+  if(e<text.length){ const sp2=text.lastIndexOf(' ', e); if(sp2>end) e=sp2; }
+  return (s>0?'…':'')+text.slice(s,e).replace(/\s+/g,' ').trim()+(e<text.length?'…':'');
+}
+/* Parselin LEJAND_ADI'sinden eşleştirme anahtarları: rumuz (K-4, TICK-1, T3) + fonksiyon sözcükleri.
+   rumuz = kısa kod → KELİME-SINIRIYLA eşleşir ('k3', 'tk3'i eşlemesin); word = uzun fonksiyon sözcüğü → alt-dize. */
+function imarParcelKeywords(im){
+  const rumuz=[], words=[]; if(!im || !im.fonksiyon) return {rumuz, words};
+  let m, re=/\b([A-ZÇĞİÖŞÜ]{1,5}-?\d+[A-Za-z]?)\b/g;
+  while(m=re.exec(im.fonksiyon)){ rumuz.push(imarTrNorm(m[1])); }
+  const fn=imarTrNorm(im.fonksiyon);
+  ['konut','ticaret','ticari','sanayi','turizm','saglik','egitim','sosyal','resmi','park','yesil','dini','otopark','depolama','mezarlik'].forEach(w=>{ if(fn.indexOf(w)>=0) words.push(w); });
+  return { rumuz:rumuz.filter((v,i,a)=>a.indexOf(v)===i), words:words.filter((v,i,a)=>a.indexOf(v)===i) };
+}
+/* normalize edilmiş snippet, parselin anahtarlarından birini içeriyor mu (rumuz: kelime-sınırı, word: alt-dize). */
+function imarKeyMatch(snipNorm, keys){
+  for(let i=0;i<keys.words.length;i++){ if(snipNorm.indexOf(keys.words[i])>=0) return true; }
+  for(let i=0;i<keys.rumuz.length;i++){
+    const r=keys.rumuz[i]; if(!r) continue;
+    const pat=r.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/-/g,'-?');   // tire opsiyonel (k-4 ≈ k4)
+    if(new RegExp('\\b'+pat+'\\b').test(snipNorm)) return true;
+  }
+  return false;
+}
+/* Plan notu metninden yapılaşma değerlerini KOŞUL-METNİYLE çıkar.
+   NOT: plan notu çok bölge/koşul içerir; tablolar düz metne taşınca dağılır → tek "doğru"yu
+   GÜVENİLİR seçmek mümkün değil (10 ilçede doğrulandı: yanlış pozitifler). Bu yüzden TÜM
+   benzersiz değerleri snippet'iyle döndürürüz; km = snippet parselin fonksiyon/rumuzunu içeriyor
+   (yumuşak ipucu, ★). Kesin seçim + uygulama kullanıcıda. */
+function imarScanValues(text, im, lines){
+  const keys = imarParcelKeywords(im);
+  const collect = (re)=>{
+    const map=new Map(); let m;
+    while(m=re.exec(text)){
+      const raw=(m[1]!=null?m[1]:m[2]); if(raw==null) continue;
+      const n=parseFloat(String(raw).replace(',', '.')); if(isNaN(n)) continue;
+      const snip=imarSnippet(text, m.index, m.index+m[0].length);
+      const km=(keys.rumuz.length||keys.words.length) ? imarKeyMatch(imarTrNorm(snip), keys) : false;
+      const key=n.toFixed(2); const rec=map.get(key);
+      if(!rec){ map.set(key,{n, snippet:snip, km}); }
+      else if(km && !rec.km){ rec.km=true; rec.snippet=snip; }   // fonksiyon-eşleşen snippet'i tercih et
+    }
+    return [...map.values()].sort((a,b)=> (b.km-a.km) || (a.n-b.n));
+  };
+  const taks=collect(/TAKS\s*[:=]?\s*(\d?[.,]\d+)/ig);
+  const kaks=collect(/(?:KAKS|EMSAL|Emsal)\s*[:=]?\s*(\d+(?:[.,]\d+)?)|\bE\s*[:=]\s*(\d+(?:[.,]\d+)?)/ig);
+  const yset=new Set(); let m;
+  const reKat=/(?:yençok|yencok)\s*[:=]?\s*(\d{1,2})\s*kat/ig; while(m=reKat.exec(text)) yset.add(m[1]+' kat');
+  const reH=/(?:Hmax|H\s*max)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/ig; while(m=reH.exec(text)) yset.add(String(m[1]).replace(',', '.')+' m');
+  const reIrt=/(\d+(?:[.,]\d+)?)\s*m?\s*irtifa/ig; while(m=reIrt.exec(text)) yset.add(String(m[1]).replace(',', '.')+' m');
+  // RUMUZ-SATIRI: parselin kendi rumuz satırından çıkan etiketli değerler = yüksek güven (self ◆)
+  const self = imarRumuzRows(lines, keys);
+  const mergeSelf = (arr, sv)=>{
+    sv.forEach(s=>{ const k=s.n.toFixed(2); const rec=arr.find(r=>r.n.toFixed(2)===k);
+      if(rec){ rec.km=true; rec.self=true; if(s.snippet) rec.snippet=s.snippet; }
+      else arr.push({n:s.n, snippet:s.snippet||'', km:true, self:true}); });
+    arr.sort((a,b)=> ((b.self?1:0)-(a.self?1:0)) || (b.km-a.km) || (a.n-b.n));
+  };
+  mergeSelf(taks, self.taks); mergeSelf(kaks, self.kaks);
+  self.yencok.forEach(v=>{ yset.delete(v); yset.add('◆ '+v); });   // rumuz-satırı Hmax → ◆ işaretle
+  return { taks, kaks, yencok:[...yset],
+    suggestedTaks: self.taks.length===1 ? self.taks[0].n : null,
+    suggestedKaks: self.kaks.length===1 ? self.kaks[0].n : null };
+}
+/* "Plan notundan değerleri tara" → PDF indir + metne çevir + değerleri çıkar + panele bas. */
+async function imarPlanNotuTara(planId){
+  if(planId==null) return;
+  const btn = document.getElementById('psPlanTara');
+  if(btn){ btn.disabled=true; btn.textContent='Plan notu taranıyor…'; }
+  try{
+    const doc = await eplanPlanNotuDoc(planId);
+    const scan = imarScanValues(doc.text, parcelImar, doc.lines);
+    if(parcelImar){
+      parcelImar.scan = scan;
+      // rumuz-satırı TEK değer = parselin kesin yapılaşma değeri → attribute boşsa OTOMATİK uygula (geri alınabilir)
+      if(scan.suggestedTaks!=null && parcelImar.maksTaks==null){ parcelImar.maksTaks=scan.suggestedTaks; parcelImar.taksFromPdf=true; parcelImar.taksSelf=true; }
+      if(scan.suggestedKaks!=null && parcelImar.emsal==null){ parcelImar.emsal=scan.suggestedKaks; parcelImar.emsalFromPdf=true; parcelImar.emsalSelf=true; }
+      imarRender(parcelImar);
+      if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
+    }
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='Tarama başarısız ('+(e.message||'ağ')+')';
+      setTimeout(()=>{ const b=document.getElementById('psPlanTara'); if(b) b.textContent='Plan notundan değerleri tara'; }, 2800); }
+  }
+}
+/* Taranan bir değeri imar limitine uygula (TAKS→maksTaks, KAKS→emsal); tekrar tıkla=geri al.
+   checks.js bu değerleri okur → mevzuat denetimi gerçek limite göre çalışır. */
+function imarApplyVal(type, val){
+  if(!parcelImar || isNaN(val)) return;
+  const scan=parcelImar.scan;
+  const isSelf = !!(scan && (scan[type]||[]).some(it=>it.self && Math.abs(it.n-val)<1e-6));
+  if(type==='taks'){ const on = parcelImar.taksFromPdf && Math.abs((parcelImar.maksTaks!=null?parcelImar.maksTaks:NaN)-val)<1e-6; parcelImar.maksTaks = on?null:val; parcelImar.taksFromPdf = !on; parcelImar.taksSelf = on?false:isSelf; }
+  else if(type==='kaks'){ const on = parcelImar.emsalFromPdf && Math.abs((parcelImar.emsal!=null?parcelImar.emsal:NaN)-val)<1e-6; parcelImar.emsal = on?null:val; parcelImar.emsalFromPdf = !on; parcelImar.emsalSelf = on?false:isSelf; }
+  imarRender(parcelImar);
+  if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
+  if(typeof render==='function') render();                 // panel canlı TAKS karşılaştırmasını tazele
+}
+
+/* Parsel yüklendikten sonra imar durumunu çek (asenkron, fire-and-forget).
+   ll verilirse (koordinat akışı, parsel içi kesin nokta) onu, yoksa parsel
+   ağırlık merkezini kullan. Eski istekler imarReqId ile iptal edilir. */
+/* getbypoint birden çok parsel döndürebilir (tolerans komşuyu kapar) → TKGM ada/parseline
+   uyanı seç; yoksa ilki (mismatch render'da uyarılır). */
+function imarPickFeature(features, ada, parsel){
+  if(!features || !features.length) return null;
+  if(ada!=null && parsel!=null){
+    const hit = features.find(f=> f.attributes && String(f.attributes.ADA)===String(ada) && String(f.attributes.PARSEL)===String(parsel));
+    if(hit) return hit;
+  }
+  return features[0];
+}
+let imarReqId = 0;
+async function imarLoad(ll, tkgmAda, tkgmParsel){
+  const box = document.getElementById('psImarBilgi');
+  parcelImar = null;
+  const pt = (ll && isFinite(ll.lat) && isFinite(ll.lng)) ? ll : psRingCentroidLL();
+  if(!pt){ imarRender(null); return; }
+  const myId = ++imarReqId;
+  if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-load">İmar durumu sorgulanıyor… <span class="ps-dim">(İBB e-Plan)</span></div>'; }
+  try{
+    const [x,y] = psLL2Merc(pt.lng, pt.lat);
+    const bp = await eplanPost('/getbypoint', {x, y});
+    if(myId !== imarReqId) return;                       // eskimiş istek
+    const f = imarPickFeature(bp.features, tkgmAda, tkgmParsel);
+    if(!f){ imarRender(null); if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">Bu parsel için İBB e-Plan’da sayısal imar verisi yok <span class="ps-dim">(yalnız İstanbul).</span></div>'; } return; }
+    const gp = await eplanPost('/getparsel', {objectId: f.attributes.OBJECTID});
+    if(myId !== imarReqId) return;
+    parcelImar = imarParse(gp);
+    if(tkgmAda!=null && tkgmParsel!=null && parcelImar.ada!=null && parcelImar.parsel!=null)
+      parcelImar.mismatch = (String(tkgmAda)!==String(parcelImar.ada) || String(tkgmParsel)!==String(parcelImar.parsel));
+    imarRender(parcelImar);
+    if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
+  }catch(e){
+    if(myId !== imarReqId) return;
+    parcelImar = null;
+    if(box){ box.style.display='block'; box.innerHTML='<div class="ps-imar-empty">İmar durumu alınamadı <span class="ps-dim">('+escapeHtml(e.message||'ağ')+').</span></div>'; }
+  }
+}
+
 /* ---- panel ---- */
 function initParselSorgu(){
   const $ = id => document.getElementById(id);
@@ -377,7 +795,7 @@ function initParselSorgu(){
   }
 
   // ortak: TKGM yanıtından parseli yükle + bilgi göster (koordinat ve ada/parsel akışı)
-  function applyData(data, adaF, parF){
+  function applyData(data, adaF, parF, ll){
     const ring = tkgmExtractRing(data);
     if(!ring){ setMsg('Parsel sınır geometrisi bulunamadı.', 'err'); return false; }
     const world = tkgmGeoToWorld(ring);
@@ -396,6 +814,7 @@ function initParselSorgu(){
       + '<br>Alan '+alan
       + (p.nitelik ? '<br><span class="ps-dim">'+escapeHtml(p.nitelik)+'</span>' : ''),
       'ok');
+    imarLoad(ll||null, p.adaNo||adaF||null, p.parselNo||parF||null);   // İBB e-Plan imar durumunu çek (asenkron); TKGM ada/parsel ile eşleştir
     return true;
   }
 
@@ -412,7 +831,7 @@ function initParselSorgu(){
     setMsg('Parsel sorgulanıyor… <span class="ps-dim">('+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+')</span>', 'load');
     try{
       const data = await getJson(TKGM_PARSEL_URL(ll.lat, ll.lng));
-      applyData(data);
+      applyData(data, null, null, ll);                    // ll: parsel içi kesin nokta (imar sorgusu için)
     }catch(e){
       setMsg(e.status===404
         ? 'Bu konumda kayıtlı parsel yok (yol / deniz / orman olabilir). Noktayı parselin içine alıp tekrar deneyin.'
@@ -481,6 +900,8 @@ function initParselSorgu(){
   btn.addEventListener('click', sorgula);
   var cek=document.getElementById('psCekme');
   if(cek) cek.addEventListener('input', function(){ psComputeSetback(); render(); });
+  var dbld=document.getElementById('psDrawBld');
+  if(dbld) dbld.addEventListener('click', psDrawBuilding);
   var sat=document.getElementById('psSat');
   if(sat) sat.addEventListener('change', function(){ psSatOn=sat.checked; psUpdateSatellite(); render(); });
   // ---- döndürme (eksene hizalama) ----

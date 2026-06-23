@@ -56,6 +56,53 @@
   #parselSec .ps-live{margin-top:7px; font-size:11.5px; color:var(--ink); line-height:1.55;}
   #parselSec .ps-live .ps-dim{color:var(--muted);}
   #parselSec .ps-live .ps-warn{color:var(--bad); font-weight:600;}
+  #parselSec .ps-live .ps-ok{color:var(--ok); font-weight:600;}
+  #parselSec .ps-draw-btn{width:100%; margin-top:8px; padding:7px 10px; border:1px solid var(--acc); border-radius:7px; background:var(--acc); color:#fff; font-size:12.5px; font-weight:600; cursor:pointer;}
+  #parselSec .ps-draw-btn:hover{background:#9c4d27; border-color:#9c4d27; color:#fff;}
+  #parselSec .ps-draw-btn small{font-weight:400; opacity:.85;}
+  /* İBB e-Plan imar durumu kartı */
+  #parselSec .ps-imar{margin-top:9px; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:#faf8f3; font-size:12px; line-height:1.5;}
+  #parselSec .ps-imar-head{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:5px;}
+  #parselSec .ps-imar-head .ps-dim{text-transform:none; letter-spacing:0;}
+  #parselSec .ps-imar-fn{font-weight:700; color:var(--acc); font-size:13px; line-height:1.35; margin-bottom:6px;}
+  #parselSec .ps-imar-grid{display:flex; flex-wrap:wrap; gap:4px 14px; margin-bottom:6px;}
+  #parselSec .ps-imar-row{display:flex; gap:6px; align-items:baseline;}
+  #parselSec .ps-imar-row span{color:var(--muted);}
+  #parselSec .ps-imar-row b{color:var(--ink);}
+  #parselSec .ps-imar-note{color:var(--muted); margin-bottom:6px;}
+  #parselSec .ps-imar-sub{color:var(--ink);}
+  #parselSec .ps-imar-plan{color:var(--muted); font-size:11px; margin-top:3px; line-height:1.4;}
+  #parselSec .ps-imar-warn{margin-top:5px; font-size:11px; color:var(--bad); line-height:1.4;}
+  #parselSec .ps-imar-btn{margin-top:8px; width:100%; padding:6px 10px; border:1px solid var(--info); border-radius:7px; background:#fff; color:var(--info); font-size:12px; font-weight:600; cursor:pointer;}
+  #parselSec .ps-imar-btn:hover{background:var(--info); color:#fff; border-color:var(--info);}
+  #parselSec .ps-imar-btn:disabled{opacity:.6; cursor:default;}
+  #parselSec .ps-imar-disc{margin-top:7px; font-size:10.5px; line-height:1.4;}
+  #parselSec .ps-imar-load,#parselSec .ps-imar-empty{font-size:11.5px; color:var(--muted);}
+  #parselSec .ps-imar-btn2{margin-top:8px; width:100%; padding:6px 10px; border:1px dashed var(--acc); border-radius:7px; background:#fff; color:var(--acc); font-size:12px; font-weight:600; cursor:pointer;}
+  #parselSec .ps-imar-btn2:hover{background:#fbf2ec;}
+  #parselSec .ps-imar-btn2:disabled{opacity:.6; cursor:default;}
+  #parselSec .ps-imar-scan{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line);}
+  #parselSec .ps-imar-scan-h{font-size:11px; color:var(--muted); margin-bottom:5px;}
+  #parselSec .ps-imar-chiprow{display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:5px;}
+  #parselSec .ps-imar-chiprow > span{color:var(--muted); font-size:11px; min-width:74px;}
+  #parselSec .ps-chip{display:inline-block; padding:2px 8px; border:1px solid var(--line); border-radius:11px; background:#fff; color:var(--ink); font-size:11.5px; cursor:pointer; user-select:none;}
+  #parselSec .ps-chip:hover{border-color:var(--acc); color:var(--acc);}
+  #parselSec .ps-chip.on{background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600;}
+  #parselSec .ps-chip.sug{border-color:var(--info); color:var(--info); background:#eef3fb;}
+  #parselSec .ps-chip.sug.on{background:var(--acc); color:#fff; border-color:var(--acc);}
+  #parselSec .ps-chip.self{border-color:var(--ok); color:#fff; background:var(--ok); font-weight:700;}
+  #parselSec .ps-chip.self.on{background:var(--acc); border-color:var(--acc);}
+  #parselSec .ps-cond-toggle{display:block; margin:6px 0 2px; padding:0; border:none; background:none; color:var(--info); font-size:11px; cursor:pointer; text-align:left;}
+  #parselSec .ps-cond-toggle:hover{color:var(--acc); text-decoration:underline; border:none;}
+  #parselSec .ps-cond-list{margin:2px 0 4px; max-height:170px; overflow:auto; border:1px solid var(--line); border-radius:6px; background:#fff;}
+  #parselSec .ps-cond-item{padding:5px 7px; font-size:10.5px; line-height:1.45; color:var(--muted); border-bottom:1px solid #efeae0;}
+  #parselSec .ps-cond-item:last-child{border-bottom:none;}
+  #parselSec .ps-cond-item b{color:var(--ink);}
+  #parselSec .ps-cond-item.km{background:#f6f9fe;}
+  #parselSec .ps-cond-item.km b{color:var(--info);}
+  #parselSec .ps-chip-static{cursor:default; background:#f3efe7; color:var(--muted);}
+  #parselSec .ps-chip-static:hover{border-color:var(--line); color:var(--muted);}
+  #parselSec .ps-imar-scan-note{margin-top:3px; font-size:10.5px; line-height:1.4;}
   #parselSec .ps-link{background:none; border:none; padding:7px 0 0; margin:0; color:var(--info); font-size:12px; cursor:pointer; width:100%; text-align:left;}
   #parselSec .ps-link:hover{color:var(--acc); border:none; text-decoration:underline;}
   #parselSec .ps-rot-wrap{margin-bottom:8px;}
