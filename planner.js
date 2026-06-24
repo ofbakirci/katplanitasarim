@@ -715,6 +715,21 @@ function generate(keepCuts){
     });
     /* sığmayanlar: önce kapasitesi kalan bölgelere; yine kalan yerleştirilemez (denetimde raporlanır) */
     if(rem.length) zones.forEach(z=>{ while(rem.length && z.units.length<z.maxU) z.units.push(rem.shift()); });
+    /* FAZ 1 (FIX-01 Seçenek A): daire almamış ama bir daire SIĞABİLECEK büyük bölge
+       ORTAK DEPO'ya düşmesin — geniş uçtaki "dev depo" (kat-plani-39: 175 m²) semptom kesimi.
+       Önce yerleşememiş daire (rem) varsa zorla ata; yoksa daire başına alanı en büyük (en
+       seyrek) bölgeden EN HAFİF daireyi devral. YALNIZ "0 daireli + büyük" bölgede tetiklenir
+       → her bölgesi zaten daire alan dikdörtgen/dengeli planlar hiç değişmez. (Geniş bölgeyi
+       düzgün 2-3 daireye bölme FAZ 2'de.) */
+    { const BIG_ZONE_M2=45; // bir 1+1 dairenin sığabileceği asgari alan
+      zones.forEach(z=>{
+        if(z.units.length>0 || z.area<BIG_ZONE_M2 || z.maxU<1) return;
+        if(rem.length){ z.units.push(rem.shift()); return; }
+        let donor=null, bestDens=0;
+        zones.forEach(d=>{ if(d===z||d.units.length<=1) return;
+          const dens=d.area/d.units.length; if(dens>bestDens){ bestDens=dens; donor=d; } });
+        if(donor) z.units.push(donor.units.pop());
+      }); }
 
     /* --- her bölgeyi hole paralel şeritlere böl --- */
     if(!customCutsZ||customCutsZ.length!==zones.length) customCutsZ=zones.map(()=>null);
