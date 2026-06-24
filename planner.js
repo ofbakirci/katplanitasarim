@@ -1090,7 +1090,7 @@ function generate(keepCuts){
     for(let i=1;i<alsAll.length;i++){ if(alsAll[i]===alsAll[i-1]+1) seg.push(alsAll[i]); else { segs.push(seg); seg=[alsAll[i]]; } }
     segs.push(seg);
     const segBest=segs.reduce((a,b)=>b.length>a.length?b:a);
-    let inStrip;
+    let inStrip; const freeEdge=new Set(); // freeEdge: bina dış YAN kenar sütunları → cephe odası (antre değil)
     if(combU){
       /* OMURGA: uç odalar tam derinlik alır, antre omurgası aradaki sütunlarda kalır.
          Sıralama: salon bir uca, eb. yatak öbür uca; çekirdek gölgesi (antre bandı
@@ -1115,19 +1115,33 @@ function generate(keepCuts){
          kapısız bırakıyordu (salon erimesi). Bkz. assignCols sonrası comb bloğu. */
       inStrip=new Set(segBest);
     } else {
-      /* küçük artık uç (≤2,5 m) salona ince kanat olarak gitmesin: şerit tamamını kapsar, banyo/mutfak genişler */
-      const nA = (segBest.length-needAls<=5) ? segBest.length : Math.min(segBest.length, needAls);
-      /* büyük artık uç (≥4 m) varsa şerit salonun KARŞI ucuna yaslanır: tam derinlikli
-         artık hep salona kalır, üst sınırlı yatak odalarına yapışmaz; küçükse ortala */
+      /* YAN-CEPHE güvencesi: şerit, bina dış YAN kenar sütununu (segBest ucu, dış
+         komşu !inside) KAPSAMASIN — o sütunu köşe cephe odası TAM DERİNLİK kapsar
+         (dikdörtgen kalır, biçimsiz doğmaz), antre içeri kayar. Önce kenar(lar)ı
+         kullanılabilir aralıktan dışla (şerit ≥ needAls kaldığı sürece); şerit bu
+         aralık içinde konumlanır → kenarı ister kaydırarak ister daraltarak boşaltır. */
+      let loB=0, hiB=segBest.length;
+      if(fac.length>=1 && segBest.length){
+        const edgeOf=(a,hi)=>cells.some(i=>{ if(alOf(i)!==a) return false; const c=i%cols,r=(i/cols)|0;
+          return horiz?(hi?(c+1>=cols||!inside[i+1]):(c-1<0||!inside[i-1]))
+                     :(hi?(r+1>=rows||!inside[i+cols]):(r-1<0||!inside[i-cols])); });
+        if(edgeOf(segBest[0],false) && hiB-1>=needAls){ loB=1; freeEdge.add(segBest[0]); }
+        if(edgeOf(segBest[hiB-1],true) && (hiB-1)-loB>=needAls){ hiB-=1; freeEdge.add(segBest[hiB]); }
+      }
+      const availR=hiB-loB;
+      /* küçük artık uç (≤2,5 m) salona ince kanat olarak gitmesin: şerit aralığı tamamını kapsar */
+      const nA = (availR-needAls<=5) ? availR : Math.min(availR, needAls);
+      /* büyük artık uç (≥4 m) varsa şerit salonun KARŞI ucuna (kenara komşu) yaslanır; küçükse ortala */
       let lo;
-      if(segBest.length-nA>=8) lo=segBest.length-nA;
-      else { lo=Math.max(0, Math.floor(segBest.length/2)-Math.floor(nA/2));
-             lo=Math.max(0, Math.min(segBest.length-nA, lo)); }
+      if(availR-nA>=8) lo=loB+availR-nA;
+      else lo=loB+Math.max(0, Math.floor(availR/2)-Math.floor(nA/2));
+      lo=Math.max(loB, Math.min(hiB-nA, lo));
       inStrip=new Set(segBest.slice(lo, lo+nA));
     }
     const entryCells=[], holCells=[], midCells=[], facCells=[];
-    cells.forEach(i=>{ const d=dOf(i);
-      if(d<eRows){ (inStrip.has(alOf(i))?entryCells:facCells).push(i); }
+    cells.forEach(i=>{ const d=dOf(i), a=alOf(i);
+      if(freeEdge.has(a)){ facCells.push(i); return; } // YAN kenar sütunu tümüyle cephe odasına (tam derinlik)
+      if(d<eRows){ (inStrip.has(a)?entryCells:facCells).push(i); }
       else if(d<eRows+hRows) holCells.push(i);
       else if(d<eRows+hRows+mRows) midCells.push(i);
       else facCells.push(i); });

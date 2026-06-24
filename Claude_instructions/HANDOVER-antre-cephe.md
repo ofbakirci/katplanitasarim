@@ -57,3 +57,24 @@ sütunları DAİMA yaşam odasına (salon/yatak)**, antre **iç sütunlara** git
 - #6 uydu: bitti (yukarıda).
 - Bekleyen (ayrı, opsiyonel): #3 L-duvar köşe sürükleme, #4 otomatik ışıklık (Option C = FAZ 2'yle aynı),
   #5 egzotik "biçimsiz" yanlış-pozitif.
+
+---
+
+## SONUÇ — antre-cephe ÇÖZÜLDÜ (2026-06-24, branch `antre-cephe-fix` → master'a merge)
+**Çözüm: `freeEdge`** (planner.js `layoutUnit`). POST-LAYOUT relokasyon DEĞİL — layout-anı, sütun-düzeyi:
+bina dış YAN kenar sütunu (alOf-uç, dış komşu `!inside`) entry şeridine girmez; o sütunu köşe cephe odası
+TAM DERİNLİK kapsar → antre içeri kayar, odalar **dikdörtgen** kalır (biçimsiz doğmaz). 3 nokta: `freeEdge`
+Set'i + non-combU inStrip'te loB/hiB ile kenar dışlama (şerit ≥ needAls) + band-split'te freeEdge→facCells.
+- Sonuç: antre-cephe 7→3 bölge (master1 2→0, 40×14 2→0, kat39 5→4 hücre; 8×24 değişmedi = sığ-dar/farklı yol).
+- Gate: kat39 bad=7 (aynı set), master1 bad=1, tam suite yeşil. **master1 byte-frozen GEVŞETİLDİ** (kullanıcı
+  onayı) → master1'in YENİ çıktısı referans (antre yan cepheden çekildi; tek salon −0.5 m², bölge/bad aynı).
+- Ölçüm: `node .test-tmp/antre-scan.js` (gitignored).
+
+## ERTELENDİ — "giriş kapısını çekirdeğe yakın tut, te dibe atma"
+Uç dairelerin (master1 D3/D6) giriş kapısı bina ucunda (~12-13 m); orta daireler zaten ~4 m. Denendi, **temiz
+çözülemedi** (geri alındı):
+- Antre `entry` dizisinde ıslak hacimlerden sonra → assignCols hep yüksek-alOf uca koyar. Çekirdek-tarafına
+  taşımak hol-kolu trim'ini kaydırıp köşe odasını L'ye sokuyor → biçimsiz (kat39 bad 7→8).
+- **Per-unit guard İMKANSIZ:** oda biçimleri layoutUnit'ten SONRAki fazlarda (slimAntres vb.) kesinleşir;
+  layoutUnit-sonrası fill ölçümü yanıltıcı (D3: normal 0.43→final temiz, repositioned 0.48→final 0.50 biçimsiz).
+- Doğru çözüm = **layoutUnit banding yeniden tasarımı** (giriş yapısal olarak çekirdek-tarafı). Ayrı/büyük iş.
