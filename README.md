@@ -46,7 +46,15 @@ npm run test:diagnostics
 - `tests/`: Node tabanli basliksiz test ve tani araclari.
 - `kulak-vakalari/`, `vakalar-2/`: kalibrasyon ve geri oynatim fixture dosyalari.
 - `snapshots/`: eski calisma anlari ve geri donus noktalaridir.
-- `DEVIR-NOTU.md`: ayrintili teknik devir ve karar gecmisi.
+- `Claude_instructions/DEVIR-NOTU.md`: ayrintili teknik devir ve karar gecmisi.
+- `mesken/`: plandan 3D render iş kolu (ayrı proje, bkz. aşağısı).
+
+## Mesken (3D render — ayrı proje)
+
+`mesken/`, bu araçtan dallanan ayrı bir projedir: kat planını layout'a sadık 3D
+"dollhouse" render'a çevirir (ControlNet / Flux-Canny). Bu araç "AI Output" düğmesiyle
+boyama tabanı + duvar kenar haritası PNG'leri üretir; mesken bunları girdi alır.
+Ayrıntı ve çalıştırma için `mesken/README.md`. (Bu klasör ana repoda gitignore'ludur.)
 
 ## Gelistirme Notlari
 

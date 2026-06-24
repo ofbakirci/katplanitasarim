@@ -2,6 +2,9 @@
 
 Yeni sohbete başlarken bu dosyayı ve `kat-plani-tasarim.html` dosyasını ekleyin.
 
+> Not: Plandan 3D render iş kolu artık ayrı projede: `mesken/` (kendi README + session
+> notları orada). Bu devir notu yalnız kat planı tasarım aracını kapsar.
+
 ## SIRADAKİ İŞ (güncel: 2026-06-10, oturum v5)
 1. ~~Vaka diff'leri~~ TAMAMLANDI (md.18: `_s` ekli dosyalarla diff yapıldı, motor v22).
    Kalan v22 artıkları:
