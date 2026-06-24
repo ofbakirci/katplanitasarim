@@ -265,7 +265,15 @@ svg.addEventListener('mousedown',e=>{
     return;
   }
   if(mode==='parcel'){
-    if(parcelClosed || e.button!==0) return;
+    if(e.button!==0) return;
+    if(parcelClosed){                                  // FAZ 5: kapalı parselde kenara tıkla = yol cephesi seç (tekrar tıkla = kaldır)
+      if(typeof psNearestParcelEdge==='function'){
+        const fe=psNearestParcelEdge(sx,sy);
+        if(fe>=0){ psFrontEdge=(psFrontEdge===fe?-1:fe); psComputeSetback();
+          if(typeof psUpdateYolUI==='function') psUpdateYolUI(); render(); }
+      }
+      return;
+    }
     const p=snapPoint(sx,sy);
     if(p.closing){ parcelClosed=true; hoverP=null; balkChecksRefresh(); render(); return; }
     if(parcelPts.length && p.x===parcelPts[parcelPts.length-1].x && p.y===parcelPts[parcelPts.length-1].y) return;

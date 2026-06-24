@@ -182,6 +182,14 @@ function render(){
     let d='M'+parcelPts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
     if(parcelClosed) d+='Z';
     g.appendChild(el('path',{d,fill:parcelClosed?'rgba(106,153,78,.13)':'none',stroke:'#4a7c4a','stroke-width':2,'stroke-dasharray':'9 5','stroke-linejoin':'miter'}));
+    /* FAZ 5: seçili yol cephesi (ön çekme bu kenara uygulanır) */
+    if(parcelClosed && typeof psFrontEdge!=='undefined' && psFrontEdge>=0 && psFrontEdge<parcelPts.length){
+      const a=parcelPts[psFrontEdge], b=parcelPts[(psFrontEdge+1)%parcelPts.length];
+      g.appendChild(el('line',{x1:W2Sx(a.x),y1:W2Sy(a.y),x2:W2Sx(b.x),y2:W2Sy(b.y),stroke:'#c0392b','stroke-width':4,'stroke-linecap':'round'}));
+      if(!clean){ const mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+        const t=el('text',{x:W2Sx(mx),y:W2Sy(my)-6,'text-anchor':'middle','font-size':Math.max(10,Math.min(14,pxPerM*0.9)),fill:'#c0392b','font-weight':'800'});
+        t.textContent='YOL'; g.appendChild(t); }
+    }
     if(!parcelClosed||mode==='parcel') parcelPts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#4a7c4a','stroke-width':2})));
     polyDims(g, parcelPts, parcelClosed, '#4a7c4a');
     if(parcelClosed){

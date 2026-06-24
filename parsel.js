@@ -238,8 +238,9 @@ function tkgmLoadParcel(world){
     parcelPts = world.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
   }
   psSnapParcelGrid();                                   // köşeleri 0,5 m ızgaraya oturt
-  parcelClosed = true;
+  parcelClosed = true; psFrontEdge=-1;                  // yeni parsel → yol cephesi seçimi sıfırla
   psComputeSetback();
+  if(typeof psUpdateYolUI==='function') psUpdateYolUI();
   psUpdateSatellite();
   if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks();
   fitView();
@@ -303,50 +304,74 @@ function psUpdateSatellite(){
 }
 
 /* ---- imar çekme (yapı yaklaşma sınırı) ---- */
-/* Parseli her kenardan d metre içe ofsetle. KONVEKS parselde yarım-düzlem kesişimi KESİN;
-   İÇBÜKEY parselde o yöntem çöker (boş döner) → miter (köşe açıortayı) ofsetine düş. */
-function tkgmSetback(poly, d){
-  const hp = tkgmSetbackHP(poly, d);
-  if(hp.length>=3) return hp;
-  return tkgmSetbackMiter(poly, d);
+/* Parseli içe ofsetle. `dspec` SAYI ise her kenardan eşit; DİZİ ise kenar başına ayrı
+   (d[i] = kenar i = parcelPts[i]→parcelPts[i+1] çekmesi) — ön/yan/arka için (FAZ 5).
+   KONVEKS parselde yarım-düzlem kesişimi KESİN; İÇBÜKEY'de çöker → miter'a düşülür.
+   Reverse yapılmaz; orientation'a göre normal işareti çevrilir → kenar↔d[i] hizası korunur. */
+function tkgmSetbackArr(poly, dspec){
+  const N=poly?poly.length:0;
+  return Array.isArray(dspec) ? poly.map((_,i)=>+dspec[i]||0) : poly.map(()=>+dspec||0);
 }
-function tkgmSetbackHP(poly, d){
-  if(!poly || poly.length<3 || !(d>0)) return [];
-  let p = poly.map(q=>({x:q.x,y:q.y}));
-  let a2=0; for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length]; a2+=p[i].x*q.y-q.x*p[i].y;}
-  if(a2<0) p.reverse();                        // CCW → iç taraf kenarın solu
-  let out=p; const N=p.length;
+/* poligon konveks mi? (içbükeyde HP yarım-düzlem kesişimi gerçek ofseti değil, çökmüş
+   konveks çekirdeği verir → miter kullanılmalı). FAZ 5: biçimsiz parsel fallback'i. */
+function tkgmIsConvex(poly){
+  if(!poly || poly.length<4) return true;            // üçgen daima konveks
+  const N=poly.length; let sign=0;
+  for(let i=0;i<N;i++){ const a=poly[i], b=poly[(i+1)%N], c=poly[(i+2)%N];
+    const cr=(b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x);
+    if(Math.abs(cr)<1e-9) continue;
+    const s=cr>0?1:-1; if(sign===0) sign=s; else if(s!==sign) return false; }
+  return true;
+}
+function tkgmSetback(poly, dspec){
+  if(tkgmIsConvex(poly)){ const hp=tkgmSetbackHP(poly, dspec); if(hp.length>=3) return hp; }
+  const mi = tkgmSetbackMiter(poly, dspec);          // içbükey (veya HP çöktü) → köşe-açıortayı ofseti
+  if(mi.length>=3) return mi;
+  return tkgmSetbackHP(poly, dspec);                 // son çare (boş da olabilir → psDrawBuilding centroid fallback)
+}
+function tkgmSetbackHP(poly, dspec){
+  if(!poly || poly.length<3) return [];
+  const p = poly.map(q=>({x:q.x,y:q.y})), N=p.length;
+  const dArr = tkgmSetbackArr(p, dspec);
+  if(!dArr.some(d=>d>0)) return [];
+  let a2=0; for(let i=0;i<N;i++){const q=p[(i+1)%N]; a2+=p[i].x*q.y-q.x*p[i].y;}
+  const ccw = a2>0;                            // CW ise içe normal sağda
+  let out=p;
   for(let i=0;i<N;i++){
+    const d=dArr[i]; if(!(d>0)) continue;       // o kenardan çekme yok
     const a=p[i], b=p[(i+1)%N];
     let ex=b.x-a.x, ey=b.y-a.y; const L=Math.hypot(ex,ey)||1; ex/=L; ey/=L;
-    const nx=-ey, ny=ex;                        // sol (içe) normal
+    const nx = ccw?-ey:ey, ny = ccw?ex:-ex;     // içe normal
     out = tkgmClipHP(out, a.x+nx*d, a.y+ny*d, nx, ny);
     if(out.length<3) return [];
   }
   return out.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
 }
-/* miter iç-ofset: her köşeyi iki komşu kenarın iç-normallerinin açıortayı boyunca d içeri taşır.
-   Konveks+içbükey köşelerde çalışır; sonuç ters dönerse / köşe parsel dışına çıkarsa boş döner. */
-function tkgmSetbackMiter(poly, d){
-  if(!poly || poly.length<3 || !(d>0)) return [];
-  let p = poly.map(q=>({x:q.x,y:q.y}));
-  let a2=0; for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length]; a2+=p[i].x*q.y-q.x*p[i].y;}
-  if(a2<0) p.reverse();
-  const N=p.length, out=[];
+/* miter iç-ofset: her köşe, komşu iki kenarın (kendi d'leriyle) içe-ofsetlenmiş
+   çizgilerinin kesişimine taşınır (per-kenar). Konveks+içbükey köşede çalışır;
+   sonuç ters dönerse / köşe parsel dışına çıkarsa boş döner. */
+function tkgmSetbackMiter(poly, dspec){
+  if(!poly || poly.length<3) return [];
+  const p = poly.map(q=>({x:q.x,y:q.y})), N=p.length;
+  const dArr = tkgmSetbackArr(p, dspec);
+  if(!dArr.some(d=>d>0)) return [];
+  let a2=0; for(let i=0;i<N;i++){const q=p[(i+1)%N]; a2+=p[i].x*q.y-q.x*p[i].y;}
+  const ccw = a2>0;
+  const lines = p.map((a,i)=>{ const b=p[(i+1)%N];
+    let ex=b.x-a.x, ey=b.y-a.y; const L=Math.hypot(ex,ey)||1; ex/=L; ey/=L;
+    const nx=ccw?-ey:ey, ny=ccw?ex:-ex, d=dArr[i];
+    return {px:a.x+nx*d, py:a.y+ny*d, dx:ex, dy:ey}; });
+  const out=[];
   for(let i=0;i<N;i++){
-    const A=p[(i-1+N)%N], V=p[i], B=p[(i+1)%N];
-    let d1x=V.x-A.x, d1y=V.y-A.y; let L1=Math.hypot(d1x,d1y)||1; d1x/=L1; d1y/=L1;
-    let d2x=B.x-V.x, d2y=B.y-V.y; let L2=Math.hypot(d2x,d2y)||1; d2x/=L2; d2y/=L2;
-    const n1x=-d1y, n1y=d1x, n2x=-d2y, n2y=d2x;      // sol (içe) normaller
-    const denom = 1 + (n1x*n2x + n1y*n2y);
-    let ox, oy;
-    if(denom < 1e-3){ ox=n1x*d; oy=n1y*d; }          // sivri köşe → tek normal
-    else { const f=d/denom; ox=(n1x+n2x)*f; oy=(n1y+n2y)*f; }
-    out.push({x:V.x+ox, y:V.y+oy});
+    const l1=lines[(i-1+N)%N], l2=lines[i];     // köşe i = kenar(i-1) ∩ kenar(i)
+    const det = l1.dx*(-l2.dy) - l1.dy*(-l2.dx);
+    if(Math.abs(det)<1e-9){ out.push({x:l2.px, y:l2.py}); continue; }   // paralel
+    const rx=l2.px-l1.px, ry=l2.py-l1.py, t=(rx*(-l2.dy) - ry*(-l2.dx))/det;
+    out.push({x:l1.px+l1.dx*t, y:l1.py+l1.dy*t});
   }
   let oa=0; for(let i=0;i<N;i++){const q=out[(i+1)%N]; oa+=out[i].x*q.y-q.x*out[i].y;}
-  if(oa<=1) return [];                                // çöktü/ters döndü
-  for(let i=0;i<N;i++){ if(!pip(out[i].x, out[i].y, p)) return []; }   // köşe parsel dışına taştı → geçersiz
+  if(oa<=1) return [];
+  for(let i=0;i<N;i++){ if(!pip(out[i].x, out[i].y, p)) return []; }
   return out.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
 }
 function tkgmClipHP(poly, px, py, nx, ny){     // yarım-düzlem: dot(q-(px,py), n) >= 0 tutulur
@@ -358,10 +383,52 @@ function tkgmClipHP(poly, px, py, nx, ny){     // yarım-düzlem: dot(q-(px,py),
   }
   return res;
 }
+/* FAZ 5: ön/yan/arka çekme (3 input; yoksa eski tek 'psCekme'ye düşer). */
+function psSetbackVals(){
+  const num=(id)=>{ const e2=document.getElementById(id); const v=e2?parseFloat(e2.value):NaN; return isFinite(v)?v:null; };
+  const legacy=num('psCekme');
+  const yan = num('psCekmeYan') != null ? num('psCekmeYan') : (legacy!=null?legacy:3);
+  return { on: num('psCekmeOn')!=null?num('psCekmeOn'):(legacy!=null?legacy:5), yan, arka: num('psCekmeArka')!=null?num('psCekmeArka'):(legacy!=null?legacy:3) };
+}
+/* yola bakan kenarın (fe) en KARŞI kenarı = arka cephe (orta noktası en uzak). <4 kenarda yok. */
+function psOppositeEdge(fe){
+  const N=parcelPts.length; if(N<4 || fe<0 || fe>=N) return -1;
+  const mid=i=>{const a=parcelPts[i],b=parcelPts[(i+1)%N];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2};};
+  const m0=mid(fe); let best=-1,bd=-1;
+  for(let i=0;i<N;i++){ if(i===fe) continue; const m=mid(i), dd=(m.x-m0.x)**2+(m.y-m0.y)**2; if(dd>bd){bd=dd;best=i;} }
+  return best;
+}
 function psComputeSetback(){
-  const inp=document.getElementById('psCekme');
-  const d=inp?parseFloat(inp.value):NaN;
-  parcelSetback = (parcelPts.length>=3 && parcelClosed && isFinite(d) && d>0) ? tkgmSetback(parcelPts, d) : [];
+  if(!(parcelPts.length>=3 && parcelClosed)){ parcelSetback=[]; return; }
+  const v=psSetbackVals(), yan=(isFinite(v.yan)&&v.yan>0)?v.yan:0;
+  const dArr = parcelPts.map(()=>yan);                  // varsayılan: tüm kenarlardan yan çekmesi
+  if(psFrontEdge>=0 && psFrontEdge<parcelPts.length){   // yol cephesi seçili → ön (+ karşı kenara arka)
+    if(v.on>0) dArr[psFrontEdge]=v.on;
+    const back=psOppositeEdge(psFrontEdge);
+    if(back>=0 && v.arka>0) dArr[back]=v.arka;
+  }
+  parcelSetback = dArr.some(d=>d>0) ? tkgmSetback(parcelPts, dArr) : [];
+}
+/* (sx,sy) ekran noktasına en yakın parsel kenarı (≤14 px) | -1. FAZ 5 yol-cephesi seçimi. */
+function psNearestParcelEdge(sx,sy){
+  if(!(parcelPts.length>=2 && parcelClosed)) return -1;
+  const seg2=(px,py,ax,ay,bx,by)=>{ const dx=bx-ax,dy=by-ay, L=dx*dx+dy*dy||1;
+    let t=((px-ax)*dx+(py-ay)*dy)/L; t=Math.max(0,Math.min(1,t));
+    const qx=ax+t*dx, qy=ay+t*dy; return (px-qx)**2+(py-qy)**2; };
+  let best=-1, bd=14*14, N=parcelPts.length;
+  for(let i=0;i<N;i++){ const a=parcelPts[i], b=parcelPts[(i+1)%N];
+    const d=seg2(sx,sy, W2Sx(a.x),W2Sy(a.y), W2Sx(b.x),W2Sy(b.y));
+    if(d<bd){ bd=d; best=i; } }
+  return best;
+}
+/* yol-cephesi durum metni (#psYolDurum). */
+function psUpdateYolUI(){
+  const e2=document.getElementById('psYolDurum'); if(!e2) return;
+  const N=parcelPts.length;
+  if(psFrontEdge>=0 && psFrontEdge<N){
+    const a=parcelPts[psFrontEdge], b=parcelPts[(psFrontEdge+1)%N];
+    e2.textContent='Kenar '+(psFrontEdge+1)+' · '+fmt(Math.hypot(b.x-a.x,b.y-a.y))+' m';
+  } else e2.textContent='seçilmedi (tümü yan)';
 }
 /* parsel + bina varsa TAKS/bahçe/çekme-ihlali canlı oku (render her çağrıldığında). */
 function psLiveUpdate(){
@@ -387,7 +454,7 @@ function psLiveUpdate(){
 function psDrawBuilding(){
   if(!(parcelPts.length>=3 && parcelClosed)) return;
   psComputeSetback();
-  const d=parseFloat((document.getElementById('psCekme')||{}).value)||0;
+  const d=psSetbackVals().yan||0;                       // biçimsiz-parsel fallback ölçeği için temsilî çekme
   let poly = (parcelSetback.length>=3) ? parcelSetback.map(p=>({x:p.x,y:p.y})) : null;
   if(!poly){
     // çekme zarfı hesaplanamadı (çok ince/karmaşık parsel) → merkez-ölçekli yaklaşık inset (GÖRÜNÜR bina garantisi)
@@ -548,6 +615,10 @@ function imarRender(im){
   const box = document.getElementById('psImarBilgi'); if(!box) return;
   if(!im){ box.style.display='none'; box.innerHTML=''; return; }
   box.style.display='block';
+  /* FAZ 5: imar plan çekmeleri varsa ön/yan/arka input'larını otomatik doldur (kaynak = plan). */
+  { const set=(id,v)=>{ const e2=document.getElementById(id); if(e2 && v!=null && isFinite(v)) e2.value=v; };
+    set('psCekmeOn', im.onCekme); set('psCekmeYan', im.yanCekme); set('psCekmeArka', im.arkaCekme);
+    if(im.onCekme!=null||im.yanCekme!=null||im.arkaCekme!=null) psComputeSetback(); }
   const prov = (im.provider && IMAR_PROVIDERS[im.provider]) ? IMAR_PROVIDERS[im.provider] : IMAR_PROVIDERS.istanbul;
   const provName = prov.name, provScan = !!prov.scan;
   let h = '<div class="ps-imar-head">İmar Durumu <span class="ps-dim">('+escapeHtml(provName)+')</span></div>';
@@ -1231,8 +1302,10 @@ function initParselSorgu(){
   inp.addEventListener('input', updateBtn);
   inp.addEventListener('keydown', e=>{ if(e.key==='Enter' && !btn.disabled) sorgula(); });
   btn.addEventListener('click', sorgula);
-  var cek=document.getElementById('psCekme');
-  if(cek) cek.addEventListener('input', function(){ psComputeSetback(); render(); });
+  ['psCekme','psCekmeOn','psCekmeYan','psCekmeArka'].forEach(function(id){
+    var cek=document.getElementById(id);
+    if(cek) cek.addEventListener('input', function(){ psComputeSetback(); render(); });
+  });
   var dbld=document.getElementById('psDrawBld');
   if(dbld) dbld.addEventListener('click', psDrawBuilding);
   var sat=document.getElementById('psSat');

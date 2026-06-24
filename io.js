@@ -170,7 +170,7 @@ function restoreState(st, opt){
   { const bi=document.getElementById('bodrumSayisi'); if(bi) bi.value=String(bodrumSayisi); }
   katKullanim=(st.plan&&st.plan.katKullanim)||'konut'; // bu katın kullanım tipi (per-kat)
   pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
-  parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed;
+  parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed; psFrontEdge=-1;
   parcelRot=(typeof st.parcelRot==='number' && isFinite(st.parcelRot))?st.parcelRot:0;
   parcelImar = st.parcelImar || null;                          // imar durumu kayıttan geri yüklenir (yeniden sorgulanmaz)
   psProj=null; psSatReq=null;                                  // kayıttan: geo referansı yok (parcelPts döndürülmüş saklanır)
@@ -488,7 +488,7 @@ function importLegacySvg(txt){
   unitObjs2.forEach(u=>{ const k2=JSON.stringify({...u.spec, adet:0});
     if(specMap.has(k2)) specMap.get(k2).adet++; else specMap.set(k2,{...u.spec}); });
   pts=poly; closed=true;
-  parcelPts=[]; parcelClosed=false; parcelSetback=[]; parcelRot=0; parcelImar=null; if(typeof imarRender==='function') imarRender(null); balconies=[];
+  parcelPts=[]; parcelClosed=false; parcelSetback=[]; parcelRot=0; parcelImar=null; psFrontEdge=-1; if(typeof imarRender==='function') imarRender(null); balconies=[];
   unitSpecs=[...specMap.values()]; renderUnits();
   customCutsZ=null; unitLayout={};
   doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
