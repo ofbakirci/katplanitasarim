@@ -437,10 +437,43 @@ function renderPlan(){
     if(c===0||id(r,c-1)===-9) draw(-9, x,y, x,y+M);
     if(r===0||id(r-1,c)===-9) draw(-9, x,y, x+M,y);
   }
+  /* --- FAZ 4: kapı açılış yayı — kanat boş hacme (girilen odaya) açılır; daha boş çeyreği
+     menteşe seçilir (çakışmada yön/menteşe kendiliğinden çevrilir). Salt çizim; plan değişmez. */
+  const inAt=(r,c)=> r>=0&&c>=0&&r<p.rows&&c<p.cols&&!!p.inside[r*p.cols+c];
+  const regAt=(r,c)=> inAt(r,c)? p.cm[r*p.cols+c] : -9;
+  const drawSwing=(e,W,target)=>{
+    let pvx,pvy,A,B;                                   // perp birim (oda yönü); A,B = iki söve
+    if(e.h){
+      const cMid=Math.floor((e.x+W/2-p.minX)/M), rB=Math.round((e.y-p.minY)/M);
+      const down=regAt(rB,cMid), up=regAt(rB-1,cMid);
+      const sgn=(target!=null&&(down===target||up===target))?(down===target?1:-1):(inAt(rB,cMid)?1:-1);
+      pvx=0; pvy=sgn; A={x:e.x,y:e.y}; B={x:e.x+W,y:e.y};
+    } else {
+      const rMid=Math.floor((e.y+W/2-p.minY)/M), cR=Math.round((e.x-p.minX)/M);
+      const right=regAt(rMid,cR), left=regAt(rMid,cR-1);
+      const sgn=(target!=null&&(right===target||left===target))?(right===target?1:-1):(inAt(rMid,cR)?1:-1);
+      pvx=sgn; pvy=0; A={x:e.x,y:e.y}; B={x:e.x,y:e.y+W};
+    }
+    const fit=(H,O)=>{ const ax=(O.x-H.x)/W, ay=(O.y-H.y)/W; let n=0;   // çeyrek-disk içi boş hücre
+      for(let a=0.15;a<=1;a+=0.21)for(let rho=0.4;rho<=1;rho+=0.3){
+        const ux=ax*(1-a)+pvx*a, uy=ay*(1-a)+pvy*a, L=Math.hypot(ux,uy)||1;
+        if(inAt(Math.floor((H.y+uy/L*rho*W-p.minY)/M),Math.floor((H.x+ux/L*rho*W-p.minX)/M))) n++; }
+      return n; };
+    const H=fit(A,B)>=fit(B,A)?A:B, O=(H===A)?B:A;
+    const th0=Math.atan2((O.y-H.y)/W,(O.x-H.x)/W), th1=Math.atan2(pvy,pvx);
+    let dth=th1-th0; while(dth>Math.PI)dth-=2*Math.PI; while(dth<-Math.PI)dth+=2*Math.PI;
+    let d='M'+W2Sx(O.x)+','+W2Sy(O.y);
+    for(let i=1;i<=8;i++){ const th=th0+dth*i/8; d+='L'+W2Sx(H.x+Math.cos(th)*W)+','+W2Sy(H.y+Math.sin(th)*W); }
+    g.appendChild(el('path',{d,fill:'none',stroke:'#9a8c78','stroke-width':Math.max(0.8,pxPerM*0.04)}));
+    g.appendChild(el('line',{x1:W2Sx(H.x),y1:W2Sy(H.y),x2:W2Sx(H.x+pvx*W),y2:W2Sy(H.y+pvy*W),stroke:'#9a8c78','stroke-width':Math.max(1,pxPerM*0.05)}));
+  };
   /* kapılar (computeDoors: elle ayar destekli) + kapı modunda tutamaçlar */
   computeDoors().forEach(dr=>{
     if(dr.status!=='ok') return;
     const e=dr.e, hov=mode==='door' && hoverDoor && hoverDoor.key===dr.key;
+    if(!clean){ const tgt = dr.kind==='unit' ? ((p.unitObjs[dr.k]&&p.unitObjs[dr.k].antre)?p.unitObjs[dr.k].antre.id:null)
+                          : dr.kind==='inner' ? (dr.reg?dr.reg.id:null) : null;
+      drawSwing(e, dr.kind==='unit'?0.9:0.8, tgt); }
     if(dr.kind==='unit'){
       const w=Math.max(2,pxPerM*0.2);
       let bx,by;
