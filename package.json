@@ -5,6 +5,7 @@
   "description": "Turkiye mevzuatina gore sematik kat plani tasarim araci.",
   "scripts": {
     "build": "node tools/bundle.js",
+    "postbuild": "KPTA_SKIP_REBUILD=1 node mesken/build-prototip.js",
     "test": "node tests/run-all.js",
     "test:syntax": "node tests/support/app-js.js --check",
     "test:smoke": "node tests/run-all.js --smoke",
