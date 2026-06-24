@@ -234,6 +234,41 @@ function render(){
     g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?Math.max(3,pxPerM*0.22):2.5,'stroke-linejoin':'miter'}));
     if(!plan||!closed) pts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#b35a2e','stroke-width':2})));
     if(!clean) polyDims(g, pts, closed, '#6b5e4d'); // dış kenar ölçüleri ("32 m"/"16 m") AI temiz modda yok
+    /* --- FAZ 3: pencereler — bina sınırının yaşam odasına (salon/yatak/mutfak) komşu
+       kenar parçalarına açıklık. Sınır poligonu kenarları boyunca yürünür; her kenara
+       içten komşu oda bulunur → pencere DUVARIN İÇİNDE (eğik cephede bile) oturur, yüzmez.
+       Aynı duvar koşuluyla (sınır çizgisi üstünde) çizilir; köşeden ≥0,3 m içeride,
+       1,0–1,8 m genişlik. Islak/iç hacim cephe almaz (PAİY denetimi runChecks'te). */
+    if(plan && closed){
+      const habit={salon:1,yatak:1,mutfak:1};
+      const regAt=(x,y)=>{ const c=Math.floor((x-plan.minX)/M), r=Math.floor((y-plan.minY)/M);
+        if(r<0||c<0||r>=plan.rows||c>=plan.cols) return null; const i=r*plan.cols+c;
+        if(!plan.inside[i]) return null; const id2=plan.cm[i]; return id2>=0?(plan.regions[id2]||null):null; };
+      const wg=el('g',{}); g.appendChild(wg);
+      const cutW=Math.max(3,pxPerM*0.22)+1.6, glassW=Math.max(1,pxPerM*0.055);
+      for(let i=0;i<pts.length;i++){
+        const A=pts[i], B=pts[(i+1)%pts.length];
+        const dx=B.x-A.x, dy=B.y-A.y, len=Math.hypot(dx,dy); if(len<1.6) continue;
+        const ux=dx/len, uy=dy/len; let nx=-uy, ny=ux;                 // iç normal (probe ile yön doğrulanır)
+        if(!regAt(A.x+dx*0.5+nx*0.35, A.y+dy*0.5+ny*0.35)){ nx=-nx; ny=-ny; }
+        const win=(s,e)=>{ const L=e-s; if(L<1.6) return;             // s,e: kenar boyunca metre
+          const w=Math.min(1.8,Math.max(1.0,L-0.6)), mid=(s+e)/2, a=mid-w/2, b=mid+w/2;
+          const p0={x:A.x+ux*a,y:A.y+uy*a}, p1={x:A.x+ux*b,y:A.y+uy*b};
+          wg.appendChild(el('line',{x1:W2Sx(p0.x),y1:W2Sy(p0.y),x2:W2Sx(p1.x),y2:W2Sy(p1.y),stroke:'#faf8f3','stroke-width':cutW}));
+          [0.0,0.13].forEach(o=>wg.appendChild(el('line',{x1:W2Sx(p0.x+nx*o),y1:W2Sy(p0.y+ny*o),
+            x2:W2Sx(p1.x+nx*o),y2:W2Sy(p1.y+ny*o),stroke:'#3f6a8c','stroke-width':glassW,'stroke-linecap':'butt'})));
+        };
+        let segS=null, segR=null;                                      // yaşam-odası komşulu kesintisiz parça
+        const step=0.25;
+        for(let t=0;t<=len+1e-9;t+=step){
+          const rg=regAt(A.x+ux*t+nx*0.35, A.y+uy*t+ny*0.35);
+          const ok=rg&&habit[rg.type];
+          if(ok&&rg===segR) continue;
+          if(segS!=null) win(segS, t); segS=ok?t:null; segR=ok?rg:null;
+        }
+        if(segS!=null) win(segS, len);
+      }
+    }
   }
 
   /* iç avlular (footprint'ten oyulmuş açık boşluk) + avlu modunda sürükleme önizlemesi */
