@@ -296,11 +296,188 @@ function exportEdgeMaskPNG(){
     img.src=data;
   } finally { edgeMaskMode=false; render(); } // ekrandaki planı normal geri çiz
 }
-/* AI Output: tek tıkla İKİ dosya — renkli boyama tabanı + duvar kenar haritası (aynı kadraj).
-   Boyama rengi/etiketi verir, kenar haritası geometriyi kilitler → stilli + %100 layout-sadık. */
+/* ============================================================================
+   ODA / DAİRE HARİTASI — makine-okunur export (AI Output'a EK; PNG'ler bozulmaz)
+   ----------------------------------------------------------------------------
+   floorplan-map.json + floorplan-overlay.svg: her odanın ve dairenin AI Output
+   render PNG'sinin PİKSEL uzayındaki konumu (bbox/polygon/centroid/alan/tip).
+   ⛔ TEK KOORDİNAT SİSTEMİ: oda/daire poligonları, bbox'lar VE (4. adımdaki
+   kamera export'unun) kamera x/y'si AYNI px uzayında — birim dönüşümü yok.
+   Uzay = AI boyama (exportAIPaintPNG) / kenar (exportEdgeMaskPNG) PNG'siyle
+   BİREBİR aynı kadraj: aşağıdaki S/panX/panY formülleri exportClone()'un
+   aiCleanMode/edgeMaskMode dalıyla (bd=0, tablo yok) AYNI, sonra ctx.scale(2,2)
+   için ×2. İki PNG ve bu harita üst üste tam çakışır. */
+function fpFraming(){
+  const site=(typeof siteOn==='function')&&siteOn();
+  let allPts=pts.concat(parcelPts);                       // exportClone ile birebir bbox
+  if(site && typeof siteBlocksData==='function'){
+    let a=[]; siteBlocksData().forEach(bd=>{ a=a.concat(bd.pts); });
+    a=a.concat(parcelPts); if(a.length>=3) allPts=a;
+  }
+  const bb=bboxOf(allPts);
+  const marg=2.5;                                          // bd=0 (AI temiz/kenar: balkon çizilmez)
+  const w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
+  const S=Math.max(site?14:22,Math.min(45,2200/w));        // px/m — exportClone ile AYNI
+  const SC=2;                                              // canvas ctx.scale(2,2) → PNG = SVG×2
+  const panX=(marg-bb.minX)*S, panY=(marg-bb.minY)*S;
+  const px=(mx,my)=>[ Math.round((mx*S+panX)*SC*10)/10, Math.round((my*S+panY)*SC*10)/10 ];
+  return { S, SC, panX, panY, W:Math.round(w*S)*SC, H:Math.round(h*S)*SC, px };
+}
+/* type → standart İngilizce enum (downstream prompt dallanması için) */
+const FP_TYPE_ENUM = {
+  salon:'living', mutfak:'kitchen', yatak:'bedroom', banyo:'bathroom', wc:'wc',
+  antre:'hall', koridor:'hall', oda:'room', merdiven:'stairs', asansor:'elevator',
+  teknik:'shaft', yangin:'fire_stairs', otopark:'parking', siginak:'shelter',
+  dukkan:'shop', depo:'storage', balkon:'balcony'
+};
+function fpRoomEnum(reg){
+  const nm=(reg.name||'').trim().toLocaleUpperCase('tr-TR');
+  if(nm.indexOf('SALON + MUTFAK')===0) return 'living_kitchen';
+  if(nm==='STÜDYO') return 'studio';
+  if(nm.indexOf('EB. YATAK')===0||nm.indexOf('EBEVEYN')===0) return 'bedroom';     // ebeveyn yatak = bedroom
+  if(nm.indexOf('ÇALIŞMA')===0) return 'study';
+  if(nm==='KİLER'||nm==='ORTAK DEPO') return 'storage';
+  return FP_TYPE_ENUM[reg.type] || 'room';
+}
+/* bir hücre kümesinin dik açılı dış sınır poligonu (ızgara köşe koordinatında [c,r]).
+   Yarı-kenar yönlendirmesi (bölge solda) → kapalı halka; düz duvardaki ara köşeler atılır. */
+function fpCellOutline(cells, cols){
+  if(!cells||!cells.length) return [];
+  const set=new Set(cells);
+  const has=(r,c)=> c>=0 && c<cols && set.has(r*cols+c);
+  const K=(c,r)=>c+'|'+r, nxt=new Map();
+  const add=(c1,r1,c2,r2)=>nxt.set(K(c1,r1),[c2,r2]);
+  cells.forEach(i=>{
+    const r=(i/cols)|0, c=i%cols;
+    if(!has(r-1,c)) add(c,r,     c+1,r);    // üst  (sol→sağ)
+    if(!has(r+1,c)) add(c+1,r+1, c,r+1);    // alt  (sağ→sol)
+    if(!has(r,c-1)) add(c,r+1,   c,r);      // sol  (alt→üst)
+    if(!has(r,c+1)) add(c+1,r,   c+1,r+1);  // sağ  (üst→alt)
+  });
+  if(!nxt.size) return [];
+  const startK=nxt.keys().next().value;
+  const ring=[]; let curK=startK, guard=0;
+  do {
+    const [c,r]=curK.split('|').map(Number); ring.push([c,r]);
+    const n=nxt.get(curK); if(!n) break;
+    curK=K(n[0],n[1]);
+  } while(curK!==startK && guard++<1e6);
+  // düz duvardaki ara köşeleri at (yalnız dönüş noktaları kalsın)
+  const n=ring.length; if(n<3) return ring;
+  const out=[];
+  for(let i=0;i<n;i++){
+    const a=ring[(i-1+n)%n], b=ring[i], c=ring[(i+1)%n];
+    if((b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])!==0) out.push(b);
+  }
+  return out.length>=3? out : ring;
+}
+/* bir bölgenin px geometrisi (bbox/polygon/centroid/alan) — verilen kadrajda */
+function fpRegionGeom(g, fr){
+  const cols=plan.cols, mnX=plan.minX, mnY=plan.minY, n=g.cells.length||1;
+  let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9,sr=0,sc=0;
+  g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;sr+=r;sc+=c;});
+  const [bx0,by0]=fr.px(mnX+c0*M, mnY+r0*M), [bx1,by1]=fr.px(mnX+(c1+1)*M, mnY+(r1+1)*M);
+  return {
+    type:fpRoomEnum(g), type_tr:g.type, name:g.name,
+    name_en:(typeof regLabelEN==='function')?regLabelEN(g):g.name,
+    bbox_px:[Math.min(bx0,bx1),Math.min(by0,by1),Math.max(bx0,bx1),Math.max(by0,by1)],
+    polygon_px:fpCellOutline(g.cells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M)),
+    centroid_px:fr.px(mnX+(sc/n+0.5)*M, mnY+(sr/n+0.5)*M),
+    area_m2:+(g.cells.length*M*M).toFixed(2)
+  };
+}
+/* daire için konum etiketi: bina bbox'una göre sol/sağ + alt/üst */
+function fpUnitLabel(u){
+  const cols=plan.cols; let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9, ux=0,uy=0,nc=0;
+  u.rooms.forEach(g=>g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; X0=Math.min(X0,c);Y0=Math.min(Y0,r);X1=Math.max(X1,c);Y1=Math.max(Y1,r);ux+=c;uy+=r;nc++;}));
+  if(!nc) return 'Daire';
+  const cx=ux/nc, cy=uy/nc, midC=plan.cols/2, midR=plan.rows/2;
+  const h=cx<midC*0.85?'Sol':(cx>midC*1.15?'Sağ':'Orta'), v=cy<midR*0.85?'Üst':(cy>midR*1.15?'Alt':'Orta');
+  return ((h==='Orta'&&v==='Orta')?'Merkez':(h+' '+v).trim())+' Daire';
+}
+/* ana harita — render PNG px uzayında units(+rooms) + ortak alanlar */
+function buildFloorplanMap(opt){
+  if(!plan||!plan.unitObjs) return null;
+  const fr=fpFraming(), cols=plan.cols, mnX=plan.minX, mnY=plan.minY;
+  const mpp=Math.round(1/(fr.S*fr.SC)*1e6)/1e6;            // metre / px
+  const units=plan.unitObjs.map((u,k)=>{
+    const id='D'+(k+1);
+    const live=u.rooms.filter(g=>g.cells.length);
+    const cnt={}; live.forEach(g=>{const e=fpRoomEnum(g); cnt[e]=(cnt[e]||0)+1;});
+    const seen={};
+    const rooms=live.map(g=>{
+      const o=fpRegionGeom(g,fr); const e=o.type;
+      seen[e]=(seen[e]||0)+1;
+      o.id=id+'-'+e+(cnt[e]>1?('-'+seen[e]):'');
+      return o;
+    });
+    let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
+    rooms.forEach(o=>{X0=Math.min(X0,o.bbox_px[0]);Y0=Math.min(Y0,o.bbox_px[1]);X1=Math.max(X1,o.bbox_px[2]);Y1=Math.max(Y1,o.bbox_px[3]);});
+    const allCells=[].concat(...live.map(g=>g.cells));
+    return {
+      id, label:fpUnitLabel(u),
+      type:(typeof unitTag==='function')?unitTag(u.spec):'',
+      bbox_px:[X0,Y0,X1,Y1],
+      polygon_px:fpCellOutline(allCells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M)),
+      rooms
+    };
+  });
+  const common=plan.regions.filter(g=>g.cells.length && g.unit<0).map(g=>{
+    const o=fpRegionGeom(g,fr); o.id='C-'+g.id; return o;
+  });
+  return {
+    render:{ file:(opt&&opt.file)||'kat-plani-AI-boyama.png', width:fr.W, height:fr.H },
+    space:'render-png-pixels',
+    note:'Tüm koordinatlar AI Output PNG pikseli (AI-boyama & controlnet-edges ile birebir çakışır). 3D dollhouse render ControlNet ile aynı çözünürlükte üretilirse bbox aynen geçerli; farklı çözünürlükte ölçek = renderW/this.width.',
+    scale:{ metersPerPixel:mpp, origin_px:fr.px(0,0),
+      formula:'px = world_m * '+(fr.S*fr.SC)+' + origin_px ; world_m = (px - origin_px) * metersPerPixel' },
+    units, common_areas:common
+  };
+}
+/* render üstüne bindirilebilen doğrulama SVG'si (aynı viewBox; düz string → headless de çalışır) */
+function buildFloorplanOverlaySVG(map){
+  if(!map) map=buildFloorplanMap(); if(!map) return '';
+  const W=map.render.width, H=map.render.height;
+  const PAL=['#b35a2e','#2f6f8f','#4a7c4a','#8a4b2d','#6b4e9e','#b8860b','#1f7a8c','#a23e48'];
+  const esc=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const ptsAttr=poly=>poly.map(p=>p[0]+','+p[1]).join(' ');
+  let s='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" font-family="sans-serif">\n';
+  s+='<rect width="'+W+'" height="'+H+'" fill="none"/>\n';
+  (map.common_areas||[]).forEach(o=>{
+    if(o.polygon_px&&o.polygon_px.length>=3) s+='<polygon points="'+ptsAttr(o.polygon_px)+'" fill="#9aa0a6" fill-opacity="0.12" stroke="#5f6368" stroke-width="2" stroke-dasharray="10 7"/>\n';
+  });
+  map.units.forEach((u,i)=>{
+    const col=PAL[i%PAL.length];
+    if(u.polygon_px&&u.polygon_px.length>=3) s+='<polygon points="'+ptsAttr(u.polygon_px)+'" fill="none" stroke="'+col+'" stroke-width="6" stroke-linejoin="round"/>\n';
+    (u.rooms||[]).forEach(o=>{
+      if(o.polygon_px&&o.polygon_px.length>=3) s+='<polygon points="'+ptsAttr(o.polygon_px)+'" fill="'+col+'" fill-opacity="0.10" stroke="'+col+'" stroke-width="2"/>\n';
+      const fs=Math.max(16,Math.min(40,(o.bbox_px[2]-o.bbox_px[0])*0.10));
+      s+='<text x="'+o.centroid_px[0]+'" y="'+o.centroid_px[1]+'" text-anchor="middle" font-size="'+fs.toFixed(0)+'" fill="#1f1f1f" font-weight="700">'+esc(o.name)+'</text>\n';
+      s+='<text x="'+o.centroid_px[0]+'" y="'+(o.centroid_px[1]+fs*1.05).toFixed(0)+'" text-anchor="middle" font-size="'+(fs*0.7).toFixed(0)+'" fill="'+col+'" font-weight="700">'+esc(o.id)+'</text>\n';
+    });
+    s+='<text x="'+(u.bbox_px[0]+10)+'" y="'+(u.bbox_px[1]+Math.max(28,(u.bbox_px[3]-u.bbox_px[1])*0.06)).toFixed(0)+'" font-size="'+Math.max(26,(u.bbox_px[2]-u.bbox_px[0])*0.08).toFixed(0)+'" fill="'+col+'" font-weight="800">'+esc(u.id)+' · '+esc(u.label)+'</text>\n';
+  });
+  return s+'</svg>\n';
+}
+function fpDownload(name, text, mime){
+  const blob=new Blob([text],{type:mime||'application/octet-stream'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(a.href); }catch(e){} }, 2000);
+}
+function exportFloorplanMapFiles(){
+  const map=buildFloorplanMap(); if(!map){ alert('Önce yerleşim oluşturun.'); return; }
+  fpDownload('floorplan-map.json', JSON.stringify(map,null,2), 'application/json');
+  setTimeout(()=>fpDownload('floorplan-overlay.svg', buildFloorplanOverlaySVG(map), 'image/svg+xml'), 300);
+}
+if(typeof window!=='undefined'){ window.buildFloorplanMap=buildFloorplanMap; window.buildFloorplanOverlaySVG=buildFloorplanOverlaySVG; }
+/* AI Output: tek tıkla DÖRT dosya — renkli boyama tabanı + duvar kenar haritası
+   (aynı kadraj) + oda/daire haritası JSON + doğrulama overlay SVG.
+   Boyama rengi/etiketi verir, kenar haritası geometriyi kilitler → stilli + %100
+   layout-sadık; harita+overlay odaları makineye okunur kılar (gözle tahmin biter). */
 function exportAIOutput(){
-  exportAIPaintPNG();                    // 1) kat-plani-AI-boyama.png  (renkli, EN etiket)
-  setTimeout(exportEdgeMaskPNG, 500);    // 2) kat-plani-controlnet-edges.png  (çoklu indirme engeline takılmamak için küçük gecikme)
+  exportAIPaintPNG();                        // 1) kat-plani-AI-boyama.png  (renkli, EN etiket)
+  setTimeout(exportEdgeMaskPNG, 500);        // 2) kat-plani-controlnet-edges.png
+  setTimeout(exportFloorplanMapFiles, 1000); // 3) floorplan-map.json + 4) floorplan-overlay.svg
 }
 document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
