@@ -596,7 +596,7 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><path d="M3.3 7L12 12l8.7-5M12 22V12"></path></svg> Render — Bu Kamera</button>'+
         '<button class="btn block" id="renderAllBtn" style="margin-top:9px"'+d+'>'+
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5M2 12l10 5 10-5"></path></svg> Render — Tüm Kameralar ('+state.placed.length+')</button>'+
-        '<button class="btn block" disabled style="margin-top:9px">▦ AI yürüyüş videosu — yakında</button></div>';
+        '<button class="btn block" id="walkExportBtn" style="margin-top:9px"'+d+'>▦ AI yürüyüş videosu</button></div>';
 
     wireCamera();
     refreshCam();
@@ -672,6 +672,7 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     var tr=$('timeRange'); if(tr) tr.oninput=function(){ if(!state.placed.length)return; state.placed[state.active].time=+tr.value; refreshTime(); };
     var rb=$('renderOneBtn'); if(rb) rb.onclick=function(){ if(state.placed.length) renderOne(); };
     var ra=$('renderAllBtn'); if(ra) ra.onclick=function(){ if(state.placed.length) renderAll(); };
+    var wb=$('walkExportBtn'); if(wb) wb.onclick=function(){ if(state.placed.length) exportCameraJSON(); };  // şimdilik: kamera+oda verisini dışa aktar (AI video bunu yiyecek)
     var zr=$('zoomRange'); if(zr) zr.oninput=function(){ state.zoom=+zr.value/100; var p=$('planbox'); if(p){ p.style.width=(state.zoom*100)+'%'; p.style.cursor=state.zoom>1?'grab':'crosshair'; } var zv=$('zoomVal'); if(zv) zv.textContent=Math.round(state.zoom*100)+'%'; layoutCam(); };
     if(state._ro) state._ro.disconnect();
     if(window.ResizeObserver){ state._ro=new ResizeObserver(function(){ layoutCam(); }); state._ro.observe(pb); }
