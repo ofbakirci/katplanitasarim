@@ -4,6 +4,18 @@ const EXPORT_FONT="'Helvetica Neue',Helvetica,Arial,sans-serif"; // sayfa CSS'i 
 let aiPaintMode=false; // AI boyama export modu: EN etiket, daire tablosu yok (balkon KORUNUR, m² KALIR)
 let edgeMaskMode=false; // ControlNet/Flux-Canny duvar-kenar export modu: beyaz zemin + saf siyah SÜREKLİ duvarlar; etiket/renk/m²/mobilya/grid/balkon/ölçü YOK
 let aiCleanMode=false;  // AI boyama TEMİZ modu: SADECE oda dolgusu + duvar + kapı boşluğu + EN oda etiketi. Düğüm/m²/ölçü/D-rozet/grid/parsel/balkon/seçim YOK. Kadraj kenar-maskesiyle birebir (bd=0 → iki PNG üst üste biner).
+/* ⛔ RENDER HEDEF ORANI: dollhouse render (nano-banana-pro, 4K 16:9) = 5504×3072.
+   AI Output kadrajı (PNG + harita) bu ORANA letterbox'lanır → render modeline GİREN plan PNG'si
+   ile ÇIKAN dollhouse AYNI en-boy oranında olur; kalan tek fark üniform ölçektir, onu da
+   koordinatların _norm (0–1) alanı çözer. Bina kadrajın ortasında, kenarlara boş pay eklenir. */
+const FP_RENDER_W=5504, FP_RENDER_H=3072, FP_RENDER_ASPECT=FP_RENDER_W/FP_RENDER_H;
+/* bina kadrajını (genişlik/yükseklik, metre) render oranına pad et → eklenecek YARI marj (m).
+   Geniş-yatık bina (w/h<oran) → yatay pay; dar bina → dikey pay. Ölçek (S) DEĞİŞMEZ: yalnız
+   boş kenar eklenir, bina pikselleri birebir aynı kalır. */
+function fpLetterbox(w,h){
+  if(w/h < FP_RENDER_ASPECT) return { dx:(h*FP_RENDER_ASPECT - w)/2, dy:0 };
+  return { dx:0, dy:(w/FP_RENDER_ASPECT - h)/2 };
+}
 function exportTableGroup(x0,maxH){
   /* yüzen daire tablosunun SVG kopyası — özdeş daireler gruplanır, plan yüksekliğini aşınca yeni sütuna sarar */
   if(!plan||!plan.unitObjs.length) return null;
@@ -61,11 +73,14 @@ function exportClone(){
   const bb=bboxOf(allPts);
   const bd=(edgeMaskMode||aiCleanMode)?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0); // kenar maskesi VE AI-temiz: balkon çizilmez → taşma payı yok (kadraj tam dikdörtgen, iki PNG üst üste biner).
   const marg=2.5+bd; // ölçü yazıları + balkon taşması (m)
-  const w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
-  const S=Math.max(site?14:22,Math.min(45,2200/w)); // ≥22 px/m (site daha büyük olabilir → ≥14)
+  let w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
+  const S=Math.max(site?14:22,Math.min(45,2200/w)); // ≥22 px/m (site daha büyük olabilir → ≥14); S pad ÖNCESİ genişlikten → çözünürlük değişmez
+  // AI temiz/kenar (render girdisi): kadrajı render oranına letterbox'la (bina ortada, boş kenar)
+  const lb=(edgeMaskMode||aiCleanMode)? fpLetterbox(w,h) : {dx:0,dy:0};
+  w+=lb.dx*2; h+=lb.dy*2;
   const save={p:pxPerM,x:panX,y:panY,m:mode};
   exportView={width:Math.round(w*S),height:Math.round(h*S),left:0,top:0};
-  pxPerM=S; panX=(marg-bb.minX)*S; panY=(marg-bb.minY)*S;
+  pxPerM=S; panX=(marg-bb.minX+lb.dx)*S; panY=(marg-bb.minY+lb.dy)*S;
   if(site) mode='site';            // tüm blokları aynı tuvalde çiz (genel görünüm)
   render();
   const clone=svg.cloneNode(true);
@@ -316,12 +331,16 @@ function fpFraming(){
   }
   const bb=bboxOf(allPts);
   const marg=2.5;                                          // bd=0 (AI temiz/kenar: balkon çizilmez)
-  const w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
-  const S=Math.max(site?14:22,Math.min(45,2200/w));        // px/m — exportClone ile AYNI
+  let w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
+  const S=Math.max(site?14:22,Math.min(45,2200/w));        // px/m — exportClone ile AYNI (pad ÖNCESİ)
   const SC=2;                                              // canvas ctx.scale(2,2) → PNG = SVG×2
-  const panX=(marg-bb.minX)*S, panY=(marg-bb.minY)*S;
+  const lb=fpLetterbox(w,h);                               // render oranına letterbox — exportClone (aiClean/edge) ile AYNI
+  w+=lb.dx*2; h+=lb.dy*2;
+  const panX=(marg-bb.minX+lb.dx)*S, panY=(marg-bb.minY+lb.dy)*S;
+  const W=Math.round(w*S)*SC, H=Math.round(h*S)*SC;
   const px=(mx,my)=>[ Math.round((mx*S+panX)*SC*10)/10, Math.round((my*S+panY)*SC*10)/10 ];
-  return { S, SC, panX, panY, W:Math.round(w*S)*SC, H:Math.round(h*S)*SC, px };
+  const norm=p=>[ Math.round(p[0]/W*1e5)/1e5, Math.round(p[1]/H*1e5)/1e5 ];  // 0–1 (render çözünürlüğünden bağımsız)
+  return { S, SC, panX, panY, W, H, px, norm };
 }
 /* type → standart İngilizce enum (downstream prompt dallanması için) */
 const FP_TYPE_ENUM = {
@@ -377,12 +396,17 @@ function fpRegionGeom(g, fr){
   let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9,sr=0,sc=0;
   g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;sr+=r;sc+=c;});
   const [bx0,by0]=fr.px(mnX+c0*M, mnY+r0*M), [bx1,by1]=fr.px(mnX+(c1+1)*M, mnY+(r1+1)*M);
+  const bbox_px=[Math.min(bx0,bx1),Math.min(by0,by1),Math.max(bx0,bx1),Math.max(by0,by1)];
+  const polygon_px=fpCellOutline(g.cells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M));
+  const centroid_px=fr.px(mnX+(sc/n+0.5)*M, mnY+(sr/n+0.5)*M);
+  const nb0=fr.norm([bbox_px[0],bbox_px[1]]), nb1=fr.norm([bbox_px[2],bbox_px[3]]);
   return {
     type:fpRoomEnum(g), type_tr:g.type, name:g.name,
     name_en:(typeof regLabelEN==='function')?regLabelEN(g):g.name,
-    bbox_px:[Math.min(bx0,bx1),Math.min(by0,by1),Math.max(bx0,bx1),Math.max(by0,by1)],
-    polygon_px:fpCellOutline(g.cells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M)),
-    centroid_px:fr.px(mnX+(sc/n+0.5)*M, mnY+(sr/n+0.5)*M),
+    bbox_px, polygon_px, centroid_px,
+    bbox_norm:[nb0[0],nb0[1],nb1[0],nb1[1]],
+    polygon_norm:polygon_px.map(p=>fr.norm(p)),
+    centroid_norm:fr.norm(centroid_px),
     area_m2:+(g.cells.length*M*M).toFixed(2)
   };
 }
@@ -414,11 +438,15 @@ function buildFloorplanMap(opt){
     let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
     rooms.forEach(o=>{X0=Math.min(X0,o.bbox_px[0]);Y0=Math.min(Y0,o.bbox_px[1]);X1=Math.max(X1,o.bbox_px[2]);Y1=Math.max(Y1,o.bbox_px[3]);});
     const allCells=[].concat(...live.map(g=>g.cells));
+    const polygon_px=fpCellOutline(allCells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M));
+    const un0=fr.norm([X0,Y0]), un1=fr.norm([X1,Y1]);
     return {
       id, label:fpUnitLabel(u),
       type:(typeof unitTag==='function')?unitTag(u.spec):'',
       bbox_px:[X0,Y0,X1,Y1],
-      polygon_px:fpCellOutline(allCells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M)),
+      polygon_px,
+      bbox_norm:[un0[0],un0[1],un1[0],un1[1]],
+      polygon_norm:polygon_px.map(p=>fr.norm(p)),
       rooms
     };
   });
@@ -426,11 +454,13 @@ function buildFloorplanMap(opt){
     const o=fpRegionGeom(g,fr); o.id='C-'+g.id; return o;
   });
   return {
-    render:{ file:(opt&&opt.file)||'kat-plani-AI-boyama.png', width:fr.W, height:fr.H },
+    render:{ file:(opt&&opt.file)||'kat-plani-AI-boyama.png', width:fr.W, height:fr.H,
+      aspect:+(fr.W/fr.H).toFixed(4), target_aspect:+FP_RENDER_ASPECT.toFixed(4) },
     space:'render-png-pixels',
-    note:'Tüm koordinatlar AI Output PNG pikseli (AI-boyama & controlnet-edges ile birebir çakışır). 3D dollhouse render ControlNet ile aynı çözünürlükte üretilirse bbox aynen geçerli; farklı çözünürlükte ölçek = renderW/this.width.',
+    note:'Koordinatlar AI Output PNG pikseli (AI-boyama & controlnet-edges ile birebir çakışır). Kadraj RENDER ORANINA letterbox\'lı (bina ortada, boş kenar) → render modeline giren plan PNG ile çıkan dollhouse AYNI oranda. Render FARKLI çözünürlükteyse _px yerine _norm (0–1) kullan: render_px = norm * renderW (x) / renderH (y); oran aynı olduğundan x ve y birebir oturur.',
     scale:{ metersPerPixel:mpp, origin_px:fr.px(0,0),
-      formula:'px = world_m * '+(fr.S*fr.SC)+' + origin_px ; world_m = (px - origin_px) * metersPerPixel' },
+      formula:'px = world_m * '+(fr.S*fr.SC)+' + origin_px ; world_m = (px - origin_px) * metersPerPixel',
+      norm_formula:'render_px_x = x_norm * renderWidth ; render_px_y = y_norm * renderHeight (kadraj render oranında → her iki eksen tek çarpan)' },
     units, common_areas:common
   };
 }

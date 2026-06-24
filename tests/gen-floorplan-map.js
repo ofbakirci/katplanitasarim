@@ -89,6 +89,8 @@ const cameras = shots.slice(0, 8).map((s, i) => {
     room_tr: r.name,
     room_id: r.id,
     x_px: pos[0], y_px: pos[1],
+    x_norm: Math.round(pos[0] / map.render.width * 1e5) / 1e5,   // 0–1 (render çözünürlüğünden bağımsız)
+    y_norm: Math.round(pos[1] / map.render.height * 1e5) / 1e5,
     heading_deg: headingTo(pos, uc),     // daire merkezine doğru bak (mantıklı varsayılan)
     lens_mm: lensFor(r.type),
     height: 'eye',                        // arayüz: Alçak | Göz hizası | Yüksek
@@ -112,8 +114,12 @@ fs.writeFileSync(path.join(outDir, 'camera-export.json'), JSON.stringify(camExpo
 const W = map.render.width, H = map.render.height;
 let fails = 0; const fail = m => { console.log('  ✗ ' + m); fails++; };
 const allRooms = map.units.flatMap(u => u.rooms);
-console.log('render PNG :', W + '×' + H + ' px  | m/px:', map.scale.metersPerPixel);
+const aspect = W / H, tgtAspect = map.render.target_aspect;
+console.log('render PNG :', W + '×' + H + ' px  | oran:', aspect.toFixed(4), '(hedef ' + tgtAspect + ')  | m/px:', map.scale.metersPerPixel);
 console.log('daire      :', map.units.length, '| oda:', allRooms.length, '| ortak alan:', map.common_areas.length);
+
+// kadraj render oranına letterbox'lı mı? (±1 px yuvarlama payı → bağıl <0.2%)
+if (!(Math.abs(aspect - tgtAspect) / tgtAspect < 0.002)) fail('kadraj oranı ' + aspect.toFixed(4) + ' render hedefi ' + tgtAspect + ' ile uyuşmuyor');
 
 allRooms.forEach(r => {
   const b = r.bbox_px;
@@ -121,6 +127,12 @@ allRooms.forEach(r => {
   if (!(b[2] > b[0] && b[3] > b[1])) fail(r.id + ' bbox dejenere');
   if (!(r.area_m2 > 0)) fail(r.id + ' alan 0');
   if (!(r.polygon_px && r.polygon_px.length >= 4)) fail(r.id + ' polygon < 4 köşe');
+  // normalize alanları: var, 0–1 aralığında, _px ile tutarlı
+  const nb = r.bbox_norm;
+  if (!(nb && nb.length === 4)) return fail(r.id + ' bbox_norm yok');
+  if (!nb.every(v => v >= -0.01 && v <= 1.01)) fail(r.id + ' bbox_norm 0–1 dışı: ' + JSON.stringify(nb));
+  if (Math.abs(nb[0] * W - b[0]) > 1.5 || Math.abs(nb[1] * H - b[1]) > 1.5) fail(r.id + ' bbox_norm*render ≠ bbox_px');
+  if (!(r.centroid_norm && r.polygon_norm && r.polygon_norm.length === r.polygon_px.length)) fail(r.id + ' centroid/polygon_norm eksik');
 });
 map.units.forEach(u => u.rooms.forEach(r => {
   const ub = u.bbox_px, rb = r.bbox_px;
@@ -131,6 +143,8 @@ cameras.forEach(c => {
   const r = roomById[c.room_id];
   if (!r) return fail(c.id + ' room_id eşleşmiyor: ' + c.room_id);
   if (!pip(c.x_px, c.y_px, r.polygon_px)) fail(c.id + ' (' + c.x_px + ',' + c.y_px + ') ' + r.id + ' polygon dışı');
+  if (!(c.x_norm >= -0.01 && c.x_norm <= 1.01 && c.y_norm >= -0.01 && c.y_norm <= 1.01)) fail(c.id + ' norm 0–1 dışı');
+  if (Math.abs(c.x_norm * W - c.x_px) > 1.5 || Math.abs(c.y_norm * H - c.y_px) > 1.5) fail(c.id + ' norm*render ≠ px');
 });
 
 console.log('kamera     :', cameras.length, '→ kaynak daire', target.id, '(' + target.label + ')');
