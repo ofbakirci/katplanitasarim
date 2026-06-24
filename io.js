@@ -489,6 +489,95 @@ function buildFloorplanOverlaySVG(map){
   });
   return s+'</svg>\n';
 }
+/* ---- kamera görüş alanı → oda ataması (koni AĞIRLIĞI + tolerans + kırpılmış koni) ----
+   room_id'yi TUTAMAÇ noktasının pip'inden DEĞİL, kameranın görüş KONİSİNİN en çok doldurduğu
+   odadan belirler: kamera çoğu kez bir odanın eşiğinde/köşesinde durup İÇERİ bakar; onu anlatan
+   oda, konisinin doldurduğu odadır. Koniyi her oda poligonuna kırpıp (Sutherland–Hodgman; koni
+   KONVEKS olduğundan L-şekilli/iç bükey odalar için de geçerli) kesişim ALANINI tartar.
+   Döner: { room_id, room_weights:[{room_id,coverage_ratio}], cone_spills, cone_polygon_px, cone_polygon_norm }.
+   ⛔ TEK UZAY: cam.x_px/y_px ile oda polygon_px aynı render-png pikselinde olmalı. */
+const FP_LENS_FOV = { 16:100, 24:74, 35:54, 50:40 };   // arayüzdeki cone ile birebir yatay FOV
+function fpLensFov(mm){ return FP_LENS_FOV[mm] || 65; }
+function fpPolyArea(poly){ let a=0; for(let i=0,j=poly.length-1;i<poly.length;j=i++) a+=(poly[j][0]+poly[i][0])*(poly[j][1]-poly[i][1]); return Math.abs(a)/2; }
+function fpPipIn(x,y,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j];
+  if(((a[1]>y)!==(b[1]>y)) && (x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])) c=!c; } return c; }
+function fpSegDist(p,a,b){ const vx=b[0]-a[0], vy=b[1]-a[1], wx=p[0]-a[0], wy=p[1]-a[1];
+  const L=vx*vx+vy*vy; let t=L?((wx*vx+wy*vy)/L):0; t=t<0?0:(t>1?1:t);
+  return Math.hypot(a[0]+t*vx-p[0], a[1]+t*vy-p[1]); }
+function fpDistToPoly(p,poly){ if(fpPipIn(p[0],p[1],poly)) return 0; let d=Infinity;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++) d=Math.min(d, fpSegDist(p,poly[j],poly[i])); return d; }
+/* subject (her tür, iç bükey olabilir) ∩ clip (KONVEKS) → kırpılmış poligon */
+function fpClipConvex(subject, clip){
+  let w=0; for(let i=0;i<clip.length;i++){ const a=clip[i], b=clip[(i+1)%clip.length]; w+=a[0]*b[1]-b[0]*a[1]; }
+  const ccw = w>=0;
+  const inside=(p,a,b)=>{ const cr=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]); return ccw? cr>=-1e-7 : cr<=1e-7; };
+  const inter=(p,q,a,b)=>{ const A1=b[1]-a[1],B1=a[0]-b[0],C1=A1*a[0]+B1*a[1];
+    const A2=q[1]-p[1],B2=p[0]-q[0],C2=A2*p[0]+B2*p[1], d=A1*B2-A2*B1;
+    return d?[(B2*C1-B1*C2)/d,(A1*C2-A2*C1)/d]:q.slice(); };
+  let out=subject.slice();
+  for(let i=0,j=clip.length-1;i<clip.length;j=i++){
+    const a=clip[j], b=clip[i], inp=out; out=[]; if(!inp.length) break;
+    let P=inp[inp.length-1];
+    for(let k=0;k<inp.length;k++){ const Q=inp[k];
+      if(inside(Q,a,b)){ if(!inside(P,a,b)) out.push(inter(P,Q,a,b)); out.push(Q); }
+      else if(inside(P,a,b)) out.push(inter(P,Q,a,b));
+      P=Q; }
+  }
+  return out;
+}
+/* görüş konisi → konveks yelpaze poligonu (tepe + yay; FOV<180 → konveks). depth = görüş derinliği px */
+function fpConePolygon(A, headingDeg, fovDeg, depth){
+  const th=headingDeg||0, half=fovDeg/2, n=Math.max(2, Math.ceil(fovDeg/12)), pts=[A.slice()];
+  for(let k=0;k<=n;k++){ const a=(th-half + fovDeg*k/n)*Math.PI/180; pts.push([A[0]+depth*Math.sin(a), A[1]-depth*Math.cos(a)]); }
+  return pts;
+}
+function cameraViewInfo(map, cam){
+  if(!map||!cam||!map.render) return null;
+  const W=map.render.width, H=map.render.height, A=[cam.x_px, cam.y_px];
+  const EMPTY={ room_id:null, room_weights:[], cone_spills:false, cone_polygon_px:null, cone_polygon_norm:null };
+  const norm=p=>[Math.round(p[0]/W*1e5)/1e5, Math.round(p[1]/H*1e5)/1e5];
+  const units=map.units||[];
+  /* kameranın AİT olduğu daire (içinde / en yakın) → görüş derinliği o dairenin köşegeni kadar
+     (kadrajın tamamına yayılıp uzak/büyük odaları yanlışlıkla kapsamasın). */
+  let home=null, hd=Infinity;
+  units.forEach(u=>{ if(!u.polygon_px||u.polygon_px.length<3) return; const d=fpDistToPoly(A,u.polygon_px); if(d<hd){ hd=d; home=u; } });
+  const depth=(home? Math.hypot(home.bbox_px[2]-home.bbox_px[0], home.bbox_px[3]-home.bbox_px[1]) : Math.hypot(W,H)*0.5)*1.15;
+  const cands=[];
+  if(home) (home.rooms||[]).forEach(r=>{ if(r.polygon_px&&r.polygon_px.length>=3) cands.push(r); });
+  (map.common_areas||[]).forEach(r=>{ if(r.polygon_px&&r.polygon_px.length>=3) cands.push(r); });
+  if(!cands.length) return EMPTY;
+  const cone=fpConePolygon(A, cam.heading_deg||0, fpLensFov(cam.lens_mm), depth);
+  const coneOf=room=>{ const clip=fpClipConvex(room.polygon_px, cone); return clip.length>=3?{ poly:clip, area:fpPolyArea(clip) }:null; };
+  /* room_id seçimi — kanıt tablosuyla birebir + 2.5D-kenar dayanıklı:
+     1) tutamaç bir odanın İÇİNDE ise → kamera O odadadır (kullanıcı oraya koydu). Şema kapısız/dolu
+        poligon → kamera kendi odasını görür; cone_polygon = koni ∩ oda, komşuya sızmaz, spill yok.
+     2) tutamaç hiçbir odada değil (eşik/duvar/2.5D-kenar) → koninin EN ÇOK doldurduğu oda kazanır
+        (içeri baktığı oda); birden çok odaya bakıyorsa room_weights + cone_spills bunu gösterir.
+     3) koni de hiçbir odaya değmiyorsa → tutamaca EN YAKIN oda → room_id ASLA null kalmaz. */
+  let chosen=null, weights, spills;
+  const apexRoom=cands.find(r=>fpPipIn(A[0], A[1], r.polygon_px)) || null;
+  if(apexRoom){
+    chosen=apexRoom; weights=[{ room_id:apexRoom.id, coverage_ratio:1 }]; spills=false;
+  } else {
+    const hits=[]; cands.forEach(r=>{ const c=coneOf(r); if(c&&c.area>1) hits.push({ room:r, area:c.area }); });
+    hits.sort((a,b)=>b.area-a.area);
+    if(hits.length){
+      const total=hits.reduce((s,h)=>s+h.area,0);
+      chosen=hits[0].room;
+      weights=hits.map(h=>({ room_id:h.room.id, coverage_ratio:Math.round(h.area/total*1e3)/1e3 })).filter(w=>w.coverage_ratio>=0.02);
+      spills=weights.filter(w=>w.coverage_ratio>=0.12).length>1;
+    } else {
+      let nd=Infinity; cands.forEach(r=>{ const d=fpDistToPoly(A, r.polygon_px); if(d<nd){ nd=d; chosen=r; } });
+      weights=chosen?[{ room_id:chosen.id, coverage_ratio:1 }]:[]; spills=false;
+    }
+  }
+  if(!chosen) return EMPTY;
+  /* cone_polygon: koni ∩ SEÇİLEN oda → komşu odaya sızmaz (describe bunu doğrudan kırpar) */
+  const cc=coneOf(chosen);
+  let cpoly=null, cnorm=null;
+  if(cc&&cc.poly.length>=3){ cpoly=cc.poly.map(p=>[Math.round(p[0]*10)/10, Math.round(p[1]*10)/10]); cnorm=cc.poly.map(norm); }
+  return { room_id:chosen.id, room_weights:weights, cone_spills:spills, cone_polygon_px:cpoly, cone_polygon_norm:cnorm };
+}
 function fpDownload(name, text, mime){
   const blob=new Blob([text],{type:mime||'application/octet-stream'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
@@ -499,7 +588,7 @@ function exportFloorplanMapFiles(){
   fpDownload('floorplan-map.json', JSON.stringify(map,null,2), 'application/json');
   setTimeout(()=>fpDownload('floorplan-overlay.svg', buildFloorplanOverlaySVG(map), 'image/svg+xml'), 300);
 }
-if(typeof window!=='undefined'){ window.buildFloorplanMap=buildFloorplanMap; window.buildFloorplanOverlaySVG=buildFloorplanOverlaySVG; }
+if(typeof window!=='undefined'){ window.buildFloorplanMap=buildFloorplanMap; window.buildFloorplanOverlaySVG=buildFloorplanOverlaySVG; window.cameraViewInfo=cameraViewInfo; }
 /* AI Output: tek tıkla DÖRT dosya — renkli boyama tabanı + duvar kenar haritası
    (aynı kadraj) + oda/daire haritası JSON + doğrulama overlay SVG.
    Boyama rengi/etiketi verir, kenar haritası geometriyi kilitler → stilli + %100
