@@ -260,11 +260,29 @@ function psGeoBbox(){
   const dLng=marM/psProj.mLng, dLat=marM/psProj.mLat;
   return {minLng:mnLng-dLng, maxLng:mxLng+dLng, minLat:mnLat-dLat, maxLat:mxLat+dLat};
 }
-/* Geo bbox → Esri export PNG → blob URL → dünya dikdörtgeni (parcelSat). render() çizer.
+/* Geo bbox → uydu görüntüsü → blob URL → dünya dikdörtgeni (parcelSat). render() çizer.
    NOT: SVG <image> dış cross-origin href'i (bu tarayıcıda) boyamıyor; görüntüyü crossOrigin
-   ile çekip canvas→blob URL'e çeviriyoruz (Esri ACAO:* → taint yok, blob URL kısa → render ucuz). */
+   ile çekip canvas→blob URL'e çeviriyoruz (Esri ACAO:* → taint yok, blob URL kısa → render ucuz).
+   ARTIK #6: tek düşük-çözünürlüklü export yerine Esri World Imagery XYZ tile MOZAİĞİ
+   (yüksek zoom → keskin); tile başarısız/çok-fazlaysa eski export'a düşülür (fallback). */
 let psSatToken = 0, psSatReq = null;
 function psSatClear(){ if(parcelSat && parcelSat._u) URL.revokeObjectURL(parcelSat._u); parcelSat=null; psSatReq=null; }
+/* lng/lat → küresel Web-Mercator piksel (zoom z, 256 px tile) */
+function psMercPx(lng, lat, z){
+  const n=256*Math.pow(2,z);
+  const s=Math.max(-0.9999,Math.min(0.9999,Math.sin(lat*Math.PI/180)));
+  return { x:(lng+180)/360*n, y:(0.5 - Math.log((1+s)/(1-s))/(4*Math.PI))*n };
+}
+/* bbox → {z, sol-üst/sağ-alt küresel piksel}. Tile bütçesi (≤48) ve canvas (≤4096 px)
+   içinde EN YÜKSEK zoom (en keskin) seçilir; z∈[16,19]. */
+function psTileGeom(gb){
+  for(let z=19; z>=16; z--){
+    const tl=psMercPx(gb.minLng, gb.maxLat, z), br=psMercPx(gb.maxLng, gb.minLat, z);
+    const W=br.x-tl.x, H=br.y-tl.y;
+    const nT=(Math.floor((br.x-1)/256)-Math.floor(tl.x/256)+1)*(Math.floor((br.y-1)/256)-Math.floor(tl.y/256)+1);
+    if(z===16 || (W<=4096 && H<=4096 && nT<=48)) return { z, pxMin:tl.x, pyMin:tl.y, pxMax:br.x, pyMax:br.y };
+  }
+}
 function psUpdateSatellite(){
   if(!psSatOn || !psProj){ psSatClear(); return; }
   const gb=psGeoBbox(); if(!gb){ psSatClear(); return; }
@@ -273,14 +291,9 @@ function psUpdateSatellite(){
   const y0=(lat0-gb.maxLat)*mLat+dy, y1=(lat0-gb.minLat)*mLat+dy;   // kuzey yukarı: maxLat → küçük y
   const w=x1-x0, h=y1-y0;
   if(!(w>0 && h>0)){ psSatClear(); return; }
-  let sw=Math.round(w/0.30), sh=Math.round(h/0.30);                 // ~0,30 m/px (daha incede Esri 500)
-  const mxd=Math.max(sw,sh); if(mxd>700){ const k=700/mxd; sw=Math.round(sw*k); sh=Math.round(sh*k); }
-  sw=Math.max(64,sw); sh=Math.max(64,sh);
-  const reqUrl='https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export'
-    + '?bbox=' + gb.minLng + ',' + gb.minLat + ',' + gb.maxLng + ',' + gb.maxLat
-    + '&bboxSR=4326&imageSR=4326&size=' + sw + ',' + sh + '&format=png&f=image';
   const rot=psProj.rot||0;
-  // bbox/boyut aynı; yalnız döndürme/öteleme değişti → görüntüyü yeniden indirme, açıyı güncelle
+  const reqUrl='sat:'+gb.minLng.toFixed(6)+','+gb.minLat.toFixed(6)+','+gb.maxLng.toFixed(6)+','+gb.maxLat.toFixed(6);
+  // bbox aynı; yalnız döndürme/öteleme değişti → görüntüyü yeniden indirme, açıyı güncelle
   if(parcelSat && parcelSat.url && psSatReq===reqUrl){
     parcelSat.x=x0; parcelSat.y=y0; parcelSat.w=w; parcelSat.h=h; parcelSat.rot=rot; parcelSat.cx=dx; parcelSat.cy=dy;
     render(); return;
@@ -288,19 +301,57 @@ function psUpdateSatellite(){
   if(parcelSat && parcelSat._u) URL.revokeObjectURL(parcelSat._u);   // eski blob'u bırak
   psSatToken++; psSatReq=reqUrl;
   parcelSat = {url:null, x:x0, y:y0, w, h, _u:null, rot, cx:dx, cy:dy}; // dikdörtgen hemen; görüntü asenkron
-  const token=psSatToken, img=new Image(); img.crossOrigin='anonymous';
-  img.onload=function(){
-    if(token!==psSatToken || !parcelSat) return;                   // eskimiş istek/iptal
-    try{
-      const cv=document.createElement('canvas'); cv.width=img.naturalWidth; cv.height=img.naturalHeight;
+  psFetchTiles(gb, psSatToken);
+}
+/* Esri World Imagery XYZ tile mozaiği (z/y/x). Hata/iptal/çok-tile → psFetchExport fallback. */
+function psFetchTiles(gb, token){
+  let g; try{ g=psTileGeom(gb); }catch(e){ return psFetchExport(gb, token); }
+  const {z,pxMin,pyMin,pxMax,pyMax}=g;
+  const W=Math.round(pxMax-pxMin), H=Math.round(pyMax-pyMin);
+  if(!(W>0&&H>0) || W>4096 || H>4096) return psFetchExport(gb, token);
+  const tx0=Math.floor(pxMin/256), tx1=Math.floor((pxMax-1)/256);
+  const ty0=Math.floor(pyMin/256), ty1=Math.floor((pyMax-1)/256);
+  if((tx1-tx0+1)*(ty1-ty0+1)>64) return psFetchExport(gb, token);   // çok tile → export
+  let cv,ctx2; try{ cv=document.createElement('canvas'); cv.width=W; cv.height=H; ctx2=cv.getContext('2d'); }
+  catch(e){ return psFetchExport(gb, token); }
+  let pending=0, failed=false;
+  const done=()=>{ if(token!==psSatToken || !parcelSat) return;
+    if(failed){ psFetchExport(gb, token); return; }
+    try{ cv.toBlob(function(b){ if(token!==psSatToken||!parcelSat||!b) return;
+      if(parcelSat._u) URL.revokeObjectURL(parcelSat._u);
+      parcelSat._u=URL.createObjectURL(b); parcelSat.url=parcelSat._u; render(); },'image/png');
+    }catch(e){ psFetchExport(gb, token); } };
+  for(let tx=tx0;tx<=tx1;tx++) for(let ty=ty0;ty<=ty1;ty++){
+    pending++;
+    const img=new Image(); img.crossOrigin='anonymous';
+    img.onload=(function(tx,ty){ return function(){ if(token!==psSatToken) return;
+      try{ ctx2.drawImage(img, Math.round(tx*256-pxMin), Math.round(ty*256-pyMin)); }catch(e){ failed=true; }
+      if(--pending===0) done(); }; })(tx,ty);
+    img.onerror=function(){ failed=true; if(--pending===0) done(); };
+    img.src='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+ty+'/'+tx;
+  }
+  if(pending===0) psFetchExport(gb, token);
+}
+/* fallback: tek Esri export PNG (~0,30 m/px, 700 px cap) — tile başarısızsa. */
+function psFetchExport(gb, token){
+  if(token!==psSatToken || !parcelSat || !psProj) return;
+  const w=parcelSat.w, h=parcelSat.h;
+  let sw=Math.round(w/0.30), sh=Math.round(h/0.30);
+  const mxd=Math.max(sw,sh); if(mxd>700){ const k=700/mxd; sw=Math.round(sw*k); sh=Math.round(sh*k); }
+  sw=Math.max(64,sw); sh=Math.max(64,sh);
+  const url='https://server.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export'
+    + '?bbox=' + gb.minLng + ',' + gb.minLat + ',' + gb.maxLng + ',' + gb.maxLat
+    + '&bboxSR=4326&imageSR=4326&size=' + sw + ',' + sh + '&format=png&f=image';
+  const img=new Image(); img.crossOrigin='anonymous';
+  img.onload=function(){ if(token!==psSatToken || !parcelSat) return;
+    try{ const cv=document.createElement('canvas'); cv.width=img.naturalWidth; cv.height=img.naturalHeight;
       cv.getContext('2d').drawImage(img,0,0);
-      cv.toBlob(function(b){
-        if(token!==psSatToken || !parcelSat || !b) return;
-        parcelSat._u=URL.createObjectURL(b); parcelSat.url=parcelSat._u; render();
-      },'image/png');
-    }catch(e){ /* taint vs. — atla */ }
+      cv.toBlob(function(b){ if(token!==psSatToken || !parcelSat || !b) return;
+        if(parcelSat._u) URL.revokeObjectURL(parcelSat._u);
+        parcelSat._u=URL.createObjectURL(b); parcelSat.url=parcelSat._u; render(); },'image/png');
+    }catch(e){}
   };
-  img.src=reqUrl;
+  img.src=url;
 }
 
 /* ---- imar çekme (yapı yaklaşma sınırı) ---- */
