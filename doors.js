@@ -24,6 +24,16 @@ function pickDoorEdge(list){
   best.forEach(e=>{ const d=Math.abs(dpos(e)-cmid); if(d<bd){bd=d;pick=e;} });
   return pick;
 }
+/* kapı boşluğu (net genişlik, m) — yönetmelik: bina ana giriş 1.5 / daire girişi 1.0 /
+   oda ve iç mekan 0.9 / ıslak hacim (banyo·wc) + balkon 0.8. Kapı orta-noktası her tipte e+0.45. */
+function doorWidthM(dr){
+  if(!dr) return 0.9;
+  if(dr.kind==='unit') return 1.0;                                     // daire (bağımsız bölüm) girişi
+  if(dr.kind==='ext')  return /^gh/.test(dr.key||'') ? 1.5 : 1.0;      // gh = bina ana girişi (150), gd = dükkân (100)
+  const t=dr.reg&&dr.reg.type;
+  if(t==='banyo'||t==='wc'||t==='balkon') return 0.8;                  // ıslak hacim + balkon
+  return 0.9;                                                          // oda ve iç mekan kapısı
+}
 function computeDoors(){
   const p=plan; if(!p) return [];
   const id=(r,c)=>(r<0||c<0||r>=p.rows||c>=p.cols)?-9:(p.inside[r*p.cols+c]?p.cm[r*p.cols+c]:-9);

@@ -329,10 +329,10 @@ function exportWallBoundaryPNG(){
       ctx.save(); ctx.scale(2,2); ctx.drawImage(img,0,0); ctx.restore();
       const kx=cv.width/f.W, ky=cv.height/f.H, ACR=0.4;   // kapı gap enine (m): iç duvardan (0.22) geniş, hücreden (0.5) dar
       ctx.globalCompositeOperation='destination-out'; ctx.fillStyle='#000';
-      doors.forEach(d=>{ const e=d.e, u=d.kind==='unit';
+      doors.forEach(d=>{ const e=d.e, Wd=doorWidthM(d), c0=0.45-Wd/2, c1=0.45+Wd/2;   // boşluk = boyamayla aynı (bina 1.5/daire 1.0/oda 0.9/ıslak 0.8)
         let mx0,my0,mx1,my1;
-        if(e.h){ mx0=e.x+(u?-0.05:0.05); mx1=e.x+(u?0.95:0.85); my0=e.y-ACR/2; my1=e.y+ACR/2; }
-        else   { my0=e.y+(u?-0.05:0.05); my1=e.y+(u?0.95:0.85); mx0=e.x-ACR/2; mx1=e.x+ACR/2; }
+        if(e.h){ mx0=e.x+c0; mx1=e.x+c1; my0=e.y-ACR/2; my1=e.y+ACR/2; }
+        else   { my0=e.y+c0; my1=e.y+c1; mx0=e.x-ACR/2; mx1=e.x+ACR/2; }
         const a=f.px(mx0,my0), b=f.px(mx1,my1);
         ctx.fillRect(Math.min(a[0],b[0])*kx, Math.min(a[1],b[1])*ky, Math.abs(b[0]-a[0])*kx, Math.abs(b[1]-a[1])*ky); });
       ctx.globalCompositeOperation='source-over';

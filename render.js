@@ -482,17 +482,14 @@ function renderPlan(){
     const e=dr.e, hov=mode==='door' && hoverDoor && hoverDoor.key===dr.key;
     if(!clean){ const tgt = dr.kind==='unit' ? ((p.unitObjs[dr.k]&&p.unitObjs[dr.k].antre)?p.unitObjs[dr.k].antre.id:null)
                           : dr.kind==='inner' ? (dr.reg?dr.reg.id:null) : null;
-      drawSwing(e, dr.kind==='unit'?0.9:0.8, tgt); }
+      drawSwing(e, Math.max(0.6,doorWidthM(dr)-0.1), tgt); }
+    const Wd=doorWidthM(dr);   // kapı boşluğu (m): bina 1.5 / daire 1.0 / oda 0.9 / ıslak+balkon 0.8 — orta-nokta e+0.45
+    const gw=clean?Math.max(3,pxPerM*0.3):(dr.kind==='unit'?Math.max(2,pxPerM*0.2):Math.max(1.5,pxPerM*0.12)); // boşluk çizgisi (kalın iç duvardan GENİŞ → açıklık kapanmaz)
+    if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.45-Wd/2),y1:W2Sy(e.y),x2:W2Sx(e.x+0.45+Wd/2),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':gw}));
+    else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.45-Wd/2),x2:W2Sx(e.x),y2:W2Sy(e.y+0.45+Wd/2),stroke:'#faf8f3','stroke-width':gw}));
     if(dr.kind==='unit'){
-      const w=clean?Math.max(3,pxPerM*0.3):Math.max(2,pxPerM*0.2);   // clean: kapı boşluğu kalın iç duvardan (0.22) GENİŞ olmalı ki açıklık kapanmasın
-
-      let bx,by;
-      if(e.h){ g.appendChild(el('line',{x1:W2Sx(e.x-0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.95),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
-        bx=W2Sx(e.x+0.45); by=W2Sy(e.y); }
-      else { g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y-0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.95),stroke:'#faf8f3','stroke-width':w}));
-        bx=W2Sx(e.x); by=W2Sy(e.y+0.45); }
-      if(!clean){ /* D1–D6 rozeti + tutamaç: AI temiz modda yok → kapı boşluğu (yukarıdaki #faf8f3 çizgi) açıkta kalır */
-        const fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
+      if(!clean){ /* D1–D6 rozeti + tutamaç: AI temiz modda yok → kapı boşluğu açıkta kalır */
+        const bx=e.h?W2Sx(e.x+0.45):W2Sx(e.x), by=e.h?W2Sy(e.y):W2Sy(e.y+0.45), fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
         g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05,fill:'#b35a2e',stroke:'#fff','stroke-width':1.5}));
         const tb=el('text',{x:bx,y:by+fs2*0.35,'text-anchor':'middle','font-size':fs2,fill:'#fff','font-weight':'700'});
         tb.textContent='D'+(dr.k+1); g.appendChild(tb);
@@ -500,15 +497,10 @@ function renderPlan(){
           g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05+3,fill:'none',stroke:'#b35a2e',
             'stroke-width':hov?2.5:1.5,'stroke-dasharray':hov?'none':'3 3'}));
       }
-    } else {
-      const w=clean?Math.max(3,pxPerM*0.3):Math.max(1.5,pxPerM*0.12);  // clean: iç kapı boşluğu da kalın duvardan geniş (gap kapanmasın)
-      if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.85),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
-      else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.85),stroke:'#faf8f3','stroke-width':w}));
-      if(mode==='door' && !clean){ /* kare tutamaç: AI temiz modda yok */
-        const m2=doorMid(e);
-        g.appendChild(el('rect',{x:m2.x-4.5,y:m2.y-4.5,width:9,height:9,
-          fill:hov?'#b35a2e':'#fff',stroke:'#b35a2e','stroke-width':2}));
-      }
+    } else if(mode==='door' && !clean){ /* iç kapı: kare tutamaç (AI temiz modda yok) */
+      const m2=doorMid(e);
+      g.appendChild(el('rect',{x:m2.x-4.5,y:m2.y-4.5,width:9,height:9,
+        fill:hov?'#b35a2e':'#fff',stroke:'#b35a2e','stroke-width':2}));
     }
   });
   /* duvar uzunlukları: yakınlaşınca hepsi, imleç bir odanın üzerindeyken o oda her ölçekte.
