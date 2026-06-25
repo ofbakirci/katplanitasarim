@@ -733,8 +733,11 @@ function generate(keepCuts){
 
     /* --- daireleri bölgelere alanla orantılı dağıt --- */
     const weight=u=>14 + u.salon*22 + u.oda*11 + (u.ensuite?3.2:0) + (u.oda>=2?8:4) + 4.5 + (u.oda>=3?1.8:0);
-    const order=[...expanded].sort((a,b)=>weight(b)-weight(a));
-    const totW=order.reduce((s,u)=>s+weight(u),0);
+    /* hedef-alan (m²): daire programının ideal ayak izi. Dağıtım dengesini bölge alanına
+       eşlemek + ŞİŞME/TIKIŞ ölçmek için. Türk daire normlarından kalibre (1+1≈58, 2+1≈86,
+       3+1≈109). Detay: referans-kat-planlari/MOTOR-DAGITIM-KURALLARI.md */
+    const targetM2=u=>22 + 13*u.salon + 23*u.oda + (u.ensuite?5:0);
+    const order=[...expanded].sort((a,b)=>targetM2(b)-targetM2(a));
     const totZA=zones.reduce((s,z)=>s+z.area,0)||1;
     /* geometrik üst sınır: daire başına asgari cephe (salon 3 m + yatak 2,5 m yan yana
        sığmalı) — dar bölgeye daire tıkıştırılınca 1,5 m'lik "oda" şeritleri doğuyordu */
@@ -742,14 +745,54 @@ function generate(keepCuts){
     zones.forEach(z=>{ const horiz=z.side==='N'||z.side==='S';
       const s=new Set(); z.cells.forEach(i=>s.add(horiz? i%cols : (i/cols)|0));
       z.maxU=Math.max(1, Math.floor(s.size*M/MIN_FRONT)); });
+    /* FAZ 1 (#42): greedy + %125-fren yerine DENGELİ + TİP-GRUPLU bölütleme.
+       Boyut-sıralı daire listesini (order, azalan) bölgelere (azalan alan, satır 732)
+       BİTİŞİK segmentler hâlinde böler. Amaç fonksiyonu = daire başına ALAN SAPMASI²
+       (şişme/tıkış): bir bölgede daireler hedef-alanına yakın alsın. Bitişik+sıralı
+       olduğundan aynı tip daireler bir arada kalır (kat-42 → alt 2×2+1 / üst 3×1+1) ve
+       büyük daireler büyük bölgeye düşer. Alan-eşleme TEK BAŞINA yetmez: eşit olmayan
+       bölgelerde büyük yana fazladan daire yükleyip eski bug'ı tekrar üretirdi — sapma²
+       şişmeyi (az daire → dev oda) doğrudan cezalandırdığı için tip-grup kazanır.
+       maxU cephe sınırı korunur; kapasite dışı kuyruk rem'de kalır (aşağıda raporlanır).
+       Detay: referans-kat-planlari/MOTOR-DAGITIM-KURALLARI.md */
+    zones.forEach(z=>z.units=[]);
     let rem=[...order];
-    zones.forEach((z,zi)=>{ z.units=[];
-      const target = zi===zones.length-1 ? Infinity : totW*z.area/totZA;
-      let acc=0;
-      while(rem.length && z.units.length<z.maxU && (acc<target || !z.units.length)){
-        if(zi<zones.length-1 && z.units.length && acc+weight(rem[0])>target*1.25) break;
-        const u=rem.shift(); z.units.push(u); acc+=weight(u); }
-    });
+    if(zones.length && order.length){
+      const Z=zones.length, cap=zones.reduce((s,z)=>s+z.maxU,0);
+      const P=Math.min(order.length, cap);                 // kapasiteye sığan baş kısım (en büyük P daire)
+      const tgt=order.map(targetM2), pre=[0], preSq=[0];    // prefix toplam + kare-toplam
+      for(let i=0;i<P;i++){ pre.push(pre[i]+tgt[i]); preSq.push(preSq[i]+tgt[i]*tgt[i]); }
+      const tkey=order.map(u=>u.oda+'/'+u.salon+'/'+(u.ensuite?1:0)+'/'+(u.acik?1:0)); // daire tipi imzası
+      const INF=1e18, TYPEMIX=1e9;
+      /* bir bölgeye order[u0..u1) atamanın maliyeti:
+         BİRİNCİL — tip-homojenlik: segment KARIŞIK tip içeriyorsa TYPEMIX cezası. order
+           azalan sıralı olduğu için aynı tip bitişiktir; ceza, kesimi tip sınırına iter
+           (kat-42 → {2+1,2+1}|{1+1,1+1,1+1}). Aynı tipi birden çok bölgeye bölmek serbest
+           (segment yine homojen). Bölge sayısı tip-grup sayısından fazlaysa kaçınılmaz
+           karışım minimumda tutulur.
+         İKİNCİL — alan dengesi (eşitlik bozucu): her daire ~ A·tgt_i/segT alır →
+           maliyet = segSumSq·(A/segT−1)². Tip-homojen seçenekler arasında dengeliyi seçer;
+           bölgeler+daireler birlikte azalan sıralı olduğu için büyük tip-grubu büyük bölgeye
+           düşürür → küçük daire (1+1) DOĞRU boyda, fazlalık büyük daireye (rahat) gider.
+         Boş bölge = alan israfı → A² (büyük boş bölge cezalı; FIX-01'i tamamlar). */
+      const segCost=(u0,u1,A)=>{ if(u1===u0) return A*A;
+        const segT=pre[u1]-pre[u0], segSq=preSq[u1]-preSq[u0], r=A/segT-1;
+        let mix=0; for(let k=u0+1;k<u1;k++){ if(tkey[k]!==tkey[u0]){ mix=1; break; } }
+        return TYPEMIX*mix + segSq*r*r; };
+      // dp[zi][u] = ilk zi bölgeye ilk u daireyi yerleştirmenin min maliyeti
+      const dp=Array.from({length:Z+1},()=>new Float64Array(P+1).fill(INF));
+      const back=Array.from({length:Z+1},()=>new Int32Array(P+1).fill(-1));
+      dp[0][0]=0;
+      for(let zi=1;zi<=Z;zi++){ const mu=zones[zi-1].maxU, A=zones[zi-1].area;
+        for(let u=0;u<=P;u++){
+          for(let u0=Math.max(0,u-mu);u0<=u;u0++){ if(dp[zi-1][u0]>=INF) continue;
+            const c=dp[zi-1][u0]+segCost(u0,u,A);
+            if(c<dp[zi][u]){ dp[zi][u]=c; back[zi][u]=u0; } } } }
+      let u=P;                                              // dp[Z][P] geri izle
+      for(let zi=Z;zi>=1;zi--){ const u0=back[zi][u]>=0?back[zi][u]:u;
+        for(let k=u0;k<u;k++) zones[zi-1].units.push(order[k]); u=u0; }
+      rem=order.slice(P);                                   // kapasite dışı kuyruk
+    }
     /* sığmayanlar: önce kapasitesi kalan bölgelere; yine kalan yerleştirilemez (denetimde raporlanır) */
     if(rem.length) zones.forEach(z=>{ while(rem.length && z.units.length<z.maxU) z.units.push(rem.shift()); });
     /* FAZ 1 (FIX-01 Seçenek A): daire almamış ama bir daire SIĞABİLECEK büyük bölge
@@ -964,9 +1007,11 @@ function generate(keepCuts){
     ebReg.cells=keep;
     return true;
   }
-  function layoutUnit(cells, u, side, addStair){
-    const unit={spec:u, rooms:[], antre:null};
-    const layoutMode = unitLayout[unitObjs.length] || 'auto'; // bu dairenin iç düzen tercihi
+  function layoutUnit(cells, u, side, addStair, uIdx){
+    const unit={spec:u, rooms:[], antre:null, side};            // side: daire takası/relayout için saklanır
+    const ui = (uIdx==null? unitObjs.length : uIdx);            // daire indeksi (açık verilebilir → post-gen relayout)
+    unit.uIdx = ui;                                             // assignCols + relayout region.unit etiketi için
+    const layoutMode = unitLayout[ui] || 'auto'; // bu dairenin iç düzen tercihi
     const area=cells.length*M*M;
     const horiz = side==='N'||side==='S';
     const alOf = horiz ? (i=>i%cols) : (i=>(i/cols)|0);   // hole paralel eksen
@@ -1295,7 +1340,7 @@ function generate(keepCuts){
         midRegs=unit.rooms.slice(r0);
       }
       /* koridor + artık cepler antreye */
-      if(!unit.antre&&corrCells.length){ const an=newReg('ANTRE','antre',unitObjs.length); unit.rooms.push(an); unit.antre=an; }
+      if(!unit.antre&&corrCells.length){ const an=newReg('ANTRE','antre',ui); unit.rooms.push(an); unit.antre=an; }
       if(unit.antre) corrCells.forEach(i=>{ cm[i]=unit.antre.id; unit.antre.cells.push(i); });
     }
     /* iç hol → antreye kat (T sirkülasyon); kol HER odaya (mutfak dâhil) erişecek kadar uzun,
@@ -1335,7 +1380,7 @@ function generate(keepCuts){
       if(als.length){
         const midA=als[Math.floor(als.length/2)];
         const want=new Set([midA-1,midA,midA+1]);
-        const an=newReg('ANTRE','antre',unitObjs.length);
+        const an=newReg('ANTRE','antre',ui);
         cells.forEach(i=>{ if(want.has(alOf(i)) && dOf(i)<eRows+hRows+1 && cm[i]>=0){
           const old=regions[cm[i]];
           if(old&&old.type!=='koridor'&&old.type!=='merdiven'){ old.cells=old.cells.filter(j=>j!==i); cm[i]=an.id; an.cells.push(i); } } });
@@ -1358,7 +1403,7 @@ function generate(keepCuts){
     const colA=new Map(); cellArr.forEach(i=>{const a=alOf(i); colA.set(a,(colA.get(a)||0)+1);});
     const als=[...colA.keys()].sort((a,b)=>a-b);
     const total=cellArr.length, tw=roomDefs.reduce((s,r)=>s+r.w,0);
-    const regs=roomDefs.map(d=>{ const g=newReg(d.name,d.type,unitObjs.length); unit.rooms.push(g);
+    const regs=roomDefs.map(d=>{ const g=newReg(d.name,d.type, unit.uIdx!=null?unit.uIdx:unitObjs.length); unit.rooms.push(g);
       if(d.name==='ANTRE') unit.antre=g; return g; });
     let acc=0, k=0; const bounds=[];
     for(const a of als){ acc+=colA.get(a);
@@ -1623,6 +1668,22 @@ function generate(keepCuts){
   plan={regions, cm, inside, rows, cols, minX, minY, corridorR0, corridorR1,
         stairs, unitObjs, villa, kat, binaYuk, perFloor, nAsansor, asansorYeri,
         fireStairNeeded, teknikNeeded, zoneUI};
+  /* DAİRE TAKASI / post-gen relayout (#41): verilen ayak izini (cellsIn) yeni spec ile
+     YERİNDE yeniden döşer — tam generate YOK, diğer daireler bozulmaz. Eski odalar çağıran
+     tarafça boşaltılır; hücreler serbest bırakılır, layoutUnit odaları uIdx etiketiyle üretir,
+     tüketilmeyen artık hücreler en büyük odaya katılır (delik kalmaz). closure: layoutUnit/cm. */
+  plan.relayoutFootprint=(cellsIn, spec, side, uIdx)=>{
+    cellsIn.forEach(i=>{ cm[i]=-1; });
+    const nu=layoutUnit(cellsIn, spec, side, false, uIdx);
+    nu.side=side;
+    const leftover=cellsIn.filter(i=>cm[i]===-1);
+    if(leftover.length && nu.rooms.some(g=>g.cells.length)){
+      const big=nu.rooms.reduce((a,b)=>(b.cells.length>a.cells.length?b:a));
+      leftover.forEach(i=>{ cm[i]=big.id; big.cells.push(i); });
+    }
+    nu.rooms.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
+    return nu;
+  };
   hoverWall=null; hoverRoomId=null; hoverDoor=null;
   doorOverrides={}; extraDoors=[]; doorHidden={}; // bölge kimlikleri yeniden doğdu: elle kapı ayarları bayat
   editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (ulayout/corelock/bound tam durum taşır, hayatta kalır)

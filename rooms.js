@@ -338,6 +338,147 @@ function swapRooms(g1,g2){
   refreshAfterRoomEdit();
   return true;
 }
+/* DAİRE TAKASI (#41): bir dairenin hole bakan tarafını (N/S/E/W) ayak izi merkezini
+   koridor bölgesine göre kıyaslayarak bul — yatay/dikey koridorda da doğru, elle koridor
+   düzenlemesinden sonra da güncel (depolanan side'a güvenmez). */
+function unitSideOf(cells){
+  const p=plan; if(!cells.length) return 'S';
+  let sr=0,sc=0; cells.forEach(i=>{ sr+=(i/p.cols)|0; sc+=i%p.cols; });
+  const mr=sr/cells.length, mc=sc/cells.length;
+  const kor=p.regions.find(g=>g.type==='koridor'&&g.cells.length);
+  if(kor){ let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9,kr=0,kc=0;
+    kor.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols; kr+=r;kc+=c;
+      if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c; });
+    kr/=kor.cells.length; kc/=kor.cells.length;
+    if((c1-c0)<(r1-r0)) return mc<kc?'W':'E';   // dikey koridor → sol/sağ
+    return mr<kr?'N':'S';                        // yatay koridor → üst/alt
+  }
+  return mr < (p.corridorR0||0) ? 'N' : 'S';
+}
+/* DAİRE TAKASI: iki dairenin programını (spec) yer değiştirir; her birinin MEVCUT ayak
+   izini takaslanmış spec ile YERİNDE yeniden döşer (plan.relayoutFootprint — tam generate
+   YOK → diğer daireler/koridor bozulmaz). Geri al: tam durum anlık görüntüsü (ulayout gibi). */
+function swapUnits(kA,kB){
+  const p=plan; if(!p||kA===kB||!p.relayoutFootprint) return false;
+  const A=p.unitObjs[kA], B=p.unitObjs[kB];
+  if(!A||!B||!A.rooms.some(g=>g.cells.length)||!B.rooms.some(g=>g.cells.length)) return false;
+  const state=stateSnapshot();                          // DEĞİŞİKLİKTEN ÖNCE tam durum (geri al)
+  const cellsA=[],cellsB=[];
+  A.rooms.forEach(g=>g.cells.forEach(i=>cellsA.push(i)));
+  B.rooms.forEach(g=>g.cells.forEach(i=>cellsB.push(i)));
+  if(!cellsA.length||!cellsB.length) return false;
+  const specA={...A.spec}, specB={...B.spec};
+  const sideA=unitSideOf(cellsA), sideB=unitSideOf(cellsB);
+  A.rooms.forEach(g=>g.cells=[]); B.rooms.forEach(g=>g.cells=[]); // eski odaları boşalt (relayout cm'yi tazeler)
+  p.unitObjs[kA]=p.relayoutFootprint(cellsA, specB, sideA, kA);
+  p.unitObjs[kB]=p.relayoutFootprint(cellsB, specA, sideB, kB);
+  editHistory.push({type:'unitswap', state});
+  hoverWall=null; hoverRoomId=null;
+  p.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render();
+  return true;
+}
+/* ===== APARTMAN HOLÜ manuel düzenleme (#41) =====
+   Holün band-bilgisi (bbox + yön). Genişlet/daralt zaten daire-koridor duvarı mavi
+   tutamaçlarıyla yapılır; buradaki ekler UZATMA (uç boyunca) + çekirdeğe ulaştırmadır. */
+function corridorBandInfo(){
+  const p=plan; if(!p) return null;
+  const kor=p.regions.find(g=>g.type==='koridor'&&g.cells.length); if(!kor) return null;
+  let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+  kor.cells.forEach(i=>{const r=(i/p.cols)|0,c=i%p.cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;});
+  return {kor,r0,r1,c0,c1,horiz:(c1-c0)>=(r1-r0)};
+}
+function corridorCoresUnreached(){
+  const p=plan;
+  return p.regions.filter(g=>(g.type==='merdiven'||g.type==='asansor'||g.type==='yangin')&&g.cells.length)
+    .filter(g=>!g.cells.some(i=>{const r=(i/p.cols)|0,c=i%p.cols;
+      return [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].some(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols)return false;
+        const j=rr*p.cols+cc; return p.inside[j]&&p.cm[j]>=0&&p.regions[p.cm[j]].type==='koridor'; }); }));
+}
+/* holü bir ucundan band-yüksekliğince 1 hücre uzat (cell-transfer). Uçtaki sütun/satırda
+   koridora KOMŞU + boş/daire-odası hücreler koridora aktarılır; donör oda kopar/biter ya
+   da çekirdeğe (sabit) dayanırsa iptal (→ çekirdeğe bitişik kalınır). */
+function corridorExtendStep(dir){
+  const p=plan, b=corridorBandInfo(); if(!b) return false;
+  const FIXED=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik';
+  const isKor=j=>j>=0&&j<p.rows*p.cols&&p.inside[j]&&p.cm[j]===b.kor.id;
+  const cand=[];
+  if(b.horiz){ const c=dir>0?b.c1+1:b.c0-1; if(c<0||c>=p.cols) return false;
+    for(let r=b.r0;r<=b.r1;r++) cand.push(r*p.cols+c); }
+  else { const r=dir>0?b.r1+1:b.r0-1; if(r<0||r>=p.rows) return false;
+    for(let c=b.c0;c<=b.c1;c++) cand.push(r*p.cols+c); }
+  const strip=[];
+  for(const i of cand){ if(!p.inside[i]||p.cm[i]===b.kor.id) continue;
+    const cmi=p.cm[i]; if(cmi>=0&&FIXED(p.regions[cmi].type)) return false;   // çekirdeğe dayandı
+    const r=(i/p.cols)|0,c=i%p.cols;
+    const adj=[[r-1,c],[r+1,c],[r,c-1],[r,c+1]].some(([rr,cc])=>isKor(rr*p.cols+cc));
+    if(adj) strip.push(i);
+  }
+  if(!strip.length) return false;
+  const donors=new Map();
+  strip.forEach(i=>{ const cmi=p.cm[i]; if(cmi<0||cmi===b.kor.id) return;
+    if(!donors.has(cmi)) donors.set(cmi,[]); donors.get(cmi).push(i); });
+  for(const [rid,cells] of donors){ const g=p.regions[rid];
+    const rm=new Set(cells), rest=g.cells.filter(i=>!rm.has(i));
+    if(rest.length<4) return false;                                          // donör tükenecek → iptal
+    const set=new Set(rest), seen=new Set([rest[0]]), st=[rest[0]];
+    while(st.length){ const i=st.pop(),r=(i/p.cols)|0,c=i%p.cols;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols)return;
+        const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){seen.add(j);st.push(j);} }); }
+    if(seen.size!==rest.length) return false;                                // donör kopacak → iptal
+  }
+  donors.forEach((cells,rid)=>{ const g=p.regions[rid]; const rm=new Set(cells); g.cells=g.cells.filter(i=>!rm.has(i)); });
+  strip.forEach(i=>{ p.cm[i]=b.kor.id; b.kor.cells.push(i); });
+  return true;
+}
+/* tek hücreyi koridora al (donör koruması: donör boş/çekirdek değilse kalanı bağlantılı +
+   ≥4 hücre olmalı; antre/tek-salon korunur). Başarısızsa false. */
+function claimCellForCorridor(j, kor){
+  const p=plan, FIXED=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik';
+  if(!p.inside[j]||p.cm[j]===kor.id) return false;
+  const cmi=p.cm[j];
+  if(cmi<0){ p.cm[j]=kor.id; kor.cells.push(j); return true; }   // boş
+  const g=p.regions[cmi]; if(FIXED(g.type)||g.type==='koridor') return false;
+  if(!canAbsorb(g) && g.cells.length-1<4) return false;          // tek salon/antre + son hücreler
+  const rest=g.cells.filter(i=>i!==j);
+  if(rest.length<4) return false;
+  const set=new Set(rest), seen=new Set([rest[0]]), st=[rest[0]];
+  while(st.length){ const i=st.pop(),r=(i/p.cols)|0,c=i%p.cols;
+    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols)return;
+      const k2=rr*p.cols+cc; if(set.has(k2)&&!seen.has(k2)){seen.add(k2);st.push(k2);} }); }
+  if(seen.size!==rest.length) return false;                       // donör kopacak
+  g.cells=rest; p.cm[j]=kor.id; kor.cells.push(j); return true;
+}
+/* Holü çekirdeğe uzat: ulaşılamayan her çekirdeğe doğru, koridor SINIRINDAN en yakın
+   claim-edilebilir hücreyi adım adım koridora katarak bir KOL büyütür (hem band-ekseni
+   hem dik/L durumda çalışır; donör daireler bağlantılı/≥min kalır). Tam durum geri-al. */
+function extendCorridorToCores(){
+  const p=plan; const kor=p.regions.find(g=>g.type==='koridor'&&g.cells.length); if(!kor) return false;
+  const FIXED=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik';
+  const state=stateSnapshot(); let moved=false, guard=0;
+  while(guard++<1500){
+    const un=corridorCoresUnreached(); if(!un.length) break;
+    const core=un[0];
+    let cc0=1e9,cc1=-1e9,cr0=1e9,cr1=-1e9;
+    core.cells.forEach(i=>{const r=(i/p.cols)|0,c=i%p.cols; if(c<cc0)cc0=c;if(c>cc1)cc1=c;if(r<cr0)cr0=r;if(r>cr1)cr1=r;});
+    // koridor sınırındaki aday hücreler, çekirdeğe Manhattan uzaklığına göre artan
+    const seen=new Set(), cands=[];
+    kor.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols)return;
+        const k2=rr*p.cols+cc; if(seen.has(k2))return; seen.add(k2);
+        if(!p.inside[k2]||p.cm[k2]===kor.id) return;
+        const m=p.cm[k2]; if(m>=0&&FIXED(p.regions[m].type)) return;
+        const d=Math.max(0,cr0-rr,rr-cr1)+Math.max(0,cc0-cc,cc-cc1);
+        cands.push({k:k2,d}); }); });
+    cands.sort((a,b)=>a.d-b.d);
+    let did=false;
+    for(const cand of cands){ if(claimCellForCorridor(cand.k, kor)){ did=true; moved=true; break; } }
+    if(!did) break;                       // hiçbir frontier hücresi alınamadı → dur
+  }
+  if(moved){ editHistory.push({type:'unitswap', state});
+    p.regions.forEach(g=>calcRegionMetrics(g,p.cols,p.minX,p.minY));
+    hoverWall=null; p.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); }
+  return moved;
+}
 /* odayı ortadan böl: horiz=true yatay duvar (satırlar ayrılır), false dikey duvar.
    Yeni parça nötr "ODA" doğar; ince ayar duvar sürükleme, adlandırma Tipini değiştir. */
 function splitRoom(g, horiz){
@@ -458,7 +599,35 @@ svg.addEventListener('contextmenu',e=>{
   if(!plan.inside[j]||plan.cm[j]<0) return;
   const g=plan.regions[plan.cm[j]];
   const k=unitOfRoom(g.id);
-  if(k<0||g.type==='merdiven') return;                     // ortak alan/merdivene menü yok
+  if(g.type==='koridor'){                                  // APARTMAN HOLÜ menüsü (#41)
+    const wrapC=roomMenu.parentElement.getBoundingClientRect();
+    const placeC=()=>{ roomMenu.style.display='block';
+      roomMenu.style.left=Math.min(e.clientX-wrapC.left, wrapC.width-220)+'px';
+      roomMenu.style.top =Math.min(e.clientY-wrapC.top,  wrapC.height-roomMenu.offsetHeight-10)+'px'; };
+    const failC=msg=>{ roomMenu.innerHTML=`<div class="note">${escapeHtml(msg)}</div>`; placeC(); setTimeout(hideRoomMenu,1800); };
+    const doExt=(fn,errMsg)=>{ const st=stateSnapshot();
+      if(fn()){ editHistory.push({type:'unitswap',state:st});
+        plan.regions.forEach(gg=>calcRegionMetrics(gg,plan.cols,plan.minX,plan.minY));
+        hoverWall=null; plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); hideRoomMenu(); }
+      else failC(errMsg); };
+    const un=corridorCoresUnreached();
+    let html='<div class="mh">APARTMAN HOLÜ</div><hr>';
+    html += un.length
+      ? `<div class="mi" data-corecore="1">➜ Holü çekirdeğe uzat (${un.length} ulaşılamayan)</div>`
+      : `<div class="mi dis" title="Hol zaten çekirdeğe komşu">✓ Hol çekirdeğe ulaşıyor</div>`;
+    html += `<div class="mi" data-corext-r="1">▸ Holü sağa/aşağı uzat</div>`
+          + `<div class="mi" data-corext-l="1">◂ Holü sola/yukarı uzat</div>`
+          + `<div class="mh">Genişlet/daralt: holün kenar duvarındaki mavi tutamacı sürükleyin.</div>`;
+    roomMenu.innerHTML=html; placeC();
+    const cc=roomMenu.querySelector('.mi[data-corecore]');
+    if(cc) cc.onclick=()=>{ const st=stateSnapshot();
+      if(extendCorridorToCores()) hideRoomMenu();
+      else failC('Uzatılamadı (komşu daire korunuyor ya da çekirdek hol ekseninde değil).'); };
+    const cr=roomMenu.querySelector('.mi[data-corext-r]'); if(cr) cr.onclick=()=>doExt(()=>corridorExtendStep(1),'Sağa/aşağı uzatılamadı (sınır ya da komşu daire korunuyor).');
+    const cl=roomMenu.querySelector('.mi[data-corext-l]'); if(cl) cl.onclick=()=>doExt(()=>corridorExtendStep(-1),'Sola/yukarı uzatılamadı (sınır ya da komşu daire korunuyor).');
+    return;
+  }
+  if(k<0||g.type==='merdiven') return;                     // diğer ortak alan/merdivene menü yok
   const u=plan.unitObjs[k];
   const wrap=roomMenu.parentElement.getBoundingClientRect();
   const place=()=>{ roomMenu.style.display='block';
@@ -508,7 +677,8 @@ svg.addEventListener('contextmenu',e=>{
          + opt('flat','Odalar yan yana')
          + opt('rail','Yatak odaları derinlemesine');
       const nbr=u.rooms.length && plan.unitObjs.filter((o,j)=>j!==k && o.rooms.some(x=>x.cells.length)).length;
-      if(nbr) html+='<hr><div class="mi del" data-dissolve="1">✕ Daireyi sil (komşuya kat)</div>';
+      if(nbr) html+='<hr><div class="mi" data-swapunit-open="1">⇄ Daireyi başka daireyle takas et…</div>'
+                  +'<div class="mi del" data-dissolve="1">✕ Daireyi sil (komşuya kat)</div>';
     }
     roomMenu.innerHTML=html; place(); bindMain();
   };
@@ -534,6 +704,18 @@ svg.addEventListener('contextmenu',e=>{
       else fail('Takas yapılamadı (EB ikilisi / tek salon korunur).'); });
     const back=roomMenu.querySelector('.mi[data-back]'); if(back) back.onclick=buildMain;
   };
+  const showSwapUnit=()=>{
+    let html=`<div class="mh">D${k+1} · ${escapeHtml(unitTag(u.spec))} ↔ takas edilecek daire</div><hr>`;
+    plan.unitObjs.forEach((o,j)=>{ if(j===k||!o.rooms.some(x=>x.cells.length)) return;
+      const m2=o.rooms.reduce((s,g)=>s+g.cells.length,0)*M*M;
+      html+=`<div class="mi" data-swapunit="${j}">D${j+1} · ${escapeHtml(unitTag(o.spec))} (${fmt(m2)} m²)</div>`; });
+    html+=`<hr><div class="mi" data-back="1">‹ Geri</div>`;
+    roomMenu.innerHTML=html; place();
+    roomMenu.querySelectorAll('.mi[data-swapunit]').forEach(mi=>mi.onclick=()=>{
+      if(swapUnits(k, +mi.dataset.swapunit)) hideRoomMenu();
+      else fail('Daire takas edilemedi.'); });
+    const back=roomMenu.querySelector('.mi[data-back]'); if(back) back.onclick=buildMain;
+  };
   function bindMain(){
     roomMenu.querySelectorAll('.mi[data-add]').forEach(mi=>mi.onclick=()=>{
       const ok=addRoom(g, ROOM_ADD[+mi.dataset.add], j);
@@ -552,6 +734,7 @@ svg.addEventListener('contextmenu',e=>{
       else fail('Kırpılacak fazlalık yok (erişim ve bağlantı korunuyor).'); };
     const rt=roomMenu.querySelector('.mi[data-retype-open]'); if(rt) rt.onclick=showRetype;
     const sw=roomMenu.querySelector('.mi[data-swap-open]'); if(sw) sw.onclick=showSwap;
+    const swu=roomMenu.querySelector('.mi[data-swapunit-open]'); if(swu) swu.onclick=showSwapUnit;
     roomMenu.querySelectorAll('.mi[data-split]').forEach(mi=>mi.onclick=()=>{
       if(splitRoom(g, mi.dataset.split==='h')) hideRoomMenu();
       else fail('Oda bölünemedi (çok küçük ya da parçalar kopuk kalırdı).'); });

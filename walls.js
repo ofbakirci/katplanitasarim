@@ -119,6 +119,11 @@ function moveWallStep(run, dir){
   }
   if(donor.cells.length-strip.length<4){               // donör yok olacak: birleştir ya da dur
     if(!canAbsorb(donor)) return false;                // yutulamaz oda (tek salon/antre/çekirdek) → duvar durur
+    /* #41 GERİ-DÖNDÜRÜLEBİLİR SINIR: DAİRELER birbirini (veya holü) YUTMASIN — birleşme
+       yalnız AYNI daire içindeki oda-oda için. Farklı daire/hol sınırında SERT DUR →
+       sınır her zaman geri çekilebilir, daire "yapışıp" kaybolmaz. Daireyi bilinçli
+       silmek için: sağ tık → "Daireyi sil (komşuya kat)". */
+    if(unitOfRoom(donor.id) !== unitOfRoom(recv.id)) return false;
     donor.cells.slice().forEach(i=>{ p.cm[i]=recv.id; recv.cells.push(i); });
     donor.cells=[];
     const k=unitOfRoom(donor.id);

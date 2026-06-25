@@ -87,10 +87,17 @@ function collectChecks(){
         else add('bad', `${tag} — ${g.name} dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.`, g.id);
       }
     });
-    /* oran denetimi: artık alan salona akar; salon dairenin yarısını geçtiyse taban bu programa fazla geliyor */
+    /* TİP-BİLİNÇLİ boyut denetimi (FAZ 2 / #42): artık alan salona/odalara akar. Daire,
+       tipinin makul üst sınırını (Türk normu hedef × 1.4) aşıyorsa taban bu programa fazla
+       geliyor → daire sayısını artır / derinliği azalt. Motorun eskiden eksik olan "1+1
+       86 m² olmaz" kavramı: hedef 1+1≈58, 2+1≈86, 3+1≈109 m²; >1.4× = şişme. Salon-oranı
+       (>%50) yedek sinyal. Yalnız INFO — yerleşim değişmez. Detay: MOTOR-DAGITIM-KURALLARI.md */
     if(salon&&salon.cells.length){
       const totU=u.rooms.reduce((s,g)=>s+g.area,0);
-      if(salon.area>Math.max(45, totU*0.5))
+      const sp=u.spec, tM2=22+13*(sp.salon||0)+23*(sp.oda||0)+(sp.ensuite?5:0);
+      if(totU>tM2*1.4)
+        add('info', `${tag} — Daire ${fmt(totU)} m² (${unitTag(sp)} için makul ~${fmt(tM2)} m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.`, salon.id);
+      else if(salon.area>Math.max(45, totU*0.5))
         add('info', `${tag} — Salon ${fmt(salon.area)} m² (dairenin %${Math.round(100*salon.area/totU)}'i): artık taban alanı salona aktı. Daire sayısını artırın veya derinliği azaltın.`, salon.id);
     }
     /* biçim denetimi: oda, kapsayan dikdörtgeninin en az %55'ini doldurmalı */
@@ -150,6 +157,18 @@ function collectChecks(){
       if(doors.length) doors.forEach(d=>meas(d.e.x, d.e.y, p.unitObjs[d.k].antre?p.unitObjs[d.k].antre.id:null));
       else p.unitObjs.forEach(u=>{ if(u.antre) meas(u.antre.cx, u.antre.cy, u.antre.id); });
       add(worst<=REG.kacisMesafe?'ok':'bad',`En uzak daire kapısı → merdiven kaçış mesafesi ≈ ${fmt(worst)} m (max ${REG.kacisMesafe} m).`, worstReg);
+    }
+    /* HOL↔ÇEKİRDEK bağlantısı (#41): apartman holü asansör/merdiven/yangın merdivenine
+       KOMŞU olmalı (daireden çekirdeğe erişim + kaçış). Motor eskiden bunu denetlemiyordu;
+       kopuksa holü "Holü çekirdeğe uzat" ile uzatın (hol sağ tık). */
+    { const kor=p.regions.find(g=>g.type==='koridor'&&g.cells.length);
+      if(kor){
+        const reaches=g=>g.cells.some(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+          return [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].some(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols)return false;
+            const j=rr*p.cols+cc; return p.inside[j]&&p.cm[j]>=0&&p.regions[p.cm[j]].type==='koridor'; }); });
+        const unr=p.regions.filter(g=>(g.type==='merdiven'||g.type==='asansor'||g.type==='yangin')&&g.cells.length&&!reaches(g));
+        if(unr.length) add('bad', `Apartman holü ${unr.map(g=>g.name).join(', ')} ile komşu değil — daireden çekirdeğe erişim/kaçış kopuk. Holü sağ tık → "Holü çekirdeğe uzat".`, kor.id);
+      }
     }
     /* sığınak + teknik — bina genelinde bir kat SIĞINAK olarak planlandıysa karşılanmış sayılır */
     const toplam=p.perFloor*p.kat;

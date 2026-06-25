@@ -482,6 +482,12 @@ function undoEdit(){
     document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
     document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
     updateStructResetBtn();
+  } else if(e.type==='unitswap'){
+    if(e.state){ // daire takası: tam durum anlık görüntüsü ile birebir geri dön
+      const keep=editHistory;
+      try{ restoreState(e.state, {fit:false}); }catch(err){ console.error(err); }
+      editHistory=keep;
+    }
   } else if(e.type==='cut'){
     customCutsZ=e.cuts; generate(true);
   } else if(e.type==='ulayout'){
