@@ -561,23 +561,34 @@ function renderPlan(){
   p.regions.forEach(reg=>{
     if(!reg.cells.length||reg.area<2.0) return; // kırıntı bölgelere etiket yazma
     const lbl=(typeof aiPaintMode!=='undefined' && aiPaintMode)?regLabelEN(reg):reg.name;
-    let fs=Math.max(8,Math.min(13,pxPerM*0.62)), vertical=false;
-    if(clean){ /* AI boyama: etiket DAHA BÜYÜK/baskın — odaya sığsın, TAŞMASIN. Oda belirgin DİKEY + dikdörtgen ise etiket 90° döndürülür (uzun ekseni kullan → daha büyük yazı). fs = min(uzunluk-ekseni, kalınlık-ekseni, [yalnız L/U'da] iç-teğet daire). Alt-taban yok. */
-      const nCh=Math.max(3,(lbl||'').length), EM=0.62;
-      const cw=Math.max(1,Math.round(reg.bw/M)), ch=Math.max(1,Math.round(reg.bh/M));
-      const rf=Math.min(1, reg.cells.length/(cw*ch));   // 1 = tam dikdörtgen, <1 = L/U/girintili oda
-      const Rp=(reg.labelR!=null?reg.labelR:reg.minSide/2)*pxPerM*(0.55+0.17*rf);  // Manhattan→güvenli Öklid: dikdörtgen 0.72, L/U 0.55
-      const bwp=reg.bw*pxPerM, bhp=reg.bh*pxPerM;
-      const circ = rf>=0.92 ? Infinity : 2*Rp/Math.hypot(EM*nCh,1);   // daire YALNIZ düzensiz (L/U) odada bağlar; dikdörtgende bbox yeter (yoksa uzun odada döndürmenin faydası kalmaz)
-      const fitFor=(along,across)=>Math.min(26, 0.84*along/(EM*nCh), 0.74*across, circ);  // uzunluk-ekseni: metin boyu; kalınlık-ekseni: satır yüksekliği
-      const fsH=fitFor(bwp,bhp), fsV=fitFor(bhp,bwp);
-      if(reg.bh>reg.bw*1.15 && fsV>fsH*1.2){ fs=fsV; vertical=true; } else fs=fsH;   // belirgin dikey oda + dikey kayda değer büyükse döndür
-    }
     const lx=reg.labelX!=null?reg.labelX:reg.cx, ly=reg.labelY!=null?reg.labelY:reg.cy; // L/U odada komşuya taşmayan çapa
+    let fs=Math.max(8,Math.min(13,pxPerM*0.62)), vertical=false, lines=[lbl];
+    if(clean){ /* AI boyama: etiket DAHA BÜYÜK/baskın. Adaylar: 1-satır yatay, 1-satır dikey (90°), ve çok-kelimeli ise 2-satır yatay (her bölme). Her aday GERÇEK bölge ızgarasına göre 3×3 örnekle sığana kadar küçültülür (13cm pay → taşmaz/değmez); en büyük SKOR kazanır (1-satır+yatay hafif tercihli). */
+      const EM=0.62, CAP=30, LH=1.05;
+      const fw=(reg.freeW!=null?reg.freeW:reg.bw)*pxPerM, fh=(reg.freeH!=null?reg.freeH:reg.bh)*pxPerM;
+      const inReg=(wx,wy)=>{ const c=Math.floor((wx-p.minX)/M), r=Math.floor((wy-p.minY)/M); return r>=0&&c>=0&&r<p.rows&&c<p.cols&&!!p.inside[r*p.cols+c]&&p.cm[r*p.cols+c]===reg.id; };
+      const fitBlock=(lns,vert)=>{ const mc=Math.max(...lns.map(s=>s.length||1)), nL=lns.length, along=vert?fh:fw, across=vert?fw:fh;
+        let f=Math.min(CAP, 0.86*along/(EM*mc), 0.72*across/(nL*LH));   // serbest açıklıkla cömert tahmin
+        for(let it=0;it<12;it++){ const fm=f/pxPerM, hl=0.5*EM*fm*mc+0.13, ht=0.5*nL*LH*fm+0.13;   // blok yarı-uzunluk(en uzun satır) / yarı-kalınlık(satır sayısı) + 13cm pay
+          const hw=vert?ht:hl, hh=vert?hl:ht; let ok=true;
+          for(let a=-1;a<=1&&ok;a++)for(let b=-1;b<=1&&ok;b++) if(!inReg(lx+a*hw, ly+b*hh)) ok=false;
+          if(ok) break; f*=0.87; }
+        return f; };
+      const words=(lbl||'').split(' ');
+      const cands=[{lns:[lbl],vert:false},{lns:[lbl],vert:true}];        // 2-satır SADECE yatay (2-satır dikey = iki tuhaf paralel sütun → yok)
+      for(let i=1;i<words.length;i++) cands.push({lns:[words.slice(0,i).join(' '),words.slice(i).join(' ')],vert:false});
+      let best=null;
+      cands.forEach(c=>{ const f=fitBlock(c.lns,c.vert), score=f*(c.vert?0.9:1)*(c.lns.length>1?0.9:1);  // 1-satır & yatay hafif tercihli
+        if(!best||score>best.score) best={fs:f,lns:c.lns,vert:c.vert,score}; });
+      fs=best.fs; vertical=best.vert; lines=best.lns;
+    }
     const sx=W2Sx(lx), sy=W2Sy(ly);
-    const t=el('text',{x:sx,y:sy+(clean?fs*0.34:-fs*0.25),'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
+    const t=el('text',{x:sx,'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
+    if(clean && lines.length>1){ const n=lines.length, yb0=sy-(n-1)*1.05*fs/2+fs*0.34;   // çok-satır: blok çapada dikey ortalı
+      lines.forEach((ln,i)=>{ const ts=el('tspan',{x:sx,y:yb0+i*1.05*fs}); ts.textContent=ln; t.appendChild(ts); }); }
+    else { t.setAttribute('y', sy+(clean?fs*0.34:-fs*0.25)); t.textContent=lbl; }
     if(vertical) t.setAttribute('transform','rotate(-90 '+sx+' '+sy+')');   // dikey okuma: alttan yukarı (mimari konvansiyon)
-    t.textContent=lbl; g.appendChild(t);
+    g.appendChild(t);
     if(reg.area>=2 && !clean){ /* m² değeri AI temiz modda yok; oda EN etiketi kalır */
       const t2=el('text',{x:W2Sx(lx),y:W2Sy(ly)+fs*0.95,'text-anchor':'middle','font-size':fs*0.9,fill:'#6b5e4d'});
       t2.textContent=fmt(reg.area)+' m²'; g.appendChild(t2); }

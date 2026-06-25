@@ -37,7 +37,7 @@ function collect(root){
   const o={texts:[],lines:[],rects:[],circles:[],paths:[]};
   (function walk(e,inheritStroke){ if(!e) return;
     const stroke=(e.attrs&&e.attrs.stroke)||inheritStroke;   // <g stroke> alt çizgilere miras kalır
-    if(e.tag==='text') o.texts.push((e.textContent||'').trim());
+    if(e.tag==='text'||e.tag==='tspan') o.texts.push((e.textContent||'').trim()); // tspan: 2-satır sarılmış oda etiketi (clean modda uzun etiketler bölünür)
     else if(e.tag==='line') o.lines.push(Object.assign({_stroke:stroke}, e.attrs));
     else if(e.tag==='rect') o.rects.push(e.attrs);
     else if(e.tag==='circle') o.circles.push(e.attrs);
