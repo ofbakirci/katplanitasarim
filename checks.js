@@ -203,7 +203,14 @@ function collectChecks(){
       if(!hasSalon) add('bad','Evde hiç salon/oturma odası yok — konutta en az bir oturma alanı zorunlu (PAİY md.30). Bir katın programına salon ekleyin.');
     }
     if(!floorsOn()){
-      if(p.kat>1) add('ok','Çok katlı villa → iç merdiven yerleştirildi.');
+      if(p.kat>1){
+        /* BUG-FIX: önceden merdiven bölgesi GERÇEKTEN var mı bakmadan koşulsuz 'ok'
+           basılıyordu → yerleşmemiş merdiveni maskeliyordu. Artık gerçek denetim. */
+        const hasStair=p.regions.some(g=>g.type==='merdiven'&&g.cells&&g.cells.length);
+        add(hasStair?'ok':'bad', hasStair
+          ? 'Çok katlı villa → iç merdiven yerleştirildi.'
+          : 'Çok katlı villa ama iç merdiven yerleştirilemedi — taban geometrisini genişletin veya kat programını hafifletin.');
+      }
     } else {
       /* --- katları ayrı planla: katlar arası tutarlılık kuralları --- */
       const fl=[]; for(let k=0;k<p.kat;k++) fl.push(floorState(k));
