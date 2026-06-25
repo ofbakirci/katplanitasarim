@@ -13,9 +13,16 @@ const path = require('path');
 
 const HERE = __dirname;                                   // .../mesken
 const REPO = path.resolve(HERE, '..');                    // katplanitasarim
-const IMGDIR = path.join(HERE, '_build', 'img');
+// Demo render JPEG'leri (FINAL_v3_clean vb.) — yalnız bu prototip için. Proje düzenlemesinde
+// _build/img → _arsiv/deneyler/_build_eski/img'ye taşındı; ikisini de ara (varsa _build önce).
+const IMGDIR = [path.join(HERE, '_build', 'img'),
+                path.join(HERE, '_arsiv', 'deneyler', '_build_eski', 'img')]
+               .find(d => fs.existsSync(d)) || path.join(HERE, '_build', 'img');
 
-const TEMPLATE = path.join(HERE, 'prototip.template.html');
+// Template proje düzenlemesinde 02_PROTOTIP/'e taşındı; yeni konumu önce ara, eskisine düş.
+const TEMPLATE = [path.join(HERE, '02_PROTOTIP', 'prototip.template.html'),
+                  path.join(HERE, 'prototip.template.html')]
+                 .find(p => fs.existsSync(p)) || path.join(HERE, 'prototip.template.html');
 const OUT = path.join(HERE, 'MESKEN-prototip.html');
 
 // Gerçek motor: tek-dosya bundle (worktree'de değil, ana repoda).
