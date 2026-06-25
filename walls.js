@@ -9,6 +9,7 @@ function calcRegionMetrics(g, cols, minX, minY){
   g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; r0=Math.min(r0,r);r1=Math.max(r1,r);c0=Math.min(c0,c);c1=Math.max(c1,c);sr+=r;sc+=c;});
   g.bw=g.cells.length?(c1-c0+1)*M:0; g.bh=g.cells.length?(r1-r0+1)*M:0;
   g.minSide=g.cells.length?Math.min(g.bw,g.bh):0;
+  g.labelR=g.minSide/2;   // çapada iç-teğet daire yarıçapı (m): dikdörtgen varsayılan; n>2'de mesafe-dönüşümüyle gerçeğe çekilir (etiket boyu sığdırma)
   g.cx=g.cells.length?minX+(sc/g.cells.length+0.5)*M:0;
   g.cy=g.cells.length?minY+(sr/g.cells.length+0.5)*M:0;
   /* etiket çapası (label anchor): odanın İÇİNDE, kenarlardan en uzak hücre — "pole of
@@ -30,6 +31,7 @@ function calcRegionMetrics(g, cols, minX, minY){
     g.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols,d=dist[idx(r,c)], dot=(c-mc)*(c-mc)+(r-mr)*(r-mr);
       if(d>bd||(d===bd&&dot<bDot)){ bd=d; bDot=dot; bR=r; bC=c; } });
     g.labelX=minX+(bC+0.5)*M; g.labelY=minY+(bR+0.5)*M;
+    g.labelR=Math.max(M*0.5, bd*M);   // gerçek iç-teğet yarıçap (çapa hücresinin kenara mesafe-dönüşümü)
   }
 }
 function computeWallRuns(){

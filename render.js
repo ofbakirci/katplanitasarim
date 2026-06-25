@@ -102,7 +102,7 @@ function gardenLabelPos(){
 function drawWallEdgeMask(r){
   svg.appendChild(el('rect',{x:0,y:0,width:r.width,height:r.height,fill:'#ffffff'})); // saf beyaz zemin
   const p=plan; if(!p) return;
-  const EW=Math.max(3,pxPerM*0.18);            // iç bölme kalınlığı (tabanda ~3-4 px, ölçekle büyür)
+  const EW=Math.max(4,pxPerM*0.22);            // iç bölme = dış duvarla EŞİT kalınlık (AI ControlNet ince iç duvarı "açıklık" sanmasın); dış kabuk EW*1.6
   const g=el('g',{stroke:'#000','stroke-linecap':'square','shape-rendering':'crispEdges'}); svg.appendChild(g);
   const line=(x1,y1,x2,y2,w)=>g.appendChild(el('line',{x1,y1,x2,y2,'stroke-width':w}));
   const id=(rr,cc)=>(rr<0||cc<0||rr>=p.rows||cc>=p.cols||!p.inside[rr*p.cols+cc])?-9:p.cm[rr*p.cols+cc];
@@ -439,7 +439,8 @@ function renderPlan(){
       const outer=(b===-9);
       if(outer && !(onEdge(x1,y1)&&onEdge(x2,y2))) return;
       walls.appendChild(el('line',{x1:W2Sx(x1),y1:W2Sy(y1),x2:W2Sx(x2),y2:W2Sy(y2),
-        'stroke-width':outer?Math.max(2.5,pxPerM*0.22):Math.max(1,pxPerM*0.07)})); } };
+        // AI boyama (clean): iç duvar = dış duvarla EŞİT kalın (model ince duvarı açıklık sanıp mutfak/salonu açık-plan render etmesin). Teknik görünümde iç duvar İNCE kalır.
+        'stroke-width':outer?Math.max(2.5,pxPerM*0.22):(clean?Math.max(2.5,pxPerM*0.22):Math.max(1,pxPerM*0.07))})); } };
     draw(id(r,c+1), x+M,y, x+M,y+M);
     draw(id(r+1,c), x,y+M, x+M,y+M);
     if(c===0||id(r,c-1)===-9) draw(-9, x,y, x,y+M);
@@ -483,7 +484,8 @@ function renderPlan(){
                           : dr.kind==='inner' ? (dr.reg?dr.reg.id:null) : null;
       drawSwing(e, dr.kind==='unit'?0.9:0.8, tgt); }
     if(dr.kind==='unit'){
-      const w=Math.max(2,pxPerM*0.2);
+      const w=clean?Math.max(3,pxPerM*0.3):Math.max(2,pxPerM*0.2);   // clean: kapı boşluğu kalın iç duvardan (0.22) GENİŞ olmalı ki açıklık kapanmasın
+
       let bx,by;
       if(e.h){ g.appendChild(el('line',{x1:W2Sx(e.x-0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.95),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
         bx=W2Sx(e.x+0.45); by=W2Sy(e.y); }
@@ -499,7 +501,7 @@ function renderPlan(){
             'stroke-width':hov?2.5:1.5,'stroke-dasharray':hov?'none':'3 3'}));
       }
     } else {
-      const w=Math.max(1.5,pxPerM*0.12);
+      const w=clean?Math.max(3,pxPerM*0.3):Math.max(1.5,pxPerM*0.12);  // clean: iç kapı boşluğu da kalın duvardan geniş (gap kapanmasın)
       if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.05),y1:W2Sy(e.y),x2:W2Sx(e.x+0.85),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':w}));
       else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.05),x2:W2Sx(e.x),y2:W2Sy(e.y+0.85),stroke:'#faf8f3','stroke-width':w}));
       if(mode==='door' && !clean){ /* kare tutamaç: AI temiz modda yok */
@@ -558,10 +560,24 @@ function renderPlan(){
   /* etiketler */
   p.regions.forEach(reg=>{
     if(!reg.cells.length||reg.area<2.0) return; // kırıntı bölgelere etiket yazma
-    const fs=Math.max(8,Math.min(13,pxPerM*0.62));
+    const lbl=(typeof aiPaintMode!=='undefined' && aiPaintMode)?regLabelEN(reg):reg.name;
+    let fs=Math.max(8,Math.min(13,pxPerM*0.62)), vertical=false;
+    if(clean){ /* AI boyama: etiket DAHA BÜYÜK/baskın — odaya sığsın, TAŞMASIN. Oda belirgin DİKEY + dikdörtgen ise etiket 90° döndürülür (uzun ekseni kullan → daha büyük yazı). fs = min(uzunluk-ekseni, kalınlık-ekseni, [yalnız L/U'da] iç-teğet daire). Alt-taban yok. */
+      const nCh=Math.max(3,(lbl||'').length), EM=0.62;
+      const cw=Math.max(1,Math.round(reg.bw/M)), ch=Math.max(1,Math.round(reg.bh/M));
+      const rf=Math.min(1, reg.cells.length/(cw*ch));   // 1 = tam dikdörtgen, <1 = L/U/girintili oda
+      const Rp=(reg.labelR!=null?reg.labelR:reg.minSide/2)*pxPerM*(0.55+0.17*rf);  // Manhattan→güvenli Öklid: dikdörtgen 0.72, L/U 0.55
+      const bwp=reg.bw*pxPerM, bhp=reg.bh*pxPerM;
+      const circ = rf>=0.92 ? Infinity : 2*Rp/Math.hypot(EM*nCh,1);   // daire YALNIZ düzensiz (L/U) odada bağlar; dikdörtgende bbox yeter (yoksa uzun odada döndürmenin faydası kalmaz)
+      const fitFor=(along,across)=>Math.min(26, 0.84*along/(EM*nCh), 0.74*across, circ);  // uzunluk-ekseni: metin boyu; kalınlık-ekseni: satır yüksekliği
+      const fsH=fitFor(bwp,bhp), fsV=fitFor(bhp,bwp);
+      if(reg.bh>reg.bw*1.15 && fsV>fsH*1.2){ fs=fsV; vertical=true; } else fs=fsH;   // belirgin dikey oda + dikey kayda değer büyükse döndür
+    }
     const lx=reg.labelX!=null?reg.labelX:reg.cx, ly=reg.labelY!=null?reg.labelY:reg.cy; // L/U odada komşuya taşmayan çapa
-    const t=el('text',{x:W2Sx(lx),y:W2Sy(ly)-fs*0.25,'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
-    t.textContent=(typeof aiPaintMode!=='undefined' && aiPaintMode)?regLabelEN(reg):reg.name; g.appendChild(t);
+    const sx=W2Sx(lx), sy=W2Sy(ly);
+    const t=el('text',{x:sx,y:sy+(clean?fs*0.34:-fs*0.25),'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
+    if(vertical) t.setAttribute('transform','rotate(-90 '+sx+' '+sy+')');   // dikey okuma: alttan yukarı (mimari konvansiyon)
+    t.textContent=lbl; g.appendChild(t);
     if(reg.area>=2 && !clean){ /* m² değeri AI temiz modda yok; oda EN etiketi kalır */
       const t2=el('text',{x:W2Sx(lx),y:W2Sy(ly)+fs*0.95,'text-anchor':'middle','font-size':fs*0.9,fill:'#6b5e4d'});
       t2.textContent=fmt(reg.area)+' m²'; g.appendChild(t2); }
