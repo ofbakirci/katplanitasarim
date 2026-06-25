@@ -487,8 +487,45 @@ function generate(keepCuts){
     return false;
   };
 
+  /* tek daire + KİLİTLİ çekirdek (katlar arası ortak): çekirdek yukarıda zaten claim'li.
+     Bant koridoru kullanma — karşı kanat sahipsiz kalıp ORTAK DEPO + dev hol doğuruyor
+     (kat-plani-40: 57 m² depo + 38,5 m² hol = kat'ın ~%48'i ölü). Bunun yerine çekirdeğin
+     iç-cepheye bakan kenarına 1,5 m lobi koy, kalan TÜM tabanı tek daireye ver
+     (trySingleUnit'in kilitli-çekirdek ikizi). Lobi taban dışına düşerse / daireye <20 m²
+     kalırsa false → eski bant yoluna güvenli geri-düşüş. */
+  const trySingleUnitLockedCore=()=>{
+    const coreTypes={merdiven:1,asansor:1,yangin:1,teknik:1};
+    let cr0=rows,cr1=-1,cc0=cols,cc1=-1,nc=0;
+    regions.forEach(g=>{ if(!coreTypes[g.type]) return;
+      g.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+        if(r<cr0)cr0=r; if(r>cr1)cr1=r; if(c<cc0)cc0=c; if(c>cc1)cc1=c; nc++; }); });
+    if(nc===0) return false;                              // çekirdek yok → bu yola girme
+    /* çekirdek hangi kenara yaslı? en küçük boşluk = yaslı kenar; lobi+daire karşı tarafta */
+    const gapN=cr0, gapS=rows-1-cr1, gapW=cc0, gapE=cols-1-cc1;
+    const mn=Math.min(gapN,gapS,gapW,gapE), LOB=3;        // 1,5 m lobi
+    let side,lr0,lc0,lh,lw;
+    if(mn===gapN){      side='S'; lr0=cr1+1;   lc0=cc0;     lh=LOB;        lw=cc1-cc0+1; }
+    else if(mn===gapS){ side='N'; lr0=cr0-LOB; lc0=cc0;     lh=LOB;        lw=cc1-cc0+1; }
+    else if(mn===gapW){ side='E'; lr0=cr0;     lc0=cc1+1;   lh=cr1-cr0+1;  lw=LOB; }
+    else {              side='W'; lr0=cr0;     lc0=cc0-LOB; lh=cr1-cr0+1;  lw=LOB; }
+    const lob=[];                                         // lobinin iç+boş hücreleri
+    for(let r=lr0;r<lr0+lh;r++)for(let c=lc0;c<lc0+lw;c++){
+      if(r<0||c<0||r>=rows||c>=cols) continue;
+      const i=r*cols+c; if(inside[i]&&cm[i]===-1) lob.push(i); }
+    if(lob.length<LOB) return false;                      // lobi büyük ölçüde taban dışı
+    let restN=0; for(let i=0;i<rows*cols;i++) if(inside[i]&&cm[i]===-1) restN++;
+    if((restN-lob.length)*M*M<20) return false;           // daireye anlamlı alan kalmalı
+    const hol=newReg('APARTMAN HOLÜ','koridor');           // ↑ tüm kontroller geçti → commit
+    lob.forEach(i=>{ cm[i]=hol.id; hol.cells.push(i); });
+    const rest=[]; for(let i=0;i<rows*cols;i++) if(inside[i]&&cm[i]===-1) rest.push(i);
+    unitObjs.push(layoutUnit(rest, expanded[0], side));   // kalan taban tek daireye
+    return true;
+  };
+
   if(!villa && perFloor===1 && !coreLocked && trySingleUnit()){
     customCutsZ=[]; // ayırıcı yok; ince ayar duvar sürükleme + oda ekle/sil ile
+  } else if(!villa && perFloor===1 && coreLocked && !wantV && trySingleUnitLockedCore()){
+    customCutsZ=[]; // kilitli çekirdek + tek daire: lobi + tüm taban tek daireye
   } else if(!villa){
     /* --- ortak hol: ana bant --- */
     let sumR=0,n=0; const colMin=new Array(cols).fill(1e9), colMax=new Array(cols).fill(-1e9);
