@@ -134,7 +134,10 @@ function collectChecks(){
     collectUsageChecks(add, p);
   } else if(!p.villa){
     add('ok',`Ortak hol genişliği 1,50 m olarak yerleştirildi (min ${REG.koridorMin.toLocaleString('tr-TR')} m).`);
-    add('ok',`Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ ${REG.merdivenMin.toLocaleString('tr-TR')} m (konut).`);
+    const hasMerd=p.regions.some(g=>g.type==='merdiven'&&g.cells.length);
+    add(hasMerd?'ok':'bad', hasMerd
+      ? `Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ ${REG.merdivenMin.toLocaleString('tr-TR')} m (konut).`
+      : `Ortak merdiven yok — apartmanda en az bir kaçış merdiveni zorunlu (BYKHY). Bir odaya/çekirdeğe sağ tık → "Yapı elemanı ekle → Merdiven".`);
     /* asansör */
     if(p.kat>=REG.ikiAsansorKat) add(p.nAsansor>=2?'ok':'bad',`Kat adedi ${p.kat} ≥ ${REG.ikiAsansorKat-1}+ → en az 2 asansör zorunlu. Planda: ${p.nAsansor}.`);
     else if(p.kat>=REG.asansorKat) add(p.nAsansor>=1?'ok':'bad',`Kat adedi ${p.kat} ≥ 4 → asansör zorunlu. Planda: ${p.nAsansor}.`);

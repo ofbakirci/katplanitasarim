@@ -30,6 +30,7 @@ function doorWidthM(dr){
   if(!dr) return 0.9;
   if(dr.kind==='unit') return 1.0;                                     // daire (bağımsız bölüm) girişi
   if(dr.kind==='ext')  return /^gh/.test(dr.key||'') ? 1.5 : 1.0;      // gh = bina ana girişi (150), gd = dükkân (100)
+  if(dr.kind==='extra') return dr.ext ? 1.0 : 0.9;                     // elle eklenen: dış giriş 1.0 / iç kapı 0.9
   const t=dr.reg&&dr.reg.type;
   if(t==='banyo'||t==='wc'||t==='balkon') return 0.8;                  // ıslak hacim + balkon
   return 0.9;                                                          // oda ve iç mekan kapısı
@@ -103,12 +104,14 @@ function computeDoors(){
       else if(g.type==='dukkan')  extDoor(g,'gd'+g.id);   // dükkân girişi (vitrin cephesi)
     });
   }
-  /* çift tıkla eklenen kapılar (kenar hâlâ iki farklı bölgeyi ayırıyorsa) */
+  /* çift tıkla eklenen kapılar — iç kapı: kenar iki farklı iç bölgeyi ayırıyorsa;
+     dış giriş (d.ext): kenar bir iç bölge ile dışarıyı (−9) ayırıyorsa (yalnız zemin katta eklenir) */
   extraDoors.forEach((d,i)=>{
     const r=Math.round((d.y-p.minY)/M), c=Math.round((d.x-p.minX)/M);
     const sides=d.h? [id(r-1,c),id(r,c)] : [id(r,c-1),id(r,c)];
-    const ok=sides[0]>=0&&sides[1]>=0&&sides[0]!==sides[1];
-    out.push({key:'x'+i, e:ok?{h:d.h,x:d.x,y:d.y}:null, edges:[], kind:'extra', i, status:ok?'ok':'stale'});
+    const ok=d.ext ? ((sides[0]>=0)!==(sides[1]>=0) && (sides[0]===-9||sides[1]===-9))  // tam bir taraf iç + öbürü dışarı
+                   : (sides[0]>=0&&sides[1]>=0&&sides[0]!==sides[1]);
+    out.push({key:'x'+i, e:ok?{h:d.h,x:d.x,y:d.y}:null, edges:[], kind:'extra', ext:!!d.ext, i, status:ok?'ok':'stale'});
   });
   return out;
 }
@@ -129,6 +132,26 @@ function edgeNear(wx,wy){
     if(id(r,c-1)>=0&&id(r,c)>=0&&id(r,c-1)!==id(r,c)){      /* sol kenar */
       const d=distSeg(wx,wy,x,y,x,y+M);
       if(d<bd){ bd=d; best={h:0,x,y}; }
+    }
+  }
+  return best;
+}
+/* imlece en yakın DIŞ duvar kenarı (zemin katta dış/giriş kapısı eklemek için):
+   bir tarafı iç bölge (>=0), öbürü dışarı (−9). Dönüş ext:true bayraklı. */
+function extEdgeNear(wx,wy){
+  const p=plan; if(!p) return null;
+  const id=(r,c)=>(r<0||c<0||r>=p.rows||c>=p.cols)?-9:(p.inside[r*p.cols+c]?p.cm[r*p.cols+c]:-9);
+  const r0=Math.floor((wy-p.minY)/M), c0=Math.floor((wx-p.minX)/M);
+  let best=null, bd=Math.max(0.4, 10/pxPerM);
+  for(let r=r0-1;r<=r0+2;r++)for(let c=c0-1;c<=c0+2;c++){
+    const x=p.minX+c*M, y=p.minY+r*M, me=id(r,c);
+    const up=id(r-1,c);
+    if(((up>=0)!==(me>=0))&&(up===-9||me===-9)){          /* üst (yatay) dış kenar */
+      const d=distSeg(wx,wy,x,y,x+M,y); if(d<bd){ bd=d; best={h:1,x,y,ext:true}; }
+    }
+    const lf=id(r,c-1);
+    if(((lf>=0)!==(me>=0))&&(lf===-9||me===-9)){          /* sol (dikey) dış kenar */
+      const d=distSeg(wx,wy,x,y,x,y+M); if(d<bd){ bd=d; best={h:0,x,y,ext:true}; }
     }
   }
   return best;
