@@ -399,14 +399,18 @@ function fpRegionGeom(g, fr){
   const bbox_px=[Math.min(bx0,bx1),Math.min(by0,by1),Math.max(bx0,bx1),Math.max(by0,by1)];
   const polygon_px=fpCellOutline(g.cells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M));
   const centroid_px=fr.px(mnX+(sc/n+0.5)*M, mnY+(sr/n+0.5)*M);
+  // label_anchor: etiketin GERÇEKTE yazıldığı nokta (pole of inaccessibility, calcRegionMetrics'ten).
+  // L/U/girintili odalarda centroid komşu odaya düşebilir; bu nokta hep kendi poligonu İÇİNDE.
+  const label_anchor_px=(typeof g.labelX==='number')?fr.px(g.labelX, g.labelY):centroid_px;
   const nb0=fr.norm([bbox_px[0],bbox_px[1]]), nb1=fr.norm([bbox_px[2],bbox_px[3]]);
   return {
     type:fpRoomEnum(g), type_tr:g.type, name:g.name,
     name_en:(typeof regLabelEN==='function')?regLabelEN(g):g.name,
-    bbox_px, polygon_px, centroid_px,
+    bbox_px, polygon_px, centroid_px, label_anchor_px,
     bbox_norm:[nb0[0],nb0[1],nb1[0],nb1[1]],
     polygon_norm:polygon_px.map(p=>fr.norm(p)),
     centroid_norm:fr.norm(centroid_px),
+    label_anchor_norm:fr.norm(label_anchor_px),
     area_m2:+(g.cells.length*M*M).toFixed(2)
   };
 }
@@ -482,8 +486,9 @@ function buildFloorplanOverlaySVG(map){
     (u.rooms||[]).forEach(o=>{
       if(o.polygon_px&&o.polygon_px.length>=3) s+='<polygon points="'+ptsAttr(o.polygon_px)+'" fill="'+col+'" fill-opacity="0.10" stroke="'+col+'" stroke-width="2"/>\n';
       const fs=Math.max(16,Math.min(40,(o.bbox_px[2]-o.bbox_px[0])*0.10));
-      s+='<text x="'+o.centroid_px[0]+'" y="'+o.centroid_px[1]+'" text-anchor="middle" font-size="'+fs.toFixed(0)+'" fill="#1f1f1f" font-weight="700">'+esc(o.name)+'</text>\n';
-      s+='<text x="'+o.centroid_px[0]+'" y="'+(o.centroid_px[1]+fs*1.05).toFixed(0)+'" text-anchor="middle" font-size="'+(fs*0.7).toFixed(0)+'" fill="'+col+'" font-weight="700">'+esc(o.id)+'</text>\n';
+      const la=o.label_anchor_px||o.centroid_px;     // etiket çapası (L/U odada komşuya taşmaz)
+      s+='<text x="'+la[0]+'" y="'+la[1]+'" text-anchor="middle" font-size="'+fs.toFixed(0)+'" fill="#1f1f1f" font-weight="700">'+esc(o.name)+'</text>\n';
+      s+='<text x="'+la[0]+'" y="'+(la[1]+fs*1.05).toFixed(0)+'" text-anchor="middle" font-size="'+(fs*0.7).toFixed(0)+'" fill="'+col+'" font-weight="700">'+esc(o.id)+'</text>\n';
     });
     s+='<text x="'+(u.bbox_px[0]+10)+'" y="'+(u.bbox_px[1]+Math.max(28,(u.bbox_px[3]-u.bbox_px[1])*0.06)).toFixed(0)+'" font-size="'+Math.max(26,(u.bbox_px[2]-u.bbox_px[0])*0.08).toFixed(0)+'" fill="'+col+'" font-weight="800">'+esc(u.id)+' · '+esc(u.label)+'</text>\n';
   });

@@ -559,10 +559,11 @@ function renderPlan(){
   p.regions.forEach(reg=>{
     if(!reg.cells.length||reg.area<2.0) return; // kırıntı bölgelere etiket yazma
     const fs=Math.max(8,Math.min(13,pxPerM*0.62));
-    const t=el('text',{x:W2Sx(reg.cx),y:W2Sy(reg.cy)-fs*0.25,'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
+    const lx=reg.labelX!=null?reg.labelX:reg.cx, ly=reg.labelY!=null?reg.labelY:reg.cy; // L/U odada komşuya taşmayan çapa
+    const t=el('text',{x:W2Sx(lx),y:W2Sy(ly)-fs*0.25,'text-anchor':'middle','font-size':fs,'font-weight':'700',fill:'#2b2620'});
     t.textContent=(typeof aiPaintMode!=='undefined' && aiPaintMode)?regLabelEN(reg):reg.name; g.appendChild(t);
     if(reg.area>=2 && !clean){ /* m² değeri AI temiz modda yok; oda EN etiketi kalır */
-      const t2=el('text',{x:W2Sx(reg.cx),y:W2Sy(reg.cy)+fs*0.95,'text-anchor':'middle','font-size':fs*0.9,fill:'#6b5e4d'});
+      const t2=el('text',{x:W2Sx(lx),y:W2Sy(ly)+fs*0.95,'text-anchor':'middle','font-size':fs*0.9,fill:'#6b5e4d'});
       t2.textContent=fmt(reg.area)+' m²'; g.appendChild(t2); }
   });
   /* vurgulanan bölge (seçim göstergesi) — AI temiz modda yok */

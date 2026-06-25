@@ -11,6 +11,26 @@ function calcRegionMetrics(g, cols, minX, minY){
   g.minSide=g.cells.length?Math.min(g.bw,g.bh):0;
   g.cx=g.cells.length?minX+(sc/g.cells.length+0.5)*M:0;
   g.cy=g.cells.length?minY+(sr/g.cells.length+0.5)*M:0;
+  /* etiket çapası (label anchor): odanın İÇİNDE, kenarlardan en uzak hücre — "pole of
+     inaccessibility"nin ızgara karşılığı (grid distance-transform). L/U/girintili odalarda
+     kütle merkezi (cx,cy) boşluğa/komşu odaya düşebilir; bu nokta her zaman kendi poligonunun
+     içinde ve en geniş yerde kalır. Etiket yazımı (teknik plan + AI-boyama + overlay) bunu kullanır. */
+  const n=g.cells.length;
+  g.labelX=g.cx; g.labelY=g.cy;
+  if(n>2){
+    const set=new Set(g.cells), BW=c1-c0+3, idx=(r,c)=>(r-r0+1)*BW+(c-c0+1);
+    const dist=new Int16Array(BW*(r1-r0+3)).fill(-1), q=[];
+    for(let r=r0-1;r<=r1+1;r++)for(let c=c0-1;c<=c1+1;c++) if(!set.has(r*cols+c)){ dist[idx(r,c)]=0; q.push(r,c); }
+    for(let h=0;h<q.length;h+=2){ const r=q[h],c=q[h+1],d=dist[idx(r,c)]+1, nb=[r-1,c,r+1,c,r,c-1,r,c+1];
+      for(let k=0;k<8;k+=2){ const nr=nb[k],nc=nb[k+1];
+        if(nr<r0-1||nr>r1+1||nc<c0-1||nc>c1+1) continue;
+        if(set.has(nr*cols+nc)&&dist[idx(nr,nc)]<0){ dist[idx(nr,nc)]=d; q.push(nr,nc); } } }
+    const mc=sc/n, mr=sr/n;                         // eşit-uzaklıkta kütle merkezine en yakını → kararlı/merkezi
+    let bd=-1, bDot=Infinity, bR=mr|0, bC=mc|0;
+    g.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols,d=dist[idx(r,c)], dot=(c-mc)*(c-mc)+(r-mr)*(r-mr);
+      if(d>bd||(d===bd&&dot<bDot)){ bd=d; bDot=dot; bR=r; bC=c; } });
+    g.labelX=minX+(bC+0.5)*M; g.labelY=minY+(bR+0.5)*M;
+  }
 }
 function computeWallRuns(){
   const p=plan; if(!p) return [];
