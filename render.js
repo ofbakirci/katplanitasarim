@@ -357,8 +357,13 @@ function render(){
     if(hoverP.snapPS) g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:9,fill:'none',stroke:'#2563a8','stroke-width':2})); // parsele yapıştı
   }
   /* gerçek kuzey oku — parsel döndürülünce gerçek kuzeyi gösterir (ekran-sabit:
-     ekranda sol-alt [üstte araç çubuğu var], dışa aktarımda sol-üst) */
-  if(parcelPts.length>=3){
+     ekranda sol-alt [üstte araç çubuğu var], dışa aktarımda sol-üst).
+     Temiz export'larda (AI-boyama / kenar-maskesi / duvar-sınırı) pusula GİRMEZ →
+     PNG'de yabancı işaret kalmaz; ekran + normal PNG/SVG export'unda görünür. */
+  if(parcelPts.length>=3
+     && !(typeof aiCleanMode!=='undefined'&&aiCleanMode)
+     && !(typeof edgeMaskMode!=='undefined'&&edgeMaskMode)
+     && !(typeof wallBoundaryMode!=='undefined'&&wallBoundaryMode)){
     const VH=(r&&r.height)|| +svg.getAttribute('height')||600;
     const cx=46, cy=exportView?48:(VH-54), R=15, th=parcelRot||0;
     const nx=Math.sin(th), ny=-Math.cos(th);        // kuzey yön vektörü (ekran)

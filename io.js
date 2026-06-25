@@ -62,18 +62,35 @@ function exportTableGroup(x0,maxH){
     g.insertBefore(el('rect',{x:x0+i*(W+gap),y:8,width:W,height:colHs[i]+6,fill:'#ffffff',stroke:'#c9c2b4','stroke-width':1,rx:6}),g.firstChild);
   return {g, w:(col+1)*(W+gap)-gap, h:Math.max(...colHs)+22};
 }
-function exportClone(){
+/* Export kadraj bbox + margin — exportClone() ile fpFraming() ARASINDA paylaşılır (senkron şart:
+   biri parselli biri parselsiz kalırsa PNG ↔ JSON pixel kayar).
+   • Temiz mod (AI-boyama / kenar-maskesi / duvar-sınırı, ya da forceClean): PARSELSİZ — sadece
+     bina duvar noktaları (site: blokların birleşik pts'i) + dar 0.15m nefes payı → yamuk
+     footprint'in en dış köşeleri kadraj kenarına değer, etrafta geniş boş bant kalmaz, duvar
+     tıraşlanmaz. Balkon çizilmez → bd=0.
+   • Diğer modlar (normal PNG/SVG, ölçü yazılı): bina+parsel + 2.5m + balkon taşma payı (eski). */
+function fpFrameBBox(forceClean){
   const site=(typeof siteOn==='function')&&siteOn();
-  /* ekran yakınlığından bağımsız, sabit ölçekte çiz. bbox: site → TÜM bloklar + parsel;
-     tek bina → aktif sınır + parsel */
-  let allPts=pts.concat(parcelPts);
+  const clean = forceClean
+             || (typeof aiCleanMode!=='undefined'&&aiCleanMode)
+             || (typeof edgeMaskMode!=='undefined'&&edgeMaskMode)
+             || (typeof wallBoundaryMode!=='undefined'&&wallBoundaryMode);
+  let framePts = clean ? pts.slice() : pts.concat(parcelPts);
   if(site && typeof siteBlocksData==='function'){
     let a=[]; siteBlocksData().forEach(bd=>{ a=a.concat(bd.pts); });
-    a=a.concat(parcelPts); if(a.length>=3) allPts=a;
+    if(!clean) a=a.concat(parcelPts);   // temiz modda parsel kadraja KATILMAZ (sadece bloklar)
+    if(a.length>=3) framePts=a;
   }
-  const bb=bboxOf(allPts);
-  const bd=(edgeMaskMode||wallBoundaryMode||aiCleanMode)?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0); // kenar maskesi VE AI-temiz: balkon çizilmez → taşma payı yok (kadraj tam dikdörtgen, iki PNG üst üste biner).
-  const marg=2.5+bd; // ölçü yazıları + balkon taşması (m)
+  const bb=bboxOf(framePts);
+  const bd=clean?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0);
+  const marg=clean?0.15:(2.5+bd);        // temiz: köşeler kadraja değsin; diğer: ölçü + balkon payı
+  return { bb, marg };
+}
+function exportClone(){
+  const site=(typeof siteOn==='function')&&siteOn();
+  /* ekran yakınlığından bağımsız, sabit ölçekte çiz. Kadraj (parselli/parselsiz + margin)
+     fpFrameBBox()'tan — fpFraming() ile birebir aynı (PNG ↔ JSON çakışsın). */
+  const {bb,marg}=fpFrameBBox();
   let w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
   const S=Math.max(site?14:22,Math.min(45,2200/w)); // ≥22 px/m (site daha büyük olabilir → ≥14); S pad ÖNCESİ genişlikten → çözünürlük değişmez
   // AI temiz/kenar (render girdisi): kadrajı render oranına letterbox'la (bina ortada, boş kenar)
@@ -353,13 +370,7 @@ function exportWallBoundaryPNG(){
    için ×2. İki PNG ve bu harita üst üste tam çakışır. */
 function fpFraming(){
   const site=(typeof siteOn==='function')&&siteOn();
-  let allPts=pts.concat(parcelPts);                       // exportClone ile birebir bbox
-  if(site && typeof siteBlocksData==='function'){
-    let a=[]; siteBlocksData().forEach(bd=>{ a=a.concat(bd.pts); });
-    a=a.concat(parcelPts); if(a.length>=3) allPts=a;
-  }
-  const bb=bboxOf(allPts);
-  const marg=2.5;                                          // bd=0 (AI temiz/kenar: balkon çizilmez)
+  const {bb,marg}=fpFrameBBox(true);                       // JSON/overlay DAİMA temiz PNG kadrajı: parselsiz + 0.15m (exportClone clean dalıyla birebir)
   let w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
   const S=Math.max(site?14:22,Math.min(45,2200/w));        // px/m — exportClone ile AYNI (pad ÖNCESİ)
   const SC=2;                                              // canvas ctx.scale(2,2) → PNG = SVG×2
