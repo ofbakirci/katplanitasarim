@@ -850,10 +850,21 @@ function generate(keepCuts){
         wantStair=false;
       }
     }
-    const free = stairReg? all.filter(i=>cm[i]===-1) : all;
-    const stairA = stairReg? stairReg.cells.length*M*M : 0;
-    const vu = layoutVillaSofa(free, unitSpecs[0], wantStair, stairA)
-            || layoutUnit(free, unitSpecs[0], 'N', wantStair);
+    let free = stairReg? all.filter(i=>cm[i]===-1) : all;
+    let stairA = stairReg? stairReg.cells.length*M*M : 0;
+    let vu = layoutVillaSofa(free, unitSpecs[0], wantStair, stairA);
+    if(!vu){
+      /* BUG-FIX (çok katlı villada iç merdiven): L/T tabanda layoutVillaSofa
+         doluluk<0.85 olunca bail edip layoutUnit fallback'ine düşüyor; orada merdiven
+         sıradan bir hacim gibi ele alınıp yoğun programda sessizce düşebiliyordu.
+         Çözüm: fallback'e düşmeden ÖNCE iç merdiveni birinci-sınıf rezerve et (taban
+         şekli ne olursa olsun) → layoutUnit kalan alanda merdivensiz çalışsın. */
+      if(wantStair && !stairReg){
+        stairReg=reserveVillaStair(free);
+        if(stairReg){ free=all.filter(i=>cm[i]===-1); stairA=stairReg.cells.length*M*M; wantStair=false; }
+      }
+      vu = layoutUnit(free, unitSpecs[0], 'N', wantStair);
+    }
     if(stairReg) vu.rooms.push(stairReg);
     unitObjs.push(vu);
   }
@@ -864,6 +875,40 @@ function generate(keepCuts){
      Antre ortada 1,5 m yatay omurga + güney cepheye giriş kolu (villa kapısı antrenin
      dışa bakan kenarına çizilir); odalar kuzey/güney cephe bantlarına asılır — her oda
      hem pencere hem sofadan kapı alır. Sığmayan oda yine dürüstçe raporlanır. */
+  /* BUG-FIX yardımcı: çok katlı villada iç merdivenin MUTLAKA yerleşmesini garanti eder.
+     layoutVillaSofa yalnız ~dikdörtgen tabanda merdiveni birinci-sınıf rezerve eder;
+     L/T tabanda bail edince layoutUnit fallback'i merdiveni sessizce düşürebiliyordu.
+     Bu yardımcı kalan boş hücrelerden ≈2,5 m geniş × 3..5 m derin bir merdiven kovası
+     keser (en büyük sığanı, taban köşesine yaslayarak) ve birinci-sınıf MERDİVEN bölgesi
+     olarak sahiplenir. Hiç sığmazsa null döner (runChecks dürüstçe 'merdiven yok' yazar). */
+  function reserveVillaStair(cells){
+    const freeSet=new Set(cells.filter(i=>cm[i]===-1));
+    if(!freeSet.size) return null;
+    let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+    freeSet.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+    const fits=(rr,cc,h,w)=>{ for(let r=rr;r<rr+h;r++)for(let c=cc;c<cc+w;c++){ if(!freeSet.has(r*cols+c)) return false; } return true; };
+    const corners=[[r0,c0],[r0,c1+1],[r1+1,c0],[r1+1,c1+1]];
+    const W=5;                                  // 2,5 m net merdiven kovası genişliği
+    for(const H of [10,9,8,7,6]){               // 5,0 → 3,0 m derinlik; en büyüğü tercih
+      for(const [dh,dw] of [[H,W],[W,H]]){      // dikey ve yatay yön
+        let best=null,bd=Infinity;
+        for(let r=r0;r+dh<=r1+1;r++)for(let c=c0;c+dw<=c1+1;c++){
+          if(!fits(r,c,dh,dw)) continue;
+          /* kovayı bir taban köşesine yasla → kalan alan bütün (oda bandı bölünmesin) */
+          const boxC=[[r,c],[r,c+dw],[r+dh,c],[r+dh,c+dw]];
+          const d=Math.min(...corners.flatMap(([cr,cc])=>boxC.map(([br,bc])=>Math.abs(br-cr)+Math.abs(bc-cc))));
+          if(d<bd){ bd=d; best=[r,c,dh,dw]; }
+        }
+        if(best){
+          const g=newReg('MERDİVEN','merdiven',0);
+          for(let r=best[0];r<best[0]+best[2];r++)for(let c=best[1];c<best[1]+best[3];c++){
+            const i=r*cols+c; cm[i]=g.id; g.cells.push(i); }
+          return g;
+        }
+      }
+    }
+    return null;
+  }
   function layoutVillaSofa(cells, u, addStair, claimedArea){
     let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
     cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});

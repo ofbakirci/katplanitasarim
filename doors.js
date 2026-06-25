@@ -49,12 +49,21 @@ function computeDoors(){
     if(!u.antre||!u.antre.cells.length) return;
     if(p.villa&&floorsOn()&&activeFloor>0) return; // üst katta sokak girişi yok; erişim iç merdivenden
     const isCor=v=>v>=0&&p.regions[v]&&p.regions[v].type==='koridor';
-    const edges=[];
+    /* BUG-FIX (villa giriş kapısı): önceden villa ön kapısı YALNIZ antrenin GÜNEY
+       komşusu dışarıdaysa (id(r+1,c)===-9) konuyordu; diğer 3 yön yalnız koridor test
+       ediyordu. Villada koridor olmadığından, antresi batı/kuzey/doğu cepheye düşen L/T
+       villada giriş kapısı HİÇ yerleşmiyordu. Artık antrenin dış cepheye (−9) değen
+       HERHANGİ bir kenarı aday olur — ancak GÜNEY (ön cephe) önceliklidir: güney dış
+       kenar varsa eski davranış aynen sürer (dikdörtgen villada kapı yana kaymaz),
+       yoksa antrenin dokunduğu öbür cephe (extAlt) kullanılır. */
+    const ext=v=>p.villa&&v===-9;
+    const edges=[], extAlt=[];      // edges: koridor + güney-dış (öncelikli) · extAlt: villa yan/kuzey dış cepheleri
     u.antre.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
-      if(isCor(id(r+1,c))||(p.villa&&id(r+1,c)===-9)) edges.push({x:p.minX+c*M, y:p.minY+(r+1)*M, h:1});
-      if(isCor(id(r-1,c))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:1});
-      if(isCor(id(r,c+1))) edges.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0});
-      if(isCor(id(r,c-1))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); });
+      if(isCor(id(r+1,c))||ext(id(r+1,c))) edges.push({x:p.minX+c*M, y:p.minY+(r+1)*M, h:1});           // güney: koridor ya da dış cephe
+      if(isCor(id(r-1,c))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:1}); else if(ext(id(r-1,c))) extAlt.push({x:p.minX+c*M, y:p.minY+r*M, h:1});
+      if(isCor(id(r,c+1))) edges.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0}); else if(ext(id(r,c+1))) extAlt.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0});
+      if(isCor(id(r,c-1))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); else if(ext(id(r,c-1))) extAlt.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); });
+    if(p.villa && !edges.length) edges.push(...extAlt);   // güney dış cephe yoksa antrenin dokunduğu öbür cepheye giriş
     const key='u'+k;
     if(!edges.length){ out.push({key, e:null, edges, kind:'unit', k, status:'none'}); return; }
     if(doorHidden[key]){ out.push({key, e:null, edges, kind:'unit', k, status:'hidden'}); return; }
