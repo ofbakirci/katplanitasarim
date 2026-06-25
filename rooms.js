@@ -627,7 +627,26 @@ svg.addEventListener('contextmenu',e=>{
     const cl=roomMenu.querySelector('.mi[data-corext-l]'); if(cl) cl.onclick=()=>doExt(()=>corridorExtendStep(-1),'Sola/yukarı uzatılamadı (sınır ya da komşu daire korunuyor).');
     return;
   }
-  if(k<0||g.type==='merdiven') return;                     // diğer ortak alan/merdivene menü yok
+  if(isStructReg(g)){                                       // çekirdek öğesi (merdiven/asansör/yangın/şaft): SİL + EKLE
+    const wrapS=roomMenu.parentElement.getBoundingClientRect();
+    const placeS=()=>{ roomMenu.style.display='block';
+      roomMenu.style.left=Math.min(e.clientX-wrapS.left, wrapS.width-210)+'px';
+      roomMenu.style.top =Math.min(e.clientY-wrapS.top,  wrapS.height-roomMenu.offsetHeight-10)+'px'; };
+    roomMenu.innerHTML=`<div class="mh">${escapeHtml(g.name)}</div><hr>`
+      + `<div class="mi del" data-sdel="1">✕ ${escapeHtml(g.name)} sil</div>`
+      + `<hr><div class="mh">Yapı elemanı ekle (tıkladığınız yere)</div>`
+      + `<div class="mi" data-saddt="merdiven">+ Merdiven</div>`
+      + `<div class="mi" data-saddt="asansor">+ Asansör</div>`
+      + `<div class="mi" data-saddt="yangin">+ Yangın merdiveni</div>`
+      + `<div class="mi" data-saddt="teknik">+ Teknik / şaft</div>`;
+    placeS();
+    const db=roomMenu.querySelector('.mi[data-sdel]');
+    if(db) db.onclick=()=>{ doDeleteStruct(g.id); hideRoomMenu(); };
+    roomMenu.querySelectorAll('.mi[data-saddt]').forEach(mi=>mi.onclick=()=>{
+      if(doAddStruct(mi.dataset.saddt, sx, sy)) hideRoomMenu(); });
+    return;
+  }
+  if(k<0) return;                                          // diğer ortak alana (hol dışı) menü yok
   const u=plan.unitObjs[k];
   const wrap=roomMenu.parentElement.getBoundingClientRect();
   const place=()=>{ roomMenu.style.display='block';
@@ -680,6 +699,7 @@ svg.addEventListener('contextmenu',e=>{
       if(nbr) html+='<hr><div class="mi" data-swapunit-open="1">⇄ Daireyi başka daireyle takas et…</div>'
                   +'<div class="mi del" data-dissolve="1">✕ Daireyi sil (komşuya kat)</div>';
     }
+    html+='<hr><div class="mi" data-saddmenu="1">⊞ Yapı elemanı ekle…</div>';   // merdiven/asansör/yangın/şaft (tıklanan yere)
     roomMenu.innerHTML=html; place(); bindMain();
   };
   const showRetype=()=>{
@@ -716,6 +736,19 @@ svg.addEventListener('contextmenu',e=>{
       else fail('Daire takas edilemedi.'); });
     const back=roomMenu.querySelector('.mi[data-back]'); if(back) back.onclick=buildMain;
   };
+  const showStructAdd=()=>{                                  // oda menüsünden drill-in: yapı elemanı ekle
+    let html='<div class="mh">Yapı elemanı ekle (tıkladığınız yere)</div><hr>'
+      + '<div class="mi" data-saddt="merdiven">+ Merdiven</div>'
+      + '<div class="mi" data-saddt="asansor">+ Asansör</div>'
+      + '<div class="mi" data-saddt="yangin">+ Yangın merdiveni</div>'
+      + '<div class="mi" data-saddt="teknik">+ Teknik / şaft</div>'
+      + '<hr><div class="mi" data-back="1">‹ Geri</div>';
+    roomMenu.innerHTML=html; place();
+    roomMenu.querySelectorAll('.mi[data-saddt]').forEach(mi=>mi.onclick=()=>{
+      if(doAddStruct(mi.dataset.saddt, sx, sy)) hideRoomMenu();
+      else fail('Eklenemedi (bina dışına düştü — bina içinde bir yere tıklayın).'); });
+    const back=roomMenu.querySelector('.mi[data-back]'); if(back) back.onclick=buildMain;
+  };
   function bindMain(){
     roomMenu.querySelectorAll('.mi[data-add]').forEach(mi=>mi.onclick=()=>{
       const ok=addRoom(g, ROOM_ADD[+mi.dataset.add], j);
@@ -735,6 +768,7 @@ svg.addEventListener('contextmenu',e=>{
     const rt=roomMenu.querySelector('.mi[data-retype-open]'); if(rt) rt.onclick=showRetype;
     const sw=roomMenu.querySelector('.mi[data-swap-open]'); if(sw) sw.onclick=showSwap;
     const swu=roomMenu.querySelector('.mi[data-swapunit-open]'); if(swu) swu.onclick=showSwapUnit;
+    const sad=roomMenu.querySelector('.mi[data-saddmenu]'); if(sad) sad.onclick=showStructAdd;
     roomMenu.querySelectorAll('.mi[data-split]').forEach(mi=>mi.onclick=()=>{
       if(splitRoom(g, mi.dataset.split==='h')) hideRoomMenu();
       else fail('Oda bölünemedi (çok küçük ya da parçalar kopuk kalırdı).'); });

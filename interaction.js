@@ -339,7 +339,8 @@ svg.addEventListener('dblclick',e=>{
     else doorHidden[h.key]=true;
     hoverDoor=null; runChecks(); render(); return;
   }
-  const eg=edgeNear(S2Wx(sx),S2Wy(sy));
+  let eg=edgeNear(S2Wx(sx),S2Wy(sy));
+  if(!eg && (!floorsOn()||activeFloor===zeminIdx())) eg=extEdgeNear(S2Wx(sx),S2Wy(sy));  // zemin katta dış cepheye giriş kapısı
   if(eg){
     editHistory.push({type:'door', prev:doorSnapshot()});
     extraDoors.push(eg); runChecks(); render();
@@ -487,6 +488,13 @@ function undoEdit(){
       const keep=editHistory;
       try{ restoreState(e.state, {fit:false}); }catch(err){ console.error(err); }
       editHistory=keep;
+    }
+  } else if(e.type==='structedit'){
+    if(e.state){ // yapı elemanı ekle/sil: tam durum anlık görüntüsü (bölge ekleme/silme dahil) birebir geri döner
+      const keep=editHistory;
+      try{ restoreState(e.state, {fit:false}); }catch(err){ console.error(err); }
+      editHistory=keep;
+      updateStructResetBtn(); // iskelet düğmesi lockedCore'a göre tazelensin
     }
   } else if(e.type==='cut'){
     customCutsZ=e.cuts; generate(true);
