@@ -100,7 +100,7 @@ function gardenLabelPos(){
    Kapı/açıklık çizilmez → duvarlar süreklidir (kapı boşluğu yok). Çekirdek (yangın/asansör/şaft/
    merdiven) sembolleri çizilmez → yalnız kutu sınırı. Dış kabuk pts ile en kalın. */
 function drawWallEdgeMask(r){
-  svg.appendChild(el('rect',{x:0,y:0,width:r.width,height:r.height,fill:'#ffffff'})); // saf beyaz zemin
+  if(!(typeof wallBoundaryMode!=='undefined' && wallBoundaryMode)) svg.appendChild(el('rect',{x:0,y:0,width:r.width,height:r.height,fill:'#ffffff'})); // saf beyaz zemin (wallBoundaryMode'da ŞEFFAF → zemin çizilmez)
   const p=plan; if(!p) return;
   const EW=Math.max(4,pxPerM*0.22);            // iç bölme = dış duvarla EŞİT kalınlık (AI ControlNet ince iç duvarı "açıklık" sanmasın); dış kabuk EW*1.6
   const g=el('g',{stroke:'#000','stroke-linecap':'square','shape-rendering':'crispEdges'}); svg.appendChild(g);
@@ -129,7 +129,7 @@ function drawWallEdgeMask(r){
 function render(){
   svg.innerHTML='';
   const r=exportView||svg.getBoundingClientRect();
-  if(typeof edgeMaskMode!=='undefined' && edgeMaskMode){ drawWallEdgeMask(r); return; } // ControlNet kenar maskesi: yalnız beyaz zemin + siyah duvarlar; başka HİÇBİR şey çizme
+  if(typeof edgeMaskMode!=='undefined' && (edgeMaskMode||(typeof wallBoundaryMode!=='undefined'&&wallBoundaryMode))){ drawWallEdgeMask(r); return; } // ControlNet kenar maskesi / şeffaf duvar sınırı: yalnız siyah duvarlar (wallBoundaryMode'da zemin yok); başka HİÇBİR şey çizme
   const clean = typeof aiCleanMode!=='undefined' && aiCleanMode; // AI temiz mod: gürültü katmanlarını (grid/parsel/balkon/düğüm/m²/ölçü/seçim) atla
   /* ızgara (AI temiz modda çizilmez) */
   if(!clean){

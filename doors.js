@@ -16,7 +16,13 @@ function pickDoorEdge(list){
       if(brk){ const run=arr.slice(s,i); if(!best||run.length>best.length) best=run; s=i; }
     }
   });
-  return best? best[Math.floor(best.length/2)] : null;
+  if(!best) return null;
+  /* kapıyı parçanın ORTASINA çapala: kapı orta-noktası (anchor e + 0.45) parça merkezine en yakın olan kenarı seç.
+     Eski "orta indeks" 2-hücrelik (1 m) parçada 2. kenarı seçip kapıyı +0.8 m yönünde ~0.35 m komşuya kaydırıyordu. */
+  const dpos=e=>e.h?e.x:e.y, cmid=dpos(best[0])+best.length*M/2-0.45;
+  let pick=best[0], bd=Infinity;
+  best.forEach(e=>{ const d=Math.abs(dpos(e)-cmid); if(d<bd){bd=d;pick=e;} });
+  return pick;
 }
 function computeDoors(){
   const p=plan; if(!p) return [];

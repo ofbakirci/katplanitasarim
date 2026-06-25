@@ -4,6 +4,7 @@ const EXPORT_FONT="'Helvetica Neue',Helvetica,Arial,sans-serif"; // sayfa CSS'i 
 let aiPaintMode=false; // AI boyama export modu: EN etiket, daire tablosu yok (balkon KORUNUR, m² KALIR)
 let edgeMaskMode=false; // ControlNet/Flux-Canny duvar-kenar export modu: beyaz zemin + saf siyah SÜREKLİ duvarlar; etiket/renk/m²/mobilya/grid/balkon/ölçü YOK
 let aiCleanMode=false;  // AI boyama TEMİZ modu: SADECE oda dolgusu + duvar + kapı boşluğu + EN oda etiketi. Düğüm/m²/ölçü/D-rozet/grid/parsel/balkon/seçim YOK. Kadraj kenar-maskesiyle birebir (bd=0 → iki PNG üst üste biner).
+let wallBoundaryMode=false; // Şeffaf duvar/oda/daire SINIRI + KAPI BOŞLUKLARI export modu (kat-plani-duvarsinirlari.png): edge-mask ile aynı kadraj AMA zemin şeffaf + computeDoors() kapı boşlukları canvas'ta gerçekten oyulur (boyamadaki kapılarla birebir).
 /* ⛔ RENDER HEDEF ORANI: dollhouse render (nano-banana-pro, 4K 16:9) = 5504×3072.
    AI Output kadrajı (PNG + harita) bu ORANA letterbox'lanır → render modeline GİREN plan PNG'si
    ile ÇIKAN dollhouse AYNI en-boy oranında olur; kalan tek fark üniform ölçektir, onu da
@@ -71,12 +72,12 @@ function exportClone(){
     a=a.concat(parcelPts); if(a.length>=3) allPts=a;
   }
   const bb=bboxOf(allPts);
-  const bd=(edgeMaskMode||aiCleanMode)?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0); // kenar maskesi VE AI-temiz: balkon çizilmez → taşma payı yok (kadraj tam dikdörtgen, iki PNG üst üste biner).
+  const bd=(edgeMaskMode||wallBoundaryMode||aiCleanMode)?0:balconies.reduce((m,b)=>Math.max(m,b.depth||0),0); // kenar maskesi VE AI-temiz: balkon çizilmez → taşma payı yok (kadraj tam dikdörtgen, iki PNG üst üste biner).
   const marg=2.5+bd; // ölçü yazıları + balkon taşması (m)
   let w=bb.maxX-bb.minX+marg*2, h=bb.maxY-bb.minY+marg*2;
   const S=Math.max(site?14:22,Math.min(45,2200/w)); // ≥22 px/m (site daha büyük olabilir → ≥14); S pad ÖNCESİ genişlikten → çözünürlük değişmez
   // AI temiz/kenar (render girdisi): kadrajı render oranına letterbox'la (bina ortada, boş kenar)
-  const lb=(edgeMaskMode||aiCleanMode)? fpLetterbox(w,h) : {dx:0,dy:0};
+  const lb=(edgeMaskMode||wallBoundaryMode||aiCleanMode)? fpLetterbox(w,h) : {dx:0,dy:0};
   w+=lb.dx*2; h+=lb.dy*2;
   const save={p:pxPerM,x:panX,y:panY,m:mode};
   exportView={width:Math.round(w*S),height:Math.round(h*S),left:0,top:0};
@@ -87,7 +88,7 @@ function exportClone(){
   const planW=exportView.width, planH=exportView.height;
   exportView=null; pxPerM=save.p; panX=save.x; panY=save.y; mode=save.m; render(); // ekranı eski haline döndür
   clone.setAttribute('font-family',EXPORT_FONT);
-  const tbl=(site||aiPaintMode||edgeMaskMode)? null : exportTableGroup(planW+12, planH);  // site / AI boyama / kenar maskesi: daire tablosu yok
+  const tbl=(site||aiPaintMode||edgeMaskMode||wallBoundaryMode)? null : exportTableGroup(planW+12, planH);  // site / AI boyama / kenar maskesi: daire tablosu yok
   let W=planW, H=planH;
   if(tbl){ clone.appendChild(tbl.g); W=planW+tbl.w+24; H=Math.max(H,tbl.h+8); }
   clone.setAttribute('width',W); clone.setAttribute('height',H);
@@ -310,6 +311,34 @@ function exportEdgeMaskPNG(){
       const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani-controlnet-edges.png'; a.click(); };
     img.src=data;
   } finally { edgeMaskMode=false; render(); } // ekrandaki planı normal geri çiz
+}
+/* Şeffaf duvar/oda/daire SINIRI + KAPI BOŞLUKLARI → kat-plani-duvarsinirlari.png.
+   Edge-mask ile AYNI kadraj/ölçek (üst üste birebir çakışır) AMA: zemin ŞEFFAF (beyaz dolgu yok)
+   ve computeDoors() kapı boşlukları canvas'ta destination-out ile GERÇEKTEN oyulur — yer/genişlik
+   AI-boyamadaki kapılarla aynı (unit 1.0m / iç 0.8m, merkez e+0.45). */
+function exportWallBoundaryPNG(){
+  wallBoundaryMode=true;
+  try {
+    const {clone,W,H}=exportClone();            // siyah duvarlar, zemin YOK (wallBoundaryMode → beyaz rect atlanır)
+    const f=fpFraming();                          // metre→piksel: export PNG'leriyle birebir
+    const doors=(typeof computeDoors==='function'? computeDoors():[]).filter(d=>d&&d.status==='ok'&&d.e);
+    const data='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(clone))));
+    const img=new Image();
+    img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
+      const ctx=cv.getContext('2d');             // beyaz dolgu YOK → şeffaf zemin
+      ctx.save(); ctx.scale(2,2); ctx.drawImage(img,0,0); ctx.restore();
+      const kx=cv.width/f.W, ky=cv.height/f.H, ACR=0.4;   // kapı gap enine (m): iç duvardan (0.22) geniş, hücreden (0.5) dar
+      ctx.globalCompositeOperation='destination-out'; ctx.fillStyle='#000';
+      doors.forEach(d=>{ const e=d.e, u=d.kind==='unit';
+        let mx0,my0,mx1,my1;
+        if(e.h){ mx0=e.x+(u?-0.05:0.05); mx1=e.x+(u?0.95:0.85); my0=e.y-ACR/2; my1=e.y+ACR/2; }
+        else   { my0=e.y+(u?-0.05:0.05); my1=e.y+(u?0.95:0.85); mx0=e.x-ACR/2; mx1=e.x+ACR/2; }
+        const a=f.px(mx0,my0), b=f.px(mx1,my1);
+        ctx.fillRect(Math.min(a[0],b[0])*kx, Math.min(a[1],b[1])*ky, Math.abs(b[0]-a[0])*kx, Math.abs(b[1]-a[1])*ky); });
+      ctx.globalCompositeOperation='source-over';
+      const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani-duvarsinirlari.png'; a.click(); };
+    img.src=data;
+  } finally { wallBoundaryMode=false; render(); }
 }
 /* ============================================================================
    ODA / DAİRE HARİTASI — makine-okunur export (AI Output'a EK; PNG'ler bozulmaz)
@@ -599,9 +628,10 @@ if(typeof window!=='undefined'){ window.buildFloorplanMap=buildFloorplanMap; win
    Boyama rengi/etiketi verir, kenar haritası geometriyi kilitler → stilli + %100
    layout-sadık; harita+overlay odaları makineye okunur kılar (gözle tahmin biter). */
 function exportAIOutput(){
-  exportAIPaintPNG();                        // 1) kat-plani-AI-boyama.png  (renkli, EN etiket)
-  setTimeout(exportEdgeMaskPNG, 500);        // 2) kat-plani-controlnet-edges.png
-  setTimeout(exportFloorplanMapFiles, 1000); // 3) floorplan-map.json + 4) floorplan-overlay.svg
+  exportAIPaintPNG();                          // 1) kat-plani-AI-boyama.png  (renkli, EN etiket)
+  setTimeout(exportEdgeMaskPNG, 500);          // 2) kat-plani-controlnet-edges.png
+  setTimeout(exportWallBoundaryPNG, 1000);     // 5) kat-plani-duvarsinirlari.png (ŞEFFAF duvar/oda/daire sınırı + KAPI BOŞLUKLARI)
+  setTimeout(exportFloorplanMapFiles, 1500);   // 3) floorplan-map.json + 4) floorplan-overlay.svg
 }
 document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
