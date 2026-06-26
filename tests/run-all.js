@@ -7,6 +7,7 @@ const strictTests = [
   'tests/antre-slim.js',
   'tests/etiket.js',
   'tests/room-edit.js',
+  'tests/room-edit-bugs.js',
   'tests/oda-hint.js',
   'tests/touch.js',
   'tests/villa-kat.js',

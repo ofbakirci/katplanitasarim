@@ -48,14 +48,35 @@ T('sol hint sol kenara oturur', ebL.c0===db.c0);
 /* 3) hintsiz eski yol */
 T('hintsiz addRoom', addRoom(salon,{name:'WC',type:'wc',h:2,w:3})===true);
 undoEdit();
-/* 4) EB. BANYO ekle + çift koruması + geri al */
+/* 4) EB. BANYO: id-bazlı bağ (ebHost) + AYNI odada çift koruması + FARKLI odaya çoklu ensuite + geri al (Bug B) */
 const bed=u.rooms.find(g=>g.type==='yatak'&&g.cells.length);
 T('EB. BANYO eklendi (hint ile)', addRoom(bed,{name:'EB. BANYO',type:'banyo',h:4,w:4,eb:true}, bed.cells[bed.cells.length-1])===true);
 T('host EB. YATAK oldu', bed.name==='EB. YATAK ODASI');
 T('spec.ensuite=true', u.spec.ensuite===true);
-const bed2=u.rooms.find(g=>g.type==='yatak'&&g.cells.length&&g.name!=='EB. YATAK ODASI');
-if(bed2) T('ikinci EB. BANYO engellendi', addRoom(bed2,{name:'EB. BANYO',type:'banyo',h:4,w:4,eb:true})===false);
-undoEdit();
+const eb1=u.rooms.find(g=>g.name==='EB. BANYO'&&g.cells.length);
+T('eb1 ebHost = host id', !!eb1 && eb1.ebHost===bed.id);
+/* AYNI yatak odasından 2. EB. BANYO engellenir (false döner, geçmişe yazmaz) */
+T('aynı odada 2. EB engellendi', addRoom(bed,{name:'EB. BANYO',type:'banyo',h:4,w:4,eb:true}, bed.cells[0])===false);
+/* FARKLI yatak odasına EB. BANYO serbest → çoklu ensuite (eski global limit kalktı) */
+const bed2=u.rooms.find(g=>g.type==='yatak'&&g.cells.length&&g!==bed&&g.name!=='EB. YATAK ODASI');
+T('ikinci yatak odası bulundu', !!bed2);
+let added2=false;
+if(bed2){
+  /* bed2 L-biçimli olabilir; iç bir 2×2 köşesini hint seç ki oyma geometrik olarak garanti olsun */
+  const set2=new Set(bed2.cells); let hint2=bed2.cells[0];
+  for(const i of bed2.cells){ const c=i%plan.cols;
+    if(c+1<plan.cols && set2.has(i+1)&&set2.has(i+plan.cols)&&set2.has(i+plan.cols+1)){ hint2=i; break; } }
+  added2 = addRoom(bed2,{name:'EB. BANYO',type:'banyo',h:4,w:4,eb:true}, hint2)===true;
+  T('farklı odaya 2. EB serbest (çoklu ensuite)', added2);
+  if(added2){
+    const ebs=u.rooms.filter(g=>g.name==='EB. BANYO'&&g.cells.length);
+    T('iki EB. BANYO bir arada', ebs.length===2);
+    T('eb2 ebHost = bed2 id', !!u.rooms.find(g=>g.name==='EB. BANYO'&&g.cells.length&&g.ebHost===bed2.id));
+    undoEdit(); // 2. EB geri al
+    T('2. EB geri alındı, ensuite sürüyor', u.spec.ensuite===true && u.rooms.filter(g=>g.name==='EB. BANYO'&&g.cells.length).length===1);
+  }
+}
+undoEdit(); // 1. EB geri al
 T('geri al: ensuite gitti', u.spec.ensuite===false && !u.rooms.some(g=>g.name==='EB. BANYO'&&g.cells.length));
 /* bütünlük */
 let ins=0; plan.inside.forEach(v=>ins+=v);

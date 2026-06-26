@@ -89,7 +89,9 @@ function computeDoors(){
     };
     u.rooms.forEach(reg=>{
       if(reg===u.antre||!reg.cells.length) return;
-      if(reg.name==='EB. BANYO'){ const eb=u.rooms.find(g2=>g2.name==='EB. YATAK ODASI'); if(eb) inner(reg,eb.id); return; }
+      if(reg.name==='EB. BANYO'){ // kapı KENDİ ebeveyn yatak odasına (ebHost) bağlanır; eski kayıtta ada düşülür
+        const eb=(reg.ebHost!=null&&u.rooms.find(g2=>g2.id===reg.ebHost&&g2.cells.length))||u.rooms.find(g2=>g2.name==='EB. YATAK ODASI'&&g2.cells.length);
+        if(eb) inner(reg,eb.id); return; }
       inner(reg,u.antre.id);
     });
   });

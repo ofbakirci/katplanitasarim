@@ -90,6 +90,7 @@ function slimAntres(){
    girdileri de sıfırlar — duvar düzenlemeleriyle aynı bilinçli karar. */
 const ROOM_ADD=[
   {name:'YATAK ODASI',  type:'yatak',  h:5, w:8},  // 2,5 × 4,0 m hedef
+  {name:'EB. YATAK ODASI', type:'yatak', h:6, w:8}, // 3,0 × 4,0 m ebeveyn yatak odası (sonra EB. BANYO oyulabilir)
   {name:'EB. BANYO',    type:'banyo',  h:4, w:4, eb:true}, // 2,0 × 2,0 m; yalnız yatak odasından oyulur
   {name:'OTURMA ODASI', type:'salon',  h:6, w:8},  // 3,0 × 4,0 m
   {name:'MUTFAK',       type:'mutfak', h:4, w:6},  // 2,0 × 3,0 m
@@ -101,6 +102,16 @@ function unitOfRoom(id){
   if(!plan) return -1;
   for(let k=0;k<plan.unitObjs.length;k++) if(plan.unitObjs[k].rooms.some(g=>g.id===id)) return k;
   return -1;
+}
+/* yeni yatak odası (ekle / tipe çevir) PROGRAM talebini büyütmeli mi? (Bug A)
+   Üretici istenen yatak odalarını tam yerleştiremediyse (açık var) kullanıcının elle
+   eklediği/çevirdiği oda bu AÇIĞI KAPATIR → talep artmaz, mevzuat uyarısı kaybolur.
+   Açık yoksa oda gerçekten yenidir → talep büyür (etiket 3+1 → 4+1). checks.js'teki
+   wantBeds ile aynı stüdyo (salon=0) düzeltmesini kullanır ki kıyas tutarlı olsun. */
+function bedSurplus(u){
+  const placed=u.rooms.filter(o=>o.type==='yatak'&&o.cells.length).length;
+  const want=(u.spec.salon===0 && !(plan.villa&&floorsOn()))? Math.max(0,u.spec.oda-1) : u.spec.oda;
+  return placed>=want;
 }
 function refreshAfterRoomEdit(){
   hoverWall=null; hoverRoomId=null;
@@ -146,6 +157,31 @@ function dissolveUnit(k){
 }
 /* runtime'da yeni bölge (generate dışında; dissolve kalıntısı için) */
 function newRegRuntime(name,type){ const g={id:plan.regions.length,name,type,unit:-1,cells:[]}; plan.regions.push(g); return g; }
+/* ===== ORTAK / atıl alan düzenleme (Bug C) =====
+   ORTAK DEPO (daire silme kalıntısı), sığınak/otopark artığı gibi daireye ait OLMAYAN
+   alanlar çekirdekle apartman holü arasına sıkışıp erişimi kapatabiliyor. Bu alanlar artık
+   sağ-tık menüsünden HOLÜNE KATILIR (çekirdek erişimi açılır) ya da komşulara dağıtılarak
+   SİLİNİR. Çekirdek/koridor bu yoldan yönetilmez (kendi menüleri var). */
+function isCommonOrphan(g){
+  return !!(g && g.cells.length && (g.unit==null||g.unit<0) && g.type!=='koridor' && !isStructReg(g));
+}
+/* hücreleri apartman holüne (koridor) kat — hol çekirdeğe ulaşır */
+function commonAreaToCorridor(g){
+  const p=plan; if(!isCommonOrphan(g)) return false;
+  const kor=p.regions.find(o=>o.type==='koridor'&&o.cells.length); if(!kor) return false;
+  g.cells.slice().forEach(i=>{ p.cm[i]=kor.id; kor.cells.push(i); });
+  g.cells=[];
+  calcRegionMetrics(kor,p.cols,p.minX,p.minY); calcRegionMetrics(g,p.cols,p.minX,p.minY);
+  return true;
+}
+/* hücreleri baskın komşu daire/oda/holе dağıtarak alanı sil (çekirdek hariç) */
+function dissolveCommonArea(g){
+  const p=plan; if(!isCommonOrphan(g)) return false;
+  const old=g.cells.slice(); g.cells=[];
+  assignCellsToNeighbor(old, g.id);   // structure.js: struct olmayan baskın komşuya devreder
+  calcRegionMetrics(g,p.cols,p.minX,p.minY);
+  return true;
+}
 /* odayı sil: hücreleri aynı dairedeki en uzun ortak duvarlı komşuya geçer */
 function removeRoom(g){
   const p=plan, k=unitOfRoom(g.id); if(k<0) return false;
@@ -173,7 +209,7 @@ function removeRoom(g){
   if(g.type==='yatak') s.oda=Math.max(0,s.oda-1);
   else if(g.type==='salon') s.salon=Math.max(0,s.salon-1);
   else if(g.type==='mutfak') s.acik=true;                  // mutfak salona katıldı → açık mutfak
-  else if(g.name==='EB. BANYO') s.ensuite=false;
+  else if(g.name==='EB. BANYO'){ if(!u.rooms.some(o=>o!==g&&o.name==='EB. BANYO'&&o.cells.length)) s.ensuite=false; } // başka EB. BANYO kalmadıysa söz düşer
   u.spec=s;
   calcRegionMetrics(tgt, p.cols, p.minX, p.minY);
   calcRegionMetrics(g, p.cols, p.minX, p.minY);
@@ -212,7 +248,7 @@ function addRoom(host, def, hint){
   const u=p.unitObjs[k];
   if(host.type==='merdiven') return false;
   if(def.eb&&host.type!=='yatak') return false;            // eb. banyo yalnız yatak odasından oyulur
-  if(def.eb&&u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length)) return false; // dairede tek EB. BANYO (denetim/kapı eşleşmesi ada bağlı)
+  if(def.eb&&u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length&&o.ebHost===host.id)) return false; // bir yatak odasında tek EB. BANYO (ebHost ile bağlı; FARKLI odalarda birden çok olabilir)
   /* tohum: antreye komşu host hücresi (kapı verilebilsin); eb. banyo köşeden oyulur.
      hint (sağ tık hücresi) verilirse adaylar içinden ona en yakını seçilir —
      kullanıcı odanın hangi kenara dayanacağını tık konumuyla belirler. */
@@ -270,6 +306,7 @@ function addRoom(host, def, hint){
   const oldCells=host.cells;
   host.cells=keep;
   if(!regConnected(host)){ host.cells=oldCells; return false; } // ev sahibi ikiye bölünemez
+  const growBed = def.type==='yatak' && bedSurplus(u); // ng eklenmeden ÖNCE: açık varsa talep büyümez (Bug A)
   const ng={id:p.regions.length, name:def.name, type:def.type, unit:k, cells:take};
   p.regions.push(ng);
   take.forEach(i=>p.cm[i]=ng.id);
@@ -277,10 +314,10 @@ function addRoom(host, def, hint){
   editHistory.push({type:'room', op:'add', unit:k, reg:ng, host:host.id,
     cells:take.slice(), spec:u.spec, hostName:host.name});
   const s={...u.spec};
-  if(def.type==='yatak') s.oda+=1;
+  if(def.type==='yatak'){ if(growBed) s.oda+=1; }
   else if(def.type==='salon') s.salon+=1;
   else if(def.type==='mutfak') s.acik=false;               // artık ayrı mutfak var
-  else if(def.eb){ s.ensuite=true; host.name='EB. YATAK ODASI'; } // denetim/kapı eb. yatağa bağlanır
+  else if(def.eb){ s.ensuite=true; host.name='EB. YATAK ODASI'; ng.ebHost=host.id; } // denetim/kapı eb. yatağa ID ile bağlanır
   if(def.type==='antre'&&def.name==='ANTRE'&&!u.antre) u.antre=ng; // antresiz daireye antre eklendi
   u.spec=s;
   calcRegionMetrics(host, p.cols, p.minX, p.minY);
@@ -296,6 +333,7 @@ function addRoom(host, def, hint){
    Uzatma: antre, hedef odaya Dijkstra ile en ucuz yoldan 1 m'lik korıdorla bağlanır. */
 const RETYPE=[
   {name:'YATAK ODASI',  type:'yatak'},
+  {name:'EB. YATAK ODASI', type:'yatak'},
   {name:'OTURMA ODASI', type:'salon'},
   {name:'MUTFAK',       type:'mutfak'},
   {name:'BANYO',        type:'banyo'},
@@ -305,8 +343,10 @@ const RETYPE=[
 ];
 function retypeGuard(g,u){ /* tip değişimi/takas yasağı: antre, merdiven, EB ikilisi, tek salon */
   if(g===u.antre||g.type==='merdiven'||g.name==='EB. BANYO') return 'Bu odanın tipi değiştirilemez.';
-  if(g.name==='EB. YATAK ODASI'&&u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length))
-    return 'Önce EB. BANYO silinmeli (eb. banyo bu odaya bağlı).';
+  /* EB. BANYO'su olan yatak odası tipsizleşemez (banyo öksüz kalır) — id ile bağlı;
+     eski kayıtlarda (ebHost yok) ada düşülür */
+  if(u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length&&(o.ebHost===g.id||(o.ebHost==null&&g.name==='EB. YATAK ODASI'))))
+    return 'Önce bu odaya bağlı EB. BANYO silinmeli.';
   return null;
 }
 function retypeRoom(g, def){
@@ -317,10 +357,11 @@ function retypeRoom(g, def){
     return false;                                          // TEK salon tipsizleşemez (katları ayrı planlanan villada serbest)
   editHistory.push({type:'retype', reg:g, name:g.name, rtype:g.type, unit:k, spec:u.spec});
   const s={...u.spec};
+  const growBed = def.type==='yatak' && g.type!=='yatak' && bedSurplus(u); // başka tip → yatak: açık varsa talep büyümez (Bug A)
   if(g.type==='yatak') s.oda=Math.max(0,s.oda-1);
   else if(g.type==='salon') s.salon=Math.max(0,s.salon-1);
   else if(g.type==='mutfak') s.acik=true;
-  if(def.type==='yatak') s.oda+=1;
+  if(def.type==='yatak'){ if(g.type==='yatak'||growBed) s.oda+=1; } // yatak→yatak (örn. EB. YATAK ODASI) net-0; başka→yatak açık yoksa büyümez
   else if(def.type==='salon') s.salon+=1;
   else if(def.type==='mutfak') s.acik=false;
   u.spec=s;
@@ -646,7 +687,36 @@ svg.addEventListener('contextmenu',e=>{
       if(doAddStruct(mi.dataset.saddt, sx, sy)) hideRoomMenu(); });
     return;
   }
-  if(k<0) return;                                          // diğer ortak alana (hol dışı) menü yok
+  if(k<0){                                                 // daireye ait OLMAYAN alan
+    if(isCommonOrphan(g)){                                  // ORTAK DEPO / sığınak·otopark artığı: düzenle (Bug C)
+      const wrapO=roomMenu.parentElement.getBoundingClientRect();
+      const placeO=()=>{ roomMenu.style.display='block';
+        roomMenu.style.left=Math.min(e.clientX-wrapO.left, wrapO.width-230)+'px';
+        roomMenu.style.top =Math.min(e.clientY-wrapO.top,  wrapO.height-roomMenu.offsetHeight-10)+'px'; };
+      const failO=msg=>{ roomMenu.innerHTML=`<div class="note">${escapeHtml(msg)}</div>`; placeO(); setTimeout(hideRoomMenu,1800); };
+      const doO=(fn,err)=>{ const snap=snapshotRegions();
+        if(fn()){ editHistory.push({type:'wallsnap', snap});
+          plan.regions.forEach(gg=>calcRegionMetrics(gg,plan.cols,plan.minX,plan.minY));
+          hoverWall=null; hoverRoomId=null; plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); hideRoomMenu(); }
+        else failO(err); };
+      const hasKor=plan.regions.some(o=>o.type==='koridor'&&o.cells.length);
+      let html=`<div class="mh">${escapeHtml(g.name)} · ${fmt(g.cells.length*M*M)} m²</div><hr>`;
+      if(hasKor) html+=`<div class="mi" data-otokor="1">➜ Apartman holüne kat (çekirdek erişimi aç)</div>`;
+      html+=`<div class="mi del" data-odis="1">✕ Komşulara dağıtıp sil</div>`
+          + `<hr><div class="mh">Yapı elemanı ekle (tıkladığınız yere)</div>`
+          + `<div class="mi" data-saddt="merdiven">+ Merdiven</div>`
+          + `<div class="mi" data-saddt="asansor">+ Asansör</div>`
+          + `<div class="mi" data-saddt="yangin">+ Yangın merdiveni</div>`
+          + `<div class="mi" data-saddt="teknik">+ Teknik / şaft</div>`;
+      roomMenu.innerHTML=html; placeO();
+      const ok=roomMenu.querySelector('.mi[data-otokor]'); if(ok) ok.onclick=()=>doO(()=>commonAreaToCorridor(g),'Apartman holü bulunamadı.');
+      const od=roomMenu.querySelector('.mi[data-odis]'); if(od) od.onclick=()=>doO(()=>dissolveCommonArea(g),'Dağıtılacak komşu bulunamadı.');
+      roomMenu.querySelectorAll('.mi[data-saddt]').forEach(mi=>mi.onclick=()=>{
+        if(doAddStruct(mi.dataset.saddt, sx, sy)) hideRoomMenu();
+        else failO('Eklenemedi (bina dışına düştü).'); });
+    }
+    return;                                                 // diğer ortak alana menü yok
+  }
   const u=plan.unitObjs[k];
   const wrap=roomMenu.parentElement.getBoundingClientRect();
   const place=()=>{ roomMenu.style.display='block';
@@ -662,10 +732,12 @@ svg.addEventListener('contextmenu',e=>{
   const buildMain=()=>{
     let html=`<div class="mh">D${k+1} · ${escapeHtml(g.name)}</div><hr>`;
     html+=`<div class="mh">Bu odadan oyarak ekle (tıkladığınız yere yakın)</div>`;
-    const hasEB=u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length);
+    /* EB. BANYO yalnız tıklanan YATAK odasından oyulur; o odanın zaten bağlı banyosu varsa
+       kapalı. FARKLI yatak odalarına ayrı ayrı eklenerek birden çok EB. BANYO olabilir (Bug B). */
+    const thisHostHasEB=u.rooms.some(o=>o.name==='EB. BANYO'&&o.cells.length&&o.ebHost===g.id);
     ROOM_ADD.forEach((d,i)=>{
-      if(d.eb&&hasEB){ html+=`<div class="mi dis" title="Bu dairede zaten EB. BANYO var">+ ${d.name} (zaten var)</div>`; return; }
       if(d.eb&&g.type!=='yatak'){ html+=`<div class="mi dis" title="Ebeveyn banyosu yatak odasından oyulur">+ ${d.name} (yatak odasına sağ tıklayın)</div>`; return; }
+      if(d.eb&&thisHostHasEB){ html+=`<div class="mi dis" title="Bu yatak odasında zaten EB. BANYO var (başka odaya ekleyebilirsiniz)">+ ${d.name} (bu odada zaten var)</div>`; return; }
       html+=`<div class="mi" data-add="${i}">+ ${d.name}</div>`; });
     if(!u.antre) html+=`<div class="mi" data-addantre="1">+ ANTRE (girişi yeniden oluştur)</div>`;
     if(isAntre){

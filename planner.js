@@ -1047,6 +1047,7 @@ function generate(keepCuts){
         if(j>=0&&s2.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
     if(seen.size!==keep.length) return false;
     const bath=newReg('EB. BANYO','banyo',ebReg.unit);
+    bath.ebHost=ebReg.id;                                  // çoklu ensuite için id bağı (ad-bazlı eşleşmeye düşmesin)
     unit.rooms.push(bath);
     take.forEach(i=>{ cm[i]=bath.id; bath.cells.push(i); });
     ebReg.cells=keep;
@@ -1692,7 +1693,7 @@ function generate(keepCuts){
             if(rr<0||cc2<0||rr>=rows||cc2>=cols) return;
             const j=rr*cols+cc2;
             if(inside[j]&&cm[j]>=0&&bedIds.has(cm[j])) host=regions[cm[j]]; }); });
-        if(host){ kil.name='EB. BANYO'; kil.type='banyo'; host.name='EB. YATAK ODASI'; return; }
+        if(host){ kil.name='EB. BANYO'; kil.type='banyo'; kil.ebHost=host.id; host.name='EB. YATAK ODASI'; return; }
       }
       const host=beds.find(g=>g.name==='EB. YATAK ODASI')||beds.reduce((a,b)=>b.cells.length>a.cells.length?b:a);
       const ar=u.rooms.reduce((s,g)=>s+g.cells.length,0)*M*M;

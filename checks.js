@@ -106,10 +106,13 @@ function collectChecks(){
       if(fill<0.55) add('bad', `${tag} — ${g.name} biçimsiz (dikdörtgen doluluk %${Math.round(fill*100)}). Ayırıcıyı sürükleyerek veya daire sayısını azaltarak düzeltin.`, g.id); });
     /* erişim denetimi: her oda antreye (EB. BANYO eb. yatak odasına) komşu olmalı — duvar sürüklenince canlı izlenir */
     if(u.antre&&u.antre.cells.length){
-      const ebY=u.rooms.find(g=>g.name==='EB. YATAK ODASI'&&g.cells.length);
       u.rooms.forEach(g=>{
         if(g===u.antre||!g.cells.length||g.type==='merdiven') return;
-        const tid=(g.name==='EB. BANYO'&&ebY)? ebY.id : u.antre.id;
+        let tid=u.antre.id;
+        if(g.name==='EB. BANYO'){ // her EB. BANYO KENDİ ebeveyn yatak odasına (ebHost) komşu olmalı
+          const host=(g.ebHost!=null&&u.rooms.find(o=>o.id===g.ebHost&&o.cells.length))||u.rooms.find(o=>o.name==='EB. YATAK ODASI'&&o.cells.length);
+          if(host) tid=host.id;
+        }
         const ok=g.cells.some(i=>{ const r=(i/p.cols)|0, c=i%p.cols;
           return (r>0&&p.cm[i-p.cols]===tid)||(r<p.rows-1&&p.cm[i+p.cols]===tid)
                ||(c>0&&p.cm[i-1]===tid)||(c<p.cols-1&&p.cm[i+1]===tid); });

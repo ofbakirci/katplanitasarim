@@ -135,7 +135,7 @@ function stateSnapshot(bare, withBlocks){
       parking:plan.parking? JSON.parse(JSON.stringify(plan.parking)) : undefined, // park yerleşimi (elle düzenlemeler dahil)
       inside:Array.from(plan.inside, v=>v?1:0),
       stairs:plan.stairs.map(s=>({...s})), zoneUI:plan.zoneUI||[],
-      regions:plan.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice()})),
+      regions:plan.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice(),ebHost:g.ebHost})),
       units:plan.unitObjs.map(u=>({spec:{...u.spec}, comb:!!u.comb,
         antre:u.antre?u.antre.id:-1, rooms:u.rooms.map(g=>g.id)}))}};
   /* villa katları: aktif kat tazelenip TÜM katlar dışa aktarıma gömülür
@@ -239,7 +239,7 @@ function restoreState(st, opt){
   /* bina iskeleti yalnız TAM durum geri-yüklemesinde (dosya/ulayout) gelir; kat geçişinde global kalır */
   if(!opt||!opt.keepFloors) lockedCore = st.lockedCore? st.lockedCore.map(o=>({...o})) : null;
   const sp=st.plan;
-  const regions=sp.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice()}));
+  const regions=sp.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice(),ebHost:g.ebHost}));
   const cm=new Int16Array(sp.rows*sp.cols); cm.fill(-1);
   regions.forEach(g=>g.cells.forEach(i=>{ cm[i]=g.id; }));
   const inside=Uint8Array.from(sp.inside);
