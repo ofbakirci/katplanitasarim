@@ -430,6 +430,52 @@ function fpCellOutline(cells, cols){
   }
   return out.length>=3? out : ring;
 }
+/* fpCellOutline'ın ızgara-basamaklı halkasını, footprint'in (pts) EĞİK cephe
+   segmentlerine oturtur → PNG (render.js pts çizgisi) ile birebir düz. Dünya
+   koordinatında döner (tüketici doğrudan fr.px'e verir). Yalnız eğik cepheye YAKIN
+   ardışık köşeleri düzeltir; eksen-hizalı (dik) iç/dış duvarlara dokunmaz. Not:
+   parsel footprint köşeleri ızgaraya hizalı OLMAYABİLİR → tam-üstünde (onEdge)
+   değil, TOLERANSLI yakınlık + komşu duvar kesişimiyle düzeltir. */
+function fpSmoothOutline(cells, cols){
+  const ring=fpCellOutline(cells,cols);
+  const toW=p=>[plan.minX+p[0]*M, plan.minY+p[1]*M];
+  let W=ring.map(toW);
+  if(W.length<4 || typeof pts==='undefined' || !pts || pts.length<3) return W;
+  const segs=[];                                   // yalnız EĞİK footprint segmentleri
+  for(let i=0;i<pts.length;i++){ const A=pts[i],B=pts[(i+1)%pts.length];
+    const dx=B.x-A.x, dy=B.y-A.y;
+    if(Math.abs(dx)>1e-9 && Math.abs(dy)>1e-9) segs.push({ax:A.x,ay:A.y,dx,dy,len2:dx*dx+dy*dy}); }
+  if(!segs.length) return W;                        // eğik cephe yok → dik dikdörtgen, dokunma
+  const TOL=M*1.6;                                  // basamak sapma payı (dik mesafe)
+  const near=W.map(p=>{ let best=-1,bd=TOL;         // köşe en yakın hangi eğik cepheye
+    for(let k=0;k<segs.length;k++){ const s=segs[k];
+      const t=((p[0]-s.ax)*s.dx+(p[1]-s.ay)*s.dy)/s.len2;
+      if(t<-0.02||t>1.02) continue;                 // segment aralığı dışı → değil
+      const d=Math.hypot(p[0]-(s.ax+t*s.dx), p[1]-(s.ay+t*s.dy));
+      if(d<bd){bd=d;best=k;} }
+    return best; });
+  let off=near.findIndex(v=>v<0);                   // dik bir köşeden başla (run sarması olmasın)
+  if(off<0) return W;                               // tüm köşeler cepheye yakın → olağandışı, dokunma
+  const rot=a=>a.slice(off).concat(a.slice(0,off));
+  W=rot(W); const nr=rot(near); const n=W.length;
+  const isect=(s,P,Q)=>{ const ex=Q[0]-P[0], ey=Q[1]-P[1];   // cephe çizgisi ∩ komşu duvar
+    const den=s.dx*ey-s.dy*ex; if(Math.abs(den)<1e-9) return null;
+    const t=((P[0]-s.ax)*ey-(P[1]-s.ay)*ex)/den; return [s.ax+t*s.dx, s.ay+t*s.dy]; };
+  const proj=(s,p)=>{ const t=((p[0]-s.ax)*s.dx+(p[1]-s.ay)*s.dy)/s.len2; return [s.ax+t*s.dx, s.ay+t*s.dy]; };
+  const out=[]; let i=0;
+  while(i<n){
+    if(nr[i]<0){ out.push(W[i]); i++; continue; }   // dik köşe → aynen kalır
+    const sIdx=nr[i], s=segs[sIdx]; let j=i; while(j+1<n && nr[j+1]===sIdx) j++;  // i..j aynı-cephe run'ı
+    const Pprev=W[(i-1+n)%n], Pi=W[i], Qj=W[j], Qnext=W[(j+1)%n];
+    let E=isect(s,Pprev,Pi), X=isect(s,Qj,Qnext);   // giriş/çıkış = cephe × komşu dik duvar
+    if(!E || Math.hypot(E[0]-Pi[0],E[1]-Pi[1])>3) E=proj(s,Pi);  // paralel/uzak → dik izdüşüm yedeği
+    if(!X || Math.hypot(X[0]-Qj[0],X[1]-Qj[1])>3) X=proj(s,Qj);
+    out.push(E); out.push(X); i=j+1;                // TÜM basamak run'ı yerine TEK düz cephe
+  }
+  const o2=[]; for(let k=0;k<out.length;k++){ const a=out[k], b=out[(k+1)%out.length];
+    if(Math.hypot(a[0]-b[0],a[1]-b[1])>0.05) o2.push(a); }  // bitişik cepheler arası mikro-segmenti birleştir
+  return o2.length>=3? o2 : W;
+}
 /* bir bölgenin px geometrisi (bbox/polygon/centroid/alan) — verilen kadrajda */
 function fpRegionGeom(g, fr){
   const cols=plan.cols, mnX=plan.minX, mnY=plan.minY, n=g.cells.length||1;
@@ -437,7 +483,7 @@ function fpRegionGeom(g, fr){
   g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;sr+=r;sc+=c;});
   const [bx0,by0]=fr.px(mnX+c0*M, mnY+r0*M), [bx1,by1]=fr.px(mnX+(c1+1)*M, mnY+(r1+1)*M);
   const bbox_px=[Math.min(bx0,bx1),Math.min(by0,by1),Math.max(bx0,bx1),Math.max(by0,by1)];
-  const polygon_px=fpCellOutline(g.cells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M));
+  const polygon_px=fpSmoothOutline(g.cells,cols).map(p=>fr.px(p[0], p[1]));
   const centroid_px=fr.px(mnX+(sc/n+0.5)*M, mnY+(sr/n+0.5)*M);
   // label_anchor: etiketin GERÇEKTE yazıldığı nokta (pole of inaccessibility, calcRegionMetrics'ten).
   // L/U/girintili odalarda centroid komşu odaya düşebilir; bu nokta hep kendi poligonu İÇİNDE.
@@ -482,7 +528,7 @@ function buildFloorplanMap(opt){
     let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
     rooms.forEach(o=>{X0=Math.min(X0,o.bbox_px[0]);Y0=Math.min(Y0,o.bbox_px[1]);X1=Math.max(X1,o.bbox_px[2]);Y1=Math.max(Y1,o.bbox_px[3]);});
     const allCells=[].concat(...live.map(g=>g.cells));
-    const polygon_px=fpCellOutline(allCells,cols).map(p=>fr.px(mnX+p[0]*M, mnY+p[1]*M));
+    const polygon_px=fpSmoothOutline(allCells,cols).map(p=>fr.px(p[0], p[1]));
     const un0=fr.norm([X0,Y0]), un1=fr.norm([X1,Y1]);
     return {
       id, label:fpUnitLabel(u),
