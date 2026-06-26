@@ -761,6 +761,41 @@ function importLegacySvg(txt){
       const c0=Math.round((Math.min(x1,x2)-ox)/S/M), c1=Math.round((Math.max(x1,x2)-ox)/S/M);
       for(let c=c0;c<c1;c++) if(c>=0&&c<cols2) hWall.add(r+','+c);
     } });
+  /* etiketler: oda adı metinleri (ölçü yazıları paint-order/stroke/salt-rakamla elenir)
+     → çekirdeğe konum(m)+ad olarak verilir; bölge adı ataması orada yapılır */
+  const labels=[];
+  doc.querySelectorAll('text').forEach(tx=>{
+    if(tx.getAttribute('font-weight')!=='700'||tx.getAttribute('fill')!=='#2b2620') return;
+    if(tx.getAttribute('paint-order')||tx.getAttribute('stroke')) return;
+    const nm=(tx.textContent||'').trim();
+    if(!nm||nm.length>30||/^[\d,.\s×x]+$/.test(nm)) return;
+    const mx=(parseFloat(tx.getAttribute('x'))-ox)/S, my=(parseFloat(tx.getAttribute('y'))-oy)/S;
+    if(isNaN(mx)||isNaN(my)) return;
+    labels.push({mx, my, name:nm}); });
+  /* kapılar: #faf8f3 çizgiler duvar boşluğu → çekirdeğe hücre-kenar konumu olarak verilir */
+  const doors=[];
+  doc.querySelectorAll('line[stroke="#faf8f3"]').forEach(l=>{
+    const x1=parseFloat(l.getAttribute('x1')),y1=parseFloat(l.getAttribute('y1')),
+          x2=parseFloat(l.getAttribute('x2')),y2=parseFloat(l.getAttribute('y2'));
+    if([x1,y1,x2,y2].some(isNaN)) return;
+    if(Math.abs(x1-x2)<0.01){ // dikey kapı: sol/sağ hücreler
+      doors.push({orient:'v', c:Math.round((x1-ox)/S/M), r:Math.floor(((y1+y2)/2-oy)/S/M)});
+    } else {
+      doors.push({orient:'h', r:Math.round((y1-oy)/S/M), c:Math.floor(((x1+x2)/2-ox)/S/M)});
+    } });
+  return kpBuildPlanFromCells({poly, rows:rows2, cols:cols2, cellType, vWall, hWall, labels, doors});
+}
+/* ===== paylaşılan çekirdek: 0,5 m hücre-ızgara geometrisi → bölge/daire/plan + runChecks
+   Hem eski-SVG (importLegacySvg) hem DXF (importDxf) bu çekirdeği besler — kod tekrarı yok.
+   geom = { poly: [{x,y}] m bina sınırı, rows, cols, cellType: [rows*cols] tip|null,
+            vWall/hWall: Set("r,c") iç duvar kenarları,
+            labels: [{mx,my,name}] m oda-adı metinleri (tip ince ayarı; opsiyonel),
+            doors:  [{orient:'v'|'h', r, c}] hücre-kenarı kapı boşlukları (daire grafiği) } */
+function kpBuildPlanFromCells(geom){
+  const poly=geom.poly, cols2=geom.cols, rows2=geom.rows, cellType=geom.cellType,
+        vWall=geom.vWall||new Set(), hWall=geom.hWall||new Set(),
+        labels=geom.labels||[], doors=geom.doors||[];
+  if(!cellType.some(Boolean)) throw new Error('oda hücreleri bulunamadı');
   /* bölgeler: duvarsız komşuluk bileşenleri */
   const regOf=new Array(rows2*cols2).fill(-1); const regs=[];
   for(let i=0;i<rows2*cols2;i++){
@@ -778,18 +813,12 @@ function importLegacySvg(txt){
     const ty=Object.keys(tc).sort((a,b)=>tc[b]-tc[a])[0];
     regs.push({id:id2, name:null, type:ty, unit:-1, cells:cells2});
   }
-  /* etiketler: oda adı metinleri bölgeye ad verir (BANYO/WC ayrımı, EB. BANYO, KİLER)
-     — ölçü yazıları (paint-order/stroke'lu, salt rakam) elenir */
-  doc.querySelectorAll('text').forEach(tx=>{
-    if(tx.getAttribute('font-weight')!=='700'||tx.getAttribute('fill')!=='#2b2620') return;
-    if(tx.getAttribute('paint-order')||tx.getAttribute('stroke')) return;
-    const nm=(tx.textContent||'').trim();
-    if(!nm||nm.length>30||/^[\d,.\s×x]+$/.test(nm)) return;
-    const mx=(parseFloat(tx.getAttribute('x'))-ox)/S, my=(parseFloat(tx.getAttribute('y'))-oy)/S;
-    const c=Math.floor(mx/M), r=Math.floor(my/M);
+  /* etiketler: oda adı metinleri bölgeye ad verir (BANYO/WC ayrımı, EB. BANYO, KİLER) */
+  labels.forEach(lb=>{
+    const c=Math.floor(lb.mx/M), r=Math.floor(lb.my/M);
     if(r<0||c<0||r>=rows2||c>=cols2) return;
     const rid=regOf[r*cols2+c]; if(rid<0) return;
-    if(!regs[rid].name) regs[rid].name=nm; });
+    if(!regs[rid].name) regs[rid].name=lb.name; });
   const NAME_TYPE={'WC':'wc','BANYO':'banyo','EB. BANYO':'banyo','KİLER':'antre','APARTMAN HOLÜ':'koridor',
     'MERDİVEN':'merdiven','ASANSÖR':'asansor','ASANSÖR YERİ':'asansor','YANGIN MERD.':'yangin',
     'TEKNİK / ŞAFT':'teknik','ORTAK DEPO':'teknik','ANTRE':'antre','MUTFAK':'mutfak'};
@@ -802,21 +831,16 @@ function importLegacySvg(txt){
     if(NAME_TYPE[g.name]) g.type=NAME_TYPE[g.name];
     if(g.name.indexOf('SALON')===0||g.name==='STÜDYO'||g.name==='OTURMA ODASI') g.type='salon';
     if(g.name.indexOf('YATAK')>=0) g.type='yatak'; });
-  /* kapılar: #faf8f3 çizgiler duvar boşluğudur → bölge çiftlerini bağlar */
+  /* kapılar: hücre-kenar boşlukları → bölge çiftlerini bağlar */
   const doorPairs=[];
-  doc.querySelectorAll('line[stroke="#faf8f3"]').forEach(l=>{
-    const x1=parseFloat(l.getAttribute('x1')),y1=parseFloat(l.getAttribute('y1')),
-          x2=parseFloat(l.getAttribute('x2')),y2=parseFloat(l.getAttribute('y2'));
-    if([x1,y1,x2,y2].some(isNaN)) return;
+  doors.forEach(d=>{
     let a=-1,b=-1;
-    if(Math.abs(x1-x2)<0.01){ // dikey kapı: sol/sağ hücreler
-      const c=Math.round((x1-ox)/S/M), r=Math.floor(((y1+y2)/2-oy)/S/M);
-      if(r<0||r>=rows2||c<=0||c>=cols2) return;
-      a=regOf[r*cols2+c-1]; b=regOf[r*cols2+c];
+    if(d.orient==='v'){ // dikey kapı: sol/sağ hücreler
+      if(d.r<0||d.r>=rows2||d.c<=0||d.c>=cols2) return;
+      a=regOf[d.r*cols2+d.c-1]; b=regOf[d.r*cols2+d.c];
     } else {
-      const r=Math.round((y1-oy)/S/M), c=Math.floor(((x1+x2)/2-ox)/S/M);
-      if(c<0||c>=cols2||r<=0||r>=rows2) return;
-      a=regOf[(r-1)*cols2+c]; b=regOf[r*cols2+c];
+      if(d.c<0||d.c>=cols2||d.r<=0||d.r>=rows2) return;
+      a=regOf[(d.r-1)*cols2+d.c]; b=regOf[d.r*cols2+d.c];
     }
     if(a>=0&&b>=0&&a!==b) doorPairs.push([a,b]); });
   /* daireler: kapı grafiğinde (ortak alanlar hariç) bileşenler */
@@ -911,6 +935,10 @@ function importPlanText(txt, fname){
       const json=m[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
       restoreState(JSON.parse(json)); return;
     }
+    /* DXF: uzantı ya da içerik imzası (SVG/JSON bu yola düşmez) */
+    if(/\.dxf$/i.test(fname||'') || (/\bENTITIES\b/.test(txt) && /\b(LWPOLYLINE|POLYLINE)\b/.test(txt))){
+      importDxf(txt); return;
+    }
     importLegacySvg(txt);
   }catch(err){
     alert('İçe aktarılamadı ('+(fname||'dosya')+'): '+err.message);
@@ -929,7 +957,7 @@ function importPlanText(txt, fname){
   window.addEventListener('drop',e=>{
     e.preventDefault();
     const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
-    if(!/\.(svg|json)$/i.test(f.name)) return;
+    if(!/\.(svg|json|dxf)$/i.test(f.name)) return;
     const rd=new FileReader();
     rd.onload=()=>importPlanText(String(rd.result), f.name);
     rd.readAsText(f);
