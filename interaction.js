@@ -115,6 +115,7 @@ svg.addEventListener('mousemove',e=>{
       const v=snapG(dragging.horiz? S2Wx(sx) : S2Wy(sy));
       dragging.arr[dragging.idx]=Math.min(dragging.max, Math.max(dragging.min, v));
       generate(true);
+      restoreEditedFootprints(dragging.preUnits);   // footprint'i değişmeyen dairelerin elle düzenini geri kur
     }
     if(dragging.type==='wall'){ dragWallTo(sx,sy); }
     if(dragging.type==='struct'){ dragStructTo(sx,sy); }
@@ -316,7 +317,9 @@ svg.addEventListener('mousedown',e=>{
   }
   if(plan && e.button===0){ // ayırıcı tutamacı? oda duvarı?
     const h=hitCutHandle(sx,sy);
-    if(h){ h.undo=customCutsZ&&customCutsZ.map(a=>a?a.slice():null); dragging=h; return; }
+    if(h){ h.undo=customCutsZ&&customCutsZ.map(a=>a?a.slice():null);
+      h.preUnits=captureUnitFootprints();   // sınır taşımada elle oda düzenini koru (footprint değişmeyen daireler)
+      dragging=h; return; }
     const wr=hitWallRun(sx,sy);
     if(wr){ dragging={type:'wall', run:wr, snap:snapshotRegions()};
       hoverWall=wr; e.preventDefault(); return; }
@@ -352,8 +355,9 @@ function finishDrag(){
   if(!dragging) return;
   if(dragging.type==='cut'){
     generate(true); // not: generate duvar girdilerini geçmişten siler — cut girdisi SONRA yazılır
+    restoreEditedFootprints(dragging.preUnits);   // footprint'i değişmeyen dairelerin elle düzenini geri kur
     if(dragging.undo && JSON.stringify(dragging.undo)!==JSON.stringify(customCutsZ))
-      editHistory.push({type:'cut', cuts:dragging.undo});
+      editHistory.push({type:'cut', cuts:dragging.undo, preUnits:dragging.preUnits}); // geri al da düzeni korusun
   } else if(dragging.type==='wall' && dragging.snap && plan){
     if(snapshotChanged(dragging.snap))
       editHistory.push({type:'wallsnap', snap:dragging.snap});
@@ -498,6 +502,7 @@ function undoEdit(){
     }
   } else if(e.type==='cut'){
     customCutsZ=e.cuts; generate(true);
+    restoreEditedFootprints(e.preUnits);   // sınır taşımayı geri alırken elle düzeni de geri kur
   } else if(e.type==='ulayout'){
     if(e.state){ // tam durum anlık görüntüsü: elle düzenlemeler dahil birebir geri döner
       const keep=editHistory; // restoreState yığını sıfırlar; kalan geçmiş korunur

@@ -178,3 +178,73 @@ function regionsChanged(snap){
     for(let i=0;i<a.length;i++) if(a[i]!==b[i]) return true; }
   return false;
 }
+/* ===== DAİRE SINIRI (CUT) SÜRÜKLEMESİNDE ELLE DÜZENİ KORU =====
+   Turuncu daire-ayırıcı tutamacı bir CUT'tır: sürüklerken her karede generate(true) tüm
+   daireleri layoutUnit ile SIFIRDAN dizer → elle eklenen/silinen odalar uçar. Çözüm:
+   sürükleme başında her dairenin footprint'i (hücre kümesi) + elle düzenlenmiş oda düzeni
+   yakalanır; generate sonrası footprint'i DEĞİŞMEYEN dairelere geri uygulanır. Yalnız
+   taşınan sınırın iki yanındaki daire (footprint değişti) otomatik düzende kalır. */
+function unitFootprintKey(u){
+  const cells=[]; u.rooms.forEach(g=>{ for(const i of g.cells) cells.push(i); });
+  return cells.sort((a,b)=>a-b).join(',');
+}
+/* dairenin oda düzenini taşınabilir tanıma (id yerine oda-içi indeksle: ebHost/antre
+   yeniden inşadan sonra yeni id'lere haritalanabilsin). */
+function describeUnitLayout(u){
+  const rooms=u.rooms.filter(g=>g.cells.length);
+  const idx=new Map(); rooms.forEach((g,i)=>idx.set(g.id,i));
+  return {
+    fp: unitFootprintKey({rooms}),
+    spec:{...u.spec}, comb:!!u.comb, side:u.side,
+    antre: (u.antre && idx.has(u.antre.id))? idx.get(u.antre.id) : -1,
+    rooms: rooms.map(g=>({ name:g.name, type:g.type, cells:g.cells.slice(),
+      ebHost: (g.ebHost!=null && idx.has(g.ebHost))? idx.get(g.ebHost) : -1 }))
+  };
+}
+function layoutSignature(rooms){
+  return rooms.map(r=>r.name+'#'+r.type+'#'+r.cells.slice().sort((a,b)=>a-b).join('.')).sort().join('|');
+}
+/* sürükleme başında çağrılır: korunacak düzeni yakala. */
+function captureUnitFootprints(){
+  if(!plan||!plan.unitObjs) return null;
+  return plan.unitObjs.map(describeUnitLayout);
+}
+/* generate(true) SONRASI çağrılır: footprint'i değişmeyen + düzeni farklı (=elle düzenlenmiş)
+   daireleri pre düzeniyle geri kur. Hiç elle düzen yoksa DOKUNMAZ (oto sonuç aynen kalır). */
+function restoreEditedFootprints(pre){
+  if(!pre||!plan||!plan.unitObjs) return;
+  const preMap=new Map(); pre.forEach(p=>preMap.set(p.fp, p));
+  let needRestore=false;
+  const sources=plan.unitObjs.map(u=>{
+    const p=preMap.get(unitFootprintKey(u));
+    if(p){ // footprint korundu → pre düzeni (canlı geometriden side taşı)
+      const live=describeUnitLayout(u);
+      if(layoutSignature(p.rooms)!==layoutSignature(live.rooms)) needRestore=true;
+      return {...p, side:u.side};
+    }
+    return describeUnitLayout(u); // footprint değişti → oto düzen
+  });
+  if(!needRestore) return; // korunacak elle düzen yok → generate çıktısına dokunma
+  /* temiz yeniden inşa (id===index; boş bölge bırakmaz). Önce sahipsiz/ortak bölgeler
+     (hol, çekirdek, depo, otopark), sonra daireler. */
+  const owned=new Set(); plan.unitObjs.forEach(u=>u.rooms.forEach(g=>owned.add(g)));
+  const cm=plan.cm; cm.fill(-1);
+  const regions=[];
+  plan.regions.forEach(g=>{ if(owned.has(g)||!g.cells.length) return;
+    const ng={...g, id:regions.length, cells:g.cells.slice()};
+    ng.cells.forEach(i=>{ cm[i]=ng.id; }); regions.push(ng); });
+  const unitObjs=sources.map((d,k)=>{
+    const regs=d.rooms.map(rm=>{ const ng={id:regions.length, name:rm.name, type:rm.type, unit:k, cells:rm.cells.slice()};
+      ng.cells.forEach(i=>{ cm[i]=ng.id; }); regions.push(ng); return ng; });
+    d.rooms.forEach((rm,i)=>{ if(rm.ebHost>=0 && regs[rm.ebHost]) regs[i].ebHost=regs[rm.ebHost].id; });
+    const u={ spec:{...d.spec}, comb:!!d.comb, rooms:regs,
+      antre: (d.antre>=0 && regs[d.antre])? regs[d.antre] : null };
+    if(d.side!=null) u.side=d.side;
+    return u;
+  });
+  plan.regions=regions; plan.unitObjs=unitObjs;
+  regions.forEach(g=>calcRegionMetrics(g, plan.cols, plan.minX, plan.minY));
+  plan.wallRuns=computeWallRuns();
+  hoverWall=null; hoverRoomId=null;
+  runChecks(); buildUnitTable(); render();
+}
