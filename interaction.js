@@ -1,5 +1,9 @@
 'use strict';
 /* ================= çizim etkileşimi ================= */
+/* SPACE = geçici kaydırma: basılı tutarken sol-tık sürükle görünümü kaydırır; bırakınca
+   içinde olduğumuz araca (çiz/yapı/kapı…) kesintisiz dönülür (mode HİÇ değişmez). */
+let spacePan=false;
+function syncPanCursor(){ svg.classList.toggle('panning', mode==='pan' || spacePan || (dragging&&dragging.type==='pan')); }
 function activePoly(){ return mode==='parcel'? {arr:parcelPts, cl:parcelClosed} : {arr:pts, cl:closed}; }
 function snapPoint(sx,sy){
   let x=snapG(S2Wx(sx)), y=snapG(S2Wy(sy));
@@ -170,6 +174,7 @@ svg.addEventListener('mousemove',e=>{
     }
     return;
   }
+  if(spacePan){ syncPanCursor(); return; }   // space basılı: imleç grab kalsın, hover/işaretçi mantığı çalışmasın
   if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)){ hoverP=snapPoint(sx,sy); render(); }
   else if(mode==='balkon'){
     const wx=S2Wx(sx), wy=S2Wy(sy);
@@ -225,7 +230,7 @@ svg.addEventListener('mouseleave',()=>{
   if(hoverWall||hoverRoomId!=null){ hoverWall=null; hoverRoomId=null; render(); } });
 svg.addEventListener('mousedown',e=>{
   const r=svg.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
-  if(e.button===1 || mode==='pan'){ dragging={type:'pan',sx,sy,px:panX,py:panY}; e.preventDefault(); return; }
+  if(e.button===1 || mode==='pan' || (spacePan && e.button===0)){ dragging={type:'pan',sx,sy,px:panX,py:panY}; e.preventDefault(); return; }
   if(mode==='balkon'){
     if(e.button!==0) return;
     const wx=S2Wx(sx), wy=S2Wy(sy), h=hitBalk(wx,wy);
@@ -422,7 +427,20 @@ function finishDrag(){
     render(); return;
   }
   dragging=null;
+  syncPanCursor();   // space-pan sürüşü bittiyse (space bırakılmışsa) grab imlecini düşür
 }
+/* SPACE basılı tut → geçici kaydırma (mode değişmez). Metin alanlarında boşluk yazımına dokunma. */
+window.addEventListener('keydown',e=>{
+  if(e.code!=='Space' || e.repeat || spacePan) return;
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
+  spacePan=true; svg.style.cursor=''; syncPanCursor(); e.preventDefault();   // grab imleci .panning sınıfından gelsin
+});
+window.addEventListener('keyup',e=>{
+  if(e.code!=='Space' || !spacePan) return;
+  spacePan=false; syncPanCursor();   // sürüş sürüyorsa mouseup'a dek pan class'ı tutulur
+});
+window.addEventListener('blur',()=>{ if(spacePan){ spacePan=false; syncPanCursor(); } });  // sekme/odak kaybında takılı kalmasın
 /* son elle düzenlemeyi geri al; geçmiş boşsa false döner (Geri Al eski davranışına düşer) */
 function undoEdit(){
   const e=editHistory.pop(); if(!e) return false;

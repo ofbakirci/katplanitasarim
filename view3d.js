@@ -15,27 +15,35 @@
 
   // oda tipi (TR motor tipi ya da EN) -> sıcak zemin rengi
   // ODA TİPİ = BELİRGİN AYRIK RENK → AI renkten tipi anlasın (karıştırmasın).
-  // Aynı işlev grubu aynı net renge: banyo=mavi, yatak=yeşil, salon=turuncu, mutfak=sarı,
-  // antre/hol=açık bej, koridor=gri-bej, çekirdek(merdiven/asansör/yangın)=koyu gri, balkon=açık yeşil.
+  // ANAHTARLAR fpRoomEnum() çıktısıyla BİREBİR (io.js): küçük harf, alt çizgili enum.
   const COL = {
-    banyo:0x4f9fd6, wc:0x4f9fd6,
-    yatak:0x66b56a, oda:0x66b56a, ebeveyn:0x3f8f5a,
-    salon:0xe08a3c, 'salon+mutfak':0xe0a93c,
-    mutfak:0xe8c84a,
-    antre:0xe8dcc0, hol:0xe8dcc0, koridor:0xc7bda0,
-    merdiven:0x6f6f76, asansor:0x5f5f66, yangin:0x55555c, teknik:0x7a7a82,
-    balkon:0x9fd08a,
-    Bathroom:0x4f9fd6, Bedroom:0x66b56a,'Master Bedroom':0x3f8f5a,
-    'Living Room':0xe08a3c,'Living + Kitchen':0xe0a93c, Kitchen:0xe8c84a,
-    Entry:0xe8dcc0, Corridor:0xc7bda0,
-    Staircase:0x6f6f76, Elevator:0x5f5f66,'Fire Escape Stair':0x55555c,'Fire Escape':0x55555c,
-    _def:0xddd0b4
+    bathroom:0x4f9fd6, wc:0x4f9fd6,                 // banyo/wc = MAVİ
+    bedroom:0x66b56a,                               // yatak (eb. dahil) = YEŞİL
+    living:0xe0843a, living_kitchen:0xe0a93c,        // salon = TURUNCU · salon+mutfak = amber
+    kitchen:0xe8c84a,                                // mutfak = SARI
+    studio:0xd98f4e, study:0x8fc7b0,                 // stüdyo ~salon · çalışma = nane
+    hall:0xe8dcc0,                                   // antre/koridor = AÇIK BEJ
+    room:0xcbb896,                                   // genel oda = nötr bej
+    stairs:0x6f6f76, elevator:0x5a5a62, shaft:0x7a7a82, fire_stairs:0x55555c,  // çekirdek = KOYU GRİ
+    balcony:0x9fd08a, storage:0xb7a98c, parking:0x9a9a9a, shelter:0x8a8a90, shop:0xd9b36a,
+    _def:0xcbb896
   };
   function colorFor(o){
-    const t=(o.type||o.name_en||o.name||'').toString();
+    const t=(o.type||'').toString().toLowerCase();
     if(COL[t]!=null) return COL[t];
-    const lt=t.toLowerCase();
-    for(const k in COL){ if(typeof k==='string' && lt.indexOf(k)>=0) return COL[k]; }
+    // yedek: type_tr / name_en / name içinde anahtar geçiyor mu
+    const alt=((o.type_tr||'')+' '+(o.name_en||'')+' '+(o.name||'')).toLowerCase();
+    if(/banyo|bath/.test(alt)) return COL.bathroom;
+    if(/wc/.test(alt)) return COL.wc;
+    if(/mutfak|kitchen/.test(alt) && /salon|living/.test(alt)) return COL.living_kitchen;
+    if(/mutfak|kitchen/.test(alt)) return COL.kitchen;
+    if(/salon|living/.test(alt)) return COL.living;
+    if(/yatak|bedroom|ebeveyn/.test(alt)) return COL.bedroom;
+    if(/antre|koridor|hall|hol|entry|corridor/.test(alt)) return COL.hall;
+    if(/merdiven|stair/.test(alt)) return COL.stairs;
+    if(/asans|elevator/.test(alt)) return COL.elevator;
+    if(/yangin|fire/.test(alt)) return COL.fire_stairs;
+    if(/balkon|balcony/.test(alt)) return COL.balcony;
     return COL._def;
   }
 
