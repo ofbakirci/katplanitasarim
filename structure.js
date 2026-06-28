@@ -235,7 +235,10 @@ function boundaryGroup(run){
 function dragWallTo(sx,sy){
   const p=plan, run=dragging.run;
   const want = run.horiz? Math.round((S2Wy(sy)-p.minY)/M) : Math.round((S2Wx(sx)-p.minX)/M);
-  const group = boundaryGroup(run);
+  // varsayılan: yalnız sürüklenen parça taşınır → daire sınırında parça parça esneklik
+  // (sınırda jog/girinti açılabilir). Shift'e basılı tutulursa aynı hizadaki tüm parçalar
+  // birlikte taşınır (apartman sınırını düz tutmak için eski davranış).
+  const group = dragging.groupMove? boundaryGroup(run) : [run];
   let moved=false, merged=false;
   group.forEach(rn=>{ let guard=0;
     while(rn.pos!==want && guard++<160){

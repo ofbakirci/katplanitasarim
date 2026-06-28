@@ -321,7 +321,7 @@ svg.addEventListener('mousedown',e=>{
       h.preUnits=captureUnitFootprints();   // sınır taşımada elle oda düzenini koru (footprint değişmeyen daireler)
       dragging=h; return; }
     const wr=hitWallRun(sx,sy);
-    if(wr){ dragging={type:'wall', run:wr, snap:snapshotRegions()};
+    if(wr){ dragging={type:'wall', run:wr, snap:snapshotRegions(), groupMove:e.shiftKey};
       hoverWall=wr; e.preventDefault(); return; }
   }
   if(mode!=='draw' || closed || e.button!==0) return;
