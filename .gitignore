@@ -1,4 +1,6 @@
 .DS_Store
+.env
+input/output_test3/
 snapshots/
 ref/
 node_modules/

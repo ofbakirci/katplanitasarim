@@ -87,6 +87,55 @@ function regConnected(g){
       const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
   return seen.size===g.cells.length;
 }
+/* ===== KOPUK BÖLGE ONARIMI (relayout / cut-drag / swap / yükleme sonrası) =====
+   relayoutFootprint (daire takası, sınır relayout'u) tüketilmeyen "leftover" hücreleri
+   tek "en büyük odaya" döküyor; çekirdek (merdiven/asansör) bina içine girinti yapınca
+   uzak cepler ana gövdeden KOPUK bir parça olarak o odaya takılıyor. Kopuk bölge
+   regConnected'ı KALICI false yapar → o odada "oda ekle" ve duvar sürükleme HEP reddedilir
+   (vaka: D3 antresi 71,75 m², sağ tık eklemiyor, handle büyütmüyor). generate()'in
+   fixOrphans'ıyla aynı amaç — ama o yalnız üretimde çalışır; bu, relayout/yükleme yollarında
+   güvenlik ağı. Her bölgenin ikincil parçaları en uygun komşuya katılır (öncelik: AYNI daire,
+   çekirdek-dışı) → bölge tek parça olur, düzenlenebilir. Bağlı bölgelerde NO-OP (idempotent). */
+function healDisconnected(){
+  const p=plan; if(!p||!p.regions||!p.cm) return false;
+  const CORE=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik';
+  let changed=false;
+  for(let pass=0; pass<4; pass++){
+    let any=false;
+    p.regions.forEach(g=>{
+      if(g.cells.length<2||CORE(g.type)||g.type==='koridor'||g.type==='isiklik') return;
+      const set=new Set(g.cells), seen=new Set(), comps=[];
+      g.cells.forEach(s=>{ if(seen.has(s)) return; const comp=[], stk=[s]; seen.add(s);
+        while(stk.length){ const i=stk.pop(); comp.push(i); const r=(i/p.cols)|0, c=i%p.cols;
+          [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+            const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); stk.push(j); } }); }
+        comps.push(comp); });
+      if(comps.length<2) return;
+      comps.sort((a,b)=>b.length-a.length);
+      const myUnit=unitOfRoom(g.id);
+      comps.slice(1).forEach(comp=>{                 // en büyük parça kalır; ikincil parçalar dağıtılır
+        const cnt=new Map();
+        comp.forEach(i=>{ const r=(i/p.cols)|0, c=i%p.cols;
+          [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+            const j=rr*p.cols+cc; if(!p.inside[j]) return; const v=p.cm[j];
+            if(v<0||v===g.id||CORE(p.regions[v].type)) return; // çekirdeğe katma (kilitli iskelet)
+            cnt.set(v,(cnt.get(v)||0)+1); }); });
+        if(!cnt.size) return;                         // çevresi tümü çekirdek/dış → bırak (sonraki pas dener)
+        let best=-1,bs=-1; cnt.forEach((n,v)=>{        // öncelik: aynı daire; sonra en uzun ortak sınır
+          const sameU=(myUnit>=0 && unitOfRoom(v)===myUnit), score=n+(sameU?100000:0);
+          if(score>bs){ bs=score; best=v; } });
+        if(best<0) return;
+        const rm=new Set(comp);
+        comp.forEach(i=>{ p.cm[i]=best; p.regions[best].cells.push(i); });
+        g.cells=g.cells.filter(i=>!rm.has(i));
+        changed=true; any=true;
+      });
+    });
+    if(!any) break;
+  }
+  if(changed) p.regions.forEach(g=>calcRegionMetrics(g, p.cols, p.minX, p.minY));
+  return changed;
+}
 /* TEK salon koruması: katları ayrı planlanan villada kalkar — bir katta salon yeter,
    ev genelini runChecks denetler ("Evde hiç salon yok"). Diğer her durumda yasal
    zorunlu piyes olarak korunur. */
@@ -244,6 +293,7 @@ function restoreEditedFootprints(pre){
   });
   plan.regions=regions; plan.unitObjs=unitObjs;
   regions.forEach(g=>calcRegionMetrics(g, plan.cols, plan.minX, plan.minY));
+  healDisconnected();   // relayout/leftover-döküm kopuk parça bırakmasın (düzenleme kilidi açık kalsın)
   plan.wallRuns=computeWallRuns();
   hoverWall=null; hoverRoomId=null;
   runChecks(); buildUnitTable(); render();

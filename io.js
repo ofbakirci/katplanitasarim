@@ -259,6 +259,7 @@ function restoreState(st, opt){
   /* park yerleşimi: kayıtta varsa (elle düzenlemeler dahil) aynen geri yükle, yoksa yeniden kur */
   if(sp.parking) plan.parking=JSON.parse(JSON.stringify(sp.parking));
   else if(regions.some(g=>g.type==='otopark')) plan.parking=parkingForPlan(plan);
+  healDisconnected();   // kayıtlı/relayout'lu dosyalardaki kopuk bölgeleri onar (düzenleme kilidini açar)
   hoverWall=null; hoverRoomId=null; hoverDoor=null; hoverBalk=null; hoverP=null;
   plan.wallRuns=computeWallRuns();
   document.getElementById('genBtn').disabled=false;

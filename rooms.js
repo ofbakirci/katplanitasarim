@@ -413,6 +413,7 @@ function swapUnits(kA,kB){
   A.rooms.forEach(g=>g.cells=[]); B.rooms.forEach(g=>g.cells=[]); // eski odaları boşalt (relayout cm'yi tazeler)
   p.unitObjs[kA]=p.relayoutFootprint(cellsA, specB, sideA, kA);
   p.unitObjs[kB]=p.relayoutFootprint(cellsB, specA, sideB, kB);
+  healDisconnected();   // relayout leftover-dökümü kopuk bölge bırakmasın (takas sonrası düzenlenebilir kalsın)
   editHistory.push({type:'unitswap', state});
   hoverWall=null; hoverRoomId=null;
   p.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render();
