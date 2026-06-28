@@ -1,0 +1,28 @@
+#!/bin/sh
+# KPTA pre-commit — SAPMA ÖNLEYİCİ
+# ----------------------------------------------------------------------------
+# Sorun: kabuk (kat-plani-tasarim.html) + modüler .js + Pages, kaynağı CANLI
+#        yükler → commit'le anında güncel. Ama tek-dosya ve mesken prototip,
+#        motoru İÇİNE GÖMER → `npm run build` çalışmazsa ESKİ kalır.
+# Çözüm: motor kaynağı (.js/.css) ya da kabuk staged ise, commit'ten ÖNCE
+#        otomatik build et ve üretilen TRACKED artifact'i (mesken prototip)
+#        tekrar stage'e al. Böylece commit'lenen her şey birbiriyle aynı motor.
+#
+# Not: kat-plani-tasarim.tekdosya.html .gitignore'da (yerel-only) → web'e gitmez,
+#      bilerek stage'e EKLENMEZ; build yine de diski tazeler.
+# ----------------------------------------------------------------------------
+
+# Sadece motoru etkileyen bir şey staged ise build et (md/doc commit'inde atla)
+if git diff --cached --name-only | grep -qE '\.(js|css)$|kat-plani-tasarim\.html$'; then
+  echo "[KPTA hook] Motor kaynağı değişti → npm run build (tek-dosya + mesken prototip yeniden gömülüyor)…"
+  if ! npm run build --silent; then
+    echo "[KPTA hook] ❌ BUILD HATASI — commit iptal edildi. Önce build'i düzelt."
+    exit 1
+  fi
+  # Üretilen TRACKED artifact'i commit'e dahil et (tek-dosya gitignore'da, atlanır).
+  # -f: mesken/ klasörü .gitignore'da ama bu dosya TRACKED; -f uyarıyı susturur ve
+  #     her durumda stage'e almayı garanti eder.
+  git add -f mesken/MESKEN-prototip.html
+  echo "[KPTA hook] ✓ Build tamam, mesken/MESKEN-prototip.html commit'e eklendi."
+fi
+exit 0

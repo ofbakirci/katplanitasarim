@@ -5,6 +5,27 @@ Bu repo **KPTA** (Kat Planı Tasarım Aracı). Detaylı devir notu: `Claude_inst
 
 ---
 
+## 🚀 "commit & push" KURALI — hepsi eş zamanlı güncel olsun (her oturumda oku)
+
+Kullanıcı **"commit & push"** (veya "ship", "yayınla", "gönder") dediğinde:
+**HER ZAMAN önce `npm run build` çalıştır**, sonra üretilen mesken prototip'i de stage'le, sonra commit + push. Bunu otomatikleştirmek için git **pre-commit hook** kurulu (`tools/git-hooks/pre-commit`, `git config core.hooksPath tools/git-hooks`) — motor kaynağı (`.js/.css`) ya da kabuk staged ise commit'ten önce build'i kendisi çalıştırıp `mesken/MESKEN-prototip.html`'i yeniden stage'ler. Yine de kuralı bil:
+
+| Hedef | Nasıl güncellenir | Build gerekir mi? |
+|---|---|---|
+| `kat-plani-tasarim.html` (kabuk) + modüler `.js` + `styles.css` | Kaynağı CANLI yükler | ❌ Hayır — commit+push yeter |
+| **KPTA GitHub Pages** (`https://ofbakirci.github.io/katplanitasarim/`) | `master` kökünü yayınlar; `index.html` → kabuğa yönlendirir | ❌ Hayır — kabuk+`.js` push'lanınca canlı |
+| `kat-plani-tasarim.tekdosya.html` | `npm run build` motoru içine gömer | ✅ **Evet** — **`.gitignore`'da, sadece DİSKTE/yerel** (web'e gitmez, bilinçli karar) |
+| `mesken/MESKEN-prototip.html` | `npm run build` → postbuild tek-dosya motorunu içine gömer | ✅ **Evet** — tracked, build'siz commit'lersen **eski motor gömülü kalır** |
+
+**Neden:** kabuk+Pages ham `.js`'i yükler → anında güncel. Tek-dosya ve mesken prototip motoru İÇİNE GÖMER → build olmadan **donmuş/eski** kalır. Build = ikisini taze tutar.
+
+**Pratik:**
+- Tek komut: `npm run ship "commit mesajı"` (stage tracked + commit[hook build eder] + push).
+- Yeni DOSYA eklediysen (yeni `.js` modülü, görsel) önce `git add <dosya>` — `ship` sadece tracked değişiklikleri stage'ler, `input/`/`ml/` gibi untracked klasörleri süpürmez.
+- Ben (Claude) commit&push yaparken: `npm run build` → ilgili dosyaları `git add` → commit → push.
+
+---
+
 ## ⚠️ EN ÖNEMLİ KURAL — Değişiklik nereye yazılır
 
 **Ortak motor (kadraj, export, oda yerleşimi, duvar, çizim, mevzuat) = KPTA kaynağı. Mesken prototip'e ELLE dokunma.**
