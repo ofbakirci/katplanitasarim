@@ -680,6 +680,52 @@ function exportFloorplanMapFiles(){
   setTimeout(()=>fpDownload('floorplan-overlay.svg', buildFloorplanOverlaySVG(map), 'image/svg+xml'), 300);
 }
 if(typeof window!=='undefined'){ window.buildFloorplanMap=buildFloorplanMap; window.buildFloorplanOverlaySVG=buildFloorplanOverlaySVG; window.cameraViewInfo=cameraViewInfo; }
+
+/* ============================================================================
+   AI render girdileri → dataURL (indirme YOK). Mesken prototip "Planı Boya"
+   adımı bunları iframe'den okuyup köprü render sunucusuna POST eder.
+   exportAIPaintPNG / exportEdgeMaskPNG ile BİREBİR aynı çizim mantığı (aynı
+   exportClone + mod bayrakları + 2× ölçek), tek fark: a.click() yerine
+   Promise<dataURL>. İkisi aynı kadrajda → render girdileri üst üste çakışır.
+   ---------------------------------------------------------------------------- */
+function _aiCloneToDataURL(bgFill){
+  return new Promise((resolve,reject)=>{
+    try{
+      const {clone,W,H}=exportClone();
+      const data='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(new XMLSerializer().serializeToString(clone))));
+      const img=new Image();
+      img.onload=()=>{ try{
+        const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
+        const ctx=cv.getContext('2d');
+        if(bgFill){ ctx.fillStyle=bgFill; ctx.fillRect(0,0,cv.width,cv.height); }
+        ctx.scale(2,2); ctx.drawImage(img,0,0);
+        resolve(cv.toDataURL('image/png'));
+      }catch(e){ reject(e); } };
+      img.onerror=reject;
+      img.src=data;
+    }catch(e){ reject(e); }
+  });
+}
+/* Renkli boyama tabanı (oda dolgu rengi + EN etiket), beyaz zemin. */
+function exportPaintDataURL(){
+  aiPaintMode=true; aiCleanMode=true;
+  const p=_aiCloneToDataURL('#ffffff');
+  return p.finally(()=>{ aiPaintMode=false; aiCleanMode=false; render(); });
+}
+/* ControlNet kenar maskesi (beyaz zemin + saf siyah sürekli duvarlar). */
+function exportEdgesDataURL(){
+  edgeMaskMode=true;
+  const p=_aiCloneToDataURL('#ffffff');
+  return p.finally(()=>{ edgeMaskMode=false; render(); });
+}
+if(typeof window!=='undefined'){
+  window.mskExportPaintDataURL=exportPaintDataURL;   // boyama PNG (renkli + etiket)
+  window.mskExportEdgesDataURL=exportEdgesDataURL;    // kenar maskesi PNG
+  // Mesken'in kullanacağı tek giriş: ikisini birlikte üret (sıralı, render() çakışmasın)
+  window.mskExportRenderInputs=function(){
+    return exportEdgesDataURL().then(edges=>exportPaintDataURL().then(paint=>({edges,paint})));
+  };
+}
 /* AI Output: tek tıkla DÖRT dosya — renkli boyama tabanı + duvar kenar haritası
    (aynı kadraj) + oda/daire haritası JSON + doğrulama overlay SVG.
    Boyama rengi/etiketi verir, kenar haritası geometriyi kilitler → stilli + %100
