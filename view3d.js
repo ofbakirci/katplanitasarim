@@ -75,7 +75,7 @@
         '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer">'+
           '<input type="checkbox" data-v3d="lbl" checked> Oda etiketleri</label>'+
         '<div style="display:flex;gap:6px;margin-top:10px">'+
-          '<button data-v3d="png" class="v3db">PNG indir</button>'+
+          '<button data-v3d="png" class="v3db" title="Etiketler İngilizce — AI 3D render için">PNG indir (EN)</button>'+
           '<button data-v3d="close" class="v3db" style="background:#3a3a44;color:#e8e6e0">Kapat ✕</button>'+
         '</div>'+
         '<div id="v3dStatus" style="font-size:10.5px;opacity:.6;margin-top:8px"></div>'+
@@ -259,7 +259,9 @@
       // etiket — pole-of-inaccessibility çapası (komşu odaya taşmaz); yoksa centroid'e düş
       let la=o.label_anchor_px||o.centroid_px;
       if(!la){ la=P.reduce(function(s,p){return [s[0]+p[0],s[1]+p[1]];},[0,0]).map(function(v){return v/P.length;}); }
-      const lm=px2m(map,la[0],la[1]); const spr=makeLabel(o.name||o.name_en||'');
+      const lm=px2m(map,la[0],la[1]);
+      const trName=o.name||o.name_en||'', enName=o.name_en||o.name||'';  // ekran TR; PNG export EN
+      const spr=makeLabel(trName); spr.userData.tr=trName; spr.userData.en=enName;
       spr.position.set(lm[0],0.6,lm[1]); labels.add(spr);
     });
 
@@ -267,14 +269,19 @@
     setView('iso');
   }
 
-  function makeLabel(txt){
+  function labelTexture(txt){
     const c=document.createElement('canvas'); c.width=256; c.height=64; const x=c.getContext('2d');
     x.fillStyle='rgba(20,20,25,.55)'; x.fillRect(0,0,256,64);
     x.fillStyle='#f0e8d8'; x.font='600 24px system-ui'; x.textAlign='center'; x.textBaseline='middle';
     x.fillText((txt||'').slice(0,18),128,32);
-    const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false}));
+    return new THREE.CanvasTexture(c);
+  }
+  function makeLabel(txt){
+    const s=new THREE.Sprite(new THREE.SpriteMaterial({map:labelTexture(txt),transparent:true,depthTest:false}));
     s.scale.set(2.6,0.65,1); return s;
   }
+  // etiket metnini değiştir (TR↔EN); eski texture'ı bırak (PNG export'unda kullanılır)
+  function setLabelText(spr,txt){ if(spr.material.map) spr.material.map.dispose(); spr.material.map=labelTexture(txt); spr.material.needsUpdate=true; }
 
   function setView(v){
     if(!cam||!controls) return;
@@ -315,8 +322,15 @@
     scene.__walls.children.forEach(function(w){ if(w.userData.isWall){ w.scale.y=roofOn?1:WALL_LOW;
       w.position.y=(roofOn?WALL_H:WALL_H*WALL_LOW)/2; } });
     if(scene.__lintels) scene.__lintels.visible=roofOn; }   // lentö = kapı başlığı, sadece tam yükseklikte
-  function snap(){ if(!renderer) return; renderer.render(scene,cam);
-    const a=document.createElement('a'); a.download='kat-plani-3d.png'; a.href=renderer.domElement.toDataURL('image/png'); a.click(); }
+  // PNG'yi İNGİLİZCE etiketle ver (AI 3D-render İngilizce sever; pipeline'ın geri kalanı da EN).
+  // Etiketleri EN'e çevir → render → indir → ekrandaki TR'yi geri koy.
+  function snap(){ if(!renderer) return;
+    const labs=(scene&&scene.__labels)?scene.__labels.children:[];
+    labs.forEach(function(s){ if(s.userData&&s.userData.en) setLabelText(s,s.userData.en); });
+    renderer.render(scene,cam);
+    const a=document.createElement('a'); a.download='floor-plan-3d.png'; a.href=renderer.domElement.toDataURL('image/png'); a.click();
+    labs.forEach(function(s){ if(s.userData&&s.userData.tr) setLabelText(s,s.userData.tr); });
+    renderer.render(scene,cam); }
 
   function open(){
     ensureOverlay();
