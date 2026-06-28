@@ -8,7 +8,7 @@
 (function(){
   'use strict';
   const THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-  const WALL_H = 2.7, FLOOR_T = 0.08;
+  const WALL_H = 2.7, FLOOR_T = 0.08, DOOR_H = 2.1;   // DOOR_H = kapı boşluğu yüksekliği (lentö altı)
   const WALL_LOW = 0.5;   // varsayılan duvar oranı: YARI yükseklik (dollhouse + hacim okunur). roofOn=tam.
   let overlay, host, status, scene, cam, renderer, controls, raf, roofOn=false, lblOn=true;
   let threeLoading=null, built=false, zoomEl=null, zoomActive=false;
@@ -202,12 +202,50 @@
     rooms.forEach(function(o){ o.polygon_px.forEach(function(p){ const m=px2m(map,p[0],p[1]);
       minX=Math.min(minX,m[0]);maxX=Math.max(maxX,m[0]);minZ=Math.min(minZ,m[1]);maxZ=Math.max(maxZ,m[1]); }); });
     const cx=(minX+maxX)/2, cz=(minZ+maxZ)/2;
-    // fit için: model merkezde (0,0,0); kuşatan küre yarıçapı + dikey merkez
-    scene.__fitR=0.5*Math.hypot(maxX-minX,maxZ-minZ,WALL_H);
-    scene.__fitCY=WALL_H*0.35;
+    // fit için: model merkezde (0,0,0); gerçek yarı-genişlikler (sıkı köşe-projeksiyonu fit'i)
+    scene.__hx=(maxX-minX)/2; scene.__hz=(maxZ-minZ)/2;
     const G=new THREE.Group(); G.position.set(-cx,0,-cz); scene.add(G);
     const walls=new THREE.Group(); walls.position.set(-cx,0,-cz); scene.add(walls); scene.__walls=walls;
+    const lintels=new THREE.Group(); lintels.position.set(-cx,0,-cz); lintels.visible=roofOn; scene.add(lintels); scene.__lintels=lintels;
     const labels=new THREE.Group(); labels.position.set(-cx,0,-cz); labels.visible=lblOn; scene.add(labels); scene.__labels=labels;
+
+    // paylaşılan malzemeler (her duvar için yeni material üretme)
+    const matWall=new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92});
+    const matDoor=new THREE.MeshStandardMaterial({color:0x8a6a48,roughness:0.7,metalness:0.05}); // kapı eşiği = ahşap kahve
+
+    // kapı boşlukları (metre uzayı): map.doors px → px2m. Oda kenarlarıyla AYNI doğrultudadır.
+    const doorSegs=(map.doors||[]).map(function(d){
+      const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
+      return {ax:a[0],az:a[1],bx:b[0],bz:b[1]};
+    });
+    // bir oda kenarını (a→b) kur — üstünden geçen kapılarda BOŞLUK bırak, eşik + (tam-yükseklikte) lentö ekle
+    function wallEdge(a,b){
+      const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz); if(len<0.05) return;
+      const ux=dx/len,uz=dz/len, ang=-Math.atan2(dz,dx);
+      const gaps=[];
+      doorSegs.forEach(function(d){
+        const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
+        const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
+        if(e0>0.2||e1>0.2) return;                          // kapı bu duvar doğrultusunda değil (uzaklık toleransı)
+        const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
+        if(g1-g0>0.1) gaps.push([g0,g1]);                   // duvarla örtüşen kapı boşluğu
+      });
+      gaps.sort(function(p,q){return p[0]-q[0];});
+      function seg(s0,s1){ if(s1-s0<0.04) return;
+        const wm=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,WALL_H,0.12),matWall);
+        wm.position.set(a[0]+ux*(s0+s1)/2, roofOn?WALL_H/2:WALL_H*WALL_LOW/2, a[1]+uz*(s0+s1)/2);
+        wm.rotation.y=ang; wm.scale.y=roofOn?1:WALL_LOW;
+        wm.castShadow=true; wm.userData.isWall=true; walls.add(wm);
+      }
+      let s=0; gaps.forEach(function(g){ seg(s,g[0]); s=Math.max(s,g[1]); }); seg(s,len);
+      gaps.forEach(function(g){
+        const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
+        const th=new THREE.Mesh(new THREE.BoxGeometry(gw,0.04,0.2),matDoor);          // eşik: her açıdan "kapı burada"
+        th.position.set(mx,0.02,mz); th.rotation.y=ang; th.receiveShadow=true; th.userData.isSill=true; walls.add(th);
+        const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,0.12),matWall); // lentö: yalnız tam-yükseklikte görünür
+        ln.position.set(mx,(DOOR_H+WALL_H)/2,mz); ln.rotation.y=ang; ln.castShadow=true; lintels.add(ln);
+      });
+    }
 
     rooms.forEach(function(o){
       const col=colorFor(o);
@@ -215,20 +253,13 @@
       g.rotateX(Math.PI/2);
       const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:col,roughness:0.78,metalness:0.03}));
       m.receiveShadow=true; m.castShadow=true; G.add(m);
-      // duvarlar = oda kenarları
+      // duvarlar = oda kenarları (kapı boşlukları oyulmuş)
       const P=o.polygon_px;
-      for(let i=0;i<P.length;i++){
-        const a=px2m(map,P[i][0],P[i][1]), b=px2m(map,P[(i+1)%P.length][0],P[(i+1)%P.length][1]);
-        const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz); if(len<0.05) continue;
-        const wm=new THREE.Mesh(new THREE.BoxGeometry(len,WALL_H,0.12),
-          new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92}));
-        wm.position.set((a[0]+b[0])/2, roofOn?WALL_H/2:WALL_H*WALL_LOW/2, (a[1]+b[1])/2);
-        wm.rotation.y=-Math.atan2(dz,dx); wm.scale.y=roofOn?1:WALL_LOW;
-        wm.castShadow=true; wm.userData.isWall=true; walls.add(wm);
-      }
-      // etiket
-      const c=P.reduce(function(s,p){return [s[0]+p[0],s[1]+p[1]];},[0,0]).map(function(v){return v/P.length;});
-      const lm=px2m(map,c[0],c[1]); const spr=makeLabel(o.name||o.name_en||'');
+      for(let i=0;i<P.length;i++) wallEdge(px2m(map,P[i][0],P[i][1]), px2m(map,P[(i+1)%P.length][0],P[(i+1)%P.length][1]));
+      // etiket — pole-of-inaccessibility çapası (komşu odaya taşmaz); yoksa centroid'e düş
+      let la=o.label_anchor_px||o.centroid_px;
+      if(!la){ la=P.reduce(function(s,p){return [s[0]+p[0],s[1]+p[1]];},[0,0]).map(function(v){return v/P.length;}); }
+      const lm=px2m(map,la[0],la[1]); const spr=makeLabel(o.name||o.name_en||'');
       spr.position.set(lm[0],0.6,lm[1]); labels.add(spr);
     });
 
@@ -254,23 +285,36 @@
     cam.updateProjectionMatrix(); controls.sync(); controls.update();
     fitView();   // açıyı koru, modeli ekrana sığdır
   }
-  // mevcut bakış açısını koruyarak modeli ekrana sığdır (FOV + en-boy oranına göre mesafe)
+  // mevcut bakış açısını KORUYARAK modeli ekrana SIKICA sığdır.
+  // Kuşatan küre değil: 8 köşeyi kamera eksenlerine projekte edip hepsinin
+  // çerçeveye girdiği EN YAKIN mesafeyi bulur → gerçek silüete göre, az boşluk.
   function fitView(){
-    if(!cam||!controls||!scene||scene.__fitR==null) return;
-    const R=scene.__fitR*1.12;                       // küçük kenar payı
-    const vfov=cam.fov*Math.PI/180;
-    const hfov=2*Math.atan(Math.tan(vfov/2)*Math.max(cam.aspect,0.001));
-    const fov=Math.min(vfov,hfov);                    // dar olan kenar sınırlar
-    const dist=R/Math.sin(fov/2);
-    controls.target.set(0,scene.__fitCY||0,0);
-    const dir=new THREE.Vector3().subVectors(cam.position,controls.target);
-    if(dir.lengthSq()<1e-6) dir.set(1,0.9,1);
-    dir.setLength(dist); cam.position.copy(controls.target).add(dir);
+    if(!cam||!controls||!scene||scene.__hx==null) return;
+    const hx=scene.__hx, hz=scene.__hz, topY=(roofOn?WALL_H:WALL_H*WALL_LOW), cy=topY/2;
+    const target=new THREE.Vector3(0,cy,0);
+    const dir=new THREE.Vector3().subVectors(cam.position,target);   // hedef→kamera yönü
+    if(dir.lengthSq()<1e-6) dir.set(1,0.9,1); dir.normalize();
+    const up=cam.up.clone().normalize();
+    const right=new THREE.Vector3().crossVectors(up,dir).normalize();
+    const upc=new THREE.Vector3().crossVectors(dir,right).normalize();
+    const tanV=Math.tan(cam.fov*Math.PI/360), tanH=tanV*Math.max(cam.aspect,1e-3);
+    const MARGIN=1.05;                                 // ufak kenar payı
+    let d=0; const rc=new THREE.Vector3();
+    for(let sx=-1;sx<=1;sx+=2) for(let sy=0;sy<=1;sy++) for(let sz=-1;sz<=1;sz+=2){
+      rc.set(sx*hx, sy*topY-cy, sz*hz);               // köşe (hedefe göre)
+      const along=rc.dot(dir);                         // kameraya doğru bileşen
+      const x=Math.abs(rc.dot(right))*MARGIN, y=Math.abs(rc.dot(upc))*MARGIN;
+      const need=along+Math.max(x/tanH, y/tanV);       // bu köşeyi içerecek min mesafe
+      if(need>d) d=need;
+    }
+    controls.target.copy(target);
+    cam.position.copy(target).addScaledVector(dir, d);
     cam.updateProjectionMatrix(); controls.sync(); controls.update();
   }
   function applyRoof(){ if(!scene||!scene.__walls) return;
     scene.__walls.children.forEach(function(w){ if(w.userData.isWall){ w.scale.y=roofOn?1:WALL_LOW;
-      w.position.y=(roofOn?WALL_H:WALL_H*WALL_LOW)/2; } }); }
+      w.position.y=(roofOn?WALL_H:WALL_H*WALL_LOW)/2; } });
+    if(scene.__lintels) scene.__lintels.visible=roofOn; }   // lentö = kapı başlığı, sadece tam yükseklikte
   function snap(){ if(!renderer) return; renderer.render(scene,cam);
     const a=document.createElement('a'); a.download='kat-plani-3d.png'; a.href=renderer.domElement.toDataURL('image/png'); a.click(); }
 

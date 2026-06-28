@@ -544,6 +544,14 @@ function buildFloorplanMap(opt){
   const common=plan.regions.filter(g=>g.cells.length && g.unit<0).map(g=>{
     const o=fpRegionGeom(g,fr); o.id='C-'+g.id; return o;
   });
+  // kapılar: gerçek kapı boşlukları (3B görünüm + AI besleme); oda poligonlarıyla AYNI px uzayı.
+  // span = exportWallBoundaryPNG ile birebir (orta e+0.45, genişlik doorWidthM: bina1.5/daire1.0/oda0.9/ıslak0.8).
+  const doors=(typeof computeDoors==='function'?computeDoors():[])
+    .filter(d=>d&&d.status==='ok'&&d.e)
+    .map(d=>{ const e=d.e, Wd=doorWidthM(d), c0=0.45-Wd/2, c1=0.45+Wd/2;
+      const a=fr.px(e.h?e.x+c0:e.x, e.h?e.y:e.y+c0), b=fr.px(e.h?e.x+c1:e.x, e.h?e.y:e.y+c1);
+      return { kind:d.kind, orient:e.h?'h':'v', width_m:+Wd.toFixed(2),
+               p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; });
   return {
     render:{ file:(opt&&opt.file)||'kat-plani-AI-boyama.png', width:fr.W, height:fr.H,
       aspect:+(fr.W/fr.H).toFixed(4), target_aspect:+FP_RENDER_ASPECT.toFixed(4) },
@@ -552,7 +560,7 @@ function buildFloorplanMap(opt){
     scale:{ metersPerPixel:mpp, origin_px:fr.px(0,0),
       formula:'px = world_m * '+(fr.S*fr.SC)+' + origin_px ; world_m = (px - origin_px) * metersPerPixel',
       norm_formula:'render_px_x = x_norm * renderWidth ; render_px_y = y_norm * renderHeight (kadraj render oranında → her iki eksen tek çarpan)' },
-    units, common_areas:common
+    units, common_areas:common, doors
   };
 }
 /* render üstüne bindirilebilen doğrulama SVG'si (aynı viewBox; düz string → headless de çalışır) */
