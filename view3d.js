@@ -11,7 +11,7 @@
   const WALL_H = 2.7, FLOOR_T = 0.08;
   const WALL_LOW = 0.5;   // varsayılan duvar oranı: YARI yükseklik (dollhouse + hacim okunur). roofOn=tam.
   let overlay, host, status, scene, cam, renderer, controls, raf, roofOn=false, lblOn=true;
-  let threeLoading=null, built=false;
+  let threeLoading=null, built=false, zoomEl=null, zoomActive=false;
 
   // oda tipi (TR motor tipi ya da EN) -> sıcak zemin rengi
   // ODA TİPİ = BELİRGİN AYRIK RENK → AI renkten tipi anlasın (karıştırmasın).
@@ -63,6 +63,12 @@
           '<button data-v3d="iso" class="v3db">İzometrik</button>'+
           '<button data-v3d="top" class="v3db">Üstten</button>'+
           '<button data-v3d="persp" class="v3db">Perspektif</button>'+
+          '<button data-v3d="fit" class="v3db" style="background:#7bbf8a;color:#13201a">⤢ Sığdır</button>'+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:10px">'+
+          '<span style="font-size:13px;opacity:.85" title="Yakınlaştır">🔍</span>'+
+          '<input type="range" id="v3dZoom" min="0" max="1000" value="600" '+
+            'style="flex:1;accent-color:#c9a16b;cursor:pointer">'+
         '</div>'+
         '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:8px;cursor:pointer">'+
           '<input type="checkbox" data-v3d="roof"> Duvarlar tam yükseklik</label>'+
@@ -86,11 +92,27 @@
       const a=e.target.getAttribute&&e.target.getAttribute('data-v3d'); if(!a) return;
       if(a==='close') close();
       else if(a==='iso'||a==='top'||a==='persp') setView(a);
+      else if(a==='fit') fitView();
       else if(a==='png') snap();
       else if(a==='roof'){ roofOn=e.target.checked; applyRoof(); }
       else if(a==='lbl'){ lblOn=e.target.checked; if(scene&&scene.__labels) scene.__labels.visible=lblOn; }
     });
+    // zoom slider (sağ=yakın). input sırasında loop'un slider'ı ezmesini engelle.
+    zoomEl=overlay.querySelector('#v3dZoom');
+    zoomEl.addEventListener('input',function(){ zoomActive=true;
+      if(controls) controls.setDistanceTarget(sliderToDist(+zoomEl.value)); });
+    zoomEl.addEventListener('pointerdown',function(){ zoomActive=true; });
+    window.addEventListener('pointerup',function(){ zoomActive=false; });
   }
+
+  // slider 0..1000  ↔  kamera mesafesi (log ölçek; 1000=en yakın)
+  function sliderToDist(v){ if(!controls) return 22;
+    const lo=Math.log(controls.minDistance),hi=Math.log(controls.maxDistance);
+    return Math.exp(hi-(hi-lo)*(v/1000)); }
+  function distToSlider(dd){ if(!controls) return 600;
+    const lo=Math.log(controls.minDistance),hi=Math.log(controls.maxDistance);
+    const d=Math.max(controls.minDistance,Math.min(controls.maxDistance,dd));
+    return Math.round(1000*(hi-Math.log(d))/(hi-lo)); }
 
   function loadThree(){
     if(window.THREE) return Promise.resolve();
@@ -103,27 +125,31 @@
     return threeLoading;
   }
 
-  // ---- minimal OrbitControls (r128) ----
+  // ---- minimal OrbitControls (r128) — damped rotasyon + damped zoom (radiusTarget) ----
   function attachOrbit(o,d){
-    const c={object:o,domElement:d,target:new THREE.Vector3(),enableDamping:true,dampingFactor:0.08,
-      minDistance:3,maxDistance:400,maxPolarAngle:Math.PI/2.02};
-    let sph=new THREE.Spherical(),sphD=new THREE.Spherical(),panOff=new THREE.Vector3(),scale=1,
-      rotS=new THREE.Vector2(),rotE=new THREE.Vector2(),panS=new THREE.Vector2(),state=-1;
-    const q=new THREE.Quaternion().setFromUnitVectors(o.up,new THREE.Vector3(0,1,0));
-    let qi=(q.clone().invert?q.clone().invert():q.clone().inverse());
+    const c={object:o,domElement:d,target:new THREE.Vector3(),
+      enableDamping:true,dampingFactor:0.12,rotateSpeed:0.78,zoomDamp:0.16,
+      minDistance:3,maxDistance:800,maxPolarAngle:Math.PI/2.02};
+    let sph=new THREE.Spherical(),sphD=new THREE.Spherical(),panOff=new THREE.Vector3(),
+      radiusTarget=null,rotS=new THREE.Vector2(),rotE=new THREE.Vector2(),panS=new THREE.Vector2(),state=-1;
+    function clampD(r){ return Math.max(c.minDistance,Math.min(c.maxDistance,r)); }
     c.update=function(){
       const q2=new THREE.Quaternion().setFromUnitVectors(o.up,new THREE.Vector3(0,1,0));
-      qi=(q2.clone().invert?q2.clone().invert():q2.clone().inverse());
+      const qi=(q2.clone().invert?q2.clone().invert():q2.clone().inverse());
       const off=new THREE.Vector3().copy(o.position).sub(c.target).applyQuaternion(q2);
       sph.setFromVector3(off); sph.theta+=sphD.theta; sph.phi+=sphD.phi;
       sph.phi=Math.max(0.01,Math.min(c.maxPolarAngle,sph.phi)); sph.makeSafe();
-      sph.radius*=scale; sph.radius=Math.max(c.minDistance,Math.min(c.maxDistance,sph.radius));
+      if(radiusTarget==null) radiusTarget=sph.radius; radiusTarget=clampD(radiusTarget);
+      sph.radius+=(radiusTarget-sph.radius)*c.zoomDamp; sph.radius=clampD(sph.radius);  // damped zoom
       c.target.add(panOff); off.setFromSpherical(sph).applyQuaternion(qi);
       o.position.copy(c.target).add(off); o.lookAt(c.target);
       if(c.enableDamping){ sphD.theta*=(1-c.dampingFactor); sphD.phi*=(1-c.dampingFactor); panOff.multiplyScalar(1-c.dampingFactor); }
       else { sphD.set(0,0,0); panOff.set(0,0,0); }
-      scale=1;
     };
+    c.getDistance=function(){ return o.position.distanceTo(c.target); };
+    c.setDistanceTarget=function(r){ radiusTarget=clampD(r); };
+    // konum dışarıdan set edildiyse (setView/fit) hedefi mevcut mesafeye sabitle + atalet sıfırla
+    c.sync=function(){ radiusTarget=clampD(o.position.distanceTo(c.target)); sphD.set(0,0,0); panOff.set(0,0,0); };
     function pan(dx,dy){ const off=new THREE.Vector3().copy(o.position).sub(c.target),
       td=off.length()*Math.tan((o.fov/2)*Math.PI/180);
       const X=new THREE.Vector3().setFromMatrixColumn(o.matrix,0).multiplyScalar(-2*dx*td/d.clientHeight);
@@ -132,10 +158,13 @@
     function down(e){ if(e.button===0){state=0;rotS.set(e.clientX,e.clientY);}else{state=2;panS.set(e.clientX,e.clientY);}
       window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
     function move(e){ if(state===0){ rotE.set(e.clientX,e.clientY);
-        sphD.theta-=2*Math.PI*(rotE.x-rotS.x)/d.clientHeight; sphD.phi-=2*Math.PI*(rotE.y-rotS.y)/d.clientHeight; rotS.copy(rotE); }
+        const k=2*Math.PI*c.rotateSpeed/d.clientHeight;
+        sphD.theta-=k*(rotE.x-rotS.x); sphD.phi-=k*(rotE.y-rotS.y); rotS.copy(rotE); }
       else if(state===2){ pan(e.clientX-panS.x,e.clientY-panS.y); panS.set(e.clientX,e.clientY); } }
     function up(){ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); state=-1; }
-    function wheel(e){ e.preventDefault(); scale*=e.deltaY<0?0.92:1.08; }
+    function wheel(e){ e.preventDefault();
+      const base=(radiusTarget==null?c.getDistance():radiusTarget);
+      c.setDistanceTarget(base*(e.deltaY<0?0.9:1.111)); }
     d.addEventListener('mousedown',down); d.addEventListener('wheel',wheel,{passive:false});
     d.addEventListener('contextmenu',function(e){e.preventDefault();});
     return c;
@@ -173,6 +202,9 @@
     rooms.forEach(function(o){ o.polygon_px.forEach(function(p){ const m=px2m(map,p[0],p[1]);
       minX=Math.min(minX,m[0]);maxX=Math.max(maxX,m[0]);minZ=Math.min(minZ,m[1]);maxZ=Math.max(maxZ,m[1]); }); });
     const cx=(minX+maxX)/2, cz=(minZ+maxZ)/2;
+    // fit için: model merkezde (0,0,0); kuşatan küre yarıçapı + dikey merkez
+    scene.__fitR=0.5*Math.hypot(maxX-minX,maxZ-minZ,WALL_H);
+    scene.__fitCY=WALL_H*0.35;
     const G=new THREE.Group(); G.position.set(-cx,0,-cz); scene.add(G);
     const walls=new THREE.Group(); walls.position.set(-cx,0,-cz); scene.add(walls); scene.__walls=walls;
     const labels=new THREE.Group(); labels.position.set(-cx,0,-cz); labels.visible=lblOn; scene.add(labels); scene.__labels=labels;
@@ -219,7 +251,22 @@
     if(v==='top'){ cam.up.set(0,0,-1); cam.position.set(0,d*4.2,0); cam.fov=16; }
     else { cam.up.set(0,1,0); cam.fov=42;
       if(v==='iso') cam.position.set(d,d*0.95,d); else cam.position.set(d*1.3,d*0.5,d*1.3); }
-    cam.updateProjectionMatrix(); controls.update();
+    cam.updateProjectionMatrix(); controls.sync(); controls.update();
+    fitView();   // açıyı koru, modeli ekrana sığdır
+  }
+  // mevcut bakış açısını koruyarak modeli ekrana sığdır (FOV + en-boy oranına göre mesafe)
+  function fitView(){
+    if(!cam||!controls||!scene||scene.__fitR==null) return;
+    const R=scene.__fitR*1.12;                       // küçük kenar payı
+    const vfov=cam.fov*Math.PI/180;
+    const hfov=2*Math.atan(Math.tan(vfov/2)*Math.max(cam.aspect,0.001));
+    const fov=Math.min(vfov,hfov);                    // dar olan kenar sınırlar
+    const dist=R/Math.sin(fov/2);
+    controls.target.set(0,scene.__fitCY||0,0);
+    const dir=new THREE.Vector3().subVectors(cam.position,controls.target);
+    if(dir.lengthSq()<1e-6) dir.set(1,0.9,1);
+    dir.setLength(dist); cam.position.copy(controls.target).add(dir);
+    cam.updateProjectionMatrix(); controls.sync(); controls.update();
   }
   function applyRoof(){ if(!scene||!scene.__walls) return;
     scene.__walls.children.forEach(function(w){ if(w.userData.isWall){ w.scale.y=roofOn?1:WALL_LOW;
@@ -255,7 +302,9 @@
   function close(){ if(overlay) overlay.style.display='none'; }
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();} }
-  function loop(){ raf=requestAnimationFrame(loop); if(overlay.style.display!=='none'&&controls){ controls.update(); renderer.render(scene,cam); } }
+  function loop(){ raf=requestAnimationFrame(loop);
+    if(overlay.style.display!=='none'&&controls){ controls.update(); renderer.render(scene,cam);
+      if(zoomEl&&!zoomActive) zoomEl.value=distToSlider(controls.getDistance()); } }
 
   // dışa aç + buton bağla
   window.View3D = { open:open, close:close };
