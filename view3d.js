@@ -171,7 +171,10 @@
       '.v3drailx{color:#cf9b9b}.v3drailx:hover{background:rgba(200,90,90,.22);color:#f0d8d8}'+
       '.v3draild{height:1px;background:rgba(255,255,255,.15);margin:3px 4px}'+
       '#v3dAngleWarn{position:absolute;left:12px;right:12px;top:12px;z-index:5;background:rgba(192,73,43,.96);color:#fff;border-radius:10px;padding:11px 13px;font:12.5px/1.4 system-ui;box-shadow:0 6px 18px rgba(0,0,0,.35);display:none}'+
-      '#v3dAngleWarn button{margin-top:9px;background:#fff;color:#7a2c18;border:0;border-radius:7px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}';
+      '#v3dAngleWarn button{margin-top:9px;background:#fff;color:#7a2c18;border:0;border-radius:7px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}'+
+      '#v3dSplit{position:absolute;top:0;height:100%;width:16px;margin-left:-8px;z-index:2;cursor:col-resize;display:none;align-items:center;justify-content:center;touch-action:none}'+
+      '#v3dSplit>i{display:block;width:4px;height:50px;border-radius:3px;background:rgba(201,161,107,.85);box-shadow:0 0 0 1px rgba(0,0,0,.3);transition:height .12s,background .12s}'+
+      '#v3dSplit:hover>i,#v3dSplit.drag>i{height:78px;background:#e0bd86}';
     document.head.appendChild(st);
     host=overlay.querySelector('#v3dHost');
     status=overlay.querySelector('#v3dStatus');
@@ -752,7 +755,7 @@
   function setHint(t){ lastHint=t||''; const h=overlay&&overlay.querySelector('#v3dCamHint'); if(h) h.textContent=lastHint; }
 
   // ── açılış: boot (three.js + sahne) → full ya da yan-yana (compare) layout ──
-  let compareMode=false, compareRefURL=null;
+  let compareMode=false, compareRefURL=null, compareSplit=0.5;   // sol referans / sağ 3B oranı (sürüklenebilir bölücü)
   function boot(){
     ensureOverlay();
     const map = window.buildFloorplanMap && window.buildFloorplanMap();
@@ -820,15 +823,43 @@
           '<div id="v3dAngleWarn">Açı değişti — render açısı artık aynı değil; soldaki boyama bu açıyla eşleşmiyor.'+
             '<br><button data-v3d="rerender">'+ic('camera',13)+'Bu açıda yeniden render al · 14 Kredi</button></div>';
         overlay.insertBefore(ref, host);
+        // sürüklenebilir bölücü: sol referansı küçült → sağ 3B mesh'i büyüt (kamera yerleşimini daha iyi gör)
+        const split=document.createElement('div'); split.id='v3dSplit';
+        split.title='Sürükle: bölmeyi yeniden boyutlandır';
+        split.innerHTML='<i></i>';
+        overlay.insertBefore(split, host);
+        let dragging=false;
+        function onMove(e){ if(!dragging||!overlay) return;
+          const r=overlay.getBoundingClientRect(), cx=(e.touches&&e.touches[0]?e.touches[0].clientX:e.clientX);
+          compareSplit=(cx-r.left)/(r.width||1); applyCompareSplit(); if(e.cancelable) e.preventDefault(); }
+        function onUp(){ dragging=false; split.classList.remove('drag');
+          window.removeEventListener('pointermove',onMove); window.removeEventListener('pointerup',onUp); }
+        split.addEventListener('pointerdown',function(e){ dragging=true; split.classList.add('drag');
+          window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp); e.preventDefault(); });
       }
       const img=ref.querySelector('#v3dRefImg');
       // utf8 data-URI (btoa DEĞİL): yer-tutucu metni Türkçe "boyalı" içerir → btoa Latin1 dışı karakterde patlar
       if(img) img.src=paintedURL||'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260"><rect width="100%" height="100%" fill="#1a1714"/><text x="50%" y="50%" fill="#7a6f60" font-family="system-ui" font-size="16" text-anchor="middle">boyalı render bekleniyor</text></svg>');
-      ref.style.display='flex'; host.style.left='50%';       // 3B host → sağ yarı (right:0 inset'ten gelir)
+      ref.style.display='flex';
+      const sp=overlay.querySelector('#v3dSplit'); if(sp) sp.style.display='flex';
+      applyCompareSplit();                                   // 3B host → kalan sağ pay; bölücü konumlanır
     } else {
-      if(ref) ref.style.display='none'; host.style.left='0';
+      if(ref) ref.style.display='none';
+      const sp=overlay.querySelector('#v3dSplit'); if(sp) sp.style.display='none';
+      host.style.left='0';
     }
     resize();
+  }
+  // sol referans / sağ 3B oranını uygula (compareSplit) + canlı 3B'yi yeni genişliğe sığdır.
+  function applyCompareSplit(){
+    if(!overlay) return;
+    const ref=overlay.querySelector('#v3dCompareRef'), split=overlay.querySelector('#v3dSplit');
+    const f=Math.max(0.14, Math.min(0.86, compareSplit||0.5)); compareSplit=f;
+    const pct=(f*100).toFixed(2)+'%';
+    if(ref) ref.style.width=pct;
+    if(host) host.style.left=pct;
+    if(split) split.style.left=pct;
+    resize();                                                // renderer/kamera yeni en-boy oranına göre güncellenir
   }
   // ── açı kayması uyarısı (adım 4): kullanıcı mesh'i kilitli render açısından çevirirse sol boyamaya uyarı ──
   function viewDir(v){ if(!v||!v.position||!v.target) return null;
