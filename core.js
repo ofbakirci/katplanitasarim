@@ -20,6 +20,34 @@ const REG = {
   otoparkBrutKats:1.25,       // şematik net daire alanı → brüt yaklaşığı
   otoparkKonut:[{max:80, oto:1/3}, {max:120, oto:1/2}, {max:180, oto:1}, {max:1e9, oto:2}]
 };
+/* ── Yangın / merdiven / asansör — çekirdek ölçü eşikleri ─────────────────────
+   TEK DOĞRU KAYNAK: mesken/referans-kat-planlari/yangin-merdiven-kurallari.json
+   (+ gerekçe/madde: YANGIN-MERDIVEN-ASANSOR-KURALLARI.md). `mesken/` .gitignore'da
+   olduğundan KPTA kabuğu/Pages o JSON'u YÜKLEYEMEZ → motorun ölçebileceği alt küme
+   burada (tracked core.js) aynalanır; checks.js collectCoreDim/HeightChecks tüketir.
+   JSON güncellenirse bu blok da elle senkronlanmalı. Birim: metre / m².
+   Madde: BYKHY = Binaların Yangından Korunması Yön., PAİY = Planlı Alanlar İmar Yön. */
+const FIRE = {
+  /* yapı/bina yüksekliği eşikleri (m) — sınıf seçimi (JSON yukseklik_esikleri_m) */
+  heights:{ yuksek:21.5, cokYuksek:30.5, yuksekBlok:51.5 },
+  merdiven:{
+    /* U-dönüşlü konut merdiven kovası min ayak izi [dar, uzun] (m) — 1,20 m kol +
+       sahanlık + dönüşten türetilmiş (JSON merdiven.kova_ayak_izi_tipik_m.min;
+       PAİY M.40 + BYKHY M.41). Dar kenar HARD; alan SOFT eşik. */
+    kovaMin:[2.4, 3.6],
+    daireIciMin:1.00,   // daire içi merdiven kolu min (PAİY M.40)
+    yuksekBinaKol:1.20  // yüksek binada (>21,5 m) kaçış merdiveni KOLU genişliği (BYKHY M.33(2)); REZERVE — checks.js henüz tüketmiyor: motor basamak/kol geometrisi üretmediği için bbox'tan kol genişliği ölçülemez (kova dar kenarı 2,4 m HARD eşiği zaten 1,20'yi kapsar)
+  },
+  asansor:{
+    kuyuMin:[1.5, 1.7],      // yolcu asansörü kuyu kovası min [dar, uzun] (JSON kuyu_kovasi_tipik_m.min)
+    kabinErisim:[1.10, 1.40] // erişilebilir kabin (EN 81-70, JSON kabin_erisilebilir_m)
+  },
+  guvenlikHolu:{
+    alan:[3, 6], minBoyut:1.80,            // normal yangın güvenlik holü (BYKHY M.34(3))
+    asansorAlan:[6, 10], asansorBoyut:2.0  // acil durum asansörü önü holü (BYKHY M.34(4))
+  },
+  acilAsansor:{ kabinMin:1.8 } // acil durum asansörü kabini min m² (BYKHY M.63(4))
+};
 const COLORS = {
   salon:'#ffe7c2', yatak:'#d8e8f7', mutfak:'#ffd9cc', banyo:'#d4eee5', wc:'#d4eee5',
   antre:'#f1ecdf', oda:'#e9e3f3', koridor:'#ece4d2', merdiven:'#fdf0b0', asansor:'#e6d9f6',

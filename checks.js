@@ -34,6 +34,61 @@ function parkingSummaryCheck(add){
   add(cap>=req?'ok':'bad',
     `Otopark gereksinimi (Otopark Yön. Ek-1, konut): bina genelinde en az ≈ ${req} araçlık yer gerekli; planlanan otopark/sığınak katları ≈ ${cap} araç sığdırıyor. ${cap>=req? 'Yeterli' : ('EKSİK — '+(req-cap)+' araçlık yer daha gerekli (bir bodrum katını “Otopark” yapın ya da tabanı büyütün).')}`);
 }
+/* ÇEKİRDEK ÖLÇÜ DENETİMİ — üretilen merdiven/yangın/asansör/güvenlik holü boyutlarını
+   core.js FIRE eşiklerine (= yangin-merdiven-kurallari.json) karşı test eder; altındaysa
+   UYARI üretir. Gerekçe/madde: YANGIN-MERDIVEN-ASANSOR-KURALLARI.md. Boyutlar bölge
+   sınır kutusundan (g.minSide=dar kenar, g.bw/g.bh, g.area) okunur — motor basamak/rıht
+   üretmediği için yalnız AYAK İZİ (kova/kuyu/hol) ölçüleri denetlenir. */
+function collectCoreDimChecks(add, p){
+  const longOf=g=>Math.max(g.bw,g.bh);
+  const kovaArea=FIRE.merdiven.kovaMin[0]*FIRE.merdiven.kovaMin[1]; // dar×uzun = min kova alanı (m²)
+  p.regions.forEach(g=>{
+    if(!g.cells.length) return;
+    if(g.type==='merdiven'||g.type==='yangin'){
+      if(p.villa){ // daire içi merdiven → yalnız kol genişliği (PAİY M.40)
+        if(g.minSide < FIRE.merdiven.daireIciMin - 1e-9)
+          add('bad',`${g.name}: dar kenar ${fmt(g.minSide)} m < ${fmt(FIRE.merdiven.daireIciMin)} m — daire içi merdiven kolu (PAİY M.40).`, g.id);
+        return;
+      }
+      const [mk,mu]=FIRE.merdiven.kovaMin;
+      if(g.minSide < mk - 1e-9)
+        add('bad',`${g.name} kovası dar kenarı ${fmt(g.minSide)} m < ${fmt(mk)} m — 1,20 m kol + sahanlık + dönüş sığmaz; kovayı genişletin (PAİY M.40 / BYKHY M.41).`, g.id);
+      else if(g.area < kovaArea - 1e-6)
+        add('info',`${g.name} kovası ${fmt(g.area)} m² (${fmt(g.minSide)}×${fmt(longOf(g))} m) — basamaklı kol + ara sahanlık için min ~${fmt(mk)}×${fmt(mu)} m önerilir (BYKHY M.41(3)). Kovayı uzatın.`, g.id);
+    } else if(g.type==='asansor'){
+      const [ak,au]=FIRE.asansor.kuyuMin, [ck,cu]=FIRE.asansor.kabinErisim;
+      if(g.minSide < ak - 1e-9 || longOf(g) < au - 1e-9)
+        add('bad',`${g.name} kuyusu ${fmt(g.minSide)}×${fmt(longOf(g))} m < ${fmt(ak)}×${fmt(au)} m — erişilebilir kabin (${fmt(ck)}×${fmt(cu)} m, EN 81-70) sığmaz; kuyuyu büyütün.`, g.id);
+    } else if(g.type==='guvenlik' || /GÜVENLİK/i.test(g.name||'')){ // motor henüz üretmez; varsa denetle
+      const a=FIRE.guvenlikHolu;
+      if(g.area < a.alan[0] - 1e-6) add('bad',`${g.name}: ${fmt(g.area)} m² < ${fmt(a.alan[0])} m² — yangın güvenlik holü en az ${fmt(a.alan[0])} m² (BYKHY M.34(3)).`, g.id);
+      else if(g.area > a.alan[1] + 1e-6) add('info',`${g.name}: ${fmt(g.area)} m² > ${fmt(a.alan[1])} m² — normal güvenlik holü ${fmt(a.alan[0])}–${fmt(a.alan[1])} m² olmalı (BYKHY M.34(3)).`, g.id);
+      if(g.minSide < a.minBoyut - 1e-9) add('bad',`${g.name}: dar kenar ${fmt(g.minSide)} m < ${fmt(a.minBoyut)} m (kaçış yönü, BYKHY M.34(3)).`, g.id);
+    }
+  });
+}
+/* YÜKSEKLİK-SINIFI DENETİMİ — yapı yüksekliğine göre kaç-merdiven + güvenlik holü /
+   basınçlandırma / acil durum asansörü zorunluluğu (JSON yukseklik_esikleri_m +
+   kac_merdiven_konut_TR; BYKHY M.42/M.48/M.34/M.63/M.89). Yalnız apartman (çok bölümlü). */
+function collectCoreHeightChecks(add, p){
+  if(p.villa) return;
+  const H=+p.binaYuk||0; if(H<=0) return;
+  /* konut apartmanında "≥2 kaçış merdiveni" gereği zaten fireStairNeeded bloğunda (yukarıda)
+     söyleniyor → burada tekrar etme (mükerrer yeşil / yangın yerleşemezse çift-kırmızı olmasın).
+     ticari/otopark yüksek binada o blok ÇALIŞMADIĞI için sayı denetimi burada verilir. */
+  const konutApt = !p.katKullanim || p.katKullanim==='konut';
+  const stairs=p.regions.filter(g=>(g.type==='merdiven'||g.type==='yangin')&&g.cells.length).length;
+  const hasVes=p.regions.some(g=>g.cells.length&&(g.type==='guvenlik'||/GÜVENLİK/i.test(g.name||'')));
+  if(!konutApt && H>FIRE.heights.yuksek+1e-9){ // >21,50 m → en az 2 kaçış merdiveni (≥1 korunumlu)
+    add(stairs>=2?'ok':'bad', stairs>=2
+      ? `Yapı yüksekliği ${fmt(H)} m > ${fmt(FIRE.heights.yuksek)} m → en az 2 kaçış merdiveni gerekli; planda ${stairs} merdiven var (BYKHY M.48(5)).`
+      : `Yapı yüksekliği ${fmt(H)} m > ${fmt(FIRE.heights.yuksek)} m → en az 2 kaçış merdiveni zorunlu (BYKHY M.48(5)); planda ${stairs} var. İkinci kaçış merdivenini Yapı katmanından ekleyin ya da tabanı genişletin.`);
+  }
+  if(H>FIRE.heights.cokYuksek+1e-9) // >30,50 m → güvenlik holü VEYA basınçlandırma
+    add(hasVes?'ok':'bad', `Yapı yüksekliği ${fmt(H)} m > ${fmt(FIRE.heights.cokYuksek)} m → kaçış merdivenlerinin ikisi de korunumlu + en az birinde yangın güvenlik holü (${fmt(FIRE.guvenlikHolu.alan[0])}–${fmt(FIRE.guvenlikHolu.alan[1])} m², kaçış yönü ≥ ${fmt(FIRE.guvenlikHolu.minBoyut)} m) veya basınçlandırma zorunlu (BYKHY M.48(5c)/M.34/M.89).${hasVes?'':' Şematik motor güvenlik holü/basınçlandırma çizmez — projede ekleyin.'}`);
+  if(H>FIRE.heights.yuksekBlok+1e-9) // >51,50 m → acil durum asansörü + asansör önü holü
+    add('bad', `Yapı yüksekliği ${fmt(H)} m > ${fmt(FIRE.heights.yuksekBlok)} m → acil durum asansörü (kabin ≥ ${fmt(FIRE.acilAsansor.kabinMin)} m², 630 kg) + asansör önü güvenlik holü (${fmt(FIRE.guvenlikHolu.asansorAlan[0])}–${fmt(FIRE.guvenlikHolu.asansorAlan[1])} m², ≥ ${fmt(FIRE.guvenlikHolu.asansorBoyut)} m) + merdiven basınçlandırma zorunlu (BYKHY M.63/M.34(4)/M.89).`);
+}
 function collectChecks(){
   const out=[], add=(s,t,reg,unit)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit});
   const p=plan;
@@ -285,6 +340,9 @@ function collectChecks(){
       }
     }
   }
+  /* çekirdek ölçü + yükseklik-sınıfı denetimi (yangin-merdiven-kurallari.json → FIRE) */
+  collectCoreDimChecks(add, p);
+  collectCoreHeightChecks(add, p);
   /* parsel / bahçe */
   if(parcelClosed && parcelPts.length>=3 && closed){
     const site=(typeof siteOn==='function')&&siteOn();
