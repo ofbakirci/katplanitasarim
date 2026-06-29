@@ -103,7 +103,11 @@ function generate(keepCuts){
     if(kat>=REG.ikiAsansorKat) nAsansor=2;
     else if(kat>=REG.asansorKat) nAsansor=1;
     else if(kat===REG.asansorYeriKat){ nAsansor=1; asansorYeri=true; }
-    fireStairNeeded = binaYuk>REG.yanginYukseklik || kat>=4;
+    /* 2. kaçış (yangın) merdiveni YALNIZ yapı > 21,5 m konutta zorunlu (BYKHY M.48(5b)).
+       ≤21,5 m'de (≈7 kata kadar) tek korunumlu merdiven yeterli (M.48(5a)) → çekirdek küçük,
+       azami oturum alanı. (kat≥4 → asansör; yukarıda AYRI kural — eskiden buraya da bağlıydı,
+       gereksiz 2. merdiven üretiyordu.) Kullanıcı isterse Yapı katmanından 2. merdiveni ekler. */
+    fireStairNeeded = binaYuk>REG.yanginYukseklik;
     teknikNeeded = perFloor>=REG.teknikOdaDaire;
   }
 

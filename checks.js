@@ -203,11 +203,16 @@ function collectChecks(){
     else if(p.kat>=REG.asansorKat) add(p.nAsansor>=1?'ok':'bad',`Kat adedi ${p.kat} ≥ 4 → asansör zorunlu. Planda: ${p.nAsansor}.`);
     else if(p.kat===3) add('ok','Kat adedi 3 → asansör tesisi değil, asansör YERİ ayrılması yeterli (planda kesikli gösterildi).');
     else add('info','Kat adedi ≤ 2 → asansör zorunluluğu yok.');
-    /* yangın */
-    if(p.fireStairNeeded){
-      const has=p.regions.some(g=>g.type==='yangin');
-      add(has?'ok':'bad',`Bina yüksekliği ${fmt(p.binaYuk)} m / ${p.kat} kat → 2. kaçış (yangın) merdiveni gerekli (BYKHY). ${has?'Planda eklendi.':'Yerleştirilemedi — taban geometrisini genişletin!'}`);
-    } else add('ok',`Bina yüksekliği ${fmt(p.binaYuk)} m ≤ 21,5 m → tek kaçış merdiveni yeterli olabilir (BYKHY, kullanım yüküne bağlı).`);
+    /* yangın / 2. kaçış merdiveni — BYKHY M.48: yalnız yapı > 21,5 m konutta ZORUNLU.
+       (Gerçek yüksekliğe göre; fireStairNeeded bayrağına değil — içe aktarımda bayrak
+       "yangın bölgesi var mı"dan türetildiği için elle eklenen 2. merdivenli düşük binayı
+       yanlışlıkla "zorunlu" gösterebilirdi.) ≤21,5 m'de tek merdiven yeter (M.48/5a). */
+    const hasYangin=p.regions.some(g=>g.type==='yangin');
+    if(p.binaYuk>REG.yanginYukseklik){
+      add(hasYangin?'ok':'bad',`Yapı yüksekliği ${fmt(p.binaYuk)} m > ${fmt(REG.yanginYukseklik)} m → 2. kaçış (yangın) merdiveni zorunlu (BYKHY M.48). ${hasYangin?'Planda eklendi.':'Yerleştirilemedi — taban geometrisini genişletin!'}`);
+    } else {
+      add('ok',`Yapı yüksekliği ${fmt(p.binaYuk)} m ≤ ${fmt(REG.yanginYukseklik)} m → tek korunumlu merdiven yeterli (BYKHY M.48/5a); çekirdek küçük tutuldu, azami oturum alanı.${hasYangin?' İsteğe bağlı 2. merdiven eklenmiş.':' Dilersen Yapı katmanından 2. kaçış merdiveni ekleyebilirsin.'}`);
+    }
     /* kaçış mesafesi */
     if(p.stairs.length){
       /* BYKHY mesafesi daire ÇIKIŞ KAPISINDAN ölçülür (antre merkezinden değil) */

@@ -28,26 +28,37 @@ function t(name, ok){ if(!ok) FAILS++; console.log((ok?' ✓ ':' ✗ FAIL ')+nam
 /* ---------- A) ENTEGRASYON (gerçek generate) ---------- */
 function run(label, kat, poly, specs){
   getEl('binaTipi').value='apartman'; getEl('katSayisi').value=String(kat); getEl('katYuk').value='2.9';
-  byId['checks']=stubEl('div');
+  byId['checks']=stubEl('div'); global.__C={};
   eval(appJs + `
 ;unitSpecs=${JSON.stringify(specs)};
-pts=${JSON.stringify(poly)}; closed=true; generate();`);
+pts=${JSON.stringify(poly)}; closed=true; generate();
+const cn=t=>plan.regions.filter(g=>g.type===t&&g.cells.length).length;
+global.__C={ merdiven:cn('merdiven'), yangin:cn('yangin'), asansor:cn('asansor') };`);
   const msgs=byId['checks'].children.map(d=>({cls:d.className, txt:nodeText(d)}));
-  console.log('--- '+label+' (kat '+kat+', binaYuk '+(kat*2.9).toFixed(1)+' m) ---');
-  return { bad:s=>msgs.filter(m=>m.cls.includes('bad')&&m.txt.includes(s)).length,
+  console.log('--- '+label+' (kat '+kat+', binaYuk '+(kat*2.9).toFixed(1)+' m) → çekirdek '+JSON.stringify(global.__C)+' ---');
+  return { c:global.__C,
+           bad:s=>msgs.filter(m=>m.cls.includes('bad')&&m.txt.includes(s)).length,
            info:s=>msgs.filter(m=>m.cls.includes('info')&&m.txt.includes(s)).length,
            any:s=>msgs.filter(m=>m.txt.includes(s)).length };
 }
 const SQUARE=[{x:0,y:0},{x:30,y:0},{x:30,y:24},{x:0,y:24}];
 const SPECS=[{oda:2,salon:1,ensuite:false,acik:false,adet:4}];
 
-// 1) Alçak bina (6 kat, 17,4 m < 21,5): yeni yüksek-sınıf uyarıları ÇIKMAMALI, kova/kuyu false-positive yok.
+// 1) Alçak bina (6 kat, 17,4 m < 21,5): TEK merdiven varsayılan (azami oturum alanı);
+//    yeni yüksek-sınıf uyarıları ÇIKMAMALI, kova/kuyu false-positive yok.
 { const r=run('alçak apartman', 6, SQUARE, SPECS);
+  t('alçak: TEK merdiven varsayılan (yangın bölgesi YOK)', r.c.yangin===0 && r.c.merdiven===1);
+  t('alçak: "tek korunumlu merdiven yeterli" (M.48/5a) mesajı var', r.any('tek korunumlu merdiven yeterli')>0);
+  t('alçak: "2. kaçış (yangın) merdiveni zorunlu" YOK', r.any('2. kaçış (yangın) merdiveni zorunlu')===0);
   t('güvenlik holü zorunluluğu YOK (<21,5)', r.bad('güvenlik holü')===0);
-  t('"kaçış merdiveni zorunlu" YOK (<21,5)', r.bad('kaçış merdiveni zorunlu')===0);
   t('acil durum asansörü YOK (<21,5)', r.bad('acil durum asansörü')===0);
   t('merdiven kovası dar-kenar HARD ihlali yok', r.bad('kovası dar kenarı')===0);
   t('asansör kuyusu HARD ihlali yok', r.bad('kuyusu')===0);
+}
+// 1b) Eşik üstü (8 kat, 23,2 m > 21,5): 2. kaçış (yangın) merdiveni OTOMATİK eklenir.
+{ const r=run('eşik üstü apartman', 8, SQUARE, SPECS);
+  t('eşik üstü: 2. (yangın) merdiveni otomatik eklendi', r.c.yangin===1 && r.c.merdiven===1);
+  t('eşik üstü: "2. kaçış ... zorunlu" mesajı + yerleşti (Yerleştirilemedi yok)', r.any('2. kaçış (yangın) merdiveni zorunlu')>0 && r.bad('Yerleştirilemedi')===0);
 }
 // 2) Çok-yüksek (12 kat, 34,8 m > 30,5): güvenlik holü/basınçlandırma zorunlu (motor çizmez → bad).
 { const r=run('çok-yüksek apartman', 12, SQUARE, SPECS);
