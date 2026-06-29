@@ -92,7 +92,8 @@ const ROOM_ADD=[
   {name:'YATAK ODASI',  type:'yatak',  h:5, w:8},  // 2,5 × 4,0 m hedef
   {name:'EB. YATAK ODASI', type:'yatak', h:6, w:8}, // 3,0 × 4,0 m ebeveyn yatak odası (sonra EB. BANYO oyulabilir)
   {name:'EB. BANYO',    type:'banyo',  h:4, w:4, eb:true}, // 2,0 × 2,0 m; yalnız yatak odasından oyulur
-  {name:'OTURMA ODASI', type:'salon',  h:6, w:8},  // 3,0 × 4,0 m
+  {name:'SALON',        type:'salon',  h:6, w:8},  // 3,0 × 4,0 m ana salon (etiket kurtarma)
+  {name:'OTURMA ODASI', type:'salon',  h:6, w:8},  // 3,0 × 4,0 m ikincil oturma odası
   {name:'MUTFAK',       type:'mutfak', h:4, w:6},  // 2,0 × 3,0 m
   {name:'BANYO',        type:'banyo',  h:3, w:4},  // 1,5 × 2,0 m
   {name:'WC',           type:'wc',     h:2, w:3},  // 1,0 × 1,5 m
@@ -325,6 +326,75 @@ function addRoom(host, def, hint){
   refreshAfterRoomEdit();
   return true;
 }
+/* ================= serbest oda çizimi (roomdraw modu) =================
+   Kullanıcı kapalı bir poligon çizer; içindeki hücreler rasterize edilip yeni nötr
+   "ODA" olur. Context-menü dikdörtgen-oyma kısıtlarını (≥3 m² host, tek dikdörtgen)
+   BAYPAS eder — "alan yeterli değil" çıkmazına kaçış kapısı. KAPSAM (kullanıcı kararı:
+   tek daire içi): yalnız poligonun en çok üstünde olduğu BASKIN dairenin odalarından +
+   boş/artık iç hücrelerden alır; çekirdek (merdiven/asansör/şaft/yangın), apartman holü
+   (koridor) ve DİĞER daireler korunur. Mecburi piyes (tek/korumalı salon, antre) tümüyle
+   yutulamaz. Geri al: cut/structedit gibi TAM-durum anlık görüntüsüyle (çoklu-donör carve,
+   tek-host undo varsayımını baypas eder). */
+function largestComponent(cells){
+  const p=plan, set=new Set(cells), seen=new Set(); let best=[];
+  for(const s of cells){ if(seen.has(s)) continue;
+    const comp=[], stk=[s]; seen.add(s);
+    while(stk.length){ const i=stk.pop(); comp.push(i); const r=(i/p.cols)|0,c=i%p.cols;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+        const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); stk.push(j); } }); }
+    if(comp.length>best.length) best=comp; }
+  return best;
+}
+function addRoomFromPolygon(poly){
+  if(!plan||!poly||poly.length<3) return {ok:false, reason:'small'};
+  const p=plan, CORE=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik';
+  /* 1) rasterize: footprint içi, merkezi poligonda olan hücreler */
+  const cand=[];
+  for(let r=0;r<p.rows;r++)for(let c=0;c<p.cols;c++){
+    const i=r*p.cols+c; if(!p.inside[i]) continue;
+    if(pip(p.minX+(c+0.5)*M, p.minY+(r+0.5)*M, poly)) cand.push(i); }
+  if(cand.length<4) return {ok:false, reason:'small'};   // <1 m²
+  /* 2) baskın daire: poligonun en çok hücresini kapsadığı daire */
+  const tally=new Map();
+  cand.forEach(i=>{ const v=p.cm[i]; if(v<0||CORE(p.regions[v].type)) return;
+    const k=unitOfRoom(v); if(k>=0) tally.set(k,(tally.get(k)||0)+1); });
+  let domK=-1, bestN=-1; tally.forEach((n,k)=>{ if(n>bestN){ bestN=n; domK=k; } });
+  if(domK<0) return {ok:false, reason:'nounit'};         // yalnız hol/çekirdek/boş üstünde
+  const u=p.unitObjs[domK], myRegs=new Set(u.rooms.map(g=>g.id));
+  /* 3) kapsam: yalnız bu dairenin odaları + boş iç hücreler (çekirdek/hol/diğer daire hariç) */
+  let take=cand.filter(i=>{ const v=p.cm[i];
+    if(v<0) return true;                                 // boş iç hücre serbest
+    if(CORE(p.regions[v].type)) return false;
+    return myRegs.has(v); });
+  if(take.length<4) return {ok:false, reason:'small'};
+  /* 4) tek parça: poligon ince boyunluysa bile yeni oda 4-bağlı kalsın */
+  take=largestComponent(take);
+  if(take.length<4) return {ok:false, reason:'small'};
+  /* 4b) mecburi piyes koruması: tek/korumalı salon ya da antre tümüyle yutulamaz (≥1 m² kalsın) */
+  const takeSet=new Set(take), survives=g=> g && g.cells.filter(i=>!takeSet.has(i)).length>=4;
+  const salon=u.rooms.find(o=>o.type==='salon'&&o.cells.length);
+  if(salon && salonProtected() && !u.rooms.some(o=>o!==salon&&o.type==='salon'&&o.cells.length) && !survives(salon))
+    return {ok:false, reason:'salon'};
+  if(u.antre&&u.antre.cells.length&&!survives(u.antre)) return {ok:false, reason:'salon'};
+  /* 5) geri-al için tam durum (mutasyondan ÖNCE) */
+  const snap=stateSnapshot(false);
+  /* 6) talep et: donörlerden çıkar, yeni ODA kur */
+  const donors=new Set(); take.forEach(i=>{ const v=p.cm[i]; if(v>=0) donors.add(v); });
+  const ng={id:p.regions.length, name:'ODA', type:'oda', unit:domK, cells:take.slice()};
+  p.regions.push(ng);
+  take.forEach(i=>p.cm[i]=ng.id);
+  donors.forEach(v=>{ const g=p.regions[v]; g.cells=g.cells.filter(i=>!takeSet.has(i)); });
+  u.rooms.push(ng);
+  u.rooms=u.rooms.filter(g=> g===ng || g.cells.length);  // boşalan donörler düşer
+  if(u.antre && !u.antre.cells.length) u.antre=null;
+  /* 7) kopuk donör onar + tüm metrikler */
+  healDisconnected();
+  p.regions.forEach(g=>calcRegionMetrics(g, p.cols, p.minX, p.minY));
+  /* 8) geçmiş (tam durum) + yenile */
+  pushEdit({type:'roomdraw', state:snap});
+  refreshAfterRoomEdit();
+  return {ok:true};
+}
 /* ================= oda etiketi / takas / bölme / antre uzatma =================
    Etiket: oda tipi değiştirilebilir (spec kopyası güncellenir, denetim doğru kalır)
    ya da iki odanın etiketi takas edilir (program değişmez, yalnız adlar yer değiştirir).
@@ -334,6 +404,7 @@ function addRoom(host, def, hint){
 const RETYPE=[
   {name:'YATAK ODASI',  type:'yatak'},
   {name:'EB. YATAK ODASI', type:'yatak'},
+  {name:'SALON',        type:'salon'},
   {name:'OTURMA ODASI', type:'salon'},
   {name:'MUTFAK',       type:'mutfak'},
   {name:'BANYO',        type:'banyo'},

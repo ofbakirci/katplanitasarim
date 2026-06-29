@@ -3,6 +3,7 @@
 let pxPerM = 16, panX = 80, panY = 70;
 let mode = 'draw';            // draw | pan
 let pts = [];                 // poligon köşeleri (m)
+let roomPts = [];             // serbest oda çizimi (roomdraw modu): köşeler (m); kapanınca rasterize → yeni ODA
 let closed = false;
 let hoverP = null;
 let plan = null;              // üretilen plan
@@ -53,7 +54,7 @@ const EDIT_LABELS = {
   wallsnap:'Duvar taşındı', cut:'Daire sınırı', door:'Kapı', balk:'Balkon', avlu:'Avlu',
   park:'Otopark', retype:'Oda tipi', swap:'Oda yeri', unitswap:'Daire taşındı',
   corelock:'Çekirdek', bound:'Sınır taşındı', structedit:'Yapı elemanı',
-  ulayout:'Daire düzeni', sitemove:'Blok taşındı', __snap:'Adım'
+  ulayout:'Daire düzeni', sitemove:'Blok taşındı', roomdraw:'Oda çizildi', __snap:'Adım'
 };
 function labelFor(e){
   if(!e) return 'Düzenleme';
@@ -742,7 +743,7 @@ function removeBlock(k){
 /* boş blok için tuvali temizle: yalnız geometri sıfırlanır; bina tipi/kat ayarları VE
    site parseli (site-ortak) korunur */
 function clearCanvasForNewBlock(){
-  pts=[]; closed=false; plan=null;
+  pts=[]; roomPts=[]; closed=false; plan=null;
   balconies=[]; courtyards=[]; avluGhost=null; editHistory=[]; resetCuts();
   doorOverrides={}; extraDoors=[]; doorHidden={};
   villaFloors=null; activeFloor=0; lockedCore=null;

@@ -388,11 +388,18 @@ function render(){
     if(mode==='balkon'&&hoverBalk&&hoverBalk.ghost) drawB(hoverBalk.ghost,true);
   }
 
+  /* serbest oda çizimi: yarım poligon (köşeler + kenarlar) — mor */
+  if(mode==='roomdraw' && roomPts.length && !clean){
+    const rg=el('g',{}); svg.appendChild(rg);
+    let rd='M'+roomPts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
+    rg.appendChild(el('path',{d:rd,fill:roomPts.length>2?'rgba(122,79,179,.10)':'none',stroke:'#7a4fb3','stroke-width':2,'stroke-dasharray':'6 4','stroke-linejoin':'round'}));
+    roomPts.forEach(p=>rg.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#7a4fb3','stroke-width':2})));
+  }
   /* aktif poligon çizimi (bina veya parsel) */
   const act=activePoly();
-  if(hoverP && !act.cl && !clean && (mode==='draw'||mode==='parcel')){
+  if(hoverP && !act.cl && !clean && (mode==='draw'||mode==='parcel'||mode==='roomdraw')){
     const g=el('g',{}); svg.appendChild(g);
-    const col=mode==='parcel'?'#4a7c4a':'#b35a2e';
+    const col=mode==='parcel'?'#4a7c4a':mode==='roomdraw'?'#7a4fb3':'#b35a2e';
     const l=act.arr[act.arr.length-1];
     if(l){ g.appendChild(el('line',{x1:W2Sx(l.x),y1:W2Sy(l.y),x2:W2Sx(hoverP.x),y2:W2Sy(hoverP.y),stroke:col,'stroke-width':2,'stroke-dasharray':'6 4'}));
       const L=Math.hypot(hoverP.x-l.x,hoverP.y-l.y);

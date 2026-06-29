@@ -4,7 +4,7 @@
    içinde olduğumuz araca (çiz/yapı/kapı…) kesintisiz dönülür (mode HİÇ değişmez). */
 let spacePan=false;
 function syncPanCursor(){ svg.classList.toggle('panning', mode==='pan' || spacePan || (dragging&&dragging.type==='pan')); }
-function activePoly(){ return mode==='parcel'? {arr:parcelPts, cl:parcelClosed} : {arr:pts, cl:closed}; }
+function activePoly(){ if(mode==='roomdraw') return {arr:roomPts, cl:false}; return mode==='parcel'? {arr:parcelPts, cl:parcelClosed} : {arr:pts, cl:closed}; }
 function snapPoint(sx,sy){
   let x=snapG(S2Wx(sx)), y=snapG(S2Wy(sy));
   const A=activePoly();
@@ -17,7 +17,7 @@ function snapPoint(sx,sy){
       return {x:Math.round(t.x*1000)/1000, y:Math.round(t.y*1000)/1000, snapPS:true};
     }
   }
-  if((mode==='draw'||mode==='parcel') && A.arr.length && !A.cl){
+  if((mode==='draw'||mode==='parcel'||mode==='roomdraw') && A.arr.length && !A.cl){
     /* 15° açı kilidi: kenar açısı 15°'nin katına, uzunluk 0,5 m ızgaraya oturur */
     const l=A.arr[A.arr.length-1], wx=S2Wx(sx), wy=S2Wy(sy);
     const d=Math.hypot(wx-l.x, wy-l.y);
@@ -175,7 +175,7 @@ svg.addEventListener('mousemove',e=>{
     return;
   }
   if(spacePan){ syncPanCursor(); return; }   // space basılı: imleç grab kalsın, hover/işaretçi mantığı çalışmasın
-  if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)){ hoverP=snapPoint(sx,sy); render(); }
+  if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)||(mode==='roomdraw'&&plan)){ hoverP=snapPoint(sx,sy); render(); }
   else if(mode==='balkon'){
     const wx=S2Wx(sx), wy=S2Wy(sy);
     const h=hitBalk(wx,wy);
@@ -320,6 +320,14 @@ svg.addEventListener('mousedown',e=>{
     dragging={type:'siteMove', idx, x0:wx, y0:wy, orig, dx:0, dy:0, moved:false};
     e.preventDefault(); return;
   }
+  if(mode==='roomdraw'){
+    if(e.button!==0) return;
+    if(!plan){ roomDrawToast('Önce yerleşim oluşturun'); return; }
+    const q=snapPoint(sx,sy);
+    if(q.closing){ finishRoomPoly(); return; }
+    if(roomPts.length && q.x===roomPts[roomPts.length-1].x && q.y===roomPts[roomPts.length-1].y) return;
+    roomPts.push({x:q.x,y:q.y}); render(); return;
+  }
   if(plan && e.button===0){ // ayırıcı tutamacı? oda duvarı?
     const h=hitCutHandle(sx,sy);
     if(h){ h.undo=customCutsZ&&customCutsZ.map(a=>a?a.slice():null);
@@ -338,6 +346,7 @@ svg.addEventListener('mousedown',e=>{
 });
 /* kapı modu: çift tık — duvarda kapı ekle, mevcut kapıyı sil */
 svg.addEventListener('dblclick',e=>{
+  if(mode==='roomdraw'){ e.preventDefault(); finishRoomPoly(); return; }
   if(mode!=='door'||!plan) return;
   e.preventDefault();
   const rb=svg.getBoundingClientRect(), sx=e.clientX-rb.left, sy=e.clientY-rb.top;
@@ -451,6 +460,11 @@ window.addEventListener('keydown',e=>{
   if(k==='z' && !e.shiftKey){ e.preventDefault(); document.getElementById('tUndo').click(); }
   else if((k==='z' && e.shiftKey) || k==='y'){ e.preventDefault(); document.getElementById('tRedo').click(); }
 });
+/* Esc: serbest oda çizimini iptal et (yarım poligonu at) */
+window.addEventListener('keydown',e=>{
+  if(e.key!=='Escape' || mode!=='roomdraw' || !roomPts.length) return;
+  roomPts=[]; hoverP=null; render();
+});
 /* son elle düzenlemeyi geri al; geçmiş boşsa false döner (Geri Al eski davranışına düşer).
    Pop'tan ÖNCE o anki TAM durumu redoHistory'ye iter → İleri Al her tip için çalışır
    (heterojen delta-undo'larla uyumlu: ilk geri-al delta ile, sonrası iki yönde snapshot ile). */
@@ -533,6 +547,12 @@ function undoEdit(){
       editHistory=keep;
       updateStructResetBtn(); // iskelet düğmesi lockedCore'a göre tazelensin
     }
+  } else if(e.type==='roomdraw'){
+    if(e.state){ // serbest oda çizimi: çoklu-donör carve → TAM durum anlık görüntüsü birebir geri döner
+      const keep=editHistory;
+      try{ restoreState(e.state, {fit:false}); }catch(err){ console.error(err); }
+      editHistory=keep;
+    }
   } else if(e.type==='cut'){
     if(e.state){ // daire sınırı: cut-öncesi TAM durum (yeniden dizilen dairelerin elle düzeni dâhil) birebir geri döner
       const keep=editHistory;
@@ -583,6 +603,26 @@ function finishPoly(){
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   render();
+}
+/* serbest oda çizimi: kısa uyarı baloncuğu (canvasWrap'a, ~1,6 sn) */
+function roomDrawToast(msg){
+  let t=document.getElementById('drawToast');
+  if(!t){ t=document.createElement('div'); t.id='drawToast';
+    (document.getElementById('canvasWrap')||document.body).appendChild(t); }
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(roomDrawToast._t); roomDrawToast._t=setTimeout(()=>t.classList.remove('show'),1600);
+}
+/* serbest oda çizimini kapat: poligonu rasterize edip yeni ODA'ya çevir (rooms.js) */
+function finishRoomPoly(){
+  if(roomPts.length<3){ roomPts=[]; hoverP=null; render(); return; }
+  const poly=roomPts.slice(); roomPts=[]; hoverP=null;
+  const res=addRoomFromPolygon(poly);             // başarıda refreshAfterRoomEdit zaten render eder
+  if(!res||!res.ok){
+    roomDrawToast(res&&res.reason==='nounit' ? 'Bir daire üstüne çizin'
+      : res&&res.reason==='salon' ? 'Mecburi piyes (salon/antre) yutulamaz — daha küçük çizin'
+      : 'Çok küçük — daha geniş çizin');
+    render();
+  }
 }
 /* ================= park yeri düzenleme (otopark/sığınak katı) =================
    Park modunda: park yerine tık=sil, boş uygun yere tık=ekle, park yerini sürükle=taşı.
@@ -648,8 +688,8 @@ function updateParkBtn(){
   if(!ok && mode==='park') setMode('draw');
 }
 /* araç çubuğu */
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null;
-  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tStruct','struct'],['tPark','park'],['tSite','site'],['tPan','pan']]){
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; roomPts=[];
+  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
   if(m==='park') showParkBar();
@@ -705,6 +745,7 @@ document.getElementById('tBalk').onclick=()=>setMode('balkon');
 document.getElementById('tAvlu').onclick=()=>setMode('avlu');
 document.getElementById('tDoor').onclick=()=>setMode('door');
 document.getElementById('tStruct').onclick=()=>setMode('struct');
+{ const tr=document.getElementById('tRoom'); if(tr) tr.onclick=()=>setMode('roomdraw'); }
 document.getElementById('tPark').onclick=()=>setMode('park');
 { const sb=document.getElementById('tSite'); if(sb) sb.onclick=()=>{ if(siteOn()) setMode(mode==='site'?'draw':'site'); }; }
 document.getElementById('tPan').onclick=()=>setMode('pan');
@@ -720,7 +761,7 @@ document.getElementById('tUndo').onclick=()=>{
 document.getElementById('tRedo').onclick=()=>{ redoEdit(); };
 document.getElementById('tHist').onclick=()=>{ const p=document.getElementById('histPanel');
   if(p){ const open=p.style.display==='none'||!p.style.display; p.style.display=open?'flex':'none'; if(open) refreshHistoryUI(true); } };
-document.getElementById('tClear').onclick=()=>{ pts=[];closed=false;plan=null;editHistory=[];redoHistory=[];resetCuts();
+document.getElementById('tClear').onclick=()=>{ pts=[];roomPts=[];closed=false;plan=null;editHistory=[];redoHistory=[];resetCuts();
   parcelPts=[];parcelClosed=false;balconies=[];courtyards=[];avluGhost=null;hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
