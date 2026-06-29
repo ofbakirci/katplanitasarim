@@ -14,7 +14,9 @@ let hoverRoomId = null;       // imleç altındaki oda (duvar ölçüsü vurgusu
 let hoverStruct = null;       // yapı modunda imleç altındaki yapı tutamağı {regId,handle}
 let hoverBay = null;          // park modunda imleç altındaki park yeri index'i | null
 let parkGhost = null;         // park modunda eklenecek boş park yeri önizlemesi {x,y,w,h,ang} | null
-let editHistory = [];         // elle düzenleme geçmişi: {type:'wall',a,b,cellsA,cellsB} | {type:'cut',cuts} | {type:'balk',prev}
+let editHistory = [];         // elle düzenleme geçmişi (geri al): {type, ...} — pushEdit() ile yazılır
+let redoHistory = [];         // ileri al yığını: undoEdit her geri almada o anki TAM durumu buraya iter; redoEdit geri yükler
+const HIST_CAP = 100;         // geçmiş üst sınırı (en eski adım düşürülür)
 let parcelPts = [];           // parsel poligonu (opsiyonel; bahçe = parsel − bina)
 let parcelClosed = false;
 let parcelSetback = [];       // imar çekme (yapı yaklaşma) sınırı: parselin içe-ofseti; şematik kılavuz
@@ -41,6 +43,28 @@ let villaOffset = 0;          // villaFloors dizisinin kurulduğu bodrum sayıs�
 let floorClip = null;         // kat düzeni kopyala/uygula tamponu: {src, snap} | null
 let lockedCore = null;        // bina iskeleti: kilitli çekirdek öğeleri [{type,name,x0,y0,x1,y1}] (dünya koord, katlar arası ortak) | null
 let exportView = null;        // io.js dışa aktarımı sırasında render() için geçici görünüm
+
+/* ================= geri al / ileri al geçmişi =================
+   pushEdit: TÜM düzenleme girdileri buradan geçer → ileri-al yığınını sıfırlar (yeni iş
+   geleceği siler), insan-okur etiket ekler (geçmiş paneli), yığını HIST_CAP'e sınırlar.
+   İstisna: redoEdit'in __snap geri-itişi ham editHistory.push kullanır (redo'yu silmemeli). */
+const EDIT_LABELS = {
+  wallsnap:'Duvar taşındı', cut:'Daire sınırı', door:'Kapı', balk:'Balkon', avlu:'Avlu',
+  park:'Otopark', retype:'Oda tipi', swap:'Oda yeri', unitswap:'Daire taşındı',
+  corelock:'Çekirdek', bound:'Sınır taşındı', structedit:'Yapı elemanı',
+  ulayout:'Daire düzeni', sitemove:'Blok taşındı', __snap:'Adım'
+};
+function labelFor(e){
+  if(!e) return 'Düzenleme';
+  if(e.type==='room') return e.op==='add' ? 'Oda eklendi' : 'Oda silindi';
+  return EDIT_LABELS[e.type] || 'Düzenleme';
+}
+function pushEdit(e){
+  if(e && !e.label) e.label = labelFor(e);
+  editHistory.push(e);
+  redoHistory = [];                                 // yeni düzenleme → ileri-al geçersiz
+  if(editHistory.length > HIST_CAP) editHistory.shift();
+}
 
 const svg = document.getElementById('svg');
 const NS = 'http://www.w3.org/2000/svg';

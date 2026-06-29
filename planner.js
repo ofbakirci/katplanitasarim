@@ -439,7 +439,7 @@ function generate(keepCuts){
     plan.parking=parkingForPlan(plan); // gerçek park yerleri + sürüş yolları (çizim + sayım)
     hoverWall=null; hoverRoomId=null; hoverDoor=null;
     doorOverrides={}; extraDoors=[]; doorHidden={};
-    editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound');
+    editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'||e.type==='__snap');
     plan.wallRuns=computeWallRuns();
     runChecks(); buildUnitTable(); renderFloorTabs(); updateStructResetBtn();
     document.getElementById('svgBtn').disabled=false;
@@ -1732,7 +1732,7 @@ function generate(keepCuts){
   };
   hoverWall=null; hoverRoomId=null; hoverDoor=null;
   doorOverrides={}; extraDoors=[]; doorHidden={}; // bölge kimlikleri yeniden doğdu: elle kapı ayarları bayat
-  editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (ulayout/corelock/bound tam durum taşır, hayatta kalır)
+  editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'||e.type==='__snap'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (ulayout/corelock/bound tam durum taşır, hayatta kalır)
   plan.wallRuns=computeWallRuns();
   slimAntres(); // antre fazlalığı (kör uç kol, odaya sokulan çıkıntı, şişkin yuva) odalara geri verilir
   /* slim sonrası odalar büyüdü: ilk turda yer bulamayan eb. banyo şimdi sığabilir */

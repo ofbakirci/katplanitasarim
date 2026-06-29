@@ -240,7 +240,7 @@ svg.addEventListener('mousedown',e=>{
       e.preventDefault(); return;
     }
     const nb=ghostBalk(wx,wy);
-    if(nb){ editHistory.push({type:'balk', prev:balkSnapshot()}); balconies.push(nb);
+    if(nb){ pushEdit({type:'balk', prev:balkSnapshot()}); balconies.push(nb);
       hoverBalk=null; balkChecksRefresh(); render(); }
     return;
   }
@@ -292,7 +292,7 @@ svg.addEventListener('mousedown',e=>{
       dragging={type:'park', idx:hb, gx:S2Wx(sx)-b.x, gy:S2Wy(sy)-b.y, undo:parkSnapshot(), moved:false};
       e.preventDefault();
     } else { const g=parkGhostAt(sx,sy);
-      if(g){ editHistory.push({type:'park', prev:parkSnapshot()});
+      if(g){ pushEdit({type:'park', prev:parkSnapshot()});
         plan.parking.bays.push(g); parkGhost=null; parkEditRefresh(); }
     }
     return;
@@ -324,6 +324,7 @@ svg.addEventListener('mousedown',e=>{
     const h=hitCutHandle(sx,sy);
     if(h){ h.undo=customCutsZ&&customCutsZ.map(a=>a?a.slice():null);
       h.preUnits=captureUnitFootprints();   // sınır taşımada elle oda düzenini koru (footprint değişmeyen daireler)
+      h.preSnap=plan?stateSnapshot(false):null;   // GERİ AL: cut-öncesi TAM durum (yeniden dizilen dairelerin elle düzeni de dâhil)
       dragging=h; return; }
     const wr=hitWallRun(sx,sy);
     if(wr){ dragging={type:'wall', run:wr, snap:snapshotRegions(), groupMove:e.shiftKey};
@@ -342,7 +343,7 @@ svg.addEventListener('dblclick',e=>{
   const rb=svg.getBoundingClientRect(), sx=e.clientX-rb.left, sy=e.clientY-rb.top;
   const h=hitDoor(sx,sy);
   if(h){ /* sil: ekstra kapı kalkar, otomatik kapı bastırılır */
-    editHistory.push({type:'door', prev:doorSnapshot()});
+    pushEdit({type:'door', prev:doorSnapshot()});
     if(h.kind==='extra') extraDoors.splice(h.i,1);
     else doorHidden[h.key]=true;
     hoverDoor=null; runChecks(); render(); return;
@@ -350,7 +351,7 @@ svg.addEventListener('dblclick',e=>{
   let eg=edgeNear(S2Wx(sx),S2Wy(sy));
   if(!eg && (!floorsOn()||activeFloor===zeminIdx())) eg=extEdgeNear(S2Wx(sx),S2Wy(sy));  // zemin katta dış cepheye giriş kapısı
   if(eg){
-    editHistory.push({type:'door', prev:doorSnapshot()});
+    pushEdit({type:'door', prev:doorSnapshot()});
     extraDoors.push(eg); runChecks(); render();
   }
 });
@@ -361,44 +362,44 @@ function finishDrag(){
   if(dragging.type==='cut'){
     generate(true); // not: generate duvar girdilerini geçmişten siler — cut girdisi SONRA yazılır
     restoreEditedFootprints(dragging.preUnits);   // footprint'i değişmeyen dairelerin elle düzenini geri kur
-    if(dragging.undo && JSON.stringify(dragging.undo)!==JSON.stringify(customCutsZ))
-      editHistory.push({type:'cut', cuts:dragging.undo, preUnits:dragging.preUnits}); // geri al da düzeni korusun
+    if(dragging.undo && JSON.stringify(dragging.undo)!==JSON.stringify(customCutsZ) && dragging.preSnap)
+      pushEdit({type:'cut', state:dragging.preSnap}); // geri al: cut-öncesi TAM duruma birebir dön (restoreState)
   } else if(dragging.type==='wall' && dragging.snap && plan){
     if(snapshotChanged(dragging.snap))
-      editHistory.push({type:'wallsnap', snap:dragging.snap});
+      pushEdit({type:'wallsnap', snap:dragging.snap});
   } else if(dragging.type==='struct' && dragging.snap && plan){
     if(regionsChanged(dragging.snap)){
       if(plan.villa){ /* villa: tek merdiven üretim-sonrası kalır (yeniden üretmeden) */
-        editHistory.push({type:'wallsnap', snap:dragging.snap});
+        pushEdit({type:'wallsnap', snap:dragging.snap});
         plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable();
       } else { /* apartman: çekirdeği iskelet olarak kilitle + daireleri etrafına yeniden diz */
         captureLockedCore();
-        editHistory.push({type:'corelock', prev:dragging.prevCore});
+        pushEdit({type:'corelock', prev:dragging.prevCore});
         generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
         updateStructResetBtn();
       }
     }
   } else if(dragging.type==='bvert' && plan){
     /* bina sınırı değişti → çekirdek kilitliyken yeniden diz (kata özel sınır) */
-    editHistory.push({type:'bound', prevPts:dragging.prevPts, prevCore:dragging.prevCore});
+    pushEdit({type:'bound', prevPts:dragging.prevPts, prevCore:dragging.prevCore});
     try{ generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
     catch(err){ console.error('sınır düzenleme:', err); }
     document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
     document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   } else if(dragging.type==='door' && dragging.undo){
     if(JSON.stringify(dragging.undo)!==JSON.stringify(doorSnapshot()))
-      editHistory.push({type:'door', prev:dragging.undo});
+      pushEdit({type:'door', prev:dragging.undo});
   } else if((dragging.type==='balkD'||dragging.type==='balkT') && dragging.undo){
     if(JSON.stringify(dragging.undo)!==JSON.stringify(balkSnapshot()))
-      editHistory.push({type:'balk', prev:dragging.undo});
+      pushEdit({type:'balk', prev:dragging.undo});
     balkChecksRefresh();
   } else if(dragging.type==='park' && plan && plan.parking){
     if(!dragging.moved){ /* hareketsiz = tık → park yerini sil */
       plan.parking.bays.splice(dragging.idx,1);
-      editHistory.push({type:'park', prev:dragging.undo});
+      pushEdit({type:'park', prev:dragging.undo});
       hoverBay=null; parkEditRefresh();
     } else { /* taşındı → değişikliği geçmişe yaz */
-      editHistory.push({type:'park', prev:dragging.undo});
+      pushEdit({type:'park', prev:dragging.undo});
       parkEditRefresh();
     }
   } else if(dragging.type==='siteMove'){
@@ -409,7 +410,7 @@ function finishDrag(){
         try{ restoreState(translateStateObj(d.orig.snap, d.dx, d.dy), {keepBlocks:true}); }
         catch(err){ console.error('blok taşı:', err); }
       }
-      editHistory.push({type:'sitemove', idx:d.idx, active:d.orig.active, snap:d.orig.snap});
+      pushEdit({type:'sitemove', idx:d.idx, active:d.orig.active, snap:d.orig.snap});
       if(plan) runChecks(); renderBlockTabs(); render();
     } else if(typeof switchBlock==='function'){   // hareketsiz tık = bloğa geç (düzenle)
       switchBlock(d.idx); setMode('draw');
@@ -419,7 +420,7 @@ function finishDrag(){
     const gh=avluGhost; avluGhost=null; const prev=dragging.prev; dragging=null;
     if(gh && gh.poly){ const bb=bboxOf(gh.poly);
       if((bb.maxX-bb.minX)>=1 && (bb.maxY-bb.minY)>=1){   // anlamlı avlu: en az 1×1 m
-        editHistory.push({type:'avlu', prev});
+        pushEdit({type:'avlu', prev});
         courtyards.push({poly:gh.poly});
         avluChanged(); return;
       }
@@ -441,9 +442,23 @@ window.addEventListener('keyup',e=>{
   spacePan=false; syncPanCursor();   // sürüş sürüyorsa mouseup'a dek pan class'ı tutulur
 });
 window.addEventListener('blur',()=>{ if(spacePan){ spacePan=false; syncPanCursor(); } });  // sekme/odak kaybında takılı kalmasın
-/* son elle düzenlemeyi geri al; geçmiş boşsa false döner (Geri Al eski davranışına düşer) */
+/* Ctrl/Cmd+Z = geri al, Ctrl/Cmd+Shift+Z veya Ctrl/Cmd+Y = ileri al. Metin alanlarında dokunma. */
+window.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey) || e.altKey) return;
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
+  const k=(e.key||'').toLowerCase();
+  if(k==='z' && !e.shiftKey){ e.preventDefault(); document.getElementById('tUndo').click(); }
+  else if((k==='z' && e.shiftKey) || k==='y'){ e.preventDefault(); document.getElementById('tRedo').click(); }
+});
+/* son elle düzenlemeyi geri al; geçmiş boşsa false döner (Geri Al eski davranışına düşer).
+   Pop'tan ÖNCE o anki TAM durumu redoHistory'ye iter → İleri Al her tip için çalışır
+   (heterojen delta-undo'larla uyumlu: ilk geri-al delta ile, sonrası iki yönde snapshot ile). */
 function undoEdit(){
-  const e=editHistory.pop(); if(!e) return false;
+  if(!editHistory.length) return false;
+  const cur = plan ? stateSnapshot(false) : null;   // ileri-al için mevcut durum (plan yoksa redo yok)
+  const e = editHistory.pop();
+  if(cur) redoHistory.push({state:cur, label:e.label||labelFor(e)});
   if(e.type==='balk'){
     balconies=e.prev.map(b=>({...b}));
     balkChecksRefresh(); render(); return true;
@@ -519,8 +534,16 @@ function undoEdit(){
       updateStructResetBtn(); // iskelet düğmesi lockedCore'a göre tazelensin
     }
   } else if(e.type==='cut'){
-    customCutsZ=e.cuts; generate(true);
-    restoreEditedFootprints(e.preUnits);   // sınır taşımayı geri alırken elle düzeni de geri kur
+    if(e.state){ // daire sınırı: cut-öncesi TAM durum (yeniden dizilen dairelerin elle düzeni dâhil) birebir geri döner
+      const keep=editHistory;
+      try{ restoreState(e.state, {fit:false}); }catch(err){ console.error(err); }
+      editHistory=keep;
+    } else { customCutsZ=e.cuts; generate(true); restoreEditedFootprints(e.preUnits); } // eski girdi uyumu (oturum-içi)
+  } else if(e.type==='__snap'){ // ileri-al'dan dönen tam-durum girdisi (redoEdit yazar)
+    const keep=editHistory;
+    try{ restoreState(e.state, {fit:false}); }catch(err){ console.error(err); }
+    editHistory=keep;
+    updateStructResetBtn();
   } else if(e.type==='ulayout'){
     if(e.state){ // tam durum anlık görüntüsü: elle düzenlemeler dahil birebir geri döner
       const keep=editHistory; // restoreState yığını sıfırlar; kalan geçmiş korunur
@@ -530,6 +553,20 @@ function undoEdit(){
       unitLayout=Object.assign({}, e.prev);
     } else { unitLayout=Object.assign({}, e.prev); generate(true); }
   }
+  return true;
+}
+/* yapılan son geri-al'ı yeniden uygula (İleri Al). undoEdit'in simetriği:
+   hedef snapshot'ı yükle, o anki durumu __snap olarak editHistory'ye geri it (tekrar geri-alınabilsin).
+   restoreState editHistory'yi sıfırlar → keepE ile koru; redoHistory'ye dokunmaz ama keepR ile garanti. */
+function redoEdit(){
+  if(!redoHistory.length) return false;
+  const r=redoHistory.pop();
+  const cur = plan ? stateSnapshot(false) : null;
+  const keepE=editHistory, keepR=redoHistory;
+  try{ restoreState(r.state, {fit:false}); }catch(err){ console.error(err); }
+  editHistory=keepE; redoHistory=keepR;
+  if(cur) editHistory.push({type:'__snap', state:cur, label:r.label}); // ham push: redoHistory'yi temizleme
+  updateStructResetBtn();
   return true;
 }
 svg.addEventListener('wheel',e=>{
@@ -591,7 +628,7 @@ function parkEditRefresh(){ if(!plan||!plan.parking) return;
 }
 function setParkOrient(o){
   if(!plan||!plan.parking) return;
-  editHistory.push({type:'park', prev:parkSnapshot()}); // yön/sıfırla da geri alınabilir olsun
+  pushEdit({type:'park', prev:parkSnapshot()}); // yön/sıfırla da geri alınabilir olsun
   const np=parkingForPlan(plan, o==='auto'?undefined:(o==='v'));
   np.orient=o; np.manual=false; plan.parking=np;
   hoverBay=null; parkGhost=null;
@@ -679,8 +716,11 @@ document.getElementById('tUndo').onclick=()=>{
   if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
   if(undoEdit()) return; // önce elle duvar/ayırıcı/balkon düzenlemeleri
   if(closed&&plan&&!confirm('Geri alınacak düzenleme kalmadı. Plan SİLİNİP çizim aşamasına dönülsün mü?')) return; // emniyet: saatlik emek tek tıkla gitmesin
-  if(closed){closed=false;plan=null;balconies=[];editHistory=[];document.getElementById('genBtn').disabled=true;document.getElementById('unitTable').style.display='none';} else pts.pop(); resetCuts(); render(); };
-document.getElementById('tClear').onclick=()=>{ pts=[];closed=false;plan=null;editHistory=[];resetCuts();
+  if(closed){closed=false;plan=null;balconies=[];editHistory=[];redoHistory=[];document.getElementById('genBtn').disabled=true;document.getElementById('unitTable').style.display='none';} else pts.pop(); resetCuts(); render(); };
+document.getElementById('tRedo').onclick=()=>{ redoEdit(); };
+document.getElementById('tHist').onclick=()=>{ const p=document.getElementById('histPanel');
+  if(p){ const open=p.style.display==='none'||!p.style.display; p.style.display=open?'flex':'none'; if(open) refreshHistoryUI(true); } };
+document.getElementById('tClear').onclick=()=>{ pts=[];closed=false;plan=null;editHistory=[];redoHistory=[];resetCuts();
   parcelPts=[];parcelClosed=false;balconies=[];courtyards=[];avluGhost=null;hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır

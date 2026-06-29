@@ -234,6 +234,25 @@
   .utT tr{cursor:pointer;}
   .utT tr:hover{background:#f6efe8;}
   .utT td.num{text-align:right; white-space:nowrap; color:var(--muted);}
+  /* devre dışı araç butonu (ör. ileri-al boşken) */
+  #toolbar button:disabled, #toolbar button:disabled:hover{opacity:.45; cursor:not-allowed; color:var(--muted); border-color:var(--line);}
+  /* yüzen değişiklik geçmişi paneli */
+  #histPanel{position:absolute; left:10px; bottom:48px; width:240px; max-height:calc(100% - 180px);
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    box-shadow:0 3px 12px rgba(0,0,0,.10); display:none; flex-direction:column; overflow:hidden; z-index:7;}
+  #hpHead{display:flex; justify-content:space-between; align-items:center; padding:8px 11px;
+    background:#fbfaf7; border-bottom:1px solid var(--line); font-weight:700; font-size:13px; user-select:none;}
+  #hpHead button{padding:0 8px; font-size:14px; line-height:1.5;}
+  #hpBody{overflow-y:auto; padding:5px 7px;}
+  .histRow{padding:5px 9px; font-size:12px; cursor:pointer; border-radius:5px; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; display:flex; gap:7px; align-items:center;}
+  .histRow:hover{background:#f3f1ec;}
+  .histRow.now{font-weight:700; color:var(--acc); cursor:default;}
+  .histRow.now:hover{background:none;}
+  .histRow.future{opacity:.45;}
+  .histRow .hi{color:var(--muted); font-size:11px; min-width:15px; text-align:center; flex:none;}
+  .histRow.empty{color:var(--muted); cursor:default; font-style:italic;}
+  .histRow.empty:hover{background:none;}
   /* oda sağ tık menüsü */
   #roomMenu{position:absolute; display:none; z-index:9; background:var(--panel); border:1px solid var(--line);
     border-radius:9px; box-shadow:0 4px 14px rgba(0,0,0,.13); font-size:12.5px; min-width:185px; padding:4px 0; user-select:none;}

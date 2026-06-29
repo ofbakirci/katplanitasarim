@@ -124,7 +124,7 @@ function stateSnapshot(bare, withBlocks){
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
     parcelClosed, parcelRot, parcelImar, balconies:balconies.map(b=>({...b})),
     courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
-    specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ, unitLayout:Object.assign({},unitLayout),
+    specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ?customCutsZ.map(a=>a?a.slice():null):null, unitLayout:Object.assign({},unitLayout),
     doors:{ov:doorOverrides, extra:extraDoors, hidden:doorHidden},
     plan:{rows:plan.rows, cols:plan.cols, minX:plan.minX, minY:plan.minY,
       corridorR0:plan.corridorR0, corridorR1:plan.corridorR1,

@@ -104,7 +104,7 @@ function doAddStruct(type, sx, sy){
   if(!plan) return false;
   const st0=stateSnapshot();
   if(!addStructRegion(type, sx, sy)) return false;
-  editHistory.push({type:'structedit', state:st0});
+  pushEdit({type:'structedit', state:st0});
   if(!plan.villa){ captureLockedCore(); updateStructResetBtn(); }
   if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
   return true;
@@ -113,7 +113,7 @@ function doDeleteStruct(regId){
   if(!plan) return false;
   const st0=stateSnapshot();
   if(!deleteStructRegion(regId)) return false;
-  editHistory.push({type:'structedit', state:st0});
+  pushEdit({type:'structedit', state:st0});
   if(!plan.villa){ captureLockedCore(); updateStructResetBtn(); }
   if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
   return true;

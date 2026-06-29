@@ -199,7 +199,7 @@ function removeRoom(g){
   let best=-1,bn=0; cnt.forEach((n,v)=>{ if(n>bn){bn=n;best=v;} });
   if(best<0) return false;                                 // daire içi komşusu yok
   const tgt=p.regions[best];
-  editHistory.push({type:'room', op:'remove', unit:k, reg:g, tgt:best,
+  pushEdit({type:'room', op:'remove', unit:k, reg:g, tgt:best,
     cells:g.cells.slice(), roomsIdx:u.rooms.indexOf(g), spec:u.spec});
   g.cells.forEach(i=>{ p.cm[i]=best; tgt.cells.push(i); });
   g.cells=[];
@@ -230,7 +230,7 @@ function openKitchen(salon){
     return (r>0&&p.cm[i-p.cols]===salon.id)||(r<p.rows-1&&p.cm[i+p.cols]===salon.id)
          ||(c>0&&p.cm[i-1]===salon.id)||(c<p.cols-1&&p.cm[i+1]===salon.id); });
   if(!adj) return 'noadj';
-  editHistory.push({type:'room', op:'remove', unit:k, reg:mut, tgt:salon.id,
+  pushEdit({type:'room', op:'remove', unit:k, reg:mut, tgt:salon.id,
     cells:mut.cells.slice(), roomsIdx:u.rooms.indexOf(mut), spec:u.spec, tgtName:salon.name});
   mut.cells.forEach(i=>{ p.cm[i]=salon.id; salon.cells.push(i); });
   mut.cells=[];
@@ -311,7 +311,7 @@ function addRoom(host, def, hint){
   p.regions.push(ng);
   take.forEach(i=>p.cm[i]=ng.id);
   u.rooms.splice(u.rooms.indexOf(host)+1, 0, ng);
-  editHistory.push({type:'room', op:'add', unit:k, reg:ng, host:host.id,
+  pushEdit({type:'room', op:'add', unit:k, reg:ng, host:host.id,
     cells:take.slice(), spec:u.spec, hostName:host.name});
   const s={...u.spec};
   if(def.type==='yatak'){ if(growBed) s.oda+=1; }
@@ -355,7 +355,7 @@ function retypeRoom(g, def){
   if(retypeGuard(g,u)) return false;
   if(g.type==='salon'&&def.type!=='salon'&&salonProtected()&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length))
     return false;                                          // TEK salon tipsizleşemez (katları ayrı planlanan villada serbest)
-  editHistory.push({type:'retype', reg:g, name:g.name, rtype:g.type, unit:k, spec:u.spec});
+  pushEdit({type:'retype', reg:g, name:g.name, rtype:g.type, unit:k, spec:u.spec});
   const s={...u.spec};
   const growBed = def.type==='yatak' && g.type!=='yatak' && bedSurplus(u); // başka tip → yatak: açık varsa talep büyümez (Bug A)
   if(g.type==='yatak') s.oda=Math.max(0,s.oda-1);
@@ -374,7 +374,7 @@ function swapRooms(g1,g2){
   if(k<0||k!==unitOfRoom(g2.id)) return false;             // yalnız aynı daire içinde
   const u=plan.unitObjs[k];
   if(retypeGuard(g1,u)||retypeGuard(g2,u)) return false;
-  editHistory.push({type:'swap', a:g1.id, b:g2.id});
+  pushEdit({type:'swap', a:g1.id, b:g2.id});
   const n=g1.name,t=g1.type; g1.name=g2.name; g1.type=g2.type; g2.name=n; g2.type=t;
   refreshAfterRoomEdit();
   return true;
@@ -414,7 +414,7 @@ function swapUnits(kA,kB){
   p.unitObjs[kA]=p.relayoutFootprint(cellsA, specB, sideA, kA);
   p.unitObjs[kB]=p.relayoutFootprint(cellsB, specA, sideB, kB);
   healDisconnected();   // relayout leftover-dökümü kopuk bölge bırakmasın (takas sonrası düzenlenebilir kalsın)
-  editHistory.push({type:'unitswap', state});
+  pushEdit({type:'unitswap', state});
   hoverWall=null; hoverRoomId=null;
   p.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render();
   return true;
@@ -516,7 +516,7 @@ function extendCorridorToCores(){
     for(const cand of cands){ if(claimCellForCorridor(cand.k, kor)){ did=true; moved=true; break; } }
     if(!did) break;                       // hiçbir frontier hücresi alınamadı → dur
   }
-  if(moved){ editHistory.push({type:'unitswap', state});
+  if(moved){ pushEdit({type:'unitswap', state});
     p.regions.forEach(g=>calcRegionMetrics(g,p.cols,p.minX,p.minY));
     hoverWall=null; p.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); }
   return moved;
@@ -542,7 +542,7 @@ function splitRoom(g, horiz){
   p.regions.push(ng); take.forEach(i=>p.cm[i]=ng.id);
   if(!regConnected(ng)){ p.regions.pop(); take.forEach(i=>p.cm[i]=g.id); g.cells=old; return false; }
   u.rooms.splice(u.rooms.indexOf(g)+1, 0, ng);
-  editHistory.push({type:'room', op:'add', unit:k, reg:ng, host:g.id,
+  pushEdit({type:'room', op:'add', unit:k, reg:ng, host:g.id,
     cells:take.slice(), spec:u.spec, hostName:g.name});    // addRoom ile aynı geri alma yolu
   calcRegionMetrics(g, p.cols, p.minX, p.minY);
   calcRegionMetrics(ng, p.cols, p.minX, p.minY);
@@ -599,7 +599,7 @@ function extendAntreTo(g){
   let ok=regConnected(an);
   donors.forEach(o=>{ if(o.cells.length<4||!regConnected(o)) ok=false; });
   if(!ok){ restoreRegions(snap); return false; }
-  editHistory.push({type:'wallsnap', snap});
+  pushEdit({type:'wallsnap', snap});
   p.regions.forEach(g2=>calcRegionMetrics(g2,p.cols,p.minX,p.minY));
   refreshAfterRoomEdit();
   return true;
@@ -612,14 +612,14 @@ svg.addEventListener('contextmenu',e=>{
   if(mode==='balkon'){
     const rb=svg.getBoundingClientRect();
     const h=hitBalk(S2Wx(e.clientX-rb.left), S2Wy(e.clientY-rb.top));
-    if(h){ editHistory.push({type:'balk', prev:balkSnapshot()});
+    if(h){ pushEdit({type:'balk', prev:balkSnapshot()});
       balconies.splice(h.i,1); hoverBalk=null; balkChecksRefresh(); render(); }
     return;
   }
   if(mode==='avlu'){
     const rb=svg.getBoundingClientRect();
     const h=hitAvlu(S2Wx(e.clientX-rb.left), S2Wy(e.clientY-rb.top));
-    if(h){ editHistory.push({type:'avlu', prev:courtyardsSnapshot()});
+    if(h){ pushEdit({type:'avlu', prev:courtyardsSnapshot()});
       courtyards.splice(h.i,1); avluGhost=null; avluChanged(); }
     return;
   }
@@ -628,7 +628,7 @@ svg.addEventListener('contextmenu',e=>{
     const rb=svg.getBoundingClientRect();
     const h=hitDoor(e.clientX-rb.left, e.clientY-rb.top);
     if(h && h.kind!=='extra' && doorOverrides[h.key]){
-      editHistory.push({type:'door', prev:doorSnapshot()});
+      pushEdit({type:'door', prev:doorSnapshot()});
       delete doorOverrides[h.key]; hoverDoor=null; render();
     }
     return;
@@ -648,7 +648,7 @@ svg.addEventListener('contextmenu',e=>{
       roomMenu.style.top =Math.min(e.clientY-wrapC.top,  wrapC.height-roomMenu.offsetHeight-10)+'px'; };
     const failC=msg=>{ roomMenu.innerHTML=`<div class="note">${escapeHtml(msg)}</div>`; placeC(); setTimeout(hideRoomMenu,1800); };
     const doExt=(fn,errMsg)=>{ const st=stateSnapshot();
-      if(fn()){ editHistory.push({type:'unitswap',state:st});
+      if(fn()){ pushEdit({type:'unitswap',state:st});
         plan.regions.forEach(gg=>calcRegionMetrics(gg,plan.cols,plan.minX,plan.minY));
         hoverWall=null; plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); hideRoomMenu(); }
       else failC(errMsg); };
@@ -696,7 +696,7 @@ svg.addEventListener('contextmenu',e=>{
         roomMenu.style.top =Math.min(e.clientY-wrapO.top,  wrapO.height-roomMenu.offsetHeight-10)+'px'; };
       const failO=msg=>{ roomMenu.innerHTML=`<div class="note">${escapeHtml(msg)}</div>`; placeO(); setTimeout(hideRoomMenu,1800); };
       const doO=(fn,err)=>{ const snap=snapshotRegions();
-        if(fn()){ editHistory.push({type:'wallsnap', snap});
+        if(fn()){ pushEdit({type:'wallsnap', snap});
           plan.regions.forEach(gg=>calcRegionMetrics(gg,plan.cols,plan.minX,plan.minY));
           hoverWall=null; hoverRoomId=null; plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); hideRoomMenu(); }
         else failO(err); };
@@ -836,7 +836,7 @@ svg.addEventListener('contextmenu',e=>{
       else fail('Bu oda silinemedi (daire içi komşusu yok).'); };
     const slim=roomMenu.querySelector('.mi[data-slim]');
     if(slim) slim.onclick=()=>{ const snap=snapshotRegions();
-      if(slimUnitAntre(u)){ editHistory.push({type:'wallsnap', snap}); refreshAfterRoomEdit(); hideRoomMenu(); }
+      if(slimUnitAntre(u)){ pushEdit({type:'wallsnap', snap}); refreshAfterRoomEdit(); hideRoomMenu(); }
       else fail('Kırpılacak fazlalık yok (erişim ve bağlantı korunuyor).'); };
     const rt=roomMenu.querySelector('.mi[data-retype-open]'); if(rt) rt.onclick=showRetype;
     const sw=roomMenu.querySelector('.mi[data-swap-open]'); if(sw) sw.onclick=showSwap;
@@ -861,7 +861,7 @@ svg.addEventListener('contextmenu',e=>{
     const dis=roomMenu.querySelector('.mi[data-dissolve]');
     if(dis) dis.onclick=()=>{
       const snap=snapshotRegions();
-      if(dissolveUnit(k)){ editHistory.push({type:'wallsnap', snap}); hideRoomMenu(); }
+      if(dissolveUnit(k)){ pushEdit({type:'wallsnap', snap}); hideRoomMenu(); }
       else fail('Daire silinemedi (komşu daire bulunamadı).');
     };
   }
@@ -875,7 +875,7 @@ function applyUnitLayout(k, mode){
   const state=stateSnapshot(); // DEĞİŞİKLİKTEN ÖNCE tam durum: geri al elle düzenlemeleri de birebir getirir
   if(mode==='auto') delete unitLayout[k]; else unitLayout[k]=mode;
   if(JSON.stringify(prev)===JSON.stringify(unitLayout)) return;
-  editHistory.push({type:'ulayout', prev, state});
+  pushEdit({type:'ulayout', prev, state});
   generate(true);
 }
 svg.addEventListener('mousedown',hideRoomMenu);

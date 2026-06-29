@@ -67,6 +67,51 @@ function buildUnitTable(){
     b.style.display=off?'block':'none';
     document.getElementById('utToggle').textContent=off?'–':'+'; });
 })();
+/* ================= değişiklik geçmişi paneli =================
+   editHistory (yapılmış) + redoHistory (geri-alınmış, gelecek) listelenir. "şimdi" sınır işareti.
+   Satıra tıkla → gotoHistory: o duruma kadar undoEdit/redoEdit döngüsü (mevcut primitifler). */
+let histSig='';
+function refreshHistoryUI(force){
+  const eh=(typeof editHistory!=='undefined')?editHistory:[], rh=(typeof redoHistory!=='undefined')?redoHistory:[];
+  const rb=document.getElementById('tRedo'); if(rb) rb.disabled = rh.length===0;   // ileri-al boşken soluk
+  // ucuz dirty-check: uzunluklar + uçtaki etiketler aynıysa yeniden kurma (cut sürüklemesinde render çok çağrılır)
+  const top=eh.length?(eh[eh.length-1].label||''):'', rtop=rh.length?(rh[rh.length-1].label||''):'';
+  const sig=eh.length+'|'+rh.length+'|'+top+'|'+rtop;
+  if(!force && sig===histSig) return;
+  histSig=sig;
+  const body=document.getElementById('hpBody'); if(!body) return;
+  body.innerHTML='';
+  if(!eh.length && !rh.length){
+    const d=document.createElement('div'); d.className='histRow empty'; d.textContent='Henüz değişiklik yok';
+    body.appendChild(d); return;
+  }
+  const addRow=(label, cls, jump, mark)=>{
+    const d=document.createElement('div'); d.className='histRow'+(cls?' '+cls:'');
+    const hi=document.createElement('span'); hi.className='hi'; hi.textContent=mark;
+    const ht=document.createElement('span'); ht.className='ht'; ht.textContent=label;
+    d.appendChild(hi); d.appendChild(ht);
+    if(jump!=null){ d.dataset.jump=jump; d.onclick=()=>gotoHistory(+d.dataset.jump); }
+    body.appendChild(d);
+  };
+  eh.forEach((e,i)=>addRow(e.label||labelFor(e), null, -(eh.length-i), String(i+1)));   // yapılmış: eski→yeni
+  addRow('şimdi', 'now', null, '●');                                                     // sınır
+  for(let j=rh.length-1, n=1; j>=0; j--, n++) addRow(rh[j].label||'Adım', 'future', n, '↷'); // gelecek: yakın→uzak
+}
+/* geçmişte gez: delta<0 → |delta| kez geri al, delta>0 → delta kez ileri al */
+function gotoHistory(delta){
+  if(!delta) return;
+  if(delta<0){ for(let i=0;i<-delta && editHistory.length;i++) undoEdit(); }
+  else { for(let i=0;i<delta && redoHistory.length;i++) redoEdit(); }
+  render();
+}
+(function(){ /* geçmiş panelini daralt/genişlet */
+  const tb=document.getElementById('hpToggle'); if(!tb) return;
+  tb.addEventListener('click',()=>{
+    const b=document.getElementById('hpBody');
+    const off=b.style.display==='none';
+    b.style.display=off?'block':'none';
+    tb.textContent=off?'–':'+'; });
+})();
 /* ================= çizim (render) ================= */
 /* kenar ölçü etiketleri (her iki poligon için ortak) */
 function polyDims(g, arr, isClosed, color){
@@ -376,6 +421,7 @@ function render(){
   }
   updateZoomUI();
   if(typeof psLiveUpdate==='function') psLiveUpdate();
+  refreshHistoryUI();   // geçmiş paneli + ileri-al butonu (ucuz dirty-check; tüm reset noktalarını yakalar)
 }
 
 function renderPlan(){
