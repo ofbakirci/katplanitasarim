@@ -66,6 +66,7 @@ function parkingForPlan(pl, vertical){
 }
 function generate(keepCuts){
   if(!closed) return;
+  planAutoRepaired=false;   // kullanıcı üretimi/temiz üretim "otomatik onarıldı" değildir (repairImportedPlan sonradan işaretler)
   const villa = document.getElementById('binaTipi').value==='villa';
   const kat = Math.max(1,+document.getElementById('katSayisi').value||1);
   const katYuk = +document.getElementById('katYuk').value||2.9;
@@ -1747,4 +1748,46 @@ function generate(keepCuts){
   document.getElementById('pngBtn').disabled=false;
   document.getElementById('aiOutputBtn').disabled=false;
   render();
+}
+
+/* ===== İÇE AKTARILAN BOZUK DÜZEN OTOMATİK ONARIMI (yalnız dosya yükleme yolu) =====
+   Düzenleme (cut sürükleme / oda silme / daire takası) bazen bağımsız bölüm hücrelerini
+   APARTMAN HOLÜ'ne (koridor) döküp odaları HÜCRESİZ bırakabiliyor. Böyle bir durum
+   kaydedilip yeniden açıldığında: hol kat alanının büyük kısmını yutmuş, daireler
+   piyeslerini kaybetmiş, çok sayıda hücresiz "hayalet" oda kalmış olur. Sonuç: kuzeye/hole
+   doğru duvar sürüklenemez (koridor parçalı → moveWallStep'in regConnected'ı reddeder) ve
+   hol "doldurulamaz". healDisconnected/fixOrphans koridoru ATLADIĞI için bu durumu onaramaz.
+   Çözüm: yüklemede bozukluğu sez → spec + ayırıcılardan generate(true) ile YENİDEN ÜRET
+   (cut bölünmesi korunur). YALNIZ importPlanText'ten çağrılır; undo/redo/kat-geçiş
+   restoreState'i ETKİLENMEZ. İdempotent: sağlıklı planda NO-OP. */
+function planLooksBroken(){
+  const p=plan;
+  if(!p||!p.regions||!p.unitObjs||!p.inside||!p.cm) return false;
+  if(p.villa) return false;                                          // villa: ayrı yerleşim mantığı
+  if((p.katKullanim||'konut')!=='konut') return false;               // ticari/otopark/sığınak: hol/çekirdek doğal büyük
+  if(p.unitObjs.length<2) return false;                              // tek daire: koridor doğal büyük
+  if(typeof villaFloors!=='undefined' && villaFloors) return false;  // kat-ayrı: çok-kat durum, otomatik regen sürpriz olur
+  if(typeof blocks!=='undefined' && blocks) return false;            // site: çok-blok durum
+  let inside=0; for(let i=0;i<p.inside.length;i++) if(p.inside[i]) inside++;
+  if(inside<40) return false;
+  const CORE={merdiven:1,yangin:1,asansor:1,teknik:1};
+  let corr=0, ghosts=0;
+  p.regions.forEach(g=>{
+    if(!g) return;
+    const n=g.cells?g.cells.length:0;
+    if(g.type==='koridor') corr+=n;
+    else if(n===0 && g.type!=='isiklik' && !CORE[g.type]) ghosts++;  // hücresiz hayalet oda (piyes yutulmuş)
+  });
+  /* hol kat alanının >%25'i + 5+ hücresiz oda = piyesler hole yutulmuş (sağlıklı: hol ≤%15, hayalet ≤3) */
+  return corr/inside>0.25 && ghosts>=5;
+}
+function repairImportedPlan(){
+  try{
+    if(!planLooksBroken()) return false;
+    console.warn('[KPTA] İçe aktarılan düzen bozuk görünüyor (hol bağımsız bölüm alanını yutmuş + hücresiz odalar); spec ve ayırıcılardan yeniden üretiliyor.');
+    generate(true);          // cut bölünmesini koru, oda dağılımını specten yeniden kur (generate kendi runChecks/render'ını yapar)
+    planAutoRepaired=true;   // generate flag'i sıfırladı; onarımdan SONRA işaretle
+    runChecks();             // bilgi notunu göstermek için checks'i yeniden topla/render et
+    return true;
+  }catch(err){ console.error('[KPTA] otomatik onarım başarısız:', err); return false; }
 }

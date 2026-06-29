@@ -38,6 +38,7 @@ let blocks = null;            // site "çoklu blok": blok başına TAM durum anl
 let activeBlock = 0;          // blocks aktifken düzenlenen blok indeksi (0 = Blok A)
 let villaFloors = null;       // villa "katları ayrı planla": kat başına durum anlık görüntüsü (stateSnapshot biçimi) | null
 let activeFloor = 0;          // villaFloors aktifken görüntülenen kat İNDEKSİ (0 = en alt bodrum; zemin = bodrumSayisi)
+let planAutoRepaired = false; // içe aktarılan bozuk düzen otomatik yeniden üretildiyse true → runChecks bilgi notu gösterir (repairImportedPlan)
 let bodrumSayisi = 0;         // bodrum (eksi) kat sayısı; toplam kat = bodrum + üst. villaFloors indeksi: 0=en alt bodrum, zeminIdx()=zemin
 let villaOffset = 0;          // villaFloors dizisinin kurulduğu bodrum sayısı (sayaç değişiminde indeks kaymasını yönetmek için)
 let floorClip = null;         // kat düzeni kopyala/uygula tamponu: {src, snap} | null

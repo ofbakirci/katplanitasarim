@@ -18,6 +18,7 @@ const strictTests = [
   'tests/wall-drag.js',
   'tests/cut-preserve.js',
   'tests/heal-disconnect.js',
+  'tests/repair-import.js',
   'tests/core-shadow.js',
   'tests/yangin-merdiven.js',
   'tests/acik-mutfak.js',

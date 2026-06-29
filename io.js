@@ -984,11 +984,11 @@ function kpBuildPlanFromCells(geom){
 function importPlanText(txt, fname){
   txt=txt.replace(/^﻿/,'');
   try{
-    if(/^\s*\{/.test(txt)){ restoreState(JSON.parse(txt)); return; }
+    if(/^\s*\{/.test(txt)){ restoreState(JSON.parse(txt)); repairImportedPlan(); return; }
     const m=txt.match(/<metadata[^>]*id="kpState"[^>]*>([\s\S]*?)<\/metadata>/);
     if(m){
       const json=m[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
-      restoreState(JSON.parse(json)); return;
+      restoreState(JSON.parse(json)); repairImportedPlan(); return;
     }
     /* DXF: uzantı ya da içerik imzası (SVG/JSON bu yola düşmez) */
     if(/\.dxf$/i.test(fname||'') || (/\bENTITIES\b/.test(txt) && /\b(LWPOLYLINE|POLYLINE)\b/.test(txt))){

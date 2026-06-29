@@ -92,6 +92,8 @@ function collectCoreHeightChecks(add, p){
 function collectChecks(){
   const out=[], add=(s,t,reg,unit)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit});
   const p=plan;
+  if(typeof planAutoRepaired!=='undefined' && planAutoRepaired)
+    add('info','İçe aktarılan düzen bozuktu (apartman holü bağımsız bölüm alanını yutmuştu, odalar hücresiz kalmıştı) → spec ve ayırıcılardan otomatik yeniden üretildi. Elle yapılmış oda düzenlemeleri korunamadı.');
   /* piyes ölçüleri — Planlı Alanlar İmar Yönetmeliği md.30 */
   p.unitObjs.forEach((u,k)=>{
     if(!u.rooms.some(g=>g.cells.length)) return;   // silinmiş (komşuya katılmış) daire
