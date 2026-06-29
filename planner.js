@@ -1783,7 +1783,49 @@ function planLooksBroken(){
     else if(n===0 && g.type!=='isiklik' && !CORE[g.type]) ghosts++;  // hücresiz hayalet oda (piyes yutulmuş)
   });
   /* hol kat alanının >%25'i + 5+ hücresiz oda = piyesler hole yutulmuş (sağlıklı: hol ≤%15, hayalet ≤3) */
-  return corr/inside>0.25 && ghosts>=5;
+  if(corr/inside>0.25 && ghosts>=5) return true;
+  /* Ölü koridor kolu: bant dışında (corridorR0..R1 üstü/altı) kalan koridor hücrelerine
+     bitişik tüm daireler, bu kola gerek duymadan zaten bant koridoruna ulaşabiliyorsa
+     (yani her dairenin en az bir odası bant hücresiyle doğrudan komşu ise) kol işlevsiz
+     ölü alandır. Elle daraltma imkânsız (çekirdeğe/kenar → FIXED). >10 m² ise yeniden
+     üretim gerekir. */
+  if(p.corridorR0>=0&&p.corridorR1>=0&&p.unitObjs&&p.unitObjs.length>=2){
+    const hol=p.regions.find(g=>g&&g.type==='koridor');
+    if(hol&&hol.cells){
+      const armCells=hol.cells.filter(ci=>{ const r=(ci/p.cols)|0; return r<p.corridorR0||r>p.corridorR1; });
+      if(armCells.length*M*M>10){
+        const armSet=new Set(armCells);
+        /* bant hücreleri (corridorR0..R1 arasındaki hol hücreleri) */
+        const bandSet=new Set(hol.cells.filter(ci=>{ const r=(ci/p.cols)|0; return r>=p.corridorR0&&r<=p.corridorR1; }));
+        /* hangi birimler kola bitişik? */
+        const unitOf2=new Map(); p.unitObjs.forEach((u,k)=>u.rooms.forEach(g=>unitOf2.set(g.id,k)));
+        const adjUnits=new Set();
+        for(const ci of armCells){
+          const r=(ci/p.cols)|0, c=ci%p.cols;
+          for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+            const nr=r+dr,nc=c+dc;
+            if(nr<0||nc<0||nr>=p.rows||nc>=p.cols) continue;
+            const nId=p.cm[nr*p.cols+nc];
+            if(nId>=0&&!armSet.has(nr*p.cols+nc)){ const uk=unitOf2.get(nId); if(uk!==undefined) adjUnits.add(uk); }
+          }
+        }
+        /* her bitişik birimin bant'a DOĞRUDAN erişimi var mı? */
+        const allHaveBandAccess=adjUnits.size>0&&[...adjUnits].every(uk=>{
+          const u=p.unitObjs[uk]; if(!u) return false;
+          return u.rooms.some(g=>g.cells&&g.cells.some(ci=>{
+            const r=(ci/p.cols)|0, c=ci%p.cols;
+            for(const [dr,dc] of [[-1,0],[1,0],[0,-1],[0,1]]){
+              const nr=r+dr,nc=c+dc;
+              if(nr>=0&&nc>=0&&nr<p.rows&&nc<p.cols&&bandSet.has(nr*p.cols+nc)) return true;
+            }
+            return false;
+          }));
+        });
+        if(allHaveBandAccess) return true; // ölü koridor kolu saptandı
+      }
+    }
+  }
+  return false;
 }
 function repairImportedPlan(){
   try{
