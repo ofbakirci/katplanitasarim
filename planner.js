@@ -1503,7 +1503,12 @@ function generate(keepCuts){
             [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc2])=>{
               if(rr<0||cc2<0||rr>=rows||cc2>=cols) return;
               const j=rr*cols+cc2;
-              if(inside[j]&&cm[j]>=0&&cm[j]!==g.id) cnt.set(cm[j],(cnt.get(cm[j])||0)+1); }); });
+              /* ÇEKİRDEK alıcı OLAMAZ: kopuk parça merdiven/asansör/yangın/şaft'a katılmaz
+                 (kilitli ayak izi). Yoksa kullanıcı çekirdeği daraltınca yan dairede açığa
+                 çıkan kopuk şerit baskın-komşu olarak ÇEKİRDEĞE geri yapışır → daralttığın
+                 sütun aynen geri büyür ("yapı elemanı yeniden boyutlandırmaya direniyor").
+                 assignCellsToNeighbor (yapı modu) ve healDisconnected zaten böyle dışlıyor. */
+              if(inside[j]&&cm[j]>=0&&cm[j]!==g.id&&!isStructReg(regions[cm[j]])) cnt.set(cm[j],(cnt.get(cm[j])||0)+1); }); });
           let best=-1,bn=0; cnt.forEach((n,id2)=>{ if(n>bn){bn=n;best=id2;} });
           if(best>=0){
             comp.forEach(i=>{ cm[i]=best; regions[best].cells.push(i); });
