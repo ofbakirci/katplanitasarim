@@ -89,6 +89,37 @@ function dxfLayerToType(layer){
   return null;
 }
 function dxfIsDoorLayer(layer){ return /DOOR|KAPI|A-DOOR/.test(String(layer||'').toUpperCase()); }
+
+/* Izgara 4M hücreyi aşınca: körü körüne "$INSUNITS hatalı" deme.
+   Planın GERÇEK metre boyuna bak, kullanıcının anlayacağı dille ayırt et:
+   · çok büyük (>~150 m kenar)  → tek daire değil, koca pafta/harita atılmış
+   · çok küçük (<~1 m kenar)    → ölçek bozuk (mm dosyasını metre sandık vb.)
+   · arası                       → genel ölçek şüphesi */
+function dxfFmtBoyut(m){
+  if(!isFinite(m)) return '?';
+  if(m>=1000) return (m/1000).toFixed(m>=10000?0:1).replace('.',',')+' km';
+  if(m>=1)    return Math.round(m).toLocaleString('tr-TR')+' m';
+  if(m>=0.01) return Math.round(m*100)+' cm';
+  return Math.round(m*1000)+' mm';
+}
+function dxfOversizeMessage(wM, hM, roomCount){
+  const big=Math.max(wM,hM), boyut=dxfFmtBoyut(wM)+' × '+dxfFmtBoyut(hM);
+  if(big>150){
+    return 'Bu DXF tek bir kat planı için fazla büyük görünüyor (≈'+boyut+'). '
+      +'Büyük olasılıkla bütün bir imar paftası / hâlihazır harita ya da birden çok '
+      +'binayı içeren bir dosya aktardınız. Lütfen YALNIZCA tek bir dairenin ya da '
+      +'katın planını içeren bir DXF aktarın (gereksiz katmanları/parselleri CAD\'de '
+      +'silip yeniden kaydedebilirsiniz).';
+  }
+  if(big<1){
+    return 'DXF\'in ölçeği okunamadı; plan olması gerekenden çok küçük çözümlendi '
+      +'(≈'+boyut+'). Dosyanın birimi (mm/cm/m) hatalı olabilir — CAD\'de "Birim" '
+      +'ayarını kontrol edip yeniden kaydedin.';
+  }
+  return 'DXF ızgaraya sığmadı (plan ≈'+boyut+'). Dosyanın ölçeği/birimi ($INSUNITS) '
+    +'hatalı olabilir; ya da dosya tek bir kat planından büyük. Lütfen tek bir kat '
+    +'planı içeren, ölçeği doğru bir DXF aktarın.';
+}
 /* MTEXT biçim kodlarını ({\fArial;...}, \P satır sonu) ayıkla */
 function dxfCleanText(t){
   return String(t||'').replace(/\\[A-Za-z][^;\\]*;/g,'').replace(/[{}]/g,'')
@@ -129,14 +160,23 @@ function importDxf(txt){
       doorEnts.push({x1:v.x*toM, y1:v.y*toM, x2:v.x*toM, y2:v.y*toM}); // nokta kapı
     }
   });
-  if(!rooms.length) throw new Error('DXF: oda poligonu yok (kapalı LWPOLYLINE bekleniyor)');
+  if(!rooms.length) throw new Error('Bu DXF\'te tanınabilir oda alanı bulunamadı. Motor, '
+    +'odaların kapalı çoklu-çizgi (LWPOLYLINE) olarak çizildiği bir kat planı bekler. '
+    +'Lütfen tek bir dairenin/katın planını içeren bir DXF aktarın.');
 
   /* ızgara BİNADAN: origin = oda poligonlarının min köşesi (parsel değil) */
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
   rooms.forEach(rm=>rm.pts.forEach(p=>{ if(p.x<minX)minX=p.x; if(p.y<minY)minY=p.y; if(p.x>maxX)maxX=p.x; if(p.y>maxY)maxY=p.y; }));
   const ox=minX, oy=minY;
-  const cols=Math.max(1,Math.round((maxX-ox)/M)), rows=Math.max(1,Math.round((maxY-oy)/M));
-  if(cols*rows>4e6) throw new Error('DXF: ızgara çok büyük ('+cols+'×'+rows+') — ölçek ($INSUNITS) hatalı olabilir');
+  const wM=maxX-ox, hM=maxY-oy;                 // planın metre cinsinden TAM boyu (grid kararı için, güvenli)
+  const cols=Math.max(1,Math.round(wM/M)), rows=Math.max(1,Math.round(hM/M));
+  if(cols*rows>4e6){
+    /* Uyarı rakamı için aykırı köşeleri (pafta antedi, 0-noktası çizimleri) dışla:
+       tüm köşelerin %2–%98 yüzdelik aralığı = planın gerçek gövdesi. */
+    const allX=[],allY=[]; rooms.forEach(rm=>rm.pts.forEach(p=>{allX.push(p.x);allY.push(p.y);}));
+    const span=arr=>{ arr.sort((a,b)=>a-b); const lo=arr[Math.floor(arr.length*0.02)], hi=arr[Math.floor(arr.length*0.98)]; return hi-lo; };
+    throw new Error(dxfOversizeMessage(span(allX), span(allY), rooms.length));
+  }
   const pip=(poly,x,y)=>{ let inn=false;
     for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j];
       if((a.y>y)!==(b.y>y) && x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x) inn=!inn; }
@@ -163,7 +203,9 @@ function importDxf(txt){
       const idx=r*cols+c; if(cellType[idx]===null){ cellType[idx]=rm.fillType; cellPoly[idx]=ri; }
     }
   });
-  if(!cellType.some(Boolean)) throw new Error('DXF: oda poligonları ızgaraya düşmedi (ölçek?)');
+  if(!cellType.some(Boolean)) throw new Error('DXF\'teki oda alanları ızgaraya yerleştirilemedi. '
+    +'Dosyanın ölçeği/birimi hatalı olabilir; ya da odalar kapalı çoklu-çizgi değil. '
+    +'Lütfen tek bir kat planı içeren, ölçeği doğru bir DXF aktarın.');
 
   /* iç duvarlar: farklı kaynak-poligona ait komşu hücreler arası kenar */
   const vWall=new Set(), hWall=new Set();
