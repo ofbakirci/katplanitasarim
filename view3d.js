@@ -19,6 +19,9 @@
   let camGizmos=null, raycaster=null, pickerWired=false;
   // ── katlanabilir panel: sağ kenarda ikon-rail + açılır çekmece (mesh'i örtmez) ──
   let activeGroup=null, lockedViewRef=null, onReRenderCb=null, angleDrift=false, lastHint='';
+  // embedded = MESKEN akışı içinde açıldı (adım 2/4) → Kapat (X) YOK (3B kapatılan modal değil, bir adım).
+  // standalone KPTA toolbar "3B" → embedded=false → Kapat X kalır (2B'ye dönüş için).
+  let embedded=false;
   const CAM_Y = { low:1.1, eye:1.6, high:2.2 };          // 3 kademe yükseklik (m) — prototip height ile birebir
   const LENS_FOV = { 16:100, 24:74, 35:54, 50:40 };       // objektif → yatay görüş açısı
 
@@ -121,7 +124,8 @@
     const rail=overlay&&overlay.querySelector('#v3dRail'); if(!rail) return;
     let h='';
     railGroups().forEach(function(g){ h+='<button data-grp="'+g.k+'" class="v3drailb'+(activeGroup===g.k?' on':'')+'" title="'+g.t+'">'+ic(g.i,19)+'</button>'; });
-    h+='<div class="v3draild"></div><button data-v3d="close" class="v3drailb v3drailx" title="Kapat">'+ic('close',19)+'</button>';
+    // Kapat (X) YALNIZ standalone'da (toolbar 3B). Akış içinde (embedded) yok — adımlar arası gezilir, kapatılmaz.
+    if(!embedded) h+='<div class="v3draild"></div><button data-v3d="close" class="v3drailb v3drailx" title="Kapat">'+ic('close',19)+'</button>';
     rail.innerHTML=h;
   }
   function renderDrawer(){
@@ -778,7 +782,7 @@
     }).catch(function(e){ status.textContent='HATA: '+(e.message||e); return null; });
   }
   // tam-ekran 3B (toolbar / adım 2 "3B"): SALT İZLEME — kamera bölümü GİZLİ (#1), mesh serbest.
-  function open(){ compareMode=false; compareRefURL=null; setCamUI(false); return boot().then(function(map){ setCamUI(false); return map; }); }
+  function open(opts){ compareMode=false; compareRefURL=null; embedded=!!(opts&&opts.embedded); setCamUI(false); return boot().then(function(map){ setCamUI(false); return map; }); }
   // plan imzası: yerleşim değişince (oda sayısı / footprint ölçüsü) eski kameralar geçersiz olur
   function planSig(map){
     const u=(map&&map.units)||[]; let rc=0; u.forEach(function(x){ rc+=((x.rooms||[]).length); });
@@ -786,7 +790,7 @@
   }
   // adım 4 "Kamera": SOL boyalı referans + SAĞ canlı 3B (kilitli açı), kamera bölümü AÇIK, demo vitrin kameralar hazır.
   function openCompare(paintedURL, lockedView, onReRender){
-    compareMode=true; compareRefURL=paintedURL||null;
+    compareMode=true; compareRefURL=paintedURL||null; embedded=true;   // akış adımı → Kapat X yok
     onReRenderCb=(typeof onReRender==='function')?onReRender:null;
     return boot().then(function(map){
       if(!map) return;
