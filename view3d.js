@@ -59,8 +59,8 @@
     overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:#15151a;display:none;';
     overlay.innerHTML =
       '<div id="v3dHost" style="position:absolute;inset:0"></div>'+
-      '<div style="position:absolute;top:12px;left:12px;background:rgba(38,38,46,.92);color:#e8e6e0;'+
-        'font:13px/1.4 system-ui,sans-serif;padding:12px 14px;border-radius:10px;max-width:280px;backdrop-filter:blur(6px)">'+
+      '<div id="v3dPanel" style="position:absolute;top:12px;left:12px;background:rgba(38,38,46,.92);color:#e8e6e0;'+
+        'font:13px/1.4 system-ui,sans-serif;padding:12px 14px;border-radius:10px;max-width:280px;backdrop-filter:blur(6px);z-index:3">'+
         '<b style="color:#c9a16b">3B Görünüm</b><br>'+
         '<span style="font-size:11.5px;opacity:.85">Gerçek geometriden — AI yok. Plandaki her oda zeminden çıkarıldı, '+
         'bitişik sınırlar = iç duvarlar (mutfak/salon dahil).</span>'+
@@ -540,15 +540,17 @@
   function updateCamPanel(){ const c=overlay&&overlay.querySelector('#v3dCamCount'); if(c) c.textContent=camList.length?(camList.length+' kamera'):''; }
   function setHint(t){ const h=overlay&&overlay.querySelector('#v3dCamHint'); if(h) h.textContent=t||''; }
 
-  function open(){
+  // ── açılış: boot (three.js + sahne) → full ya da yan-yana (compare) layout ──
+  let compareMode=false, compareRefURL=null;
+  function boot(){
     ensureOverlay();
     const map = window.buildFloorplanMap && window.buildFloorplanMap();
     if(!map || !map.units || !map.units.length){
-      alert('Önce bir yerleşim oluşturun (oda/daire). 3B görünüm planı kullanır.'); return;
+      alert('Önce bir yerleşim oluşturun (oda/daire). 3B görünüm planı kullanır.'); return Promise.resolve(null);
     }
     overlay.style.display='block';
     status.textContent='three.js yükleniyor…';
-    loadThree().then(function(){
+    return loadThree().then(function(){
       if(!renderer){
         renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
         renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -562,11 +564,48 @@
         window.addEventListener('resize',resize);
         loop();
       }
+      setCompareLayout(compareMode, compareRefURL);         // full / yan-yana yerleşimi uygula
       resize();
       buildScene(map); built=true;
-    }).catch(function(e){ status.textContent='HATA: '+(e.message||e); });
+      return map;
+    }).catch(function(e){ status.textContent='HATA: '+(e.message||e); return null; });
   }
-  function close(){ if(overlay) overlay.style.display='none'; }
+  function open(){ compareMode=false; compareRefURL=null; setPlaceMode(false); return boot(); }    // tam-ekran 3B (toolbar/adım 2)
+  // adım 4: SOL boyalı referans + SAĞ canlı 3B (kilitli açı), kamera-koyma açık, demo vitrin kameralar hazır.
+  function openCompare(paintedURL, lockedView){
+    compareMode=true; compareRefURL=paintedURL||null;
+    return boot().then(function(map){
+      if(!map) return;
+      if(lockedView) restoreView(lockedView);              // 3B = boyalıyla AYNI açıdan başlar
+      fitView();                                            // kilitli açıyı KORU, yarı-ekran kadrajına sığdır
+      if(!camList.length) deriveShowcaseCameras(map);       // daire başına vitrin kamera otomatik
+      setPlaceMode(true);
+    });
+  }
+  // overlay'i full ↔ yan-yana (sol boyalı img / sağ 3B host) arasında geçir + paneli taşı.
+  function setCompareLayout(on, paintedURL){
+    if(!overlay||!host) return;
+    let ref=overlay.querySelector('#v3dCompareRef');
+    const panel=overlay.querySelector('#v3dPanel');
+    if(on){
+      if(!ref){
+        ref=document.createElement('div'); ref.id='v3dCompareRef';
+        ref.style.cssText='position:absolute;left:0;top:0;width:50%;height:100%;background:#0e0c0a;display:flex;align-items:center;justify-content:center;border-right:2px solid #2a2a30;z-index:1';
+        ref.innerHTML='<img id="v3dRefImg" style="max-width:96%;max-height:92%;object-fit:contain;border-radius:8px" alt="Boyalı render">'+
+          '<div style="position:absolute;top:12px;left:12px;background:rgba(38,38,46,.92);color:#e8e6e0;font:12px system-ui;padding:6px 10px;border-radius:8px">Boyalı render — referans</div>';
+        overlay.insertBefore(ref, host);
+      }
+      const img=ref.querySelector('#v3dRefImg');
+      if(img) img.src=paintedURL||'data:image/svg+xml;base64,'+btoa('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260"><rect width="100%" height="100%" fill="#1a1714"/><text x="50%" y="50%" fill="#7a6f60" font-family="system-ui" font-size="16" text-anchor="middle">boyalı render bekleniyor</text></svg>');
+      ref.style.display='flex'; host.style.left='50%';       // 3B host → sağ yarı (right:0 inset'ten gelir)
+      if(panel){ panel.style.left='auto'; panel.style.right='12px'; }   // panel sağ kenara → mesh ortası açık kalır
+    } else {
+      if(ref) ref.style.display='none'; host.style.left='0';
+      if(panel){ panel.style.left='12px'; panel.style.right='auto'; }
+    }
+    resize();
+  }
+  function close(){ if(overlay) overlay.style.display='none'; setPlaceMode(false); }
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();} }
   function loop(){ raf=requestAnimationFrame(loop);
@@ -574,7 +613,7 @@
       if(zoomEl&&!zoomActive) zoomEl.value=distToSlider(controls.getDistance()); } }
 
   // dışa aç + buton bağla
-  window.View3D = { open:open, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
+  window.View3D = { open:open, openCompare:openCompare, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
     clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras };
   function bind(){
