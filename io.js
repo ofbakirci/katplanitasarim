@@ -5,7 +5,7 @@ let aiPaintMode=false; // AI boyama export modu: EN etiket, daire tablosu yok (b
 let edgeMaskMode=false; // ControlNet/Flux-Canny duvar-kenar export modu: beyaz zemin + saf siyah SÜREKLİ duvarlar; etiket/renk/m²/mobilya/grid/balkon/ölçü YOK
 let aiCleanMode=false;  // AI boyama TEMİZ modu: SADECE oda dolgusu + duvar + kapı boşluğu + EN oda etiketi. Düğüm/m²/ölçü/D-rozet/grid/parsel/balkon/seçim YOK. Kadraj kenar-maskesiyle birebir (bd=0 → iki PNG üst üste biner).
 let wallBoundaryMode=false; // Şeffaf duvar/oda/daire SINIRI + KAPI BOŞLUKLARI export modu (kat-plani-duvarsinirlari.png): edge-mask ile aynı kadraj AMA zemin şeffaf + computeDoors() kapı boşlukları canvas'ta gerçekten oyulur (boyamadaki kapılarla birebir).
-/* ⛔ RENDER HEDEF ORANI: dollhouse render (nano-banana-pro, 4K 16:9) = 5504×3072.
+/* RENDER HEDEF ORANI: dollhouse render (nano-banana-pro, 4K 16:9) = 5504×3072.
    AI Output kadrajı (PNG + harita) bu ORANA letterbox'lanır → render modeline GİREN plan PNG'si
    ile ÇIKAN dollhouse AYNI en-boy oranında olur; kalan tek fark üniform ölçektir, onu da
    koordinatların _norm (0–1) alanı çözer. Bina kadrajın ortasında, kenarlara boş pay eklenir. */
@@ -363,7 +363,7 @@ function exportWallBoundaryPNG(){
    ----------------------------------------------------------------------------
    floorplan-map.json + floorplan-overlay.svg: her odanın ve dairenin AI Output
    render PNG'sinin PİKSEL uzayındaki konumu (bbox/polygon/centroid/alan/tip).
-   ⛔ TEK KOORDİNAT SİSTEMİ: oda/daire poligonları, bbox'lar VE (4. adımdaki
+   TEK KOORDİNAT SİSTEMİ: oda/daire poligonları, bbox'lar VE (4. adımdaki
    kamera export'unun) kamera x/y'si AYNI px uzayında — birim dönüşümü yok.
    Uzay = AI boyama (exportAIPaintPNG) / kenar (exportEdgeMaskPNG) PNG'siyle
    BİREBİR aynı kadraj: aşağıdaki S/panX/panY formülleri exportClone()'un
@@ -595,7 +595,7 @@ function buildFloorplanOverlaySVG(map){
    oda, konisinin doldurduğu odadır. Koniyi her oda poligonuna kırpıp (Sutherland–Hodgman; koni
    KONVEKS olduğundan L-şekilli/iç bükey odalar için de geçerli) kesişim ALANINI tartar.
    Döner: { room_id, room_weights:[{room_id,coverage_ratio}], cone_spills, cone_polygon_px, cone_polygon_norm }.
-   ⛔ TEK UZAY: cam.x_px/y_px ile oda polygon_px aynı render-png pikselinde olmalı. */
+   TEK UZAY: cam.x_px/y_px ile oda polygon_px aynı render-png pikselinde olmalı. */
 const FP_LENS_FOV = { 16:100, 24:74, 35:54, 50:40 };   // arayüzdeki cone ile birebir yatay FOV
 function fpLensFov(mm){ return FP_LENS_FOV[mm] || 65; }
 function fpPolyArea(poly){ let a=0; for(let i=0,j=poly.length-1;i<poly.length;j=i++) a+=(poly[j][0]+poly[i][0])*(poly[j][1]-poly[i][1]); return Math.abs(a)/2; }

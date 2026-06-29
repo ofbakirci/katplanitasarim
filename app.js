@@ -167,8 +167,8 @@ function reflowFloors(){
   villaFloors=next; activeFloor=na; villaOffset=bodrumSayisi;
 }
 /* ================= kat kullanım tipi (apartman + katları ayrı) =================
-   Her kat ayrı bir kullanıma ayrılabilir: 🏠 Konut (varsayılan, daire yerleşimi),
-   🏪 Ticari (zemin dükkânlar), 🅿️ Otopark (bodrum araç), 🛡️ Sığınak (bodrum sığınak).
+   Her kat ayrı bir kullanıma ayrılabilir: Konut (varsayılan, daire yerleşimi),
+   Ticari (zemin dükkânlar), Otopark (bodrum araç), Sığınak (bodrum sığınak).
    Aktif katın tipi global `katKullanim`'dadır; diğer katlarınki kendi anlık görüntüsünde
    (villaFloors[k].plan.katKullanim) saklanır. Yalnız apartmanda + katları ayrı açıkken. */
 /* kullanım ikonu icon() ile gelir (icons.js): icon('ticari'|'otopark'|'siginak'|'konut') */
@@ -549,7 +549,7 @@ function applyFloorLayout(){
   });
   if(n) renderFloorTabs();                                   // tablar + panel tazelenir (önce)
   const head=document.getElementById('floorPasteHead');      // sonucu EN SON yaz (tazeleme ezmesin)
-  if(head) head.innerHTML = n? ('<b>'+n+' kat</b> bu düzene güncellendi ✓') : 'Hiç kat seçilmedi.';
+  if(head) head.innerHTML = n? ('<b>'+n+' kat</b> bu düzene güncellendi') : 'Hiç kat seçilmedi.';
   if(n) setTimeout(closeFloorPaste, 1300);
 }
 function closeFloorPaste(){ floorClip=null;

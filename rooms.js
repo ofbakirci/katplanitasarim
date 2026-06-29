@@ -726,8 +726,8 @@ svg.addEventListener('contextmenu',e=>{
     const un=corridorCoresUnreached();
     let html='<div class="mh">APARTMAN HOLÜ</div><hr>';
     html += un.length
-      ? `<div class="mi" data-corecore="1">➜ Holü çekirdeğe uzat (${un.length} ulaşılamayan)</div>`
-      : `<div class="mi dis" title="Hol zaten çekirdeğe komşu">✓ Hol çekirdeğe ulaşıyor</div>`;
+      ? `<div class="mi" data-corecore="1">Holü çekirdeğe uzat (${un.length} ulaşılamayan)</div>`
+      : `<div class="mi dis" title="Hol zaten çekirdeğe komşu">Hol çekirdeğe ulaşıyor</div>`;
     html += `<div class="mi" data-corext-r="1">▸ Holü sağa/aşağı uzat</div>`
           + `<div class="mi" data-corext-l="1">◂ Holü sola/yukarı uzat</div>`
           + `<div class="mh">Genişlet/daralt: holün kenar duvarındaki mavi tutamacı sürükleyin.</div>`;
@@ -746,7 +746,7 @@ svg.addEventListener('contextmenu',e=>{
       roomMenu.style.left=Math.min(e.clientX-wrapS.left, wrapS.width-210)+'px';
       roomMenu.style.top =Math.min(e.clientY-wrapS.top,  wrapS.height-roomMenu.offsetHeight-10)+'px'; };
     roomMenu.innerHTML=`<div class="mh">${escapeHtml(g.name)}</div><hr>`
-      + `<div class="mi del" data-sdel="1">✕ ${escapeHtml(g.name)} sil</div>`
+      + `<div class="mi del" data-sdel="1">${escapeHtml(g.name)} sil</div>`
       + `<hr><div class="mh">Yapı elemanı ekle (tıkladığınız yere)</div>`
       + `<div class="mi" data-saddt="merdiven">+ Merdiven</div>`
       + `<div class="mi" data-saddt="asansor">+ Asansör</div>`
@@ -773,8 +773,8 @@ svg.addEventListener('contextmenu',e=>{
         else failO(err); };
       const hasKor=plan.regions.some(o=>o.type==='koridor'&&o.cells.length);
       let html=`<div class="mh">${escapeHtml(g.name)} · ${fmt(g.cells.length*M*M)} m²</div><hr>`;
-      if(hasKor) html+=`<div class="mi" data-otokor="1">➜ Apartman holüne kat (çekirdek erişimi aç)</div>`;
-      html+=`<div class="mi del" data-odis="1">✕ Komşulara dağıtıp sil</div>`
+      if(hasKor) html+=`<div class="mi" data-otokor="1">Apartman holüne kat (çekirdek erişimi aç)</div>`;
+      html+=`<div class="mi del" data-odis="1">Komşulara dağıtıp sil</div>`
           + `<hr><div class="mh">Yapı elemanı ekle (tıkladığınız yere)</div>`
           + `<div class="mi" data-saddt="merdiven">+ Merdiven</div>`
           + `<div class="mi" data-saddt="asansor">+ Asansör</div>`
@@ -815,22 +815,22 @@ svg.addEventListener('contextmenu',e=>{
     if(isAntre){
       html+='<hr><div class="mh">Antre</div>'
         + `<div class="mi" data-slim="1">⇲ Antreyi kırp (fazlalık odalara)</div>`
-        + `<div class="mi dis" title="Daire girişi her zaman korunur">✕ Antre silinemez</div>`
+        + `<div class="mi dis" title="Daire girişi her zaman korunur">Antre silinemez</div>`
         + `<div class="mh">Uzatmak için: duvarını sürükleyin ya da hedef odaya sağ tıklayın</div>`;
     } else {
       html+='<hr><div class="mh">Düzenle</div>'
-        + `<div class="mi" data-retype-open="1">✎ Tipini değiştir…</div>`
+        + `<div class="mi" data-retype-open="1">Tipini değiştir…</div>`
         + `<div class="mi" data-swap-open="1">⇄ Başka odayla takas et…</div>`
         + `<div class="mi" data-split="v">║ Odayı dikine böl</div>`
         + `<div class="mi" data-split="h">═ Odayı enine böl</div>`;
       if(g.type==='salon'&&u.rooms.some(o=>o.type==='mutfak'&&o.cells.length))
         html+=`<div class="mi" data-acik="1">⌐ Açık mutfağa dönüştür (mutfağı salona kat)</div>`;
       if(u.antre&&u.antre.cells.length&&!antreAdj)
-        html+=`<div class="mi" data-extend="1">➜ Antreyi bu odaya uzat (kapı erişimi)</div>`;
+        html+=`<div class="mi" data-extend="1">Antreyi bu odaya uzat (kapı erişimi)</div>`;
       const onlySalon=g.type==='salon'&&salonProtected()&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length);
       html+='<hr>'+(onlySalon
-        ? `<div class="mi dis" title="Yasal zorunlu piyes">✕ Tek salon silinemez</div>`
-        : `<div class="mi del" data-del="1">✕ Odayı sil (komşuya katılır)</div>`);
+        ? `<div class="mi dis" title="Yasal zorunlu piyes">Tek salon silinemez</div>`
+        : `<div class="mi del" data-del="1">Odayı sil (komşuya katılır)</div>`);
     }
     if(!plan.villa){
       const cur=unitLayout[k]||'auto';
@@ -841,7 +841,7 @@ svg.addEventListener('contextmenu',e=>{
          + opt('rail','Yatak odaları derinlemesine');
       const nbr=u.rooms.length && plan.unitObjs.filter((o,j)=>j!==k && o.rooms.some(x=>x.cells.length)).length;
       if(nbr) html+='<hr><div class="mi" data-swapunit-open="1">⇄ Daireyi başka daireyle takas et…</div>'
-                  +'<div class="mi del" data-dissolve="1">✕ Daireyi sil (komşuya kat)</div>';
+                  +'<div class="mi del" data-dissolve="1">Daireyi sil (komşuya kat)</div>';
     }
     html+='<hr><div class="mi" data-saddmenu="1">⊞ Yapı elemanı ekle…</div>';   // merdiven/asansör/yangın/şaft (tıklanan yere)
     roomMenu.innerHTML=html; place(); bindMain();

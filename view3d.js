@@ -17,6 +17,8 @@
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
   let placeMode=false, camUIEnabled=false, placeAction='aim', camList=[], activeCamIdx=-1, pendingPos=null, camHeight='eye', camLens=24, camPlanSig=null;
   let camGizmos=null, raycaster=null, pickerWired=false;
+  // ── katlanabilir panel: sağ kenarda ikon-rail + açılır çekmece (mesh'i örtmez) ──
+  let activeGroup=null, lockedViewRef=null, onReRenderCb=null, angleDrift=false, lastHint='';
   const CAM_Y = { low:1.1, eye:1.6, high:2.2 };          // 3 kademe yükseklik (m) — prototip height ile birebir
   const LENS_FOV = { 16:100, 24:74, 35:54, 50:40 };       // objektif → yatay görüş açısı
 
@@ -54,6 +56,90 @@
     return COL._def;
   }
 
+  // ── SVG ikonlar (Lucide tarzı, stroke=currentColor) — EMOJİ YOK ──
+  const ICONS={
+    view:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>',
+    layers:'<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+    camera:'<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/>',
+    download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
+    close:'<path d="M18 6 6 18M6 6l12 12"/>',
+    fit:'<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
+    zoom:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+    target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
+    move:'<path d="M5 9 2 12l3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
+    plus:'<path d="M12 5v14M5 12h14"/>',
+    trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
+    bolt:'<path d="M13 2 3 14h7l-1 8 10-12h-7z"/>'
+  };
+  // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
+  function ic(name,size){ const s=(size||16)+'px';
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:'+s+';height:'+s+';display:inline-block;flex:none;vertical-align:-2px;cursor:inherit">'+(ICONS[name]||'')+'</svg>'; }
+
+  // çekmece içeriği — grup başına kontroller (data-* öznitelikleri var olan delege handler'a gider)
+  function groupHTML(g){
+    if(g==='view') return '<div class="v3dgh">Görünüm</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
+        '<button data-v3d="iso" class="v3db">İzometrik</button>'+
+        '<button data-v3d="top" class="v3db">Üstten</button>'+
+        '<button data-v3d="persp" class="v3db">Perspektif</button>'+
+        '<button data-v3d="fit" class="v3db v3dgreen">'+ic('fit',13)+'Sığdır</button>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:12px">'+ic('zoom',15)+
+        '<input type="range" id="v3dZoom" min="0" max="1000" value="600" style="flex:1;accent-color:#c9a16b;cursor:pointer"></div>';
+    if(g==='layers') return '<div class="v3dgh">Katman</div>'+
+      '<label class="v3dchk"><input type="checkbox" data-v3d="roof"'+(roofOn?' checked':'')+'> Duvarlar tam yükseklik</label>'+
+      '<label class="v3dchk"><input type="checkbox" data-v3d="lbl"'+(lblOn?' checked':'')+'> Oda etiketleri</label>';
+    if(g==='export') return '<div class="v3dgh">İndir</div>'+
+      '<button data-v3d="png" class="v3db" style="width:100%">'+ic('download',13)+'PNG indir (EN)</button>'+
+      '<div class="v3dnote">Etiketler İngilizce — AI 3D render için.</div>';
+    if(g==='camera') return '<div class="v3dgh">Kamera</div>'+
+      '<button data-v3d="place" class="v3db" id="v3dPlaceBtn" style="width:100%">'+ic('camera',13)+'Kamera yerleştir</button>'+
+      '<div id="v3dCamHint" class="v3dnote" style="min-height:12px;margin-top:6px"></div>'+
+      '<div id="v3dCamStrip" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px"></div>'+
+      '<div id="v3dCamCtl" style="display:none;margin-top:10px">'+
+        '<div class="v3dlbl">Seçili kamera</div>'+
+        '<div style="display:flex;gap:4px">'+
+          '<button data-camact="add" class="v3db v3dact">'+ic('plus',12)+'Ekle</button>'+
+          '<button data-camact="aim" class="v3db v3dact" title="Bakış noktasına tıkla">'+ic('target',12)+'Yön</button>'+
+          '<button data-camact="move" class="v3db v3dact" title="Yeni konuma taşı">'+ic('move',12)+'Taşı</button>'+
+          '<button data-v3d="camdel" class="v3db v3ddanger" title="Seçili kamerayı sil">'+ic('trash',12)+'</button></div>'+
+        '<div class="v3dlbl">Yükseklik</div>'+
+        '<div style="display:flex;gap:4px"><button data-camh="low" class="v3db v3dh">Alçak</button><button data-camh="eye" class="v3db v3dh">Göz</button><button data-camh="high" class="v3db v3dh">Üst</button></div>'+
+        '<div class="v3dlbl">Objektif (görüş açısı)</div>'+
+        '<div style="display:flex;gap:4px"><button data-caml="16" class="v3db v3dl">16</button><button data-caml="24" class="v3db v3dl">24</button><button data-caml="35" class="v3db v3dl">35</button><button data-caml="50" class="v3db v3dl">50</button></div>'+
+        '<div style="display:flex;gap:4px;margin-top:10px"><button data-v3d="camdemo" class="v3db v3dgreen" style="flex:1">'+ic('bolt',12)+'Demo</button><button data-v3d="camclear" class="v3db v3dgray" style="flex:1">Temizle</button></div>'+
+      '</div>';
+    return '';
+  }
+  function railGroups(){
+    const gs=[{k:'view',i:'view',t:'Görünüm'},{k:'layers',i:'layers',t:'Katman'}];
+    if(camUIEnabled) gs.push({k:'camera',i:'camera',t:'Kamera'});
+    gs.push({k:'export',i:'download',t:'İndir'});
+    return gs;
+  }
+  function renderRail(){
+    const rail=overlay&&overlay.querySelector('#v3dRail'); if(!rail) return;
+    let h='';
+    railGroups().forEach(function(g){ h+='<button data-grp="'+g.k+'" class="v3drailb'+(activeGroup===g.k?' on':'')+'" title="'+g.t+'">'+ic(g.i,19)+'</button>'; });
+    h+='<div class="v3draild"></div><button data-v3d="close" class="v3drailb v3drailx" title="Kapat">'+ic('close',19)+'</button>';
+    rail.innerHTML=h;
+  }
+  function renderDrawer(){
+    const d=overlay&&overlay.querySelector('#v3dDrawer'); if(!d) return;
+    zoomEl=null;
+    if(!activeGroup){ d.style.display='none'; return; }
+    d.style.display='block'; d.innerHTML=groupHTML(activeGroup);
+    if(activeGroup==='view') wireZoom();
+    if(activeGroup==='camera'){ updateCamPanel(); applyPlaceModeUI(); setHint(lastHint); }
+  }
+  function setGroup(g){ activeGroup=(activeGroup===g?null:g); renderRail(); renderDrawer(); }
+  function wireZoom(){
+    const el=overlay&&overlay.querySelector('#v3dZoom'); if(!el) return; zoomEl=el;
+    el.value=distToSlider(controls?controls.getDistance():22);
+    el.addEventListener('input',function(){ zoomActive=true; if(controls) controls.setDistanceTarget(sliderToDist(+el.value)); });
+    el.addEventListener('pointerdown',function(){ zoomActive=true; });
+  }
+
   function ensureOverlay(){
     if(overlay) return;
     overlay=document.createElement('div');
@@ -61,69 +147,33 @@
     overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:#15151a;display:none;';
     overlay.innerHTML =
       '<div id="v3dHost" style="position:absolute;inset:0"></div>'+
-      '<div id="v3dPanel" style="position:absolute;top:12px;left:12px;background:rgba(38,38,46,.92);color:#e8e6e0;'+
-        'font:13px/1.4 system-ui,sans-serif;padding:12px 14px;border-radius:10px;max-width:280px;backdrop-filter:blur(6px);z-index:3">'+
-        '<b style="color:#c9a16b">3B Görünüm</b><br>'+
-        '<span style="font-size:11.5px;opacity:.85">Gerçek geometriden — AI yok. Plandaki her oda zeminden çıkarıldı, '+
-        'bitişik sınırlar = iç duvarlar (mutfak/salon dahil).</span>'+
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">'+
-          '<button data-v3d="iso" class="v3db">İzometrik</button>'+
-          '<button data-v3d="top" class="v3db">Üstten</button>'+
-          '<button data-v3d="persp" class="v3db">Perspektif</button>'+
-          '<button data-v3d="fit" class="v3db" style="background:#7bbf8a;color:#13201a">⤢ Sığdır</button>'+
-        '</div>'+
-        '<div style="display:flex;align-items:center;gap:8px;margin-top:10px">'+
-          '<span style="font-size:13px;opacity:.85" title="Yakınlaştır">🔍</span>'+
-          '<input type="range" id="v3dZoom" min="0" max="1000" value="600" '+
-            'style="flex:1;accent-color:#c9a16b;cursor:pointer">'+
-        '</div>'+
-        '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:8px;cursor:pointer">'+
-          '<input type="checkbox" data-v3d="roof"> Duvarlar tam yükseklik</label>'+
-        '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer">'+
-          '<input type="checkbox" data-v3d="lbl" checked> Oda etiketleri</label>'+
-        '<div style="display:flex;gap:6px;margin-top:10px">'+
-          '<button data-v3d="png" class="v3db" title="Etiketler İngilizce — AI 3D render için">PNG indir (EN)</button>'+
-          '<button data-v3d="close" class="v3db" style="background:#3a3a44;color:#e8e6e0">Kapat ✕</button>'+
-        '</div>'+
-        '<div id="v3dCamSection" style="border-top:1px solid rgba(255,255,255,.15);margin-top:10px;padding-top:10px;display:none">'+
-          '<button data-v3d="place" class="v3db" id="v3dPlaceBtn" style="width:100%">📷 Kamera yerleştir</button>'+
-          '<div id="v3dCamHint" style="font-size:10px;opacity:.8;margin-top:6px;min-height:12px;line-height:1.35"></div>'+
-          '<div id="v3dCamStrip" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px"></div>'+
-          '<div id="v3dCamCtl" style="display:none;margin-top:10px">'+
-            '<div style="font-size:10.5px;opacity:.7;margin-bottom:4px">Seçili kamera</div>'+
-            '<div style="display:flex;gap:4px">'+
-              '<button data-camact="add" class="v3db v3dact">＋ Ekle</button>'+
-              '<button data-camact="aim" class="v3db v3dact" title="Kameranın bakacağı noktaya zeminde tıkla">🎯 Yön</button>'+
-              '<button data-camact="move" class="v3db v3dact" title="Kamerayı yeni zemin noktasına taşı">✥ Taşı</button>'+
-              '<button data-v3d="camdel" class="v3db" style="background:#5a3a3a;color:#f0d8d8" title="Seçili kamerayı sil">🗑</button></div>'+
-            '<div style="font-size:10.5px;opacity:.7;margin:8px 0 4px">Yükseklik</div>'+
-            '<div style="display:flex;gap:4px">'+
-              '<button data-camh="low" class="v3db v3dh">Alçak</button>'+
-              '<button data-camh="eye" class="v3db v3dh">Göz</button>'+
-              '<button data-camh="high" class="v3db v3dh">Üst</button></div>'+
-            '<div style="font-size:10.5px;opacity:.7;margin:8px 0 4px">Objektif (görüş açısı)</div>'+
-            '<div style="display:flex;gap:4px">'+
-              '<button data-caml="16" class="v3db v3dl">16</button>'+
-              '<button data-caml="24" class="v3db v3dl">24</button>'+
-              '<button data-caml="35" class="v3db v3dl">35</button>'+
-              '<button data-caml="50" class="v3db v3dl">50</button></div>'+
-            '<div style="display:flex;gap:4px;margin-top:10px">'+
-              '<button data-v3d="camdemo" class="v3db" style="flex:1;background:#7bbf8a;color:#13201a">⚡ Demo</button>'+
-              '<button data-v3d="camclear" class="v3db" style="flex:1;background:#3a3a44;color:#e8e6e0">Temizle</button></div>'+
-          '</div>'+
-        '</div>'+
-        '<div id="v3dStatus" style="font-size:10.5px;opacity:.6;margin-top:8px"></div>'+
-      '</div>';
+      '<div id="v3dDock" style="position:absolute;top:12px;right:12px;display:flex;align-items:flex-start;gap:8px;z-index:3">'+
+        '<div id="v3dDrawer" style="background:rgba(34,34,40,.94);color:#e8e6e0;font:13px/1.45 system-ui,sans-serif;padding:13px 15px;border-radius:12px;width:250px;max-height:calc(100vh - 24px);overflow:auto;backdrop-filter:blur(7px);display:none"></div>'+
+        '<div id="v3dRail" style="background:rgba(34,34,40,.94);border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:5px;backdrop-filter:blur(7px)"></div>'+
+      '</div>'+
+      '<div id="v3dStatus" style="position:absolute;left:12px;bottom:12px;color:#e8e6e0;opacity:.6;font:10.5px system-ui;background:rgba(34,34,40,.6);padding:4px 9px;border-radius:7px"></div>';
     document.body.appendChild(overlay);
     // buton stilleri
     const st=document.createElement('style');
-    st.textContent='.v3db{background:#c9a16b;color:#1a1a1f;border:0;padding:6px 10px;border-radius:7px;'+
-      'font-weight:600;cursor:pointer;font-size:11.5px}.v3db:hover{filter:brightness(1.08)}';
+    st.textContent=
+      '.v3db{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:#c9a16b;color:#1a1a1f;border:0;padding:6px 10px;border-radius:7px;font-weight:600;cursor:pointer;font-size:11.5px;font-family:inherit}'+
+      '.v3db:hover{filter:brightness(1.08)}'+
+      '.v3dgreen{background:#7bbf8a;color:#13201a}.v3dgray{background:#3a3a44;color:#e8e6e0}.v3ddanger{background:#5a3a3a;color:#f0d8d8;flex:none;padding:6px 8px}'+
+      '.v3dgh{font-size:12px;font-weight:700;letter-spacing:.04em;color:#c9a16b;text-transform:uppercase;margin-bottom:10px}'+
+      '.v3dlbl{font-size:10.5px;opacity:.7;margin:8px 0 4px}.v3dnote{font-size:10px;opacity:.78;line-height:1.4}'+
+      '.v3dchk{display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:8px;cursor:pointer}'+
+      '.v3drailb{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:0;border-radius:9px;background:transparent;color:#c9b79a;cursor:pointer}'+
+      '.v3drailb:hover{background:rgba(255,255,255,.08);color:#f0e6d6}.v3drailb.on{background:#c9a16b;color:#1a1a1f}'+
+      '.v3drailx{color:#cf9b9b}.v3drailx:hover{background:rgba(200,90,90,.22);color:#f0d8d8}'+
+      '.v3draild{height:1px;background:rgba(255,255,255,.15);margin:3px 4px}'+
+      '#v3dAngleWarn{position:absolute;left:12px;right:12px;top:12px;z-index:5;background:rgba(192,73,43,.96);color:#fff;border-radius:10px;padding:11px 13px;font:12.5px/1.4 system-ui;box-shadow:0 6px 18px rgba(0,0,0,.35);display:none}'+
+      '#v3dAngleWarn button{margin-top:9px;background:#fff;color:#7a2c18;border:0;border-radius:7px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}';
     document.head.appendChild(st);
     host=overlay.querySelector('#v3dHost');
     status=overlay.querySelector('#v3dStatus');
     overlay.addEventListener('click',function(e){
-      const t=e.target.closest&&e.target.closest('[data-camh],[data-caml],[data-camact],[data-camsel],[data-camdel],[data-v3d]')||e.target;
+      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-camact],[data-camsel],[data-camdel],[data-v3d]')||e.target;
+      const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ setGroup(gp); return; }
       const ch=t.getAttribute&&t.getAttribute('data-camh'); if(ch){ setCamHeight(ch); return; }
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
       const ca=t.getAttribute&&t.getAttribute('data-camact'); if(ca){ setPlaceAction(ca); return; }
@@ -138,15 +188,13 @@
       else if(a==='camclear') clearCams();
       else if(a==='camdemo'){ if(scene&&scene.__map) deriveShowcaseCameras(scene.__map); }
       else if(a==='camdel'){ if(activeCamIdx>=0) removeCam(activeCamIdx); }
+      else if(a==='rerender') doReRender();
       else if(a==='roof'){ roofOn=t.checked; applyRoof(); }
       else if(a==='lbl'){ lblOn=t.checked; if(scene&&scene.__labels) scene.__labels.visible=lblOn; }
     });
-    // zoom slider (sağ=yakın). input sırasında loop'un slider'ı ezmesini engelle.
-    zoomEl=overlay.querySelector('#v3dZoom');
-    zoomEl.addEventListener('input',function(){ zoomActive=true;
-      if(controls) controls.setDistanceTarget(sliderToDist(+zoomEl.value)); });
-    zoomEl.addEventListener('pointerdown',function(){ zoomActive=true; });
+    // zoom slider (sağ=yakın) listener'ı çekmece her render'da wireZoom ile bağlanır
     window.addEventListener('pointerup',function(){ zoomActive=false; });
+    renderRail(); renderDrawer();
   }
 
   // slider 0..1000  ↔  kamera mesafesi (log ölçek; 1000=en yakın)
@@ -572,7 +620,7 @@
     else if(placeMode) placeAction='add';                       // boş liste → zemine tıklama yeni kamera (takılı 'aim/move' kalmasın)
     renderCamGizmos(); applyPlaceModeUI(); return camList.length;
   }
-  function clearCams(){ camList=[]; activeCamIdx=-1; pendingPos=null; placeAction='add'; renderCamGizmos(); applyPlaceModeUI(); setHint('Kamera kalmadı · ＋ Ekle ya da ⚡ Demo'); }
+  function clearCams(){ camList=[]; activeCamIdx=-1; pendingPos=null; placeAction='add'; renderCamGizmos(); applyPlaceModeUI(); setHint('Kamera kalmadı · Ekle ya da Demo'); }
 
   // ── DEMO kameraları yerleşimden TÜRET (sabit koordinat YASAK; §3.4) ──
   // Daire başına 1-2 vitrin: salon (+ varsa ebeveyn yatak). Köşeden ~0.5m içeri, centroid'e bakar.
@@ -611,15 +659,15 @@
   // camUIEnabled: bölümü AÇ/KAPAT — adım 2 (salt 3B) hiç göstermez, adım 4 gösterir (#1)
   function setCamUI(on){
     camUIEnabled=!!on;
-    if(overlay){ const sec=overlay.querySelector('#v3dCamSection'); if(sec) sec.style.display=camUIEnabled?'block':'none'; }
-    if(!camUIEnabled){ setPlaceMode(false); }
-    renderCamGizmos();
+    if(camUIEnabled) activeGroup='camera';                                   // adım 4 → kamera çekmecesi açık başlar
+    else { if(activeGroup===null||activeGroup==='camera') activeGroup='view'; setPlaceMode(false); }
+    renderRail(); renderDrawer(); renderCamGizmos();
   }
   function applyPlaceModeUI(){
     if(!overlay) return;
     const btn=overlay.querySelector('#v3dPlaceBtn'), ctl=overlay.querySelector('#v3dCamCtl');
-    if(btn){ btn.style.background=placeMode?'#7bbf8a':'#c9a16b'; btn.style.color=placeMode?'#13201a':'#1a1a1f';
-             btn.textContent=placeMode?'📷 Yerleştirme açık — bitirmek için tıkla':'📷 Kamera yerleştir'; }
+    if(btn){ btn.classList.toggle('v3dgreen',placeMode);
+             btn.innerHTML=ic('camera',13)+(placeMode?'Yerleştirme açık — bitir':'Kamera yerleştir'); }
     if(ctl) ctl.style.display=placeMode?'block':'none';
     syncCamBtns();
   }
@@ -630,7 +678,7 @@
     if(placeMode) placeAction=(activeCamIdx>=0)?'aim':'add';
     renderCamGizmos(); applyPlaceModeUI();
     setHint(placeMode
-      ? (placeAction==='add' ? 'Kamera KONUMUNA tıkla (sonra bakış noktası)' : 'Zemine tıkla = seçili kamerayı çevir · ＋ Ekle = yeni')
+      ? (placeAction==='add' ? 'Kamera KONUMUNA tıkla (sonra bakış noktası)' : 'Zemine tıkla = seçili kamerayı çevir · Ekle = yeni')
       : 'Mesh serbest — döndür/yakınlaştır · kamerayı seçmek için üstüne tıkla');
   }
   function togglePlaceMode(){ setPlaceMode(!placeMode); }
@@ -650,7 +698,7 @@
     if(placeMode && placeAction==='add') placeAction='aim';   // seçince düzenlemeye geç
     const c=camList[i]; camHeight=c.height||'eye'; camLens=c.lens||24;
     renderCamGizmos(); applyPlaceModeUI();
-    setHint('Kamera '+(i+1)+' seçili · 🎯 Yön / ✥ Taşı ya da zemine tıkla');
+    setHint('Kamera '+(i+1)+' seçili · Yön / Taşı ya da zemine tıkla');
   }
   function removeCam(i){
     if(i<0||i>=camList.length) return;
@@ -662,7 +710,7 @@
     if(activeCamIdx>=0){ const c=camList[activeCamIdx]; camHeight=c.height||'eye'; camLens=c.lens||24; }  // panel/eklenecek-varsayılanı tazele
     else if(placeMode) placeAction='add';                                                                // seçim kalmadı → zemine tıklama yeni kamera
     renderCamGizmos(); applyPlaceModeUI();
-    setHint(camList.length?('Kamera '+(activeCamIdx+1)+' seçili'):'Kamera kalmadı · ＋ Ekle ya da ⚡ Demo');
+    setHint(camList.length?('Kamera '+(activeCamIdx+1)+' seçili'):'Kamera kalmadı · Ekle ya da Demo');
   }
   function setCamHeight(h){ camHeight=h;
     if(activeCamIdx>=0){ const c=camList[activeCamIdx]; c.height=h; c.pos.y=CAM_Y[h]; renderCamGizmos(); logRoom(c); }
@@ -687,17 +735,17 @@
     camList.forEach(function(c,i){
       const on=(i===activeCamIdx);
       html+='<span data-camsel="'+i+'" title="Kamera '+(i+1)+' — seç" '+
-        'style="position:relative;display:inline-flex;align-items:center;gap:4px;cursor:pointer;'+
+        'style="position:relative;display:inline-flex;align-items:center;gap:3px;cursor:pointer;'+
         'background:'+(on?'#e0843a':'#3a3a44')+';color:'+(on?'#1a1a1f':'#e8e6e0')+';'+
-        'border-radius:7px;padding:4px 7px 4px 8px;font-size:11px;font-weight:700">'+
-        '📷 '+(i+1)+
-        '<b data-camdel="'+i+'" title="Sil" style="cursor:pointer;font-weight:700;opacity:.75;padding:0 2px">×</b></span>';
+        'border-radius:7px;padding:4px 6px 4px 7px;font-size:11px;font-weight:700">'+
+        ic('camera',12)+(i+1)+
+        '<b data-camdel="'+i+'" title="Sil" style="cursor:pointer;font-weight:700;opacity:.7;padding:0 1px 0 2px">×</b></span>';
     });
     html+='<span data-camact="add" title="Yeni kamera ekle" style="display:inline-flex;align-items:center;cursor:pointer;'+
-      'border:1.5px dashed rgba(255,255,255,.35);color:#c9a16b;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700">＋</span>';
+      'border:1.5px dashed rgba(255,255,255,.35);color:#c9a16b;border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700">'+ic('plus',13)+'</span>';
     strip.innerHTML=html;
   }
-  function setHint(t){ const h=overlay&&overlay.querySelector('#v3dCamHint'); if(h) h.textContent=t||''; }
+  function setHint(t){ lastHint=t||''; const h=overlay&&overlay.querySelector('#v3dCamHint'); if(h) h.textContent=lastHint; }
 
   // ── açılış: boot (three.js + sahne) → full ya da yan-yana (compare) layout ──
   let compareMode=false, compareRefURL=null;
@@ -737,12 +785,15 @@
     return u.length+'u'+rc+'r'+Math.round((scene&&scene.__hx||0)*10)+'x'+Math.round((scene&&scene.__hz||0)*10);
   }
   // adım 4 "Kamera": SOL boyalı referans + SAĞ canlı 3B (kilitli açı), kamera bölümü AÇIK, demo vitrin kameralar hazır.
-  function openCompare(paintedURL, lockedView){
+  function openCompare(paintedURL, lockedView, onReRender){
     compareMode=true; compareRefURL=paintedURL||null;
+    onReRenderCb=(typeof onReRender==='function')?onReRender:null;
     return boot().then(function(map){
       if(!map) return;
       if(lockedView) restoreView(lockedView);              // 3B = boyalıyla AYNI açıdan başlar
       fitView();                                            // kilitli açıyı KORU, yarı-ekran kadrajına sığdır
+      lockedViewRef=lockedView||getView();                  // sürüklenince bununla karşılaştır (açı kayması uyarısı)
+      angleDrift=false; updateAngleWarn();
       setCamUI(true);                                        // kamera bölümünü göster
       const sig=planSig(map);
       if(camList.length && camPlanSig && camPlanSig!==sig) clearCams();   // plan değişti → eski (geçersiz koordinatlı) kameraları at
@@ -756,31 +807,46 @@
   function setCompareLayout(on, paintedURL){
     if(!overlay||!host) return;
     let ref=overlay.querySelector('#v3dCompareRef');
-    const panel=overlay.querySelector('#v3dPanel');
     if(on){
       if(!ref){
         ref=document.createElement('div'); ref.id='v3dCompareRef';
         ref.style.cssText='position:absolute;left:0;top:0;width:50%;height:100%;background:#0e0c0a;display:flex;align-items:center;justify-content:center;border-right:2px solid #2a2a30;z-index:1';
         ref.innerHTML='<img id="v3dRefImg" style="max-width:96%;max-height:92%;object-fit:contain;border-radius:8px" alt="Boyalı render">'+
-          '<div style="position:absolute;top:12px;left:12px;background:rgba(38,38,46,.92);color:#e8e6e0;font:12px system-ui;padding:6px 10px;border-radius:8px">Boyalı render — referans</div>';
+          '<div style="position:absolute;top:12px;left:12px;background:rgba(38,38,46,.92);color:#e8e6e0;font:12px system-ui;padding:6px 10px;border-radius:8px">Boyalı render — referans</div>'+
+          '<div id="v3dAngleWarn">Açı değişti — render açısı artık aynı değil; soldaki boyama bu açıyla eşleşmiyor.'+
+            '<br><button data-v3d="rerender">'+ic('camera',13)+'Bu açıda yeniden render al · 14 Kredi</button></div>';
         overlay.insertBefore(ref, host);
       }
       const img=ref.querySelector('#v3dRefImg');
       // utf8 data-URI (btoa DEĞİL): yer-tutucu metni Türkçe "boyalı" içerir → btoa Latin1 dışı karakterde patlar
       if(img) img.src=paintedURL||'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260"><rect width="100%" height="100%" fill="#1a1714"/><text x="50%" y="50%" fill="#7a6f60" font-family="system-ui" font-size="16" text-anchor="middle">boyalı render bekleniyor</text></svg>');
       ref.style.display='flex'; host.style.left='50%';       // 3B host → sağ yarı (right:0 inset'ten gelir)
-      if(panel){ panel.style.left='auto'; panel.style.right='12px'; }   // panel sağ kenara → mesh ortası açık kalır
     } else {
       if(ref) ref.style.display='none'; host.style.left='0';
-      if(panel){ panel.style.left='12px'; panel.style.right='auto'; }
     }
     resize();
+  }
+  // ── açı kayması uyarısı (adım 4): kullanıcı mesh'i kilitli render açısından çevirirse sol boyamaya uyarı ──
+  function viewDir(v){ if(!v||!v.position||!v.target) return null;
+    const dx=v.position.x-v.target.x,dy=v.position.y-v.target.y,dz=v.position.z-v.target.z,l=Math.hypot(dx,dy,dz)||1; return [dx/l,dy/l,dz/l]; }
+  function updateAngleWarn(){ const w=overlay&&overlay.querySelector('#v3dAngleWarn'); if(w) w.style.display=(angleDrift&&compareMode)?'block':'none'; }
+  function checkAngleDrift(){
+    if(!compareMode){ if(angleDrift){ angleDrift=false; updateAngleWarn(); } return; }
+    const a=viewDir(lockedViewRef), b=viewDir(getView()); if(!a||!b) return;
+    const dot=Math.max(-1,Math.min(1,a[0]*b[0]+a[1]*b[1]+a[2]*b[2])), deg=Math.acos(dot)*180/Math.PI;
+    const drift=deg>4;                                       // ~4° üstü sapma = açı değişti say
+    if(drift!==angleDrift){ angleDrift=drift; updateAngleWarn(); }
+  }
+  function doReRender(){
+    if(onReRenderCb){ try{ onReRenderCb(getView()); }catch(e){} }
+    lockedViewRef=getView(); angleDrift=false; updateAngleWarn();   // yeni açı = yeni kilit
   }
   function close(){ if(overlay) overlay.style.display='none'; setPlaceMode(false); }
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();} }
   function loop(){ raf=requestAnimationFrame(loop);
     if(overlay.style.display!=='none'&&controls){ controls.update(); renderer.render(scene,cam);
+      checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
       if(zoomEl&&!zoomActive) zoomEl.value=distToSlider(controls.getDistance()); } }
 
   // dışa aç + buton bağla

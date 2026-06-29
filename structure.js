@@ -57,7 +57,7 @@ function applyStructRect(reg, nr0,nc0,nr1,nc1){
   p.regions.forEach(g=>calcRegionMetrics(g,cols,p.minX,p.minY));
   return true;
 }
-/* yeni çekirdek öğesi ekle/sil (yapı modu paleti + ✕ tutamağı).
+/* yeni çekirdek öğesi ekle/sil (yapı modu paleti + tutamağı).
    Ad/renk haritaları core.js'teki COLORS + lockedCore adlarıyla uyumlu. */
 const STRUCT_NAME={merdiven:'MERDİVEN', asansor:'ASANSÖR', yangin:'YANGIN MERD.', teknik:'TEKNİK / ŞAFT'};
 const STRUCT_SIZE={merdiven:{w:3.0,h:5.0}, asansor:{w:2.0,h:2.0}, yangin:{w:2.5,h:3.5}, teknik:{w:1.0,h:1.5}};
@@ -195,8 +195,8 @@ function renderStructLayer(){
     sq(eW,mR,'w','ew-resize'); sq(eE,mR,'e','ew-resize');
     const mv=el('circle',{cx:mC,cy:mR,r:HS*1.5,fill:'#2f6f8f',stroke:'#fff','stroke-width':2,cursor:'move','data-hx':mC,'data-hy':mR});
     mv.dataset.struct=JSON.stringify({regId:reg.id,handle:'move'}); sg.appendChild(mv);
-    const mvt=el('text',{x:mC,y:mR+fs*0.35,'text-anchor':'middle','font-size':fs,fill:'#fff','font-weight':'700','pointer-events':'none'});
-    mvt.textContent='✛'; sg.appendChild(mvt);
+    const cr=HS*1.5*0.55;   // taşı tutamacı = artı/crosshair (emoji yok, SVG çizgi)
+    sg.appendChild(el('path',{d:'M'+(mC-cr)+' '+mR+'h'+(2*cr)+'M'+mC+' '+(mR-cr)+'v'+(2*cr),stroke:'#fff','stroke-width':2,'stroke-linecap':'round',fill:'none','pointer-events':'none'}));
   });
   /* --- bina sınırı: köşe tutamakları (taşı) + kenar ortası (+ anchor ekle) --- */
   if(closed && pts.length>=3){

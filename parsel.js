@@ -494,7 +494,7 @@ function psLiveUpdate(){
     html+='<br><b>Bina tabanı:</b> '+fmt(ba)+' m² · <b>TAKS:</b> '+fmt(Math.round(taks*100)/100)
         +' <span class="ps-dim">(≈%'+Math.round(taks*100)+')</span> · <b>Bahçe:</b> '+fmt(Math.max(0,pa-ba))+' m²';
     if(parcelSetback.length>=3 && pts.some(q=>!pip(q.x,q.y,parcelSetback)))
-      html+='<br><span class="ps-warn">⚠ Bina, imar çekme sınırını aşıyor.</span>';
+      html+='<br><span class="ps-warn">Bina, imar çekme sınırını aşıyor.</span>';
   }
   live.innerHTML=html;
 }
@@ -649,13 +649,13 @@ function imarParse(gp){
 }
 function imarRow(label, val){ return (val==null||val==='') ? '' : '<div class="ps-imar-row"><span>'+label+'</span><b>'+escapeHtml(String(val))+'</b></div>'; }
 function imarFmtDate(ms){ if(!ms) return null; const d=new Date(ms); return isNaN(d.getTime()) ? null : (d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')); }
-/* plan notundan taranan değer satırı (tıklanabilir chip'ler; uygulanan=.on, fonksiyon-ilişkili=.sug ★). */
+/* plan notundan taranan değer satırı (tıklanabilir chip'ler; uygulanan=.on, fonksiyon-ilişkili=.sug). */
 function imarChipRow(label, type, items, applied){
   if(!items || !items.length) return '';
   const chips = items.map(it=>{
     const on = (applied!=null && Math.abs(applied-it.n)<1e-6);
     const tip = it.snippet ? ' title="'+escapeHtml(it.snippet).replace(/"/g,'&quot;')+'"' : '';
-    const mark = it.self ? ' ◆' : (it.km ? ' ★' : '');
+    const mark = it.self ? '' : (it.km ? '' : '');
     const cls = 'ps-chip'+(on?' on':'')+(it.self?' self':(it.km?' sug':''));
     return '<span class="'+cls+'" data-type="'+type+'" data-val="'+it.n+'"'+tip+'>'+fmt(it.n)+mark+'</span>';
   }).join('');
@@ -696,13 +696,13 @@ function imarRender(im){
     h += '<div class="ps-imar-est">≈ KAKS <b>'+fmt(im.emsalEstimate)+'</b> <span class="ps-dim">(yoğunluktan TÜRETİLMİŞ tahmin · bağlayıcı değil · kesin değer 1/1000 planında)</span></div>';
   const loc = [im.ada?('Ada '+im.ada):'', im.parsel?('Parsel '+im.parsel):''].filter(Boolean).join(' · ');
   if(loc) h += '<div class="ps-imar-sub">'+escapeHtml(loc)+(im.alan!=null?(' · '+fmt(im.alan)+' m²'):'')+'</div>';
-  if(im.mismatch) h += '<div class="ps-imar-warn">⚠ '+escapeHtml(provName)+' bu noktada <b>farklı parsel</b> gösteriyor (yukarıdaki TKGM parselinden); imar bilgisi sorgulanan parsele aittir.</div>';
+  if(im.mismatch) h += '<div class="ps-imar-warn">'+escapeHtml(provName)+' bu noktada <b>farklı parsel</b> gösteriyor (yukarıdaki TKGM parselinden); imar bilgisi sorgulanan parsele aittir.</div>';
   if(im.planAdi){ const dt=imarFmtDate(im.tasdik); h += '<div class="ps-imar-plan">'+escapeHtml(im.planAdi)+(dt?(' <span class="ps-dim">('+dt+')</span>'):'')+'</div>'; }
   // plan notu metninden taranan yapılaşma değerleri (varsa) — tıklanan değer imar limitine uygulanır
   if(im.scan){
     const sc=im.scan, all=(sc.taks||[]).concat(sc.kaks||[]);
     const hasAny=(sc.taks.length||sc.kaks.length||sc.yencok.length);
-    h += '<div class="ps-imar-scan"><div class="ps-imar-scan-h">Plan notundaki yapılaşma değerleri <span class="ps-dim">(◆ = parselin rumuz satırı · ★ = fonksiyonla ilgili; uygulamak için tıkla)</span></div>';
+    h += '<div class="ps-imar-scan"><div class="ps-imar-scan-h">Plan notundaki yapılaşma değerleri <span class="ps-dim">( = parselin rumuz satırı · = fonksiyonla ilgili; uygulamak için tıkla)</span></div>';
     h += imarChipRow('TAKS', 'taks', sc.taks, im.taksFromPdf?im.maksTaks:null);
     h += imarChipRow('KAKS/Emsal', 'kaks', sc.kaks, im.emsalFromPdf?im.emsal:null);
     if(sc.yencok && sc.yencok.length)
@@ -716,11 +716,11 @@ function imarRender(im){
         h += '<button type="button" id="psScanCond" class="ps-cond-toggle">'+(im.showCond?'Koşul metinlerini gizle ▴':'Koşul metinlerini göster ▾')+'</button>';
         if(im.showCond){
           h += '<div class="ps-cond-list">';
-          all.forEach(it=>{ h += '<div class="ps-cond-item'+(it.km?' km':'')+'"><b>'+fmt(it.n)+(it.km?' ★':'')+'</b> '+escapeHtml(it.snippet||'')+'</div>'; });
+          all.forEach(it=>{ h += '<div class="ps-cond-item'+(it.km?' km':'')+'"><b>'+fmt(it.n)+(it.km?'':'')+'</b> '+escapeHtml(it.snippet||'')+'</div>'; });
           h += '</div>';
         }
       }
-      h += '<div class="ps-imar-scan-note ps-dim"><b>◆</b> parselin <b>rumuz satırından</b> (yüksek güven, tek değerse otomatik uygulandı) · <b>★</b> fonksiyonla ilişkili ipucu · işaretsiz = plandaki diğer değerler. Kesin değeri koşul metninden teyit edin.</div>';
+      h += '<div class="ps-imar-scan-note ps-dim">parselin <b>rumuz satırından</b> (yüksek güven, tek değerse otomatik uygulandı) · <b></b> fonksiyonla ilişkili ipucu · işaretsiz = plandaki diğer değerler. Kesin değeri koşul metninden teyit edin.</div>';
     }
     h += '</div>';
   } else if(provScan && im.planNotuId!=null){
@@ -843,7 +843,7 @@ function imarKeyMatch(snipNorm, keys){
    NOT: plan notu çok bölge/koşul içerir; tablolar düz metne taşınca dağılır → tek "doğru"yu
    GÜVENİLİR seçmek mümkün değil (10 ilçede doğrulandı: yanlış pozitifler). Bu yüzden TÜM
    benzersiz değerleri snippet'iyle döndürürüz; km = snippet parselin fonksiyon/rumuzunu içeriyor
-   (yumuşak ipucu, ★). Kesin seçim + uygulama kullanıcıda. */
+   (yumuşak ipucu,). Kesin seçim + uygulama kullanıcıda. */
 function imarScanValues(text, im, lines){
   const keys = imarParcelKeywords(im);
   const collect = (re)=>{
@@ -865,7 +865,7 @@ function imarScanValues(text, im, lines){
   const reKat=/(?:yençok|yencok)\s*[:=]?\s*(\d{1,2})\s*kat/ig; while(m=reKat.exec(text)) yset.add(m[1]+' kat');
   const reH=/(?:Hmax|H\s*max)\s*[:=]?\s*(\d+(?:[.,]\d+)?)/ig; while(m=reH.exec(text)) yset.add(String(m[1]).replace(',', '.')+' m');
   const reIrt=/(\d+(?:[.,]\d+)?)\s*m?\s*irtifa/ig; while(m=reIrt.exec(text)) yset.add(String(m[1]).replace(',', '.')+' m');
-  // RUMUZ-SATIRI: parselin kendi rumuz satırından çıkan etiketli değerler = yüksek güven (self ◆)
+  // RUMUZ-SATIRI: parselin kendi rumuz satırından çıkan etiketli değerler = yüksek güven (self)
   const self = imarRumuzRows(lines, keys);
   const mergeSelf = (arr, sv)=>{
     sv.forEach(s=>{ const k=s.n.toFixed(2); const rec=arr.find(r=>r.n.toFixed(2)===k);
@@ -874,7 +874,7 @@ function imarScanValues(text, im, lines){
     arr.sort((a,b)=> ((b.self?1:0)-(a.self?1:0)) || (b.km-a.km) || (a.n-b.n));
   };
   mergeSelf(taks, self.taks); mergeSelf(kaks, self.kaks);
-  self.yencok.forEach(v=>{ yset.delete(v); yset.add('◆ '+v); });   // rumuz-satırı Hmax → ◆ işaretle
+  self.yencok.forEach(v=>{ yset.delete(v); yset.add(' '+v); });   // rumuz-satırı Hmax → işaretle
   // deferral: 1/5000 nazım, değeri 1/1000 uygulama planına ertelemiş mi
   const deferred = /1\s*\/\s*1000[^.\n]{0,90}(belirlen|yapıl|göre|onan)|net\s+parsel\s+üzerinden|uygulama\s+imar\s+plan[a-zçğıöşü]*[^.\n]{0,70}belirlen|avan\s+proje/i.test(text);
   return { taks, kaks, yencok:[...yset], deferred:deferred,
@@ -1250,7 +1250,7 @@ function initParselSorgu(){
     const alanR = tkgmParseAlan(p.alan);
     const alan = (alanR!=null) ? fmt(alanR)+' m² <span class="ps-dim">(TKGM)</span>'
                                : '≈ '+fmt(shoelace(parcelPts))+' m²';
-    setMsg('✓ Parsel yüklendi'
+    setMsg('Parsel yüklendi'
       + (konum ? '<br><b>'+escapeHtml(konum)+'</b>' : '')
       + '<br>Ada <b>'+escapeHtml(ada)+'</b> · Parsel <b>'+escapeHtml(par)+'</b>'
       + '<br>Alan '+alan

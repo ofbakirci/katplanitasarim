@@ -245,5 +245,5 @@ function importDxf(txt){
 function dxfShowAmbiguous(n){
   if(typeof document==='undefined') return;
   const el=document.getElementById('stDxf'); if(!el) return;
-  el.textContent = n>0 ? ('⚠ '+n+' oda tipi belirsiz — sağ tıklayıp "Tipini değiştir" ile atayın') : '';
+  el.textContent = n>0 ? (''+n+' oda tipi belirsiz — sağ tıklayıp "Tipini değiştir" ile atayın') : '';
 }
