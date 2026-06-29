@@ -526,21 +526,27 @@ function renderPlan(){
     for(let i=1;i<=8;i++){ const th=th0+dth*i/8; d+='L'+W2Sx(H.x+Math.cos(th)*W)+','+W2Sy(H.y+Math.sin(th)*W); }
     g.appendChild(el('path',{d,fill:'none',stroke:'#9a8c78','stroke-width':Math.max(0.8,pxPerM*0.04)}));
     g.appendChild(el('line',{x1:W2Sx(H.x),y1:W2Sy(H.y),x2:W2Sx(H.x+pvx*W),y2:W2Sy(H.y+pvy*W),stroke:'#9a8c78','stroke-width':Math.max(1,pxPerM*0.05)}));
+    return {pvx,pvy};   // girilen odaya (antreye) doğru birim normal — daire rozeti ters yöne (hole) kaydırmak için
   };
   /* kapılar (computeDoors: elle ayar destekli) + kapı modunda tutamaçlar */
   computeDoors().forEach(dr=>{
     if(dr.status!=='ok') return;
     const e=dr.e, hov=mode==='door' && hoverDoor && hoverDoor.key===dr.key;
+    let sw=null;
     if(!clean){ const tgt = dr.kind==='unit' ? ((p.unitObjs[dr.k]&&p.unitObjs[dr.k].antre)?p.unitObjs[dr.k].antre.id:null)
                           : dr.kind==='inner' ? (dr.reg?dr.reg.id:null) : null;
-      drawSwing(e, Math.max(0.6,doorWidthM(dr)-0.1), tgt); }
+      sw=drawSwing(e, Math.max(0.6,doorWidthM(dr)-0.1), tgt); }
     const Wd=doorWidthM(dr);   // kapı boşluğu (m): bina 1.5 / daire 1.0 / oda 0.9 / ıslak+balkon 0.8 — orta-nokta e+0.45
     const gw=clean?Math.max(3,pxPerM*0.3):(dr.kind==='unit'?Math.max(2,pxPerM*0.2):Math.max(1.5,pxPerM*0.12)); // boşluk çizgisi (kalın iç duvardan GENİŞ → açıklık kapanmaz)
     if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.45-Wd/2),y1:W2Sy(e.y),x2:W2Sx(e.x+0.45+Wd/2),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':gw}));
     else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.45-Wd/2),x2:W2Sx(e.x),y2:W2Sy(e.y+0.45+Wd/2),stroke:'#faf8f3','stroke-width':gw}));
     if(dr.kind==='unit'){
       if(!clean){ /* D1–D6 rozeti + tutamaç: AI temiz modda yok → kapı boşluğu açıkta kalır */
-        const bx=e.h?W2Sx(e.x+0.45):W2Sx(e.x), by=e.h?W2Sy(e.y):W2Sy(e.y+0.45), fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
+        let bx=e.h?W2Sx(e.x+0.45):W2Sx(e.x), by=e.h?W2Sy(e.y):W2Sy(e.y+0.45); const fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
+        /* daire numarasını koridora doğru kaydır (sw=antreye birim normal, ters yön=hol) → duvar üstündeki
+           ayırıcı/duvar tutamaçları numarayı ÖRTMEZ. Kapı modunda rozet=sürükleme tutamacı, hitDoor kapı
+           ortasıyla hizalı kalmalı → kaydırma yok. Villada hol yok (rozet dış cephede) → kaydırma yok. */
+        if(mode!=='door' && !p.villa && sw){ const off=fs2*1.05+3; bx-=sw.pvx*off; by-=sw.pvy*off; }
         g.appendChild(el('circle',{cx:bx,cy:by,r:fs2*1.05,fill:'#b35a2e',stroke:'#fff','stroke-width':1.5}));
         const tb=el('text',{x:bx,y:by+fs2*0.35,'text-anchor':'middle','font-size':fs2,fill:'#fff','font-weight':'700'});
         tb.textContent='D'+(dr.k+1); g.appendChild(tb);
