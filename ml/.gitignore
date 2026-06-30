@@ -17,6 +17,8 @@ __pycache__/
 # phase-2 hand-correction outputs (regenerated/derived — never commit)
 phase2/finetune/
 phase2/preview/
+phase2/ft_out/
+phase2/region_signal.json
 # phase-2 case pack: KEEP IN REPO. The user opens these in KPTA, hand-corrects
 # them, and re-exports — so they must persist (small JSONs, safe to track).
 !phase2/cases/

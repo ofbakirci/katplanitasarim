@@ -1,13 +1,14 @@
 """
-ml/phase2/finetune_run.py — Faz 2: ilk gerçek fine-tune (14 elle-düzeltilmiş case).
+ml/phase2/finetune_run.py — Faz 2: fine-tune (41 elle-düzeltilmiş case = 14 batch1 + 27 batch2).
 
 Baseline (Faz 1+1b, ml/model_v2.pt, val mIoU 0.767) ağırlıklarını başlangıç alır,
-kullanıcının KPTA'da düzelttiği 14 case (ml/phase2/finetune/) ile DÜŞÜK lr +
+kullanıcının KPTA'da düzelttiği 41 case (ml/phase2/finetune/) ile DÜŞÜK lr +
 dihedral augmentation ile fine-tune eder. Baseline'ı EZMEZ → ml/model_finetuned.pt.
 
 Asıl soru: "model kullanıcının tercihlerini öğrendi mi?" — held-out case'lerde
 (fine-tune'da GÖRÜLMEYEN) baseline→finetuned tahmin kayması, kullanıcının düzeltme
 örüntüsüne (salon↓, koridor→antre) doğru mu? Genelleme mi, ezber mi?
+Held-out = 4 batch1 (önceki koşuyla birebir kıyas) + 4 batch2 (batch2 genellemesi).
 
 io.js / uygulama / motor WIP'ine DOKUNMAZ — sadece ml/ altında okur/yazar.
 
@@ -22,7 +23,8 @@ import torch.nn.functional as F
 HERE = os.path.dirname(os.path.abspath(__file__))
 ML = os.path.dirname(HERE)
 FT = os.path.join(HERE, "finetune")          # ingest çıktısı (düzeltilmiş etiketler)
-CASES = os.path.join(HERE, "cases")           # motorun ORİJİNAL çıktısı (referans)
+CASES = os.path.join(HERE, "cases")           # motorun ORİJİNAL çıktısı (batch1 referans)
+CASES2 = os.path.join(HERE, "cases_batch2")   # batch2 orijinal motor çıktısı (referans)
 BASELINE = os.path.join(ML, "model_v2.pt")    # Faz 1+1b en iyi
 OUT_MODEL = os.path.join(ML, "model_finetuned.pt")
 NORM_SRC = os.path.join(ML, "data_5k", "norm.json")  # baseline'ın gördüğü normalizasyon
@@ -33,7 +35,7 @@ os.makedirs(OUT, exist_ok=True)
 LR = 1e-4            # baseline 1e-3'ün 1/10'u
 EPOCHS = 60
 SEED = 7
-N_HELDOUT = 4       # 14'ten 4 held-out (görülmez) / 10 train
+# held-out seti aşağıda HELDOUT_NAMES ile İSİMDEN sabitlenir (sayı değil) — bkz. ~satır 114
 torch.manual_seed(SEED); np.random.seed(SEED)
 
 CLASSES = ['bos','salon','yatak','mutfak','banyo','wc','antre','koridor',
@@ -64,7 +66,11 @@ import sys; sys.path.insert(0, HERE)
 import ingest
 def engine_label(name):
     base = name[:-4] if name.endswith(".svg") else name
-    st = ingest.extract_state(open(os.path.join(CASES, base+".json"), encoding="utf-8").read())
+    # batch1 → cases/, batch2 → cases_batch2/ (hangisinde varsa)
+    path = os.path.join(CASES, base+".json")
+    if not os.path.exists(path):
+        path = os.path.join(CASES2, base+".json")
+    st = ingest.extract_state(open(path, encoding="utf-8").read())
     _, g = ingest.rasterize(st)
     return g
 
@@ -111,10 +117,16 @@ def dihedral(x, y, t):
     return xr, yr
 
 # ---- split: held-out örüntü temsilcileri (görülmez) ----
-HELDOUT_NAMES = ["case_apt_rect_2p1x2.svg",  # salon→yatak (salon küçült)
-                 "case_apt_rect_mixed.svg",  # koridor→antre
-                 "case_villa_L_5p1.svg",      # villa (salon→yatak)
-                 "case_apt_rect_studio.svg"]  # çekirdek yeniden konum
+# batch1 (4) = önceki koşuyla birebir karşılaştırılabilir kalsın diye SABİT.
+# batch2 (4) = batch2 genellemesini de ölç (kapalı/açık hol + L/T/rect + villa çeşitliliği).
+HELDOUT_NAMES = ["case_apt_rect_2p1x2.svg",       # b1: salon→yatak (salon küçült)
+                 "case_apt_rect_mixed.svg",       # b1: koridor→antre
+                 "case_villa_L_5p1.svg",          # b1: villa (salon→yatak)
+                 "case_apt_rect_studio.svg",      # b1: çekirdek yeniden konum
+                 "case_b2_apt_rect_2p1x2_open.svg",   # b2: rect, AÇIK hol (b1 2p1x2 kapalı kontrastı)
+                 "case_b2_apt_L_3p1x2_closed.svg",    # b2: L, kapalı hol
+                 "case_b2_apt_T_3p1_open.svg",        # b2: T, açık hol
+                 "case_b2_villa_rect_4p1_closed.svg"] # b2: villa, kapalı
 held = [i for i,nm in enumerate(names) if nm in HELDOUT_NAMES]
 train = [i for i in range(n) if i not in held]
 print(f"fine-tune: train {len(train)}  held-out {len(held)}  ({[names[i] for i in held]})")
@@ -206,7 +218,7 @@ ft_rows = eval_set(model, held)
 # ---- öncesi/sonrası örüntü analizi ----
 def agg(rows, key, cls): return float(np.mean([r[key][cls] for r in rows]))
 KEYS_CLS = ['salon','yatak','koridor','antre','mutfak','banyo']
-print("\n=== HELD-OUT örüntü analizi (4 case ort., maske-içi pay) ===")
+print(f"\n=== HELD-OUT örüntü analizi ({len(held)} case ort., maske-içi pay) ===")
 print(f"{'sınıf':8s} {'engine':>8s} {'base→':>8s} {'finetn':>8s} {'KULL.hed':>8s}  yön")
 for c in KEYS_CLS:
     e=agg(base_rows,'eng_sh',c); b=agg(base_rows,'pred_sh',c)
