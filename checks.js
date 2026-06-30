@@ -89,6 +89,26 @@ function collectCoreHeightChecks(add, p){
   if(H>FIRE.heights.yuksekBlok+1e-9) // >51,50 m → acil durum asansörü + asansör önü holü
     add('bad', `Yapı yüksekliği ${fmt(H)} m > ${fmt(FIRE.heights.yuksekBlok)} m → acil durum asansörü (kabin ≥ ${fmt(FIRE.acilAsansor.kabinMin)} m², 630 kg) + asansör önü güvenlik holü (${fmt(FIRE.guvenlikHolu.asansorAlan[0])}–${fmt(FIRE.guvenlikHolu.asansorAlan[1])} m², ≥ ${fmt(FIRE.guvenlikHolu.asansorBoyut)} m) + merdiven basınçlandırma zorunlu (BYKHY M.63/M.34(4)/M.89).`);
 }
+/* ZEMİN KAT — apartman holü bina DIŞ sınırına değmeli: yoksa apartman/bina giriş
+   kapısı (apartman holü → sokak) yerleştirilemez. Konut zeminde giriş kapısı
+   OTOMATİK konmaz (yalnız zemin katta elle, dış cepheye eklenir — interaction.js
+   extEdgeNear); holü içeride kalırsa eklenecek yer yoktur.
+   ground = zemin kat mı (katAyri ON ise activeFloor===zeminIdx(); OFF ise tek tip
+   kat zemini de temsil eder → daima true). ayri = katAyri açık mı (sertlik: zemin
+   katı AÇIK planlanıyorsa KIRMIZI, tek tip katta yumuşak bilgi). Üst kat (ground
+   false) ve villa (apartman holü yok / unitObjs boş) MUAF. İzole test edilebilir. */
+function collectGroundEntranceCheck(add, p, ground, ayri){
+  if(p.villa || !(p.unitObjs && p.unitObjs.length)) return;
+  if(!ground) return;
+  const kor=p.regions.find(g=>g.type==='koridor'&&g.cells.length);
+  if(!kor) return;
+  const touches=kor.cells.some(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+    return r===0||r===p.rows-1||c===0||c===p.cols-1
+      || !p.inside[i-p.cols]||!p.inside[i+p.cols]||!p.inside[i-1]||!p.inside[i+1]; });
+  if(touches) return;
+  if(ayri) add('bad', 'Zemin katta apartman holü bina dış sınırına değmiyor → apartman/bina giriş kapısı yerleştirilemez. Holü\'yü dış cepheye sürükleyip uzatın.', kor.id);
+  else      add('info', 'Apartman holü bina dış sınırına değmiyor → zemin katta apartman/bina giriş kapısı yerleştirilemez (tek tip kat zemini de temsil eder). Zemini ayrı planlıyorsanız "Katları ayrı planla" ile zemin katında holü\'yü dış cepheye uzatın.', kor.id);
+}
 function collectChecks(){
   const out=[], add=(s,t,reg,unit)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit});
   const p=plan;
@@ -238,6 +258,11 @@ function collectChecks(){
         if(unr.length) add('bad', `Apartman holü ${unr.map(g=>g.name).join(', ')} ile komşu değil — daireden çekirdeğe erişim/kaçış kopuk. Holü sağ tık → "Holü çekirdeğe uzat".`, kor.id);
       }
     }
+    /* ZEMİN KAT giriş kapısı: apartman holü dış sınıra değmeli (collectGroundEntranceCheck).
+       ground = zemin kat mı; ayri = katAyri açık mı (sertlik). */
+    { const ayri=(typeof floorsOn==='function')&&floorsOn();
+      const ground=!ayri || activeFloor===zeminIdx();
+      collectGroundEntranceCheck(add, p, ground, ayri); }
     /* sığınak + teknik — bina genelinde bir kat SIĞINAK olarak planlandıysa karşılanmış sayılır */
     const toplam=p.perFloor*p.kat;
     if(toplam>REG.siginakDaire){
