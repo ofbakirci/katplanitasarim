@@ -87,6 +87,22 @@ function regConnected(g){
       const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
   return seen.size===g.cells.length;
 }
+/* bir bölgenin BAĞLI parça (component) sayısı. regConnected yalnız "tek parça mı?" der;
+   bu, ÇEKİRDEĞİN (merdiven/asansör) ortadan ikiye böldüğü APARTMAN HOLÜ gibi MEŞRU
+   çok-parçalı bölgelerde "şerit verince parça sayısı ARTTI mı?" kıyası içindir —
+   moveWallStep daraltma kilidi (kopuk koridor sonsuza dek daraltılamıyordu) bununla açılır. */
+function regComponentCount(g){
+  if(!g.cells.length) return 0;
+  const p=plan, set=new Set(g.cells), seen=new Set(); let comps=0;
+  for(const start of g.cells){ if(seen.has(start)) continue; comps++;
+    const st=[start]; seen.add(start);
+    while(st.length){ const i=st.pop(), r=(i/p.cols)|0, c=i%p.cols;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+        if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+        const j=rr*p.cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
+  }
+  return comps;
+}
 /* ===== KOPUK BÖLGE ONARIMI (relayout / cut-drag / swap / yükleme sonrası) =====
    relayoutFootprint (daire takası, sınır relayout'u) tüketilmeyen "leftover" hücreleri
    tek "en büyük odaya" döküyor; çekirdek (merdiven/asansör) bina içine girinti yapınca
@@ -179,9 +195,10 @@ function moveWallStep(run, dir){
     if(k>=0){ const u=p.unitObjs[k]; u.rooms=u.rooms.filter(g=>g!==donor); if(u.antre===donor) u.antre=null; }
     return 'merged';
   }
+  const donorCompsBefore=regComponentCount(donor); // çekirdek-bölünmüş koridor zaten 2+ parça olabilir
   strip.forEach(i=>{ p.cm[i]=recv.id; recv.cells.push(i); });
   const rm=new Set(strip); donor.cells=donor.cells.filter(i=>!rm.has(i));
-  if(!regConnected(donor)){ // donör ikiye bölünüyorsa geri al
+  if(regComponentCount(donor) > donorCompsBefore){ // şerit donörü EK bir parçaya bölüyorsa geri al
     strip.forEach(i=>{ p.cm[i]=donor.id; donor.cells.push(i); });
     recv.cells=recv.cells.filter(i=>!rm.has(i));
     return false;
