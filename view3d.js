@@ -22,6 +22,35 @@
   // embedded = MESKEN akışı içinde açıldı (adım 2/4) → Kapat (X) YOK (3B kapatılan modal değil, bir adım).
   // standalone KPTA toolbar "3B" → embedded=false → Kapat X kalır (2B'ye dönüş için).
   let embedded=false;
+  // ── MOBİLYA (kamera-koyma aracının cam→furn ikizi) ──
+  // furnList: tüm dairelerin mobilyası TEK düz liste (her item room_id taşır). pos = MUTLAK metre
+  // (px2m uzayı; __furnitureGroup -cx,-cz ofseti onu zemin geometrisiyle aynı yere oturtur).
+  // furnMode/furnAction/pendingFurnType = Faz 2 (manuel düzenleyici). spacePan = Space basılı tut → sol-sürükle kaydırır (2B editördeki gibi).
+  let furnList=[], activeFurnIdx=-1, furnMode=false, furnAction='move', pendingFurnType='sofa_3', spacePan=false;
+  let furnUIEnabled=false, lastFurnHint='';   // furnUIEnabled = "Mobilya" rail grubu görünür (open/openCompare açar)
+  // katalog + TR karşılıkları (UI tip seçici + prompt cümlesi)
+  const FURN_TR = {
+    sofa_2:'İkili Kanepe', sofa_3:'Üçlü Kanepe', sectional_l:'Köşe Kanepe', armchair:'Koltuk', pouf:'Puf',
+    coffee_table:'Orta Sehpa', side_table:'Yan Sehpa', tv_unit:'TV Ünitesi', tv:'Televizyon', bookcase:'Kitaplık', console:'Konsol', rug:'Halı',
+    dining_table_4:'Yemek Masası (4)', dining_table_6:'Yemek Masası (6)', dining_chair:'Sandalye', sideboard:'Büfe',
+    bed_single:'Tek Yatak', bed_double:'Çift Yatak', bed_queen:'Yatak (Queen)', bed_king:'Yatak (King)',
+    nightstand:'Komodin', wardrobe_2:'Gardırop', wardrobe_3:'Gardırop (3K)', wardrobe_4:'Gardırop (4K)',
+    dresser:'Şifonyer', vanity:'Makyaj Masası', bench:'Bank',
+    counter:'Tezgah', island:'Ada', fridge:'Buzdolabı', oven_hob:'Ocak/Fırın', dishwasher:'Bulaşık Mak.', sink:'Evye',
+    toilet:'Klozet', washbasin:'Lavabo', bathtub:'Küvet', shower_tray:'Duş', washer:'Çamaşır Mak.',
+    shoe_cabinet:'Ayakkabılık', coat_rack:'Vestiyer', desk:'Çalışma Masası', office_chair:'Ofis Sandalyesi',
+    plant:'Saksı', bistro_table:'Bistro Masa', bistro_chair:'Bistro Sandalye'
+  };
+  // UI paleti: kategori başlıklı (groupHTML render eder). Motor TÜM tipleri destekler; bu sadece manuel ekleme seçeneği.
+  const FURN_PALETTE = [
+    { g:'Oturma', items:['sofa_3','sofa_2','sectional_l','armchair','pouf','coffee_table','side_table','tv_unit','tv','bookcase','console','rug'] },
+    { g:'Yemek', items:['dining_table_4','dining_table_6','dining_chair','sideboard'] },
+    { g:'Yatak', items:['bed_double','bed_queen','bed_single','nightstand','wardrobe_3','wardrobe_2','dresser','vanity','bench'] },
+    { g:'Mutfak', items:['counter','island','fridge','oven_hob','dishwasher','sink'] },
+    { g:'Banyo', items:['toilet','washbasin','bathtub','shower_tray','washer'] },
+    { g:'Giriş/Çalışma', items:['shoe_cabinet','coat_rack','console','desk','office_chair','plant'] }
+  ];
+  const FURN_CATALOG = FURN_PALETTE.reduce(function(a,c){ return a.concat(c.items); }, []);
   const CAM_Y = { low:1.1, eye:1.6, high:2.2 };          // 3 kademe yükseklik (m) — prototip height ile birebir
   const LENS_FOV = { 16:100, 24:74, 35:54, 50:40 };       // objektif → yatay görüş açısı
 
@@ -72,7 +101,10 @@
     move:'<path d="M5 9 2 12l3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
     plus:'<path d="M12 5v14M5 12h14"/>',
     trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
-    bolt:'<path d="M13 2 3 14h7l-1 8 10-12h-7z"/>'
+    bolt:'<path d="M13 2 3 14h7l-1 8 10-12h-7z"/>',
+    rotccw:'<path d="M3 2v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L3 8"/>',          // saat yönü TERSİ döndür
+    rotcw:'<path d="M21 2v6h-6"/><path d="M21 12A9 9 0 1 1 18.36 5.64L21 8"/>',          // saat yönü döndür
+    sofa:'<path d="M5 11V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 13a2 2 0 0 1 4 0v3h10v-3a2 2 0 0 1 4 0v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'  // mobilya rail ikonu
   };
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
@@ -112,11 +144,34 @@
         '<div style="display:flex;gap:4px"><button data-caml="16" class="v3db v3dl">16</button><button data-caml="24" class="v3db v3dl">24</button><button data-caml="35" class="v3db v3dl">35</button><button data-caml="50" class="v3db v3dl">50</button></div>'+
         '<div style="display:flex;gap:4px;margin-top:10px"><button data-v3d="camdemo" class="v3db v3dgreen" style="flex:1">'+ic('bolt',12)+'Demo</button><button data-v3d="camclear" class="v3db v3dgray" style="flex:1">Temizle</button></div>'+
       '</div>';
+    if(g==='furniture'){
+      const types=FURN_PALETTE.map(function(c){ return '<div class="v3dlbl" style="margin:7px 0 2px">'+c.g+'</div>'+
+        '<div style="display:flex;gap:3px;flex-wrap:wrap">'+c.items.map(function(t){ return '<button data-furntype="'+t+'" class="v3db v3dtype" style="padding:4px 6px;font-size:10px">'+FURN_TR[t]+'</button>'; }).join('')+'</div>'; }).join('');
+      return '<div class="v3dgh">Mobilya</div>'+
+        // RENDER on/off — işaretli = sahne döşeli (3B snap'i nano'ya mobilyalı gider) · işaretsiz = boş mekan
+        '<label title="3B render (nano) mobilyalı mı boş mu olsun" style="display:flex;align-items:center;gap:8px;margin:2px 0 9px;cursor:pointer;font-size:12px;font-weight:600">'+
+          '<input type="checkbox" data-v3d="furnrender" id="v3dFurnRender" '+(furnList.length?'checked':'')+' style="width:16px;height:16px;accent-color:#7bbf8a;cursor:pointer">Render\'a mobilya ekle</label>'+
+        '<button data-v3d="furnauto" class="v3db v3dgreen" style="width:100%">'+ic('bolt',13)+'Yeniden döşe</button>'+
+        '<button data-v3d="furnedit" id="v3dFurnBtn" class="v3db" style="width:100%;margin-top:6px">'+ic('move',13)+'Düzenlemeyi aç</button>'+
+        '<div id="v3dFurnHint" class="v3dnote" style="min-height:12px;margin-top:6px"></div>'+
+        '<div id="v3dFurnStrip" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px"></div>'+
+        '<div id="v3dFurnCtl" style="display:none;margin-top:10px">'+
+          '<div class="v3dlbl">Seçili — sürükle taşı · tekerlek/R döndür · Del/Backspace sil · Esc bırak</div>'+
+          '<div style="display:flex;gap:4px">'+
+            '<button data-furnrot="-90" class="v3db" title="Sola 90°">'+ic('rotccw',12)+'</button>'+
+            '<button data-furnrot="90" class="v3db" title="Sağa 90°">'+ic('rotcw',12)+'</button>'+
+            '<button data-v3d="furndel" class="v3db v3ddanger" title="Sil (Del / Backspace)">'+ic('trash',12)+'</button></div>'+
+          '<div class="v3dlbl">Tip: boşken seç → zemine tıkla = EKLE · bir mobilya seçiliyken = onun tipini DEĞİŞTİR</div>'+
+          '<div id="v3dFurnTypes">'+types+'</div>'+
+          '<button data-v3d="furnclear" class="v3db v3dgray" style="width:100%;margin-top:8px">Tümünü temizle</button>'+
+        '</div>';
+    }
     return '';
   }
   function railGroups(){
     const gs=[{k:'view',i:'view',t:'Görünüm'},{k:'layers',i:'layers',t:'Katman'}];
     if(camUIEnabled) gs.push({k:'camera',i:'camera',t:'Kamera'});
+    if(furnUIEnabled) gs.push({k:'furniture',i:'sofa',t:'Mobilya'});
     gs.push({k:'export',i:'download',t:'İndir'});
     return gs;
   }
@@ -135,6 +190,7 @@
     d.style.display='block'; d.innerHTML=groupHTML(activeGroup);
     if(activeGroup==='view') wireZoom();
     if(activeGroup==='camera'){ updateCamPanel(); applyPlaceModeUI(); setHint(lastHint); }
+    if(activeGroup==='furniture'){ updateFurnPanel(); applyFurnModeUI(); setFurnHint(lastFurnHint); }
   }
   function setGroup(g){ activeGroup=(activeGroup===g?null:g); renderRail(); renderDrawer(); }
   function wireZoom(){
@@ -179,13 +235,19 @@
     host=overlay.querySelector('#v3dHost');
     status=overlay.querySelector('#v3dStatus');
     overlay.addEventListener('click',function(e){
-      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-camact],[data-camsel],[data-camdel],[data-v3d]')||e.target;
+      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-camact],[data-camsel],[data-camdel],[data-furntype],[data-furnact],[data-furnrot],[data-furnsel],[data-furndel],[data-furndesel],[data-v3d]')||e.target;
       const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ setGroup(gp); return; }
       const ch=t.getAttribute&&t.getAttribute('data-camh'); if(ch){ setCamHeight(ch); return; }
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
       const ca=t.getAttribute&&t.getAttribute('data-camact'); if(ca){ setPlaceAction(ca); return; }
       const cs=t.getAttribute&&t.getAttribute('data-camsel'); if(cs!=null&&cs!==''){ selectCam(+cs); return; }
       const cd=t.getAttribute&&t.getAttribute('data-camdel'); if(cd!=null&&cd!==''){ removeCam(+cd); return; }
+      const ft=t.getAttribute&&t.getAttribute('data-furntype'); if(ft){ setFurnType(ft); return; }
+      const fa=t.getAttribute&&t.getAttribute('data-furnact'); if(fa){ setFurnAction(fa); return; }
+      const fr=t.getAttribute&&t.getAttribute('data-furnrot'); if(fr){ rotateFurn(+fr); return; }
+      const fsel=t.getAttribute&&t.getAttribute('data-furnsel'); if(fsel!=null&&fsel!==''){ selectFurn(+fsel); return; }
+      const fdel=t.getAttribute&&t.getAttribute('data-furndel'); if(fdel!=null&&fdel!==''){ removeFurn(+fdel); return; }
+      const fdz=t.getAttribute&&t.getAttribute('data-furndesel'); if(fdz){ selectFurn(-1); return; }   // çip × = seçimi bırak
       const a=t.getAttribute&&t.getAttribute('data-v3d'); if(!a) return;
       if(a==='close') close();
       else if(a==='iso'||a==='top'||a==='persp') setView(a);
@@ -195,6 +257,11 @@
       else if(a==='camclear') clearCams();
       else if(a==='camdemo'){ if(scene&&scene.__map) deriveShowcaseCameras(scene.__map); }
       else if(a==='camdel'){ if(activeCamIdx>=0) removeCam(activeCamIdx); }
+      else if(a==='furnedit') toggleFurnMode();
+      else if(a==='furndel'){ if(activeFurnIdx>=0) removeFurn(activeFurnIdx); }
+      else if(a==='furnclear') clearFurn();
+      else if(a==='furnauto') autoFurnishAll();
+      else if(a==='furnrender'){ if(t.checked) autoFurnishAll(); else clearFurn(); }   // render on/off: döşe ↔ boşalt (snap mobilyalı/boş gider)
       else if(a==='rerender') doReRender();
       else if(a==='roof'){ roofOn=t.checked; applyRoof(); }
       else if(a==='lbl'){ lblOn=t.checked; if(scene&&scene.__labels) scene.__labels.visible=lblOn; }
@@ -256,19 +323,29 @@
       const Y=new THREE.Vector3().setFromMatrixColumn(o.matrix,1).multiplyScalar(2*dy*td/d.clientHeight);
       panOff.add(X).add(Y); }
     function down(e){ if(!c.enabled) return;   // kamera yerleştirme açıkken mesh kilitli (döndür/kaydır kapalı)
-      if(e.button===0){state=0;rotS.set(e.clientX,e.clientY);}else{state=2;panS.set(e.clientX,e.clientY);}
+      if(e.button===0 && !spacePan){ state=0; rotS.set(e.clientX,e.clientY); }    // sol = döndür
+      else { state=2; panS.set(e.clientX,e.clientY); d.style.cursor='grabbing'; }  // sağ/orta VEYA Space+sol = kaydır
       window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
     function move(e){ if(!c.enabled) return;   // kilit sürüş ortasında devreye girerse hareketi kes
       if(state===0){ rotE.set(e.clientX,e.clientY);
         const k=2*Math.PI*c.rotateSpeed/d.clientHeight;
         sphD.theta-=k*(rotE.x-rotS.x); sphD.phi-=k*(rotE.y-rotS.y); rotS.copy(rotE); }
       else if(state===2){ pan(e.clientX-panS.x,e.clientY-panS.y); panS.set(e.clientX,e.clientY); } }
-    function up(){ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); state=-1; }
+    function up(){ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); state=-1; d.style.cursor=spacePan?'grab':''; }
     function wheel(e){ e.preventDefault(); if(!c.enabled) return;   // kilitliyken tekerlek-zoom da kapalı (panel zoom slider'ı açık kalır)
+      if(furnMode && activeFurnIdx>=0) return;                      // mobilya seçili → tekerlek onu döndürür (attachPicker), zoom yapma
       const base=(radiusTarget==null?c.getDistance():radiusTarget);
       c.setDistanceTarget(base*(e.deltaY<0?0.9:1.111)); }
+    // Space basılı tut → sol-sürükle KAYDIRIR (2B editör konvansiyonu); bırakınca döndürmeye döner
+    function isTyping(t){ return t&&(t.isContentEditable||t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'); }
+    function keyDown(e){ if(e.code!=='Space'&&e.key!==' ') return; if(!c.enabled||isTyping(e.target)) return;
+      if(overlay&&overlay.style.display==='none') return;          // 3B kapalıyken karışma (2B editörün kendi spacePan'i var)
+      if(!spacePan){ spacePan=true; if(state!==2) d.style.cursor='grab'; } e.preventDefault(); }
+    function keyUp(e){ if(e.code!=='Space'&&e.key!==' ') return; if(spacePan){ spacePan=false; if(state!==2) d.style.cursor=''; } }
     d.addEventListener('mousedown',down); d.addEventListener('wheel',wheel,{passive:false});
     d.addEventListener('contextmenu',function(e){e.preventDefault();});
+    window.addEventListener('keydown',keyDown); window.addEventListener('keyup',keyUp);
+    window.addEventListener('blur',function(){ if(spacePan){ spacePan=false; d.style.cursor=''; } });   // odak kaybında takılı kalmasın
     return c;
   }
 
@@ -312,6 +389,9 @@
     const walls=new THREE.Group(); walls.position.set(-cx,0,-cz); scene.add(walls); scene.__walls=walls;
     const lintels=new THREE.Group(); lintels.position.set(-cx,0,-cz); lintels.visible=roofOn; scene.add(lintels); scene.__lintels=lintels;
     const labels=new THREE.Group(); labels.position.set(-cx,0,-cz); labels.visible=lblOn; scene.add(labels); scene.__labels=labels;
+    // mobilya grubu — zemin/duvar gibi -cx,-cz ofsetli (pos MUTLAK metre). __floorGroup'a KOYMA:
+    // o grup kamera-yerleştirme raycast'i; mobilya oraya girerse kullanıcı "kanepenin üstüne kamera" koyar.
+    const furn=new THREE.Group(); furn.position.set(-cx,0,-cz); scene.add(furn); scene.__furnitureGroup=furn;
 
     // paylaşılan malzemeler (her duvar için yeni material üretme)
     const matWall=new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92});
@@ -368,6 +448,9 @@
       const spr=makeLabel(trName); spr.userData.tr=trName; spr.userData.en=enName;
       spr.position.set(lm[0],0.6,lm[1]); labels.add(spr);
     });
+
+    // mobilya: geçersizleri ele (A8) → düz furnList'e topla → px damgala → çiz
+    furnPruneInvalid(map); collectFurnList(); syncFurniturePx(map); renderFurniture();
 
     status.textContent=rooms.length+' oda · '+(maxX-minX).toFixed(1)+'m × '+(maxZ-minZ).toFixed(1)+'m · gerçek geometri';
     setView('iso');
@@ -550,11 +633,31 @@
   // tıklanan nesneden (ya da atasından) kamera indexini bul
   function camIdxFromObj(o){ while(o){ if(o.userData&&o.userData.camIdx!=null) return o.userData.camIdx; o=o.parent; } return -1; }
   function scenePick(ev){
-    if(!camUIEnabled||!renderer||!scene) return;
+    if(!renderer||!scene) return;
+    if(!camUIEnabled && !furnMode) return;
     const rect=renderer.domElement.getBoundingClientRect();
     const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
     if(!raycaster) raycaster=new THREE.Raycaster();
     raycaster.setFromCamera({x:nx,y:ny}, cam);
+    // ── MOBİLYA modu: yalnız mobilya (kamera gizmolarına dokunma). mobilya hit → SEÇ; zemin hit → taşı/ekle ──
+    if(furnMode){
+      if(scene.__furnitureGroup){
+        const fh=raycaster.intersectObjects(scene.__furnitureGroup.children,true);
+        for(let i=0;i<fh.length;i++){ const idx=furnIdxFromObj(fh[i].object); if(idx>=0){ selectFurn(idx); return; } }
+      }
+      // zemine tıklama = yalnız "Ekle" modunda yeni mobilya (taşıma artık SÜRÜKLE ile). Eklenen seçili → hemen sürüklenebilir.
+      if(furnAction==='add' && scene.__floorGroup){
+        const fhits=raycaster.intersectObjects(scene.__floorGroup.children,false);
+        if(fhits.length){ const p=fhits[0].point, rid=roomIdAtPoint(p); furnSnapshot();
+          const f={ id:newFurnId(pendingFurnType,rid), type:pendingFurnType, type_tr:FURN_TR[pendingFurnType]||null,
+                    room_id:rid, pos:{x:p.x+(scene.__cx||0), z:p.z+(scene.__cz||0)}, rot_deg:0, scale:1, source:'manual', locked:true };
+          attachFurnToMap(f); furnList.push(f); activeFurnIdx=furnList.length-1;
+          furnAction='move'; renderFurniture(); updateFurnPanel(); persistFurniture(); setFurnHint((FURN_TR[f.type]||f.type)+' eklendi · sürükleyerek taşı'); return;
+        }
+      }
+      if(furnAction!=='add' && activeFurnIdx>=0) selectFurn(-1);   // boş zemine tıkla = seçimi bırak
+      return;
+    }
     // 1) önce kamera gizmosuna tıklandı mı? (SEÇ) — yerleştirme açık ya da kapalı, her zaman
     if(camGizmos){
       const gh=raycaster.intersectObjects(camGizmos.children,true);
@@ -583,12 +686,113 @@
       }
     }
   }
+  /* ── MOBİLYA modsuz sürükle-bırak (spec UX P0-P2): mobilyaya bas-sürükle-bırak; geçersizde kırmızı+geri al;
+     tekerlek/R döndür (15° snap); duvara snap; Del sil; Ctrl+D çoğalt. Kamera yalnız sürükle sırasında kilitlenir. */
+  let furnDrag=null, furnGroundPlane=null, furnPersistT=null, furnUndo=[];
+  // mobilya geri-al: yıkıcı/taşıma işleminden ÖNCE tüm odaların furniture'ını anlık kopyala
+  function furnSnapshot(){ const map=scene&&scene.__map; if(!map) return; const snap={};
+    furnAllRooms(map).forEach(function(r){ snap[r.id]=(r.furniture||[]).map(function(f){ return JSON.parse(JSON.stringify(f)); }); });
+    furnUndo.push(snap); if(furnUndo.length>25) furnUndo.shift(); }
+  function furnUndoPop(){ const map=scene&&scene.__map; if(!map||!furnUndo.length){ setFurnHint('Geri alınacak işlem yok'); return; }
+    const snap=furnUndo.pop(); furnAllRooms(map).forEach(function(r){ if(snap[r.id]) r.furniture=snap[r.id].map(function(f){ return f; }); else r.furniture=[]; });
+    collectFurnList(); activeFurnIdx=-1; renderFurniture(); updateFurnPanel(); persistFurniture(); setFurnHint('Geri alındı (Ctrl+Z)'); }
+  const WALL_AFFINITY={ sofa_2:1,sofa_3:1,sectional_l:1,bed_single:1,bed_double:1,bed_queen:1,bed_king:1,wardrobe_2:1,wardrobe_3:1,wardrobe_4:1,
+    counter:1,tv_unit:1,tv:1,bookcase:1,console:1,sideboard:1,dresser:1,desk:1,fridge:1,toilet:1,washbasin:1,bathtub:1,shower_tray:1,washer:1,oven_hob:1,
+    nightstand:1,vanity:1,shoe_cabinet:1,coat_rack:1,sink:1,dishwasher:1,bench:1 };   // B7: sink/dishwasher/bench eklendi (island bilinçli serbest)
+  function schedulePersist(){ if(furnPersistT) clearTimeout(furnPersistT); furnPersistT=setTimeout(function(){ furnPersistT=null; persistFurniture(); }, 250); }
+  function furnPickIdx(ev){ if(!scene||!scene.__furnitureGroup) return -1;
+    const rect=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
+    if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
+    const fh=raycaster.intersectObjects(scene.__furnitureGroup.children,true);
+    for(let i=0;i<fh.length;i++){ const idx=furnIdxFromObj(fh[i].object); if(idx>=0) return idx; } return -1; }
+  function furnGroundHitAbs(ev){   // pointer → zemin düzlemi (y=0) → MUTLAK metre
+    const rect=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
+    if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
+    if(!furnGroundPlane) furnGroundPlane=new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+    const hit=new THREE.Vector3(); if(!raycaster.ray.intersectPlane(furnGroundPlane, hit)) return null;
+    return { x:hit.x+(scene.__cx||0), z:hit.z+(scene.__cz||0) };
+  }
+  function furnMeshByIdx(idx){ const G=scene&&scene.__furnitureGroup; if(!G) return null;
+    for(let i=0;i<G.children.length;i++){ if(G.children[i].userData && G.children[i].userData.furnIdx===idx) return G.children[i]; } return null; }
+  function tintFurnMesh(mesh, bad){ if(!mesh) return; mesh.traverse(function(n){ if(n.isMesh && n.material){
+    if(!n.material.__dragClone){ n.material=n.material.clone(); n.material.__dragClone=true; } n.material.emissive=new THREE.Color(bad?0x661111:0x402a08); } }); }
+  function dragRoomAn(absX, absZ){ const rid=roomIdAtPoint({x:absX-(scene.__cx||0), z:absZ-(scene.__cz||0)});
+    if(!rid) return null; const room=furnRoomById(rid); if(!room) return null; const an=furnAnalyzeRoom(room, scene.__map); return an?{rid:rid,an:an}:null; }
+  function furnDragValid(f, x, z, rot, ra){
+    ra=ra||dragRoomAn(x,z); if(!ra) return false; const an=ra.an;
+    const dim=FURN_DIM[f.type]||{w:0.6,d:0.6}, w=(f.__w!=null?f.__w:dim.w), d=(f.__d!=null?f.__d:dim.d);
+    const fp=furnFootprintM(x,z,rot,w,d); if(!furnRectInPoly(fp, an.poly)) return false;
+    if(COLLISION_EXEMPT[f.type]) return true;
+    if(furnDoorBlocked(fp, an)) return false;                          // A1: kapı açıklığını kapatma
+    for(let i=0;i<furnList.length;i++){ const o=furnList[i]; if(o===f||o.room_id!==ra.rid||COLLISION_EXEMPT[o.type]) continue;
+      const od=FURN_DIM[o.type]||{w:0.6,d:0.6}, ow=(o.__w!=null?o.__w:od.w), odd=(o.__d!=null?o.__d:od.d);
+      if(furnRectsOverlap(fp, furnFootprintM(o.pos.x,o.pos.z,o.rot_deg,ow,odd))) return false; }
+    return true;
+  }
+  // wall-affinity: arka yüzü yakın duvara yapıştır + duvar gerçek açısına dön (kapı aralığına snap'leme)
+  function furnWallSnap(f, x, z, ra){
+    if(!WALL_AFFINITY[f.type]) return null; ra=ra||dragRoomAn(x,z); if(!ra) return null;
+    const dim=FURN_DIM[f.type]||{w:0.6,d:0.6}, d=(f.__d!=null?f.__d:dim.d);
+    let best=null, bd=d/2+0.45; ra.an.edges.forEach(function(e){ const t=(x-e.a[0])*e.dir[0]+(z-e.a[1])*e.dir[1]; if(t<0.05||t>e.len-0.05) return;
+      for(let j=0;j<e.doorSpans.length;j++){ if(t>e.doorSpans[j][0]-DOOR_CLR && t<e.doorSpans[j][1]+DOOR_CLR) return; }   // A1: kapı önüne snap'leme
+      const dist=Math.abs((x-e.a[0])*(-e.dir[1])+(z-e.a[1])*e.dir[0]); if(dist<bd){ bd=dist; best={e:e,t:t}; } });
+    if(!best) return null; const e=best.e, inset=d/2+0.05;
+    return { x:e.a[0]+e.dir[0]*best.t+e.nIn[0]*inset, z:e.a[1]+e.dir[1]*best.t+e.nIn[1]*inset, rot:wallRotDeg(e) };
+  }
+  function beginFurnDrag(ev, idx){
+    selectFurn(idx); const f=furnList[idx]; const hit=furnGroundHitAbs(ev); if(!hit) return;
+    furnDrag={ idx:idx, f:f, off:{x:f.pos.x-hit.x, z:f.pos.z-hit.z}, start:{x:f.pos.x,z:f.pos.z,rot:f.rot_deg}, valid:true, moved:false, mesh:furnMeshByIdx(idx) };
+    if(controls) controls.enabled=false; if(renderer) renderer.domElement.style.cursor='grabbing';
+  }
+  function moveFurnDrag(ev){
+    if(!furnDrag) return; const hit=furnGroundHitAbs(ev); if(!hit) return; const f=furnDrag.f;
+    let x=hit.x+furnDrag.off.x, z=hit.z+furnDrag.off.z;
+    const ra=dragRoomAn(x,z);                                          // odayı kare başına 1× çöz (snap + valid paylaşır)
+    const snap=ev.shiftKey?null:furnWallSnap(f,x,z,ra); if(snap){ x=snap.x; z=snap.z; f.rot_deg=snap.rot; }   // Shift = serbest (snap atla)
+    f.pos={x:x,z:z}; furnDrag.moved=furnDrag.moved || (Math.abs(x-furnDrag.start.x)+Math.abs(z-furnDrag.start.z))>0.02;
+    const mesh=furnDrag.mesh; if(mesh){ mesh.position.set(x,0,z); mesh.rotation.y=(f.rot_deg||0)*Math.PI/180; }
+    furnDrag.valid=furnDragValid(f,x,z,f.rot_deg, snap?null:ra); tintFurnMesh(mesh, !furnDrag.valid);
+  }
+  function endFurnDrag(){
+    if(!furnDrag) return; const f=furnDrag.f, dr=furnDrag; furnDrag=null;
+    if(controls) controls.enabled=!placeMode; if(renderer) renderer.domElement.style.cursor='';
+    if(!dr.moved){ renderFurniture(); return; }                        // sadece tıklama (seçim) → değişiklik yok
+    const valid=furnDragValid(f, f.pos.x, f.pos.z, f.rot_deg);         // B10: bırakış noktasından TAZE doğrula
+    if(valid){ furnSnapshot();                                         // A5: geri-al için kaydet
+      const rid=roomIdAtPoint({x:f.pos.x-(scene.__cx||0), z:f.pos.z-(scene.__cz||0)});
+      if(rid && rid!==f.room_id){ detachFurnFromMap(f); f.room_id=rid; attachFurnToMap(f); }
+      f.source='manual'; f.locked=true; persistFurniture(); setFurnHint((FURN_TR[f.type]||f.type)+' taşındı');
+    } else { f.pos={x:dr.start.x,z:dr.start.z}; f.rot_deg=dr.start.rot; setFurnHint('Geçersiz konum — geri alındı'); }
+    renderFurniture(); updateFurnPanel();
+  }
+  function duplicateFurn(i){ if(i<0||i>=furnList.length) return; furnSnapshot(); const o=furnList[i];
+    const f=JSON.parse(JSON.stringify(o)); f.id=newFurnId(f.type,f.room_id); f.pos={x:o.pos.x+0.3,z:o.pos.z+0.3}; f.source='manual'; f.locked=true;
+    attachFurnToMap(f); furnList.push(f); activeFurnIdx=furnList.length-1; renderFurniture(); updateFurnPanel(); persistFurniture(); setFurnHint('Çoğaltıldı (Ctrl+D)'); }
+  function onFurnKey(e){ if(!furnMode) return;
+    const t=e.target, tag=t&&t.tagName;
+    if(t&&(t.isContentEditable||tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')) return;     // A4: başka input'ta yazarken dokunma
+    if((e.key==='z'||e.key==='Z')&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); furnUndoPop(); return; }   // A5: geri al
+    if(e.key==='Escape'){ e.preventDefault(); if(furnAction==='add'){ furnAction='move'; applyFurnModeUI(); setFurnHint('Ekleme iptal'); } else if(activeFurnIdx>=0) selectFurn(-1); return; }  // Esc = ekleme modunu iptal / seçimi bırak (silmez)
+    if(activeFurnIdx<0) return;
+    if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); removeFurn(activeFurnIdx); }  // Del + Backspace sil (input'ta yazarken yukarıda korumalı → tarayıcı geri-nav tetiklemez)
+    else if(e.key==='r'||e.key==='R'){ e.preventDefault(); rotateFurn(e.shiftKey?-15:15); }
+    else if((e.key==='d'||e.key==='D')&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); duplicateFurn(activeFurnIdx); } }
   function attachPicker(){
     if(pickerWired||!renderer) return; pickerWired=true;
     const el=renderer.domElement; let sx=0,sy=0,moved=false;
-    el.addEventListener('pointerdown',function(e){ sx=e.clientX; sy=e.clientY; moved=false; });
-    el.addEventListener('pointermove',function(e){ if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>5) moved=true; });
-    el.addEventListener('pointerup',function(e){ if(camUIEnabled&&!moved&&e.button===0) scenePick(e); });
+    el.addEventListener('pointerdown',function(e){ sx=e.clientX; sy=e.clientY; moved=false;
+      if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0) beginFurnDrag(e, idx); } });   // Space basılı → mobilyayı tutma, kaydır
+    el.addEventListener('pointermove',function(e){ if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>5) moved=true;
+      if(furnDrag){ moveFurnDrag(e); return; }
+      if(!spacePan && furnMode && e.buttons===0) el.style.cursor=(furnPickIdx(e)>=0?'grab':''); });   // hover ipucu (Space'te orbit grab imleci kalsın)
+    el.addEventListener('pointerup',function(e){ if(furnDrag){ endFurnDrag(); return; }
+      if(!spacePan && (camUIEnabled||furnMode)&&!moved&&e.button===0) scenePick(e); });   // Space'te tıklama seçmesin/koymasın (kaydırma kipi)
+    // tekerlek = seçili mobilyayı döndür (5° hassas, Shift=1° ince ayar); orbit zoom'u furnMode+seçili iken atlanır (attachOrbit)
+    el.addEventListener('wheel',function(e){ if(furnMode && activeFurnIdx>=0){ const f=furnList[activeFurnIdx], st=e.shiftKey?1:5;
+      f.rot_deg=((((f.rot_deg||0)+(e.deltaY<0?st:-st))%360)+360)%360; f.source='manual'; f.locked=true; renderFurniture(); schedulePersist(); } }, {passive:true});
+    window.addEventListener('keydown', onFurnKey);
   }
   function logRoom(c){                                     // DOĞRULAMA: oda ortasına koyunca room_id o oda mı?
     const map=scene&&scene.__map; if(!map||typeof window.cameraViewInfo!=='function') return;
@@ -600,6 +804,7 @@
   // ── dışa: kilitli kamera dizisi (prototip adım 4 + §3.3 şeması) ──
   function exportCameras(map){
     map=map||(scene&&scene.__map); if(!map) return [];
+    syncFurniturePx(map);                                          // mobilya px'i taze olsun → cameraViewInfo görsün
     const W=map.render.width, H=map.render.height, hasView=(typeof window.cameraViewInfo==='function');
     return camList.map(function(c,i){
       const px=worldToPx(map,c.pos.x,c.pos.z);
@@ -609,11 +814,12 @@
         pos_m:{x:+c.pos.x.toFixed(3),y:+c.pos.y.toFixed(3),z:+c.pos.z.toFixed(3)},
         target_m:{x:+c.target.x.toFixed(3),y:+c.target.y.toFixed(3),z:+c.target.z.toFixed(3)},
         fov_deg:lensToFov(c.lens), height:c.height,
-        room_id:null, room_weights:[], cone_spills:false, cone_polygon_px:null, cone_polygon_norm:null };
+        room_id:null, room_weights:[], cone_spills:false, cone_polygon_px:null, cone_polygon_norm:null, furniture_seen:[] };
       if(hasView){
         const v=window.cameraViewInfo(map,{x_px:x,y_px:y,heading_deg:heading,lens_mm:c.lens});
         if(v){ out.room_id=v.room_id; out.room_weights=v.room_weights||[]; out.cone_spills=!!v.cone_spills;
-               out.cone_polygon_px=v.cone_polygon_px||null; out.cone_polygon_norm=v.cone_polygon_norm||null; }
+               out.cone_polygon_px=v.cone_polygon_px||null; out.cone_polygon_norm=v.cone_polygon_norm||null;
+               out.furniture_seen=v.furniture_seen||[]; }
       }
       return out;
     });
@@ -681,6 +887,7 @@
   // placeMode AÇIK → mesh KİLİTLİ (controls.enabled=false, #3) + zemine tıklama etkin. KAPALI → mesh serbest (döndür/zoom).
   function setPlaceMode(on){
     placeMode=!!on; pendingPos=null;
+    if(placeMode && furnMode){ furnMode=false; applyFurnModeUI(); renderFurniture(); }   // mobilya düzenlemeyi kapat (dışlayan)
     if(controls) controls.enabled=!placeMode;
     if(placeMode) placeAction=(activeCamIdx>=0)?'aim':'add';
     renderCamGizmos(); applyPlaceModeUI();
@@ -754,6 +961,793 @@
   }
   function setHint(t){ lastHint=t||''; const h=overlay&&overlay.querySelector('#v3dCamHint'); if(h) h.textContent=lastHint; }
 
+  /* ====================== MOBİLYA — mesh fabrikası + render (Faz 1) ======================
+     Her mobilya = birkaç BoxGeometry grubu (lokal orijin = item merkezi, +Z = ön yön). Kamera
+     gizmolarının kardeşi: renderFurniture ↔ renderCamGizmos, ama AYRI grup (__furnitureGroup).
+     THREE LAZY yüklenir → malzemeleri modül-üstünde değil, ensureFMAT() ile tembel kur. */
+  let FMAT=null, FMAT_SET=null;
+  function ensureFMAT(){
+    if(FMAT) return;
+    const M=function(c,r,m){ return new THREE.MeshStandardMaterial({color:c, roughness:(r==null?0.8:r), metalness:(m||0)}); };
+    FMAT={ wood:M(0x9c7a52,0.82), woodDark:M(0x6e5234,0.78), panel:M(0xe4ddcf,0.7),
+           fabric:M(0x8593a8,0.95), fabric2:M(0xb7a98c,0.95), cushion:M(0x9aa7bb,0.96), leather:M(0x7c5a44,0.5),
+           white:M(0xf1f1f3,0.55), porcelain:M(0xf5f5f7,0.35), steel:M(0xc2c4c8,0.4,0.5), metal:M(0x9a9aa0,0.45,0.6),
+           dark:M(0x303036,0.6,0.3), glass:M(0xbcd6e6,0.2,0.2), green:M(0x5f8f5f,0.9), leaf:M(0x4f8453,0.85),
+           pot:M(0x9a6b4e,0.85), rug:M(0xb09277,0.97), rugDark:M(0x8a6f58,0.97) };
+    FMAT_SET=new Set(Object.keys(FMAT).map(function(k){ return FMAT[k]; }));   // paylaşılan → dispose etme
+  }
+  function fbox(w,h,d,mat){ return new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); }
+  function fcyl(r,h,mat,seg){ return new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,seg||14), mat); }
+  // --- mesh aile yardımcıları (lokal +Z = ön/odaya bakan yüz; -Z = arka/duvar) ---
+  function legsAt(g,w,d,top,lh,mat,ins){ ins=(ins==null?0.06:ins); const lw=0.05;
+    [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(function(s){ const l=fbox(lw,lh,lw,mat||FMAT.woodDark); l.position.set(s[0]*(w/2-ins),top-lh/2,s[1]*(d/2-ins)); g.add(l); }); }
+  function sofaMesh(g,w,d,mat){ mat=mat||FMAT.fabric; const arm=0.18;
+    const base=fbox(w,0.30,d,mat); base.position.y=0.17; g.add(base);
+    const back=fbox(w,0.44,0.18,mat); back.position.set(0,0.40,-d/2+0.09); g.add(back);
+    [-1,1].forEach(function(s){ const a=fbox(arm,0.40,d,mat); a.position.set(s*(w/2-arm/2),0.34,0); g.add(a); });
+    const sw=w-2*arm, n=Math.max(1,Math.round(sw/0.75)); for(let i=0;i<n;i++){ const c=fbox(sw/n-0.05,0.13,d-0.24,FMAT.cushion); c.position.set(-sw/2+sw/n*(i+0.5),0.40,0.05); g.add(c); }
+    legsAt(g,w,d,0.05,0.05,FMAT.woodDark,0.05); }
+  function tableMesh(g,w,d,topY,mat){ const t=fbox(w,0.05,d,mat||FMAT.wood); t.position.y=topY; g.add(t); legsAt(g,w,d,topY-0.025,topY-0.025,FMAT.woodDark); }
+  function chairMesh(g,w,d){ const se=0.46; const s=fbox(w,0.06,d,FMAT.wood); s.position.y=se; g.add(s);
+    const b=fbox(w,0.42,0.05,FMAT.wood); b.position.set(0,se+0.22,-d/2+0.04); g.add(b); legsAt(g,w,d,se-0.03,se-0.03,FMAT.woodDark,0.05); }
+  function cabinetMesh(g,w,d,h,mat,doors,baseY){ baseY=baseY||0; mat=mat||FMAT.panel; const box=fbox(w,h,d,mat); box.position.y=baseY+h/2; g.add(box);
+    doors=doors||Math.max(1,Math.round(w/0.5)); for(let i=1;i<doors;i++){ const gv=fbox(0.012,h*0.94,0.012,FMAT.woodDark); gv.position.set(-w/2+w/doors*i,baseY+h/2,d/2+0.006); g.add(gv); }
+    for(let i=0;i<doors;i++){ const hd=fbox(0.02,0.12,0.02,FMAT.metal); hd.position.set(-w/2+w/doors*(i+0.5)+w/doors*0.32,baseY+h/2,d/2+0.01); g.add(hd); } }
+  function bedMesh(g,w,d){ const base=fbox(w,0.28,d,FMAT.panel); base.position.y=0.14; g.add(base);
+    const mat=fbox(w-0.06,0.16,d-0.06,FMAT.fabric2); mat.position.y=0.34; g.add(mat);
+    const hb=fbox(w,0.95,0.09,FMAT.woodDark); hb.position.set(0,0.48,-d/2+0.045); g.add(hb);
+    const pil=Math.max(1,Math.round(w/0.7)); for(let i=0;i<pil;i++){ const p=fbox(w/pil-0.08,0.10,0.36,FMAT.white); p.position.set(-w/2+w/pil*(i+0.5),0.45,-d/2+0.28); g.add(p); }
+    const dv=fbox(w-0.12,0.04,d-0.7,FMAT.cushion); dv.position.set(0,0.43,0.2); g.add(dv); }
+  function plantMesh(g,h){ h=h||1.2; const pot=fcyl(0.16,0.30,FMAT.pot,12); pot.position.y=0.15; g.add(pot);
+    const stem=fcyl(0.03,h-0.5,FMAT.woodDark,6); stem.position.y=0.30+(h-0.5)/2; g.add(stem);
+    [0,1,2].forEach(function(i){ const fol=fcyl(0.22-i*0.04,0.26,FMAT.leaf,7); fol.position.y=h-0.35+i*0.12; g.add(fol); }); }
+  // tek mobilya item'i → mesh grubu. Bilinmeyen tip = kutu (çökmez).
+  function buildFurnMesh(f){
+    ensureFMAT();
+    const g=new THREE.Group();
+    const t=(f.type||'').toLowerCase();
+    const D=FURN_DIM[t]||{w:0.6,d:0.6};
+    const W=(f.__w!=null?f.__w:D.w), Dp=(f.__d!=null?f.__d:D.d);   // counter gibi parametrik genişlik
+    switch(t){
+      case 'sofa_2': case 'sofa_3': sofaMesh(g,W,Dp); break;
+      case 'sectional_l': { sofaMesh(g,W,0.95); const ch=fbox(0.92,0.30,Dp,FMAT.fabric); ch.position.set(W/2-0.46,0.17,0.0+ (Dp-0.95)/2); g.add(ch);
+        const cc=fbox(0.80,0.13,Dp-0.2,FMAT.cushion); cc.position.set(W/2-0.46,0.40,(Dp-0.95)/2); g.add(cc); break; }
+      case 'armchair': { const b=fbox(W,0.30,Dp,FMAT.fabric); b.position.y=0.17; g.add(b); const bk=fbox(W,0.42,0.16,FMAT.fabric); bk.position.set(0,0.40,-Dp/2+0.08); g.add(bk);
+        [-1,1].forEach(function(s){ const a=fbox(0.14,0.38,Dp,FMAT.fabric); a.position.set(s*(W/2-0.07),0.33,0); g.add(a); }); const cu=fbox(W-0.28,0.12,Dp-0.2,FMAT.cushion); cu.position.set(0,0.40,0.04); g.add(cu); break; }
+      case 'pouf': { const p=fbox(W,0.40,Dp,FMAT.fabric2); p.position.y=0.20; g.add(p); break; }
+      case 'coffee_table': tableMesh(g,W,Dp,0.40,FMAT.wood); break;
+      case 'side_table': { const t2=fcyl(W/2,0.04,FMAT.wood,16); t2.position.y=0.53; g.add(t2); const lg=fcyl(0.03,0.51,FMAT.woodDark,8); lg.position.y=0.255; g.add(lg); break; }
+      case 'tv_unit': { const box=fbox(W,0.48,Dp,FMAT.woodDark); box.position.y=0.24; g.add(box); for(let i=1;i<3;i++){ const gv=fbox(0.012,0.44,0.012,FMAT.dark); gv.position.set(-W/2+W/3*i,0.24,Dp/2+0.005); g.add(gv);} break; }
+      case 'tv': { const scr=fbox(W,0.80,0.05,FMAT.dark); scr.position.y=1.10; g.add(scr); const st=fbox(0.4,0.04,0.18,FMAT.dark); st.position.y=0.70; g.add(st); break; }
+      case 'bookcase': { cabinetMesh(g,W,Dp,D.h,FMAT.wood,1); const shelves=4; for(let i=1;i<shelves;i++){ const sh=fbox(W-0.06,0.03,Dp-0.04,FMAT.woodDark); sh.position.set(0,D.h*i/shelves,0); g.add(sh);} break; }
+      case 'console': { const box=fbox(W,0.18,Dp,FMAT.wood); box.position.y=0.70; g.add(box); legsAt(g,W,Dp,0.70-0.09,0.61,FMAT.woodDark); break; }
+      case 'sideboard': cabinetMesh(g,W,Dp,D.h,FMAT.wood); break;
+      case 'rug': { const rg=fbox(W,0.02,Dp,FMAT.rug); rg.position.y=0.012; g.add(rg); const bd=fbox(W-0.2,0.022,Dp-0.2,FMAT.rugDark); bd.position.y=0.013; g.add(bd); break; }
+      case 'dining_table_4': case 'dining_table_6': tableMesh(g,W,Dp,0.75,FMAT.wood); break;
+      case 'dining_chair': case 'bistro_chair': chairMesh(g,W,Dp); break;
+      case 'bistro_table': { const t2=fcyl(W/2,0.04,FMAT.metal,16); t2.position.y=0.71; g.add(t2); const lg=fcyl(0.04,0.69,FMAT.metal,8); lg.position.y=0.345; g.add(lg); break; }
+      case 'bed_single': case 'bed_double': case 'bed_queen': case 'bed_king': bedMesh(g,W,Dp); break;
+      case 'nightstand': { cabinetMesh(g,W,Dp,0.50,FMAT.wood,1); break; }
+      case 'wardrobe_2': case 'wardrobe_3': case 'wardrobe_4': cabinetMesh(g,W,Dp,D.h,FMAT.panel); break;
+      case 'dresser': cabinetMesh(g,W,Dp,D.h,FMAT.wood, Math.max(2,Math.round(W/0.5))); break;
+      case 'vanity': { const tb=fbox(W,0.04,Dp,FMAT.wood); tb.position.y=0.76; g.add(tb); legsAt(g,W,Dp,0.735,0.735,FMAT.woodDark); const mir=fbox(W*0.6,0.5,0.03,FMAT.glass); mir.position.set(0,1.15,-Dp/2+0.03); g.add(mir); break; }
+      case 'bench': { const s=fbox(W,0.12,Dp,FMAT.fabric2); s.position.y=0.40; g.add(s); legsAt(g,W,Dp,0.34,0.34,FMAT.woodDark); break; }
+      case 'counter': { const c=fbox(W,0.86,Dp,FMAT.panel); c.position.y=0.43; g.add(c); const tp=fbox(W,0.05,Dp+0.03,FMAT.steel); tp.position.y=0.88; g.add(tp);
+        const doors=Math.max(1,Math.round(W/0.6)); for(let i=1;i<doors;i++){ const gv=fbox(0.012,0.80,0.012,FMAT.woodDark); gv.position.set(-W/2+W/doors*i,0.45,Dp/2+0.005); g.add(gv);} break; }
+      case 'island': { const c=fbox(W,0.86,Dp,FMAT.panel); c.position.y=0.43; g.add(c); const tp=fbox(W+0.04,0.05,Dp+0.04,FMAT.steel); tp.position.y=0.88; g.add(tp); break; }
+      case 'oven_hob': { const c=fbox(W,0.86,Dp,FMAT.dark); c.position.y=0.43; g.add(c); const tp=fbox(W,0.05,Dp,FMAT.steel); tp.position.y=0.88; g.add(tp); [[-1],[1]].forEach(function(s){ const b=fcyl(0.09,0.012,FMAT.dark,12); b.position.set(s[0]*0.13,0.91,0); g.add(b);}); break; }
+      case 'dishwasher': case 'washer': { const c=fbox(W,D.h,Dp,FMAT.steel); c.position.y=D.h/2; g.add(c); const dr=fcyl(W*0.32,0.03,FMAT.glass,16); dr.rotation.x=Math.PI/2; dr.position.set(0,D.h*0.55,Dp/2+0.01); g.add(dr); break; }
+      case 'fridge': { const r=fbox(W,D.h,Dp,FMAT.white); r.position.y=D.h/2; g.add(r); const gv=fbox(0.015,D.h*0.96,0.015,FMAT.metal); gv.position.set(0,D.h*0.62,Dp/2+0.006); g.add(gv);
+        [0.40,0.72].forEach(function(fy){ const h2=fbox(0.03,0.22,0.03,FMAT.metal); h2.position.set(-W/2+0.10,D.h*fy,Dp/2+0.02); g.add(h2);}); break; }
+      case 'sink': { const c=fbox(W,0.86,Dp,FMAT.panel); c.position.y=0.43; g.add(c); const bs=fbox(W*0.7,0.12,Dp*0.6,FMAT.steel); bs.position.y=0.86; g.add(bs); const fa=fcyl(0.02,0.28,FMAT.metal,8); fa.position.set(0,1.0,-Dp/2+0.12); g.add(fa); break; }
+      case 'toilet': { const tank=fbox(W,0.40,0.18,FMAT.porcelain); tank.position.set(0,0.55,-Dp/2+0.09); g.add(tank); const bowl=fbox(W*0.9,0.40,Dp-0.18,FMAT.porcelain); bowl.position.set(0,0.20,0.05); g.add(bowl); const seat=fbox(W*0.92,0.04,Dp-0.16,FMAT.white); seat.position.set(0,0.42,0.06); g.add(seat); break; }
+      case 'washbasin': { const cab=fbox(W,0.72,Dp,FMAT.panel); cab.position.y=0.36; g.add(cab); const top=fbox(W,0.08,Dp,FMAT.porcelain); top.position.y=0.76; g.add(top); const bs=fbox(W*0.6,0.06,Dp*0.6,FMAT.porcelain); bs.position.y=0.74; g.add(bs); const fa=fcyl(0.018,0.22,FMAT.metal,8); fa.position.set(0,0.92,-Dp/2+0.08); g.add(fa); break; }
+      case 'bathtub': { const sh=fbox(W,0.55,Dp,FMAT.porcelain); sh.position.y=0.275; g.add(sh); const inner=fbox(W-0.16,0.40,Dp-0.16,FMAT.white); inner.position.y=0.40; g.add(inner); break; }
+      case 'shower_tray': {   // köşe duş kabini — kapalı cam kutu, TEK açıklık = ön kapı (odaya bakar). Arka cam DUVARA FLUSH (alçak-duvar dollhouse'ta bile kapalı görünür → "ikinci açıklık" yok).
+        // Yalnız YANLAR ayak-izinden inset (köşe duvarını geç → clipping yok). Arka cam ~1cm önde (flush, z-fight yok).
+        const sm=0.05, w2=Math.max(0.4,W-2*sm), gh=2.0, gt=0.02;
+        const dBack=-Dp/2+0.03, dFront=Dp/2-0.02, d2=dFront-dBack, dc=(dFront+dBack)/2;
+        const tr=fbox(w2,0.10,d2,FMAT.white); tr.position.set(0,0.05,dc); g.add(tr);                           // tekne (yanlar inset, arka flush)
+        const back=fbox(w2,gh,gt,FMAT.glass); back.position.set(0,gh/2,dBack); g.add(back);                    // ARKA cam (duvara flush, kutuyu kapatır)
+        [-1,1].forEach(function(sx){ const sp=fbox(gt,gh,d2,FMAT.glass); sp.position.set(sx*w2/2,gh/2,dc); g.add(sp); });    // iki YAN cam
+        const dw=w2*0.5, fr=fbox(dw,gh,gt,FMAT.glass); fr.position.set(-(w2-dw)/2,gh/2,dFront); g.add(fr);      // ÖN yarım cam kapı; kalan açıklık = TEK GİRİŞ
+        break; }
+      case 'shoe_cabinet': cabinetMesh(g,W,Dp,D.h,FMAT.wood,Math.max(1,Math.round(W/0.5))); break;
+      case 'coat_rack': { const post=fbox(0.06,D.h,0.06,FMAT.woodDark); post.position.y=D.h/2; g.add(post); const base=fbox(W,0.04,Dp,FMAT.woodDark); base.position.y=0.02; g.add(base);
+        [0.3,-0.3].forEach(function(s){ const arm=fbox(0.04,0.04,0.22,FMAT.metal); arm.position.set(0,D.h-0.1,s); g.add(arm);}); break; }
+      case 'desk': { const tp=fbox(W,0.05,Dp,FMAT.wood); tp.position.y=0.74; g.add(tp); const ped=fbox(0.42,0.68,Dp-0.06,FMAT.panel); ped.position.set(W/2-0.23,0.36,0); g.add(ped); legsAt(g,W,Dp,0.715,0.715,FMAT.woodDark,0.05); break; }
+      case 'office_chair': { const se=fbox(W*0.8,0.08,Dp*0.8,FMAT.dark); se.position.y=0.48; g.add(se); const bk=fbox(W*0.75,0.45,0.06,FMAT.dark); bk.position.set(0,0.72,-Dp/2+0.1); g.add(bk); const col=fcyl(0.03,0.40,FMAT.metal,8); col.position.y=0.24; g.add(col); const ft=fcyl(0.28,0.04,FMAT.dark,5); ft.position.y=0.04; g.add(ft); break; }
+      case 'plant': plantMesh(g,D.h); break;
+      default: { const r=fbox(W,0.6,Dp,FMAT.wood); r.position.y=0.3; g.add(r); }
+    }
+    return g;
+  }
+  // eski mobilya mesh'ini GPU'dan bırak — AMA paylaşılan FMAT malzemesini DEĞİL (yalnız per-instance
+  // geometri + aktif-vurgu için klonlanan malzeme). disposeGizmo'yu kullansak FMAT'ı bozardık.
+  function disposeFurn(o){ if(o.traverse) o.traverse(function(n){
+    if(n.geometry) n.geometry.dispose();
+    if(n.material && FMAT_SET && !FMAT_SET.has(n.material)){
+      (Array.isArray(n.material)?n.material:[n.material]).forEach(function(m){ if(m&&m.dispose) m.dispose(); }); }
+  }); }
+  // A8: geri yüklenen mobilyayı odasına sığmıyorsa ele (plan düzenlenince pozisyonel room_id kayabilir → taşma önle)
+  function furnPruneInvalid(map){
+    if(!map) return;
+    furnAllRooms(map).forEach(function(r){ if(!r.furniture||!r.furniture.length) return;
+      const an=furnAnalyzeRoom(r, map); if(!an) return;
+      r.furniture=r.furniture.filter(function(f){ if(!f||!f.pos) return false;
+        const dim=FURN_DIM[f.type]||{w:0.6,d:0.6}, w=(f.__w!=null?f.__w:dim.w), d=(f.__d!=null?f.__d:dim.d);
+        return furnRectInPoly(furnFootprintM(f.pos.x,f.pos.z,f.rot_deg,w,d), an.poly); });
+    });
+  }
+  // map'teki tüm room.furniture[]'ı düz furnList'e topla (units rooms + common_areas)
+  function collectFurnList(){
+    furnList=[];
+    const map=scene&&scene.__map; if(!map) return;
+    (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ (r.furniture||[]).forEach(function(f){ furnList.push(f); }); }); });
+    (map.common_areas||[]).forEach(function(r){ (r.furniture||[]).forEach(function(f){ furnList.push(f); }); });
+  }
+  // furnList → __furnitureGroup mesh'leri (renderCamGizmos ikizi). Her render'da eski mesh bırakılır.
+  function renderFurniture(){
+    if(!scene||!scene.__furnitureGroup) return;
+    ensureFMAT();
+    const G=scene.__furnitureGroup;
+    while(G.children.length){ const ch=G.children[0]; disposeFurn(ch); G.remove(ch); }
+    furnList.forEach(function(f,i){
+      if(!f||!f.pos) return;
+      const grp=buildFurnMesh(f);
+      grp.position.set(f.pos.x, 0, f.pos.z);                      // pos MUTLAK metre; grup -cx,-cz ofsetli → zeminle aynı yer
+      grp.rotation.y=(f.rot_deg||0)*Math.PI/180;
+      if(f.scale&&f.scale!==1) grp.scale.setScalar(f.scale);
+      const active=(i===activeFurnIdx);
+      grp.traverse(function(o){
+        o.userData.furnIdx=i; o.userData.furnType=f.type;
+        if(o.isMesh){ o.castShadow=true; o.receiveShadow=true;
+          if(active && o.material){ o.material=o.material.clone(); o.material.emissive=new THREE.Color(0x402a08); } }   // aktif = turuncu kor
+      });
+      G.add(grp);
+    });
+  }
+
+  /* ====================== MOBİLYA — manuel düzenleyici (Faz 2; kamera CRUD ikizi) ======================
+     furnList = render listesi; room.furniture[] = tek kaynak (cameraViewInfo + kalıcılık oradan okur).
+     Ekle/sil/taşı HER İKİSİNİ senkron tutar (attach/detachFurnToMap). pos MUTLAK metre: raycast noktası
+     (merkezlenmiş dünya) → +scene.__cx/__cz. furnMode ↔ placeMode (kamera) DIŞLAYAN: ikisi aynı anda olmaz. */
+  let furnSeq=0;
+  function newFurnId(type, roomId){ furnSeq++; return (roomId||'F')+'-'+type+'-'+furnSeq; }
+  function furnIdxFromObj(o){ while(o){ if(o.userData&&o.userData.furnIdx!=null) return o.userData.furnIdx; o=o.parent; } return -1; }
+  function furnPip(x,y,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j];
+    if(((a[1]>y)!==(b[1]>y)) && (x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])) c=!c; } return c; }
+  // merkezlenmiş dünya raycast noktası → render-px → hangi oda? (worldToPx = +cx,+cz; cameraViewInfo ile aynı uzay)
+  function roomIdAtPoint(p){
+    const map=scene&&scene.__map; if(!map) return null;
+    const px=worldToPx(map,p.x,p.z); let found=null;
+    function test(r){ if(found||!r.polygon_px||r.polygon_px.length<3) return; if(furnPip(px[0],px[1],r.polygon_px)) found=r.id; }
+    (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(test); }); (map.common_areas||[]).forEach(test);
+    return found;
+  }
+  function furnRoomById(roomId){
+    const map=scene&&scene.__map; if(!map||!roomId) return null; let hit=null;
+    (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ if(r.id===roomId) hit=r; }); });
+    (map.common_areas||[]).forEach(function(r){ if(r.id===roomId) hit=r; }); return hit;
+  }
+  function attachFurnToMap(f){ const r=furnRoomById(f&&f.room_id); if(r){ (r.furniture=r.furniture||[]).push(f); } }
+  function detachFurnFromMap(f){ const r=furnRoomById(f&&f.room_id); if(r&&r.furniture){ const k=r.furniture.indexOf(f); if(k>=0) r.furniture.splice(k,1); } }
+
+  function selectFurn(i){
+    if(i<0||i>=furnList.length){ activeFurnIdx=-1; renderFurniture(); applyFurnModeUI(); return; }
+    activeFurnIdx=i;
+    if(furnMode && furnAction==='add') furnAction='move';   // seçince düzenlemeye geç
+    const f=furnList[i];
+    renderFurniture(); applyFurnModeUI();
+    setFurnHint((FURN_TR[f.type]||f.type)+' seçili · Taşı / döndür / tip / sil');
+  }
+  function removeFurn(i){
+    if(i<0||i>=furnList.length) return; furnSnapshot();
+    detachFurnFromMap(furnList[i]); furnList.splice(i,1);
+    if(i<activeFurnIdx) activeFurnIdx--;
+    else if(i===activeFurnIdx) activeFurnIdx=Math.min(i,furnList.length-1);
+    renderFurniture(); applyFurnModeUI(); persistFurniture();
+    setFurnHint(furnList.length?('Silindi · '+furnList.length+' mobilya'):'Mobilya kalmadı');
+  }
+  function clearFurn(){
+    const map=scene&&scene.__map; furnSnapshot();
+    if(map){ (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ r.furniture=[]; }); }); (map.common_areas||[]).forEach(function(r){ r.furniture=[]; }); }
+    furnList=[]; activeFurnIdx=-1;
+    renderFurniture(); applyFurnModeUI(); persistFurniture(); setFurnHint('Tüm mobilya silindi');
+  }
+  function rotateFurn(deg){
+    if(activeFurnIdx<0){ setFurnHint('Önce bir mobilya seç.'); return; }
+    const f=furnList[activeFurnIdx];
+    f.rot_deg=((((f.rot_deg||0)+deg)%360)+360)%360; f.source='manual'; f.locked=true;
+    renderFurniture(); persistFurniture(); setFurnHint((FURN_TR[f.type]||f.type)+' → '+f.rot_deg+'°');
+  }
+  function setFurnType(type){
+    if(activeFurnIdx>=0){ const f=furnList[activeFurnIdx]; f.type=type; f.type_tr=FURN_TR[type]||null; f.source='manual'; f.locked=true;
+      renderFurniture(); updateFurnPanel(); persistFurniture(); setFurnHint('Tip → '+(FURN_TR[type]||type)); }
+    else { pendingFurnType=type; setFurnAction('add'); setFurnHint('Zemine tıkla → '+(FURN_TR[type]||type)+' ekle'); }
+    syncFurnTypeBtns();
+  }
+  function setFurnAction(a){
+    if(!furnMode) setFurnMode(true);
+    furnAction=a;
+    if(a==='move' && activeFurnIdx<0) setFurnHint('Önce mobilya seç, sonra zemine tıkla = taşı.');
+    else if(a==='add') setFurnHint('Zemine tıkla → '+(FURN_TR[pendingFurnType]||pendingFurnType)+' ekle.');
+    applyFurnModeUI();
+  }
+  function setFurnMode(on){
+    furnMode=!!on;
+    if(furnMode){ setPlaceMode(false); furnAction='move'; }                              // kamera yerleştirmeyi kapat (dışlayan)
+    if(controls) controls.enabled=!placeMode;                                            // mobilya modu orbit'i KİLİTLEMEZ (yalnız sürükle sırasında)
+    renderFurniture(); applyFurnModeUI();
+    setFurnHint(furnMode ? 'Mobilyaya tıkla = seç · SÜRÜKLE = taşı · tekerlek = döndür (Shift ince) · Del/Backspace = sil · Esc / boş zemin = bırak · Space+sürükle = kaydır' : 'Düzenleme kapalı');
+  }
+  function toggleFurnMode(){ setFurnMode(!furnMode); }
+  function setFurnUI(on){
+    furnUIEnabled=!!on;
+    if(!furnUIEnabled){ if(activeGroup==='furniture') activeGroup='view'; setFurnMode(false); }
+    renderRail(); renderDrawer();
+  }
+  function applyFurnModeUI(){
+    if(!overlay) return;
+    const btn=overlay.querySelector('#v3dFurnBtn'), ctl=overlay.querySelector('#v3dFurnCtl');
+    if(btn){ btn.classList.toggle('v3dgreen',furnMode); btn.innerHTML=ic('move',13)+(furnMode?'Düzenleme açık — bitir':'Düzenlemeyi aç'); }
+    if(ctl) ctl.style.display=furnMode?'block':'none';
+    syncFurnBtns();
+  }
+  function syncFurnBtns(){
+    if(!overlay) return;
+    syncFurnTypeBtns(); updateFurnPanel();
+  }
+  function syncFurnTypeBtns(){
+    if(!overlay) return;
+    const sel = activeFurnIdx>=0 ? (furnList[activeFurnIdx]||{}).type : pendingFurnType;
+    overlay.querySelectorAll('.v3dtype').forEach(function(b){ b.style.outline=(b.getAttribute('data-furntype')===sel)?'2px solid #7bbf8a':'none'; });
+  }
+  // mobilya ŞERİDİ (kamera #v3dCamStrip ikizi): her item seçilebilir çip (etiket + sil ×)
+  // şerit = ÖZET (163 çip değil): sayı + SEÇİLİ item (sil ×). Seçim sahnede mobilyaya tıklayarak yapılır.
+  function updateFurnPanel(){
+    if(!overlay) return;
+    const rc=overlay.querySelector('#v3dFurnRender'); if(rc) rc.checked=furnList.length>0;   // render on/off çipini sahne durumuyla eşle
+    const strip=overlay.querySelector('#v3dFurnStrip'); if(!strip) return;
+    let html='';
+    if(!furnList.length) html='<span class="v3dnote">Mobilya yok · Otomatik döşe ya da tip seç + Ekle</span>';
+    else {
+      html='<span class="v3dnote">'+furnList.length+' mobilya · sahnede birine tıkla = seç</span>';
+      if(activeFurnIdx>=0 && activeFurnIdx<furnList.length){ const f=furnList[activeFurnIdx];
+        html+='<span style="display:inline-flex;align-items:center;gap:4px;background:#e0843a;color:#1a1a1f;border-radius:7px;padding:4px 6px 4px 8px;font-size:11px;font-weight:700;margin-left:2px">'+
+          (FURN_TR[f.type]||f.type)+'<b data-furndesel="1" title="Seçimi bırak (Esc)" style="cursor:pointer;opacity:.75;padding:0 1px 0 3px">×</b></span>'; }
+    }
+    strip.innerHTML=html;
+  }
+  function setFurnHint(t){ lastFurnHint=t||''; const h=overlay&&overlay.querySelector('#v3dFurnHint'); if(h) h.textContent=lastFurnHint; }
+
+  /* ====================== MOBİLYA — otomatik yerleşim (Faz 3; kural-tabanlı + override) ======================
+     v1 bbox + "en uzun duvar" varsayımı. Eğik/L odada taşabilir (v1 kabul). pos MUTLAK metre, source:'auto'.
+     OVERRIDE: locked:true (elle düzenlenen) KORUNUR; auto onunla çakışırsa elenir. */
+  // tip → ayak izi {w,d} (rot 0; X=w, Z=d) — buildFurnMesh boyutlarıyla TUTARLI (Faz 5 furnToPolygonPx de okur).
+  // tip → ayak izi {w,d,h} metre (TR perakende + NKBA/Dimensions doğrulamalı spec). rot 0: X=w, Z=d, +Z ön.
+  const FURN_DIM = {
+    sofa_2:{w:1.60,d:0.95,h:0.85}, sofa_3:{w:2.10,d:0.95,h:0.85}, sectional_l:{w:2.60,d:2.10,h:0.85},
+    armchair:{w:0.90,d:0.90,h:0.85}, pouf:{w:0.55,d:0.55,h:0.42}, coffee_table:{w:1.00,d:0.55,h:0.42},
+    side_table:{w:0.45,d:0.45,h:0.55}, tv_unit:{w:1.60,d:0.45,h:0.50}, tv:{w:1.40,d:0.08,h:0.80},
+    bookcase:{w:0.90,d:0.35,h:1.95}, console:{w:1.10,d:0.37,h:0.80}, rug:{w:2.40,d:1.60,h:0.02},
+    dining_table_4:{w:1.20,d:0.80,h:0.76}, dining_table_6:{w:1.60,d:0.90,h:0.76}, dining_chair:{w:0.45,d:0.50,h:0.90}, sideboard:{w:1.60,d:0.45,h:0.85},
+    bed_single:{w:0.97,d:1.91,h:0.50}, bed_double:{w:1.50,d:2.00,h:0.50}, bed_queen:{w:1.60,d:2.00,h:0.50}, bed_king:{w:1.80,d:2.00,h:0.50},
+    nightstand:{w:0.45,d:0.40,h:0.50}, wardrobe_2:{w:1.00,d:0.60,h:2.10}, wardrobe_3:{w:1.50,d:0.60,h:2.10}, wardrobe_4:{w:2.00,d:0.60,h:2.10},
+    dresser:{w:1.00,d:0.50,h:0.85}, vanity:{w:1.20,d:0.45,h:0.78}, bench:{w:1.20,d:0.40,h:0.45},
+    counter:{w:0.60,d:0.60,h:0.90}, island:{w:1.20,d:0.90,h:0.90}, fridge:{w:0.70,d:0.70,h:1.85}, oven_hob:{w:0.60,d:0.60,h:0.90},
+    dishwasher:{w:0.60,d:0.60,h:0.85}, sink:{w:0.60,d:0.60,h:0.90},
+    toilet:{w:0.37,d:0.60,h:0.78}, washbasin:{w:0.60,d:0.45,h:0.85}, bathtub:{w:1.70,d:0.75,h:0.55}, shower_tray:{w:0.90,d:0.90,h:0.10}, washer:{w:0.60,d:0.60,h:0.85},
+    shoe_cabinet:{w:0.90,d:0.37,h:1.05}, coat_rack:{w:1.10,d:0.37,h:2.05}, desk:{w:1.20,d:0.60,h:0.74}, office_chair:{w:0.60,d:0.60,h:1.00},
+    plant:{w:0.40,d:0.40,h:1.20}, bistro_table:{w:0.60,d:0.60,h:0.72}, bistro_chair:{w:0.45,d:0.45,h:0.85}
+  };
+
+  /* ====================== MOBİLYA — geometri/yerleşim çekirdeği (v2 mantık-tabanlı) ======================
+     SAF GEOMETRİ (metre uzayı). Mantık programları (computeAutoFurniture v2) bunun üstüne oturur.
+     Amaç: HİÇBİR mobilya oda sınırını aşmaz, kapıyı kapatmaz, üst üste binmez (boyut-farkında). */
+  function polyAreaSignedM(poly){ let a=0; for(let i=0,j=poly.length-1;i<poly.length;j=i++) a+=(poly[j][0]*poly[i][1]-poly[i][0]*poly[j][1]); return a/2; }
+  function pointInPolyM(x,z,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j];
+    if(((a[1]>z)!==(b[1]>z)) && (x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])) c=!c; } return c; }
+  function furnRoomPolyM(room, map){
+    if(!room||!room.polygon_px||room.polygon_px.length<3) return null;
+    if(!room.__polyM) room.__polyM=room.polygon_px.map(function(p){ return px2m(map,p[0],p[1]); });
+    return room.__polyM;
+  }
+  function furnAllRooms(map){ const rs=[]; (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ rs.push(r); }); }); (map.common_areas||[]).forEach(function(r){ rs.push(r); }); return rs; }
+  // ayak izi 4 köşe (metre) — Three.js rotation.y konvansiyonu (renderFurniture/furnToPolygonPx ile aynı)
+  function furnFootprintM(x,z,rotDeg,w,d){
+    const a=(rotDeg||0)*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a), hw=w/2, hd=d/2;
+    return [[-hw,-hd],[hw,-hd],[hw,hd],[-hw,hd]].map(function(c){ return [x + c[0]*ca + c[1]*sa, z - c[0]*sa + c[1]*ca]; });
+  }
+  // dikdörtgen TAMAMEN poligon içinde mi (köşeler + kenar-orta + merkez örnekleri → iç bükey girintiyi yakalar)
+  function segIntersect(a,b,c,d){ function ccw(p,q,r){ return (r[1]-p[1])*(q[0]-p[0]) > (q[1]-p[1])*(r[0]-p[0]); }
+    return ccw(a,c,d)!==ccw(b,c,d) && ccw(a,b,c)!==ccw(a,b,d); }
+  function furnRectInPoly(corners, poly){
+    let cx=0,cz=0;
+    for(let i=0;i<corners.length;i++){ cx+=corners[i][0]; cz+=corners[i][1];
+      if(!pointInPolyM(corners[i][0],corners[i][1],poly)) return false;
+      const n=corners[(i+1)%corners.length];
+      if(!pointInPolyM((corners[i][0]+n[0])/2,(corners[i][1]+n[1])/2,poly)) return false;
+    }
+    if(!pointInPolyM(cx/corners.length, cz/corners.length, poly)) return false;
+    // A6: ayak izi kenarı bir oda kenarını KESİYOR mu (köşeler içeride ama ince girinti/kolon ortadan geçiyor olabilir)
+    for(let i=0;i<corners.length;i++){ const a=corners[i], b=corners[(i+1)%corners.length];
+      for(let j=0;j<poly.length;j++){ const c=poly[j], d=poly[(j+1)%poly.length];
+        if(segIntersect(a,b,c,d)) return false; } }
+    return true;
+  }
+  // iki konveks dörtgen çakışıyor mu (Ayırıcı Eksen Teoremi)
+  function furnRectsOverlap(A, B){
+    const both=[A,B];
+    for(let p=0;p<2;p++){ const poly=both[p];
+      for(let i=0;i<poly.length;i++){ const j=(i+1)%poly.length;
+        const nx=-(poly[j][1]-poly[i][1]), nz=(poly[j][0]-poly[i][0]);
+        let minA=1e9,maxA=-1e9,minB=1e9,maxB=-1e9;
+        A.forEach(function(q){ const dd=q[0]*nx+q[1]*nz; if(dd<minA)minA=dd; if(dd>maxA)maxA=dd; });
+        B.forEach(function(q){ const dd=q[0]*nx+q[1]*nz; if(dd<minB)minB=dd; if(dd>maxB)maxB=dd; });
+        if(maxA<minB-1e-6 || maxB<minA-1e-6) return false;   // ayırıcı eksen → çakışma yok
+      } }
+    return true;
+  }
+  // oda → kenar analizi: her duvar kenarı {len, dir, iç-normal, dış-cephe mi, kapı açıklıkları}
+  function furnAnalyzeRoom(room, map){
+    if(room.__an) return room.__an;                 // oda geometrisi statik → önbellekle (sürükle her karede ucuz)
+    const poly=furnRoomPolyM(room,map); if(!poly) return null;
+    const allRooms=furnAllRooms(map);
+    const doorsM=(map.doors||[]).map(function(d){ return { a:px2m(map,d.p0_px[0],d.p0_px[1]), b:px2m(map,d.p1_px[0],d.p1_px[1]) }; });
+    let minX=1e9,minZ=1e9,maxX=-1e9,maxZ=-1e9;
+    poly.forEach(function(p){ if(p[0]<minX)minX=p[0]; if(p[0]>maxX)maxX=p[0]; if(p[1]<minZ)minZ=p[1]; if(p[1]>maxZ)maxZ=p[1]; });
+    const edges=[];
+    for(let i=0;i<poly.length;i++){
+      const a=poly[i], b=poly[(i+1)%poly.length];
+      const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz);
+      if(len<0.2) continue;
+      const ux=dx/len, uz=dz/len, mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2;
+      let nx=-uz, nz=ux;                                                  // iç normal (probe ile yön doğrula)
+      if(!pointInPolyM(mx+nx*0.06, mz+nz*0.06, poly)){ nx=-nx; nz=-nz; }
+      const ox=mx-nx*0.4, oz=mz-nz*0.4;                                   // dış probe: hiçbir odada değilse dış cephe (pencere adayı)
+      let exterior=true;
+      for(let k=0;k<allRooms.length;k++){ if(allRooms[k]===room) continue; const rp=furnRoomPolyM(allRooms[k],map); if(rp && pointInPolyM(ox,oz,rp)){ exterior=false; break; } }
+      const doorSpans=[];
+      doorsM.forEach(function(dr){
+        const t0=(dr.a[0]-a[0])*ux+(dr.a[1]-a[1])*uz, e0=Math.abs((dr.a[0]-a[0])*(-uz)+(dr.a[1]-a[1])*ux);
+        const t1=(dr.b[0]-a[0])*ux+(dr.b[1]-a[1])*uz, e1=Math.abs((dr.b[0]-a[0])*(-uz)+(dr.b[1]-a[1])*ux);
+        if(e0<0.3 && e1<0.3){ const s0=Math.max(0,Math.min(t0,t1)), s1=Math.min(len,Math.max(t0,t1)); if(s1-s0>0.25) doorSpans.push([s0,s1]); }
+      });
+      edges.push({ a:a, b:b, len:len, dir:[ux,uz], nIn:[nx,nz], mid:[mx,mz], exterior:exterior, doorSpans:doorSpans });
+    }
+    edges.sort(function(p,q){ return q.len-p.len; });                     // uzun duvar önce (çapa mobilyası için)
+    room.__an = { room:room, poly:poly, area:Math.abs(polyAreaSignedM(poly)),
+      bbox:{minX:minX,minZ:minZ,maxX:maxX,maxZ:maxZ,w:maxX-minX,d:maxZ-minZ,cx:(minX+maxX)/2,cz:(minZ+maxZ)/2}, edges:edges };
+    return room.__an;
+  }
+  const COLLISION_EXEMPT={ rug:1, tv:1 };   // halı (mobilya altında) + TV (ünite üstünde) → çakışma engellemez/engellenmez
+  const DOOR_CLR=0.35;                       // kapı açıklığı önünde boş kalacak pay (m)
+  // ayak izi bir kapı açıklığını (± clearance) kapatıyor mu — YALNIZ item duvara yakınken (orta-oda item'ı kapıyı umursamaz)
+  function furnDoorBlocked(fp, an){
+    for(let i=0;i<an.edges.length;i++){ const e=an.edges[i]; if(!e.doorSpans.length) continue;
+      let tMin=1e9,tMax=-1e9,perpMin=1e9;
+      for(let k=0;k<fp.length;k++){ const dx=fp[k][0]-e.a[0], dz=fp[k][1]-e.a[1];
+        const t=dx*e.dir[0]+dz*e.dir[1], perp=Math.abs(dx*(-e.dir[1])+dz*e.dir[0]);
+        if(t<tMin)tMin=t; if(t>tMax)tMax=t; if(perp<perpMin)perpMin=perp; }
+      if(perpMin>0.45) continue;             // item bu duvardan uzak → kapısını engellemez
+      for(let j=0;j<e.doorSpans.length;j++){ const ds=e.doorSpans[j]; if(tMax>ds[0]-DOOR_CLR && tMin<ds[1]+DOOR_CLR) return true; }
+    }
+    return false;
+  }
+  // bir yerleşim odaya sığıyor mu: poligon-içi + kapı açmıyor + yerleşmişlerle çakışmıyor (muaf olanlar hariç)
+  function furnFits(x,z,rot,w,d, an, placed, skipOverlap){
+    const fp=furnFootprintM(x,z,rot,w,d);
+    if(!furnRectInPoly(fp, an.poly)) return false;
+    if(!skipOverlap){ if(furnDoorBlocked(fp, an)) return false;
+      for(let i=0;i<placed.length;i++){ const p=placed[i]; if(p.__exempt) continue; if(p.__fp && furnRectsOverlap(fp, p.__fp)) return false; } }
+    return true;
+  }
+  // duvara yaslı item bakış açısı = iç normal yönü (local +Z → nIn). w duvar boyunca, d odaya doğru.
+  function wallRotDeg(edge){ return (Math.atan2(edge.nIn[0], edge.nIn[1])*180/Math.PI+360)%360; }
+  // kenar üzerinde kapı (+ clearance) ve uç payları düşülmüş serbest aralıklar
+  function freeSpansOnEdge(edge, endClear, doorClear){
+    let spans=[[endClear, edge.len-endClear]];
+    edge.doorSpans.forEach(function(ds){
+      const d0=ds[0]-doorClear, d1=ds[1]+doorClear, next=[];
+      spans.forEach(function(s){ if(d1<=s[0]||d0>=s[1]){ next.push(s); return; }
+        if(d0>s[0]) next.push([s[0],d0]); if(d1<s[1]) next.push([d1,s[1]]); });
+      spans=next;
+    });
+    return spans.filter(function(s){ return s[1]-s[0]>0.1; });
+  }
+  // kenar üzerinde dünya noktasının "t" (kenar-boyu) koordinatı
+  function edgeT(edge, x, z){ return (x-edge.a[0])*edge.dir[0]+(z-edge.a[1])*edge.dir[1]; }
+  // item'ı kenara yasla → sığan {type,pos,rot,__fp} ya da null. opt: align(center/start/end), w/d/rot override, wallGap, doorClear,
+  //   atT(kenar-boyu hedef konuma EN YAKIN yerleştir — TV'yi kanepe karşısına hizala), awayFrom({x,z}'den UZAK yerleştir — kanepeyi mutfaktan ayır)
+  function placeOnEdge(an, edge, type, placed, opt){
+    opt=opt||{};
+    const dim=FURN_DIM[type]||{w:0.6,d:0.6};
+    const w=(opt.w!=null?opt.w:dim.w), d=(opt.d!=null?opt.d:dim.d);
+    const rot=(opt.rot!=null?opt.rot:wallRotDeg(edge));
+    const inset=d/2+(opt.wallGap==null?0.05:opt.wallGap);
+    const spans=freeSpansOnEdge(edge, (opt.endClear==null?0.12:opt.endClear), (opt.doorClear==null?0.35:opt.doorClear));
+    const cand=[];                                                   // tüm serbest aralıklardaki aday t'ler tek havuzda → konumsal sıralama
+    spans.forEach(function(s){ const slen=s[1]-s[0]; if(slen < w-1e-6) return;
+      if(opt.align==='start') cand.push(s[0]+w/2); else if(opt.align==='end') cand.push(s[1]-w/2); else cand.push((s[0]+s[1])/2);
+      for(let t=s[0]+w/2; t<=s[1]-w/2+1e-6; t+=0.2){ if(t-w/2>=s[0]-1e-6 && t+w/2<=s[1]+1e-6) cand.push(t); }
+    });
+    if(opt.atT!=null) cand.sort(function(p,q){ return Math.abs(p-opt.atT)-Math.abs(q-opt.atT); });   // hedefe en yakın önce
+    else if(opt.awayFrom){ const ax=opt.awayFrom.x, az=opt.awayFrom.z;                                // noktadan en uzak önce
+      cand.sort(function(p,q){ return Math.hypot(edge.a[0]+edge.dir[0]*q-ax,edge.a[1]+edge.dir[1]*q-az)
+                                    - Math.hypot(edge.a[0]+edge.dir[0]*p-ax,edge.a[1]+edge.dir[1]*p-az); }); }
+    for(let ci=0;ci<cand.length;ci++){ const t=cand[ci];
+      const px=edge.a[0]+edge.dir[0]*t + edge.nIn[0]*inset;
+      const pz=edge.a[1]+edge.dir[1]*t + edge.nIn[1]*inset;
+      if(furnFits(px,pz,rot,w,d, an, placed, opt.exempt)) return { type:type, pos:{x:px,z:pz}, rot_deg:rot, __fp:furnFootprintM(px,pz,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
+    }
+    return null;
+  }
+  // serbest bir noktaya (merkez/köşe) yerleştir → sığan {type,pos,rot,__fp} ya da null. candidates: [{x,z,rot}]
+  function placeAtCandidates(an, type, placed, candidates, opt){
+    opt=opt||{}; const dim=FURN_DIM[type]||{w:0.6,d:0.6};
+    const w=(opt.w!=null?opt.w:dim.w), d=(opt.d!=null?opt.d:dim.d);
+    for(let i=0;i<candidates.length;i++){ const c=candidates[i], rot=(c.rot!=null?c.rot:0);
+      if(furnFits(c.x,c.z,rot,w,d, an, placed, opt.exempt)) return { type:type, pos:{x:c.x,z:c.z}, rot_deg:rot, __fp:furnFootprintM(c.x,c.z,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
+    }
+    return null;
+  }
+  // odanın 4 iç köşesi (bitki/aksesuar için): bbox köşelerinden içeri ofset, poligon-içi olanlar
+  function furnInnerCorners(an, inset){
+    const b=an.bbox, q=[];
+    [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(function(s){
+      const x=b.cx + s[0]*(b.w/2 - inset), z=b.cz + s[1]*(b.d/2 - inset);
+      if(pointInPolyM(x,z,an.poly)) q.push({x:x,z:z,sx:s[0],sz:s[1]});
+    });
+    return q;
+  }
+  // yerleşim listesine ekle + footprint damgala (sonraki çakışma testleri için)
+  function pushPlaced(placed, p){ if(p){ placed.push(p); } return p; }
+  const CLR = { sofaCoffee:0.42, doorClear:0.35, diningChair:0.45 };
+  function clampN(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  function frontDir(rotDeg){ const a=rotDeg*Math.PI/180; return [Math.sin(a), Math.cos(a)]; }   // item ön yönü (=iç normal)
+  // oda tipi sınıflandırma
+  function roomKind(room){
+    const blob=((room.type||'')+' '+(room.name||'')+' '+(room.name_en||'')+' '+(room.id||'')+' '+(room.type_tr||'')).toLowerCase();
+    if(/stair|merdiven|elevator|asans|shaft|şaft|fire|yangin|yangın|parking|otopark|shelter|sığ|teknik|technical|storage|depo|shop|dükk/.test(blob)) return 'skip';
+    if(/koridor|corridor/.test(blob)) return 'corridor';
+    if(/\bwc\b/.test(blob)) return 'wc';
+    if(/bath|banyo/.test(blob)) return 'bathroom';
+    if(/living_kitchen/.test(room.type||'') || (/living|salon/.test(blob) && /kitchen|mutfak/.test(blob))) return 'living_kitchen';
+    if(/studio|stüdyo/.test(blob)) return 'studio';                    // A7: stüdyo = salon + yatak
+    if(/living|salon/.test(blob)) return 'living';
+    if(/kitchen|mutfak/.test(blob)) return 'kitchen';
+    if(/bedroom|yatak/.test(blob)) return /eb\.|ebeveyn|master|ensuite/.test(blob) ? 'master' : 'bedroom';
+    if(/study|çalışma|calisma|ofis|office|büro|buro/.test(blob)) return 'study';   // A7: çalışma odası
+    if(/balcony|balkon/.test(blob)) return 'balcony';
+    if(/hall|hol|antre|entry|foyer/.test(blob)) return 'entry';
+    return 'other';
+  }
+  function pickEdge(an, opt){ opt=opt||{}; return an.edges.find(function(e){
+    if(opt.minLen!=null && e.len<opt.minLen) return false;
+    if(opt.interior && e.exterior) return false;
+    if(opt.noDoor && e.doorSpans.length) return false;
+    if(opt.exclude && opt.exclude.indexOf(e)>=0) return false; return true; }) || null; }
+  function allEdges(an, opt){ opt=opt||{}; return an.edges.filter(function(e){
+    if(opt.minLen!=null && e.len<opt.minLen) return false;
+    if(opt.noDoor && e.doorSpans.length) return false;
+    if(opt.exclude && opt.exclude.indexOf(e)>=0) return false; return true; }); }
+  function bedHbEdge(an, item){ const fn=frontDir(item.rot_deg); let best=null,bd=-2;
+    an.edges.forEach(function(e){ const dot=e.nIn[0]*fn[0]+e.nIn[1]*fn[1]; if(dot>bd){bd=dot;best=e;} }); return best; }
+  // verilen noktaya (zone merkezi) midpoint'i EN YAKIN kenar
+  function edgeNearZone(an, c, opt){ opt=opt||{}; let best=null, bd=1e9;
+    an.edges.forEach(function(e){ if(opt.minLen!=null&&e.len<opt.minLen) return; if(opt.noDoor&&e.doorSpans.length) return; if(opt.exclude&&opt.exclude.indexOf(e)>=0) return;
+      const d=Math.hypot(e.mid[0]-c.x, e.mid[1]-c.z); if(d<bd){ bd=d; best=e; } }); return best; }
+  // yerleştir (duvar) — başarılıysa placed'e ekle
+  function place(an, edge, type, placed, opt){ if(!edge) return null; opt=Object.assign({}, opt); if(COLLISION_EXEMPT[type]) opt.exempt=true;
+    const p=placeOnEdge(an, edge, type, placed, opt); if(p) placed.push(p); return p; }
+  // ilk uygun duvara yerleştir (öncelik sıralı)
+  function placeAny(an, type, placed, opt, edges){ edges=edges||allEdges(an,{minLen:(FURN_DIM[type]||{w:0.5}).w});
+    for(let i=0;i<edges.length;i++){ const p=place(an,edges[i],type,placed,opt); if(p) return p; } return null; }
+  // boyut-küçültme zinciri: order[] tiplerini sırayla dene
+  function placeChain(an, order, placed, opt, edges){ for(let i=0;i<order.length;i++){ const p=placeAny(an,order[i],placed,opt,edges); if(p) return p; } return null; }
+  // mobilyanın ÖNÜNE (baktığı yöne) yerleştir
+  function placeFront(an, anchor, type, placed, gap){ if(!anchor) return null; const fn=frontDir(anchor.rot_deg);
+    const ad=(anchor.__d!=null?anchor.__d:(FURN_DIM[anchor.type]||{d:0.5}).d), dim=FURN_DIM[type]||{w:0.6,d:0.5};
+    const dist=ad/2+(gap==null?CLR.sofaCoffee:gap)+dim.d/2, x=anchor.pos.x+fn[0]*dist, z=anchor.pos.z+fn[1]*dist, ex=!!COLLISION_EXEMPT[type];
+    if(furnFits(x,z,anchor.rot_deg,dim.w,dim.d, an, placed, ex)){ const p={type:type,pos:{x:x,z:z},rot_deg:anchor.rot_deg,__fp:furnFootprintM(x,z,anchor.rot_deg,dim.w,dim.d),__exempt:ex}; placed.push(p); return p; } return null; }
+  // serbest noktaya yerleştir (bitki/masa)
+  function place2(an, placed, type, x, z, rot){ const dim=FURN_DIM[type]||{w:0.4,d:0.4}, ex=!!COLLISION_EXEMPT[type]; rot=rot||0;
+    if(furnFits(x,z,rot,dim.w,dim.d,an,placed,ex)){ const p={type:type,pos:{x:x,z:z},rot_deg:rot,__fp:furnFootprintM(x,z,rot,dim.w,dim.d),__exempt:ex}; placed.push(p); return p; } return null; }
+  // oda bbox'unda ızgara tarayıp clearance'lı sığan ilk yer (yemek masası gibi serbest mobilya)
+  // near verilirse: sığan hücreler arasında near'a EN YAKIN olanı seç (yemek masası mutfağa yakın dursun, oturma grubuna değil); yoksa ilk fit
+  function scanPlace(an, placed, type, clear, rots, near){ const dim=FURN_DIM[type]||{w:0.6,d:0.6}, b=an.bbox; rots=rots||[0,90];
+    const W=dim.w+2*clear, Dp=dim.d+2*clear; let best=null, bestScore=1e18;
+    for(let ri=0;ri<rots.length;ri++){ const rot=rots[ri];
+      for(let z=b.minZ+0.3; z<=b.maxZ-0.3; z+=0.3) for(let x=b.minX+0.3; x<=b.maxX-0.3; x+=0.3){
+        if(!furnFits(x,z,rot,W,Dp,an,placed)) continue;
+        if(!near){ const p={type:type,pos:{x:x,z:z},rot_deg:rot,__fp:furnFootprintM(x,z,rot,dim.w,dim.d)}; placed.push(p); return p; }
+        const sc=(x-near.x)*(x-near.x)+(z-near.z)*(z-near.z); if(sc<bestScore){ bestScore=sc; best={x:x,z:z,rot:rot}; } } }
+    if(best){ const p={type:type,pos:{x:best.x,z:best.z},rot_deg:best.rot,__fp:furnFootprintM(best.x,best.z,best.rot,dim.w,dim.d)}; placed.push(p); return p; }
+    return null; }
+
+  // ----- yardımcılar: serbest aralık + açık-plan zonlama + izleme çifti -----
+  function spanLen(s){ return s? s[1]-s[0] : 0; }
+  function bestSpanOnEdge(edge){ const ss=freeSpansOnEdge(edge,0.05,CLR.doorClear); let b=null; ss.forEach(function(s){ if(!b||(s[1]-s[0])>(b[1]-b[0])) b=s; }); return b; }
+  function roomDoorPoint(an){ for(let i=0;i<an.edges.length;i++){ const e=an.edges[i]; if(e.doorSpans.length){ const ds=e.doorSpans[0], t=(ds[0]+ds[1])/2; return { x:e.a[0]+e.dir[0]*t, z:e.a[1]+e.dir[1]*t }; } } return null; }
+  // açık-plan odayı uzun eksende İKİYE böl → {kitchen, living} merkez noktaları. Mutfak = girişe (kapıya) yakın yarı.
+  function furnOpenZones(an){
+    const b=an.bbox; let h1,h2;
+    if(b.w>=b.d){ h1={x:(b.minX+b.cx)/2,z:b.cz}; h2={x:(b.cx+b.maxX)/2,z:b.cz}; }
+    else { h1={x:b.cx,z:(b.minZ+b.cz)/2}; h2={x:b.cx,z:(b.cz+b.maxZ)/2}; }
+    const dp=roomDoorPoint(an); let kit=h1, liv=h2;
+    if(dp && Math.hypot(h2.x-dp.x,h2.z-dp.z) < Math.hypot(h1.x-dp.x,h1.z-dp.z)){ kit=h2; liv=h1; }
+    return { kitchen:kit, living:liv };
+  }
+  // iyi izleme mesafesi (2.2–4.4m) veren KARŞI duvar çifti → {a,b,dist}. Yoksa null (yüzen kanepe gerekir).
+  function pickViewPair(an, exclude){
+    exclude=exclude||[]; let best=null;
+    an.edges.forEach(function(tv){ if(exclude.indexOf(tv)>=0||tv.len<1.2) return;
+      an.edges.forEach(function(so){ if(so===tv||exclude.indexOf(so)>=0||so.len<1.4) return;
+        const facing=-(tv.nIn[0]*so.nIn[0]+tv.nIn[1]*so.nIn[1]); if(facing<0.7) return;       // karşı karşıya bakan duvarlar
+        const dx=so.mid[0]-tv.mid[0], dz=so.mid[1]-tv.mid[1], dist=Math.abs(dx*tv.nIn[0]+dz*tv.nIn[1]);
+        if(dist<2.2||dist>4.7) return;
+        const score=Math.min(tv.len,so.len) - Math.abs(dist-3.0)*1.2 - (tv.doorSpans.length+so.doorSpans.length)*0.3;
+        if(!best||score>best.score) best={ a:tv, b:so, dist:dist, score:score };
+      }); });
+    return best;
+  }
+  // anchor'ın (TV) ÖNÜNE ~3m'ye yüzen kanepe (açık-plan bölücü) — duvar yokken kullan. Düz önü doluysa (kapı/eşya) yana kaydırarak dener (yine TV'ye bakar).
+  function placeSofaFacing(an, placed, anchor, type){
+    const dim=FURN_DIM[type]||{w:1.6,d:0.95}, fn=frontDir(anchor.rot_deg), sofaRot=(anchor.rot_deg+180)%360, lat=[fn[1],-fn[0]];
+    for(let D=2.5; D<=3.95; D+=0.25){ const offs=[0,-0.55,0.55,-1.1,1.1];
+      for(let oi=0;oi<offs.length;oi++){ const x=anchor.pos.x+fn[0]*D+lat[0]*offs[oi], z=anchor.pos.z+fn[1]*D+lat[1]*offs[oi];
+        if(furnFits(x,z,sofaRot,dim.w,dim.d,an,placed)){ const p={type:type,pos:{x:x,z:z},rot_deg:sofaRot,__fp:furnFootprintM(x,z,sofaRot,dim.w,dim.d)}; placed.push(p); return p; } } }
+    return null;
+  }
+
+  // ----- SALON / SALON+MUTFAK -----
+  function furnishLiving(ctx, openKitchen){
+    const an=ctx.an, placed=ctx.placed, A=ctx.A;
+    // 1) açık mutfak: bitişik mutfak dizisini kur → mutfak çapası (gerçek yerleşmiş merkez). Yaşam çapası = ona göre karşı uç.
+    let kanchor=null;
+    if(openKitchen){ const z=furnOpenZones(an); kanchor=placeKitchenRun(ctx, true, z.kitchen); }
+    const kWall = kanchor ? edgeNearZone(an, kanchor) : null;                                     // mutfak duvarı (TV/kanepe onu dışlar)
+    const b=an.bbox, livC = kanchor ? {x:2*b.cx-kanchor.x, z:2*b.cz-kanchor.z} : {x:b.cx,z:b.cz}; // mutfaktan en uzak (oda merkezine yansıma)
+    // 2) TV + kanepe: mutfak duvarı HARİÇ iyi izleme mesafeli karşı çift; yoksa TV yaşam duvarına + yüzen kanepe
+    const sofaType = A>=30?'sectional_l':(A>=15?'sofa_3':'sofa_2');
+    const pair = pickViewPair(an, kWall?[kWall]:[]);
+    let tvWall=null, sofaWall=null, sofa=null;
+    if(pair){
+      sofaWall = (Math.hypot(pair.a.mid[0]-livC.x,pair.a.mid[1]-livC.z) <= Math.hypot(pair.b.mid[0]-livC.x,pair.b.mid[1]-livC.z)) ? pair.a : pair.b;  // kanepe = yaşam çapasına yakın
+      tvWall = (sofaWall===pair.a) ? pair.b : pair.a;
+      sofa = place(an, sofaWall, sofaType, placed, kanchor?{awayFrom:kanchor}:{align:'center'})
+          || place(an, sofaWall, 'sofa_2', placed, kanchor?{awayFrom:kanchor}:{align:'center'});
+      if(sofa){ const tvu=place(an, tvWall, 'tv_unit', placed, {atT:edgeT(tvWall,sofa.pos.x,sofa.pos.z)});   // TV kanepe karşısına HİZALI
+        if(tvu) place(an, tvWall, 'tv', placed, {atT:edgeT(tvWall,tvu.pos.x,tvu.pos.z)}); }                  // tv = ünitenin GERÇEK yerine (kayma olursa onu izle)
+    }
+    if(!sofa){                                                                                   // temiz çift yok (T/sığ oda) → yüzen kanepe (açık-plan bölücü)
+      sofaWall=null;
+      tvWall = edgeNearZone(an, livC, {exclude:kWall?[kWall]:[], noDoor:true, minLen:1.2})
+            || edgeNearZone(an, livC, {exclude:kWall?[kWall]:[], minLen:1.2})
+            || pickEdge(an,{noDoor:true,minLen:1.2}) || pickEdge(an,{minLen:1.2}) || an.edges[0];
+      const tvu = place(an, tvWall, 'tv_unit', placed, {atT:edgeT(tvWall,livC.x,livC.z)});       // TV yaşam çapasının karşısına
+      if(tvu) place(an, tvWall, 'tv', placed, {atT:edgeT(tvWall,tvu.pos.x,tvu.pos.z)});
+      const anchor = tvu || {pos:{x:tvWall.mid[0]+tvWall.nIn[0]*0.25,z:tvWall.mid[1]+tvWall.nIn[1]*0.25}, rot_deg:wallRotDeg(tvWall)};
+      sofa = placeSofaFacing(an, placed, anchor, sofaType) || placeSofaFacing(an, placed, anchor, 'sofa_2')
+          || placeAny(an,'sofa_2',placed,{align:'center'}, allEdges(an,{exclude:[tvWall],minLen:1.4}));
+    }
+    // 3) sehpa + halı
+    if(sofa) placeFront(an, sofa, 'coffee_table', placed, CLR.sofaCoffee);
+    if(sofa) placeRug(an, placed, sofa);
+    // 4) yemek masası: mutfak çapasına yakın — KOLTUKTAN ÖNCE yer kapar (yoksa koltuk yemek cebini yutar)
+    if(openKitchen && A>=18){ const near = kanchor || (sofa?{x:2*an.bbox.cx-sofa.pos.x,z:2*an.bbox.cz-sofa.pos.z}:{x:an.bbox.cx,z:an.bbox.cz});
+      placeDining(ctx, A>=26?'dining_table_6':'dining_table_4', near); }
+    // 5) koltuk + kitaplık + yan masa (TV/kanepe/mutfak dışı kalan duvarlar)
+    const used=[]; if(tvWall) used.push(tvWall); if(sofaWall) used.push(sofaWall); if(kWall) used.push(kWall);
+    if(sofa && sofaWall) place(an, sofaWall, 'side_table', placed, {});
+    const nArm=clampN(Math.round((A-14)/9),0,2);
+    const sideWalls=allEdges(an,{exclude:used,minLen:0.95});
+    let armN=0; for(let i=0;i<sideWalls.length && armN<nArm;i++){ if(place(an,sideWalls[i],'armchair',placed,kanchor?{awayFrom:kanchor}:{})) armN++; }
+    if(A>=16) placeAny(an,'bookcase',placed,{}, allEdges(an,{exclude:used,minLen:0.9}));
+  }
+  function placeRug(an, placed, sofa){ const fn=frontDir(sofa.rot_deg), cx=sofa.pos.x+fn[0]*0.95, cz=sofa.pos.z+fn[1]*0.95;
+    let w=2.4, d=1.6; for(let k=0;k<7;k++){ if(furnFits(cx,cz,sofa.rot_deg,w,d,an,placed,true)) break; w*=0.85; d*=0.85; }
+    if(w<1.0) return null; const p={type:'rug',pos:{x:cx,z:cz},rot_deg:sofa.rot_deg,__w:w,__d:d,__fp:furnFootprintM(cx,cz,sofa.rot_deg,w,d),__exempt:true}; placed.push(p); return p; }
+
+  // ----- MUTFAK (bitişik tezgah dizisi: buzdolabı–tezgah–evye–ocak–[bulaşık]) -----
+  // span aralığına soldan sağa BİTİŞİK mutfak dizisi yerleştir → mutfak merkezi (çapa) ya da null
+  function layKitchenRun(an, edge, span, placed, compact){
+    const rot=wallRotDeg(edge), gap=0.03, sl=span[1]-span[0];
+    const ess = compact ? ['fridge','sink','oven_hob'] : ['fridge','sink','oven_hob','dishwasher'];
+    const essW = ess.reduce(function(s,t){ return s+FURN_DIM[t].w; },0) + gap*(ess.length-1);
+    let counterW = Math.max(0, Math.min(sl-essW-gap*2, compact?1.6:2.4));     // kalan = tezgah (çalışma tezgahı), sınırlı
+    const list=[['fridge',FURN_DIM.fridge.w]];
+    if(counterW>=0.5) list.push(['counter',counterW/2]);
+    list.push(['sink',FURN_DIM.sink.w]); list.push(['oven_hob',FURN_DIM.oven_hob.w]);
+    if(!compact) list.push(['dishwasher',FURN_DIM.dishwasher.w]);
+    if(counterW>=0.5) list.push(['counter',counterW/2]);
+    let t=span[0], cx=0,cz=0,n=0;
+    for(let i=0;i<list.length;i++){ const type=list[i][0], w=list[i][1]; if(w<0.3) continue;
+      if(t+w > span[1]+1e-6) break;
+      const tc=t+w/2, d=FURN_DIM[type].d, inset=d/2+0.04;
+      const px=edge.a[0]+edge.dir[0]*tc+edge.nIn[0]*inset, pz=edge.a[1]+edge.dir[1]*tc+edge.nIn[1]*inset;
+      if(furnFits(px,pz,rot,w,d,an,placed)){ placed.push({type:type,pos:{x:px,z:pz},rot_deg:rot,__w:(type==='counter'?w:undefined),__fp:furnFootprintM(px,pz,rot,w,d)}); cx+=px;cz+=pz;n++; }
+      t += w + gap;
+    }
+    return n? {x:cx/n,z:cz/n} : null;
+  }
+  // dizide yer bulamayan esas eleman → başka bir serbest duvara koy (asla "yerleşmedi" olmasın)
+  function ensureKitchenItem(an, placed, type, opt, minLen){ if(placed.some(function(p){ return p.type===type; })) return; placeAny(an, type, placed, opt, allEdges(an,{minLen:minLen})); }
+  function placeKitchenRun(ctx, compact, zoneC){
+    const an=ctx.an, placed=ctx.placed;
+    let walls=allEdges(an,{minLen:1.2}); if(!walls.length) walls=allEdges(an,{minLen:0.9});
+    walls=walls.slice().sort(function(a,b){ let sa=spanLen(bestSpanOnEdge(a)), sb=spanLen(bestSpanOnEdge(b));
+      if(zoneC){ sa-=0.25*Math.hypot(a.mid[0]-zoneC.x,a.mid[1]-zoneC.z); sb-=0.25*Math.hypot(b.mid[0]-zoneC.x,b.mid[1]-zoneC.z); } return sb-sa; });  // en uzun serbest aralık (zon yakınlığı bonuslu) önce
+    let anchor=null;
+    for(let i=0;i<walls.length;i++){ const s=bestSpanOnEdge(walls[i]); if(s && (s[1]-s[0])>=1.4){ anchor=layKitchenRun(an, walls[i], s, placed, compact); if(anchor) break; } }
+    ensureKitchenItem(an, placed, 'fridge', {align:'end'}, 0.7);
+    ensureKitchenItem(an, placed, 'sink', {}, 0.6);
+    ensureKitchenItem(an, placed, 'oven_hob', {}, 0.6);
+    return anchor;
+  }
+  function furnishKitchen(ctx){ placeKitchenRun(ctx, false, null); }
+
+  // ----- YEMEK -----
+  function placeDining(ctx, tableType, near){ const an=ctx.an, placed=ctx.placed;
+    const table=scanPlace(an, placed, tableType, CLR.diningChair, null, near); if(!table) return null;
+    placeDiningChairs(an, placed, table, tableType==='dining_table_6'?6:4); return table; }
+  function placeDiningChairs(an, placed, table, n){ const d=FURN_DIM[table.type], rt=table.rot_deg*Math.PI/180, ca=Math.cos(rt), sa=Math.sin(rt);
+    const ax=[ca,-sa], az=[sa,ca], ch=FURN_DIM.dining_chair, off=0.28;
+    function put(useW, sgn, total){ const along=useW?az:ax, norm=useW?ax:az;
+      const halfN=(useW?d.w/2:d.d/2)+ch.d/2+off, spanH=(useW?d.d/2:d.w/2)-0.12;
+      for(let i=0;i<total;i++){ const t=(total===1)?0:(-spanH+2*spanH*i/(total-1));
+        const x=table.pos.x+norm[0]*sgn*halfN+along[0]*t, z=table.pos.z+norm[1]*sgn*halfN+along[1]*t;
+        const crot=(Math.atan2(-norm[0]*sgn,-norm[1]*sgn)*180/Math.PI+360)%360;
+        if(furnFits(x,z,crot,ch.w,ch.d,an,placed)) placed.push({type:'dining_chair',pos:{x:x,z:z},rot_deg:crot,__fp:furnFootprintM(x,z,crot,ch.w,ch.d)}); } }
+    const longW=d.w>=d.d, per=Math.max(1,Math.floor(n/2)-(n>=6?1:0)), ends=n-2*per;
+    put(longW,1,per); put(longW,-1,per); if(ends>0){ put(!longW,1,Math.ceil(ends/2)); if(ends>1) put(!longW,-1,Math.floor(ends/2)); }
+  }
+
+  // ----- YATAK ODASI -----
+  // yatak en az BİR uzun kenarında geçiş payı (~58cm, oda sınırına) olmalı — yoksa duvara sıkışmış sayılır
+  function bedHasAccess(an, bed){
+    const dim=FURN_DIM[bed.type]||{w:1.5,d:2.0}, w=(bed.__w!=null?bed.__w:dim.w), d=(bed.__d!=null?bed.__d:dim.d);
+    const a=bed.rot_deg*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a), lx=[ca,-sa], lz=[sa,ca];
+    const longAxis=(d>=w?lz:lx), longLen=Math.max(w,d), sideNorm=(d>=w?lx:lz), halfShort=Math.min(w,d)/2, need=0.58;
+    for(let s=-1;s<=1;s+=2){ let ok=true;
+      for(let t=-0.34;t<=0.341;t+=0.34){ const bx=bed.pos.x+longAxis[0]*t*longLen, bz=bed.pos.z+longAxis[1]*t*longLen;
+        if(!pointInPolyM(bx+sideNorm[0]*s*(halfShort+need), bz+sideNorm[1]*s*(halfShort+need), an.poly)){ ok=false; break; } }
+      if(ok) return true; }
+    return false;
+  }
+  // yatak+erişim sığmayan oda → giyinme/dolap odası (gardırop dizisi + şifonyer, yatak YOK)
+  function furnishDressing(ctx){ const an=ctx.an, placed=ctx.placed;
+    for(let k=0;k<3;k++){ if(!placeChain(an,['wardrobe_4','wardrobe_3','wardrobe_2'],placed,{}, allEdges(an,{minLen:0.95}))) break; }
+    placeAny(an,'dresser',placed,{}, allEdges(an,{minLen:0.95})); }
+  function furnishBedroom(ctx, master){ const an=ctx.an, placed=ctx.placed, A=ctx.A;
+    const order=['bed_king','bed_queen','bed_double','bed_single'];
+    const start = master?(A>=13?0:1):(A>=10?2:3);
+    const hbWalls=[ pickEdge(an,{interior:true,noDoor:true,minLen:0.95}), pickEdge(an,{noDoor:true,minLen:0.95}), pickEdge(an,{minLen:0.95}) ].filter(Boolean);
+    let bed=null;
+    for(let wi=0;wi<hbWalls.length && !bed;wi++){ for(let oi=start; oi<order.length && !bed; oi++){
+      const cand=placeOnEdge(an, hbWalls[wi], order[oi], placed, {align:'center'});
+      if(cand && bedHasAccess(an, cand)){ placed.push(cand); bed=cand; }                        // sığıyor VE erişim payı var
+    } }
+    if(!bed){ furnishDressing(ctx); return; }                                                    // hiç yatak erişimle sığmadı → giyinme odası
+    const hb=bedHbEdge(an, bed);
+    const nNs=master?2:1; for(let i=0;i<nNs;i++) place(an, hb, 'nightstand', placed, {});
+    const wo = master?['wardrobe_4','wardrobe_3','wardrobe_2']:['wardrobe_3','wardrobe_2'];
+    placeChain(an, wo, placed, {}, allEdges(an,{exclude:[hb],minLen:0.95}));
+    if(A>=12) placeAny(an, master?'vanity':'dresser', placed, {}, allEdges(an,{exclude:[hb],minLen:0.9}));
+  }
+
+  // ----- BANYO / WC (boyut-farkındalık: küvet→duş→yok) -----
+  function furnishBath(ctx, wc){ const an=ctx.an, placed=ctx.placed, A=ctx.A;
+    placeAny(an,'toilet',placed,{}, allEdges(an,{minLen:0.45}));
+    placeAny(an,'washbasin',placed,{}, allEdges(an,{minLen:0.55}));
+    // B8: küvet 1.70m duvar gerektirir → endClear küçük; sığmazsa duş; o da yoksa yıkanma yok
+    if(!wc){ let bath=placeAny(an,'bathtub',placed,{align:'center', endClear:0.03}, allEdges(an,{minLen:1.74}));
+      if(!bath) placeAny(an,'shower_tray',placed,{endClear:0.03}, allEdges(an,{minLen:0.92})); }
+    if(!wc && A>=5) placeAny(an,'washer',placed,{align:'end'}, allEdges(an,{minLen:0.65}));
+  }
+
+  // ----- GİRİŞ/ANTRE (orta boş, tek slim item) -----
+  function furnishEntry(ctx){ const an=ctx.an, placed=ctx.placed;
+    placeChain(an, (an.area>3?['shoe_cabinet','console']:['console']), placed, {}, allEdges(an,{minLen:0.8})); }
+
+  // ----- BALKON -----
+  function furnishBalcony(ctx){ const an=ctx.an, placed=ctx.placed; const t=scanPlace(an,placed,'bistro_table',0.35);
+    if(t){ place2(an,placed,'bistro_chair',t.pos.x-0.55,t.pos.z,90); place2(an,placed,'bistro_chair',t.pos.x+0.55,t.pos.z,270); } }
+
+  // ----- ÇALIŞMA ODASI (A7) -----
+  function furnishStudy(ctx){ const an=ctx.an, placed=ctx.placed;
+    placeChain(an, ['desk'], placed, {}, allEdges(an,{minLen:1.1}));
+    const desk=placed[placed.length-1];
+    if(desk && desk.type==='desk') placeFront(an, desk, 'office_chair', placed, 0.1);
+    if(an.area>=10) placeAny(an,'bookcase',placed,{}, allEdges(an,{minLen:0.9}));
+  }
+  // ----- STÜDYO (A7) = salon + yatak -----
+  function furnishStudio(ctx){ furnishLiving(ctx,false);
+    placeChain(ctx.an, ['bed_double','bed_single'], ctx.placed, {align:'center'}, allEdges(ctx.an,{noDoor:true,minLen:1.0})); }
+
+  // ----- BİTKİ pass (yalnız yaşam alanları; köşelere, sirkülasyon dışı) -----
+  function furnishPlants(ctx, kind){ if(kind!=='living'&&kind!=='living_kitchen'&&kind!=='bedroom'&&kind!=='master'&&kind!=='studio'&&kind!=='study') return;
+    const an=ctx.an, placed=ctx.placed, n=clampN(Math.round(an.area/16),0,(kind==='bedroom'?1:2)); if(n<=0) return;
+    const corners=furnInnerCorners(an, 0.35).sort(function(a,b){ return 0; }); let put=0;
+    for(let i=0;i<corners.length && put<n;i++){ if(place2(an, placed, 'plant', corners[i].x, corners[i].z)) put++; } }
+
+  // dispatcher: oda → yerleşim listesi (seed = kilitli mobilya footprint'leri, auto onlardan kaçınır)
+  function furnPlaceRoom(room, map, seed){
+    const an=furnAnalyzeRoom(room, map); if(!an || an.area<1.5) return [];
+    const kind=roomKind(room); if(kind==='skip'||kind==='corridor'||kind==='other') return [];
+    (seed||[]).forEach(function(s){ s.__seed=true; });
+    const ctx={ an:an, placed:(seed||[]).slice(), room:room, A:an.area };
+    if(kind==='living') furnishLiving(ctx,false);
+    else if(kind==='living_kitchen') furnishLiving(ctx,true);
+    else if(kind==='studio') furnishStudio(ctx);
+    else if(kind==='study') furnishStudy(ctx);
+    else if(kind==='kitchen') furnishKitchen(ctx);
+    else if(kind==='bedroom') furnishBedroom(ctx,false);
+    else if(kind==='master') furnishBedroom(ctx,true);
+    else if(kind==='bathroom') furnishBath(ctx,false);
+    else if(kind==='wc') furnishBath(ctx,true);
+    else if(kind==='entry') furnishEntry(ctx);
+    else if(kind==='balcony') furnishBalcony(ctx);
+    furnishPlants(ctx, kind);
+    return ctx.placed.filter(function(p){ return !p.__seed; });
+  }
+  function autoFurnish(room, map){
+    const locked=(room.furniture||[]).filter(function(f){ return f.locked; });   // elle düzenlenenleri KORU
+    const seed=locked.map(function(f){ const dim=FURN_DIM[f.type]||{w:0.6,d:0.6}, w=(f.__w!=null?f.__w:dim.w), d=(f.__d!=null?f.__d:dim.d);
+      return { type:f.type, pos:f.pos, rot_deg:f.rot_deg, __fp:furnFootprintM(f.pos.x,f.pos.z,f.rot_deg,w,d), __exempt:!!COLLISION_EXEMPT[f.type] }; });
+    const placedNew=furnPlaceRoom(room, map, seed);   // auto seed'lerden (kilitli) kaçınır
+    const auto=placedNew.map(function(p){ return { id:newFurnId(p.type, room.id), type:p.type, type_tr:FURN_TR[p.type]||null,
+      room_id:room.id, pos:{x:p.pos.x,z:p.pos.z}, rot_deg:p.rot_deg, scale:1, source:'auto', locked:false, __w:p.__w, __d:p.__d }; });
+    room.furniture=locked.concat(auto);
+  }
+  function autoFurnishAll(){
+    const map=scene&&scene.__map; if(!map){ setFurnHint('Plan yok.'); return; } furnSnapshot();
+    (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ autoFurnish(r, map); }); });
+    (map.common_areas||[]).forEach(function(r){ autoFurnish(r, map); });
+    collectFurnList(); activeFurnIdx=-1; renderFurniture(); updateFurnPanel(); persistFurniture();
+    setFurnHint(furnList.length+' mobilya yerleşti · elle düzenlenenler korundu');
+  }
+
+  /* ====================== MOBİLYA — px türetme + kalıcılık + sahne cümlesi (Faz 4+5) ======================
+     pos MUTLAK metre → render-px (oda polygon_px ile AYNI uzay) ki kamera (cameraViewInfo) mobilyayı görsün.
+     Kalıcılık: window.__kptaFurniture (room_id→item[]) — view3d yazar, io.js buildFloorplanMap okur (3B kapat-aç korunur). */
+  // mobilya ayak izi (rot uygulanmış) → 4 köşe render-px. Three.js rotation.y konvansiyonu (local +X → -Z @90°).
+  function furnToPolygonPx(f, map){
+    const dim=FURN_DIM[f.type]||{w:0.6,d:0.6};
+    const hw=(f.__w!=null?f.__w:dim.w)/2, hd=(f.__d!=null?f.__d:dim.d)/2, a=(f.rot_deg||0)*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a);
+    return [[-hw,-hd],[hw,-hd],[hw,hd],[-hw,hd]].map(function(c){
+      const wx=f.pos.x + c[0]*ca + c[1]*sa, wz=f.pos.z - c[0]*sa + c[1]*ca;   // lokal(X=w,Z=d) → MUTLAK metre
+      return m2px(map, wx, wz);
+    });
+  }
+  // map'teki tüm mobilyaya polygon_px + centroid_px damgala (cameraViewInfo bunları okur)
+  function syncFurniturePx(map){
+    map=map||(scene&&scene.__map); if(!map) return;
+    function stamp(r){ (r.furniture||[]).forEach(function(f){ if(f&&f.pos){ f.polygon_px=furnToPolygonPx(f,map); f.centroid_px=m2px(map,f.pos.x,f.pos.z); } }); }
+    (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(stamp); }); (map.common_areas||[]).forEach(stamp);
+  }
+  // güncel mobilyayı kalıcı store'a yaz (px dahil, derin kopya → serileştirilebilir + alias yok)
+  function persistFurniture(){
+    const map=scene&&scene.__map; if(!map){ return; }
+    syncFurniturePx(map);
+    const store={};
+    function take(r){ const fs=r.furniture||[]; if(fs.length) store[r.id]=fs.map(function(f){ return JSON.parse(JSON.stringify(f)); }); }
+    (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(take); }); (map.common_areas||[]).forEach(take);
+    try{ window.__kptaFurniture=store; }catch(e){}
+  }
+  // kameranın gördüğü mobilyadan TR cümle (nano prompt'una iliştir → mobilyayı uydurmaz, koyduğunu boyar)
+  function sceneDescription(cam){
+    // kadrajda anlamlı oranı görünen (coverage≥0.2) ya da merkezi koni içinde (coverage null) mobilya
+    const f=((cam&&cam.furniture_seen)||[]).filter(function(x){ return x.coverage_ratio==null || x.coverage_ratio>=0.2; });
+    const names=[]; f.forEach(function(x){ const n=x.type_tr||FURN_TR[x.type]||x.type; if(names.indexOf(n)<0) names.push(n); });
+    const top=names.slice(0,4);
+    if(!top.length) return '';
+    return 'Kadrajda '+top[0]+(top.length>1?', ayrıca '+top.slice(1).join(', '):'')+' görünür.';
+  }
+  // dışa: tüm mobilya düz liste (px dahil) — render pipeline / hata ayıklama
+  function exportFurniture(){ const map=scene&&scene.__map; if(map) syncFurniturePx(map); return furnList.map(function(f){ return JSON.parse(JSON.stringify(f)); }); }
+
   // ── açılış: boot (three.js + sahne) → full ya da yan-yana (compare) layout ──
   let compareMode=false, compareRefURL=null, compareSplit=0.5;   // sol referans / sağ 3B oranı (sürüklenebilir bölücü)
   function boot(){
@@ -781,11 +1775,14 @@
       setCompareLayout(compareMode, compareRefURL);         // full / yan-yana yerleşimi uygula
       resize();
       buildScene(map); built=true;
+      // host bazen boot anında daha boyutlanmamış olur → fitView aşırı yakın çerçeveler.
+      // Bir sonraki karede (host kesin boyutlu) yeniden boyutlandır + sığdır (açıyı korur).
+      requestAnimationFrame(function(){ resize(); if(!compareMode) fitView(); });
       return map;
     }).catch(function(e){ status.textContent='HATA: '+(e.message||e); return null; });
   }
   // tam-ekran 3B (toolbar / adım 2 "3B"): SALT İZLEME — kamera bölümü GİZLİ (#1), mesh serbest.
-  function open(opts){ compareMode=false; compareRefURL=null; embedded=!!(opts&&opts.embedded); setCamUI(false); return boot().then(function(map){ setCamUI(false); return map; }); }
+  function open(opts){ compareMode=false; compareRefURL=null; embedded=!!(opts&&opts.embedded); setCamUI(false); return boot().then(function(map){ setCamUI(false); setFurnUI(true); return map; }); }
   // plan imzası: yerleşim değişince (oda sayısı / footprint ölçüsü) eski kameralar geçersiz olur
   function planSig(map){
     const u=(map&&map.units)||[]; let rc=0; u.forEach(function(x){ rc+=((x.rooms||[]).length); });
@@ -802,6 +1799,7 @@
       lockedViewRef=lockedView||getView();                  // sürüklenince bununla karşılaştır (açı kayması uyarısı)
       angleDrift=false; updateAngleWarn();
       setCamUI(true);                                        // kamera bölümünü göster
+      setFurnUI(true);                                       // mobilya bölümünü de göster (adım 5 / Döşe)
       const sig=planSig(map);
       if(camList.length && camPlanSig && camPlanSig!==sig) clearCams();   // plan değişti → eski (geçersiz koordinatlı) kameraları at
       if(!camList.length) deriveShowcaseCameras(map);       // daire başına vitrin kamera otomatik
@@ -887,7 +1885,11 @@
   // dışa aç + buton bağla
   window.View3D = { open:open, openCompare:openCompare, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
-    clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras };
+    clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras,
+    // mobilya: map'ten furnList'i tazele + çiz (test + Faz 3). getMap = canlı harita erişimi.
+    refreshFurniture:function(){ collectFurnList(); renderFurniture(); }, getMap:function(){ return scene&&scene.__map; },
+    setFurnUI:setFurnUI, setFurnMode:setFurnMode, clearFurn:clearFurn, autoFurnishAll:function(){ autoFurnishAll(); },
+    exportFurniture:exportFurniture, sceneDescription:sceneDescription };
   function bind(){
     const btn=document.getElementById('t3d');
     if(btn) btn.addEventListener('click', open);

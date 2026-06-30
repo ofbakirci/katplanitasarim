@@ -498,7 +498,8 @@ function fpRegionGeom(g, fr){
     polygon_norm:polygon_px.map(p=>fr.norm(p)),
     centroid_norm:fr.norm(centroid_px),
     label_anchor_norm:fr.norm(label_anchor_px),
-    area_m2:+(g.cells.length*M*M).toFixed(2)
+    area_m2:+(g.cells.length*M*M).toFixed(2),
+    furniture:[]                                    // §Faz5 şema: mobilya alanı (buildFloorplanMap store'dan doldurur)
   };
 }
 /* daire için konum etiketi: bina bbox'una göre sol/sağ + alt/üst */
@@ -544,6 +545,10 @@ function buildFloorplanMap(opt){
   const common=plan.regions.filter(g=>g.cells.length && g.unit<0).map(g=>{
     const o=fpRegionGeom(g,fr); o.id='C-'+g.id; return o;
   });
+  // mobilya (kalıcılık): runtime store'dan (view3d yazar) room_id ile eşle → 3B kapat-aç + JSON export korunur.
+  const FS=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+  units.forEach(u=>u.rooms.forEach(o=>{ if(FS[o.id]) o.furniture=FS[o.id].map(f=>f); }));
+  common.forEach(o=>{ if(FS[o.id]) o.furniture=FS[o.id].map(f=>f); });
   // kapılar: gerçek kapı boşlukları (3B görünüm + AI besleme); oda poligonlarıyla AYNI px uzayı.
   // span = exportWallBoundaryPNG ile birebir (orta e+0.45, genişlik doorWidthM: bina1.5/daire1.0/oda0.9/ıslak0.8).
   const doors=(typeof computeDoors==='function'?computeDoors():[])
@@ -631,10 +636,30 @@ function fpConePolygon(A, headingDeg, fovDeg, depth){
   for(let k=0;k<=n;k++){ const a=(th-half + fovDeg*k/n)*Math.PI/180; pts.push([A[0]+depth*Math.sin(a), A[1]-depth*Math.cos(a)]); }
   return pts;
 }
+/* mobilyayı görüş konisine klip et → kamerada görünen mobilya (Faz 4). Mobilya polygon_px ŞART
+   (Faz 5 furnToPolygonPx üretir); yoksa centroid_px fallback (kaba). Oda polygon_px ile AYNI px uzayı. */
+function furnitureSeen(rooms, cone, coneArea){
+  const seen=[];
+  (rooms||[]).forEach(r=>{ (r.furniture||[]).forEach(f=>{
+    if(!f.polygon_px || f.polygon_px.length<3){
+      if(f.centroid_px && fpPipIn(f.centroid_px[0],f.centroid_px[1],cone))
+        seen.push({ id:f.id, type:f.type, type_tr:f.type_tr||null, room_id:r.id, coverage_ratio:null, view_share:null });
+      return;
+    }
+    const clip=fpClipConvex(f.polygon_px, cone);
+    if(clip.length>=3){ const a=fpPolyArea(clip), full=fpPolyArea(f.polygon_px);
+      seen.push({ id:f.id, type:f.type, type_tr:f.type_tr||null, room_id:r.id,
+        coverage_ratio: full>0?Math.round(a/full*1e3)/1e3:null,
+        view_share: coneArea>0?Math.round(a/coneArea*1e3)/1e3:null }); }
+  }); });
+  // prominans = kadrajdaki oran (coverage_ratio); koni daire-boyu olduğu için view_share küçük kalır, güvenilmez.
+  seen.sort((x,y)=>(y.coverage_ratio||0)-(x.coverage_ratio||0) || (y.view_share||0)-(x.view_share||0));
+  return seen;
+}
 function cameraViewInfo(map, cam){
   if(!map||!cam||!map.render) return null;
   const W=map.render.width, H=map.render.height, A=[cam.x_px, cam.y_px];
-  const EMPTY={ room_id:null, room_weights:[], cone_spills:false, cone_polygon_px:null, cone_polygon_norm:null };
+  const EMPTY={ room_id:null, room_weights:[], cone_spills:false, cone_polygon_px:null, cone_polygon_norm:null, furniture_seen:[] };
   const norm=p=>[Math.round(p[0]/W*1e5)/1e5, Math.round(p[1]/H*1e5)/1e5];
   const units=map.units||[];
   /* kameranın AİT olduğu daire (içinde / en yakın) → görüş derinliği o dairenin köşegeni kadar
@@ -676,7 +701,12 @@ function cameraViewInfo(map, cam){
   const cc=coneOf(chosen);
   let cpoly=null, cnorm=null;
   if(cc&&cc.poly.length>=3){ cpoly=cc.poly.map(p=>[Math.round(p[0]*10)/10, Math.round(p[1]*10)/10]); cnorm=cc.poly.map(norm); }
-  return { room_id:chosen.id, room_weights:weights, cone_spills:spills, cone_polygon_px:cpoly, cone_polygon_norm:cnorm };
+  // mobilya görüşü: yalnız GÖRÜLEN odalar (seçilen + koninin önemli doldurduğu açık-plan odalar; coverage≥0.12).
+  // Occlusion yok → koni komşu odaya sızabilir; bu kapsam duvar-aşırı mobilyayı (ör. salondan yatak) eler.
+  const viewedIds=new Set((weights||[]).filter(w=>w.coverage_ratio>=0.12).map(w=>w.room_id)); viewedIds.add(chosen.id);
+  const viewedRooms=cands.filter(r=>viewedIds.has(r.id));
+  const furniture_seen=furnitureSeen(viewedRooms, cone, fpPolyArea(cone));
+  return { room_id:chosen.id, room_weights:weights, cone_spills:spills, cone_polygon_px:cpoly, cone_polygon_norm:cnorm, furniture_seen:furniture_seen };
 }
 function fpDownload(name, text, mime){
   const blob=new Blob([text],{type:mime||'application/octet-stream'});
