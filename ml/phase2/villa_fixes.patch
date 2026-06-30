@@ -1,0 +1,247 @@
+diff --git a/checks.js b/checks.js
+index 76c1b20..afc8d5b 100644
+--- a/checks.js
++++ b/checks.js
+@@ -203,7 +203,14 @@ function collectChecks(){
+       if(!hasSalon) add('bad','Evde hiç salon/oturma odası yok — konutta en az bir oturma alanı zorunlu (PAİY md.30). Bir katın programına salon ekleyin.');
+     }
+     if(!floorsOn()){
+-      if(p.kat>1) add('ok','Çok katlı villa → iç merdiven yerleştirildi.');
++      if(p.kat>1){
++        /* BUG-FIX: önceden merdiven bölgesi GERÇEKTEN var mı bakmadan koşulsuz 'ok'
++           basılıyordu → yerleşmemiş merdiveni maskeliyordu. Artık gerçek denetim. */
++        const hasStair=p.regions.some(g=>g.type==='merdiven'&&g.cells&&g.cells.length);
++        add(hasStair?'ok':'bad', hasStair
++          ? 'Çok katlı villa → iç merdiven yerleştirildi.'
++          : 'Çok katlı villa ama iç merdiven yerleştirilemedi — taban geometrisini genişletin veya kat programını hafifletin.');
++      }
+     } else {
+       /* --- katları ayrı planla: katlar arası tutarlılık kuralları --- */
+       const fl=[]; for(let k=0;k<p.kat;k++) fl.push(floorState(k));
+diff --git a/doors.js b/doors.js
+index 421b2ac..5ccd389 100644
+--- a/doors.js
++++ b/doors.js
+@@ -48,12 +48,21 @@ function computeDoors(){
+     if(!u.antre||!u.antre.cells.length) return;
+     if(p.villa&&floorsOn()&&activeFloor>0) return; // üst katta sokak girişi yok; erişim iç merdivenden
+     const isCor=v=>v>=0&&p.regions[v]&&p.regions[v].type==='koridor';
+-    const edges=[];
++    /* BUG-FIX (villa giriş kapısı): önceden villa ön kapısı YALNIZ antrenin GÜNEY
++       komşusu dışarıdaysa (id(r+1,c)===-9) konuyordu; diğer 3 yön yalnız koridor test
++       ediyordu. Villada koridor olmadığından, antresi batı/kuzey/doğu cepheye düşen L/T
++       villada giriş kapısı HİÇ yerleşmiyordu. Artık antrenin dış cepheye (−9) değen
++       HERHANGİ bir kenarı aday olur — ancak GÜNEY (ön cephe) önceliklidir: güney dış
++       kenar varsa eski davranış aynen sürer (dikdörtgen villada kapı yana kaymaz),
++       yoksa antrenin dokunduğu öbür cephe (extAlt) kullanılır. */
++    const ext=v=>p.villa&&v===-9;
++    const edges=[], extAlt=[];      // edges: koridor + güney-dış (öncelikli) · extAlt: villa yan/kuzey dış cepheleri
+     u.antre.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+-      if(isCor(id(r+1,c))||(p.villa&&id(r+1,c)===-9)) edges.push({x:p.minX+c*M, y:p.minY+(r+1)*M, h:1});
+-      if(isCor(id(r-1,c))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:1});
+-      if(isCor(id(r,c+1))) edges.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0});
+-      if(isCor(id(r,c-1))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); });
++      if(isCor(id(r+1,c))||ext(id(r+1,c))) edges.push({x:p.minX+c*M, y:p.minY+(r+1)*M, h:1});           // güney: koridor ya da dış cephe
++      if(isCor(id(r-1,c))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:1}); else if(ext(id(r-1,c))) extAlt.push({x:p.minX+c*M, y:p.minY+r*M, h:1});
++      if(isCor(id(r,c+1))) edges.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0}); else if(ext(id(r,c+1))) extAlt.push({x:p.minX+(c+1)*M, y:p.minY+r*M, h:0});
++      if(isCor(id(r,c-1))) edges.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); else if(ext(id(r,c-1))) extAlt.push({x:p.minX+c*M, y:p.minY+r*M, h:0}); });
++    if(p.villa && !edges.length) edges.push(...extAlt);   // güney dış cephe yoksa antrenin dokunduğu öbür cepheye giriş
+     const key='u'+k;
+     if(!edges.length){ out.push({key, e:null, edges, kind:'unit', k, status:'none'}); return; }
+     if(doorHidden[key]){ out.push({key, e:null, edges, kind:'unit', k, status:'hidden'}); return; }
+diff --git a/planner.js b/planner.js
+index b19f438..ee50bd8 100644
+--- a/planner.js
++++ b/planner.js
+@@ -850,10 +850,21 @@ function generate(keepCuts){
+         wantStair=false;
+       }
+     }
+-    const free = stairReg? all.filter(i=>cm[i]===-1) : all;
+-    const stairA = stairReg? stairReg.cells.length*M*M : 0;
+-    const vu = layoutVillaSofa(free, unitSpecs[0], wantStair, stairA)
+-            || layoutUnit(free, unitSpecs[0], 'N', wantStair);
++    let free = stairReg? all.filter(i=>cm[i]===-1) : all;
++    let stairA = stairReg? stairReg.cells.length*M*M : 0;
++    let vu = layoutVillaSofa(free, unitSpecs[0], wantStair, stairA);
++    if(!vu){
++      /* BUG-FIX (çok katlı villada iç merdiven): L/T tabanda layoutVillaSofa
++         doluluk<0.85 olunca bail edip layoutUnit fallback'ine düşüyor; orada merdiven
++         sıradan bir hacim gibi ele alınıp yoğun programda sessizce düşebiliyordu.
++         Çözüm: fallback'e düşmeden ÖNCE iç merdiveni birinci-sınıf rezerve et (taban
++         şekli ne olursa olsun) → layoutUnit kalan alanda merdivensiz çalışsın. */
++      if(wantStair && !stairReg){
++        stairReg=reserveVillaStair(free);
++        if(stairReg){ free=all.filter(i=>cm[i]===-1); stairA=stairReg.cells.length*M*M; wantStair=false; }
++      }
++      vu = layoutUnit(free, unitSpecs[0], 'N', wantStair);
++    }
+     if(stairReg) vu.rooms.push(stairReg);
+     unitObjs.push(vu);
+   }
+@@ -864,6 +875,40 @@ function generate(keepCuts){
+      Antre ortada 1,5 m yatay omurga + güney cepheye giriş kolu (villa kapısı antrenin
+      dışa bakan kenarına çizilir); odalar kuzey/güney cephe bantlarına asılır — her oda
+      hem pencere hem sofadan kapı alır. Sığmayan oda yine dürüstçe raporlanır. */
++  /* BUG-FIX yardımcı: çok katlı villada iç merdivenin MUTLAKA yerleşmesini garanti eder.
++     layoutVillaSofa yalnız ~dikdörtgen tabanda merdiveni birinci-sınıf rezerve eder;
++     L/T tabanda bail edince layoutUnit fallback'i merdiveni sessizce düşürebiliyordu.
++     Bu yardımcı kalan boş hücrelerden ≈2,5 m geniş × 3..5 m derin bir merdiven kovası
++     keser (en büyük sığanı, taban köşesine yaslayarak) ve birinci-sınıf MERDİVEN bölgesi
++     olarak sahiplenir. Hiç sığmazsa null döner (runChecks dürüstçe 'merdiven yok' yazar). */
++  function reserveVillaStair(cells){
++    const freeSet=new Set(cells.filter(i=>cm[i]===-1));
++    if(!freeSet.size) return null;
++    let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
++    freeSet.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
++    const fits=(rr,cc,h,w)=>{ for(let r=rr;r<rr+h;r++)for(let c=cc;c<cc+w;c++){ if(!freeSet.has(r*cols+c)) return false; } return true; };
++    const corners=[[r0,c0],[r0,c1+1],[r1+1,c0],[r1+1,c1+1]];
++    const W=5;                                  // 2,5 m net merdiven kovası genişliği
++    for(const H of [10,9,8,7,6]){               // 5,0 → 3,0 m derinlik; en büyüğü tercih
++      for(const [dh,dw] of [[H,W],[W,H]]){      // dikey ve yatay yön
++        let best=null,bd=Infinity;
++        for(let r=r0;r+dh<=r1+1;r++)for(let c=c0;c+dw<=c1+1;c++){
++          if(!fits(r,c,dh,dw)) continue;
++          /* kovayı bir taban köşesine yasla → kalan alan bütün (oda bandı bölünmesin) */
++          const boxC=[[r,c],[r,c+dw],[r+dh,c],[r+dh,c+dw]];
++          const d=Math.min(...corners.flatMap(([cr,cc])=>boxC.map(([br,bc])=>Math.abs(br-cr)+Math.abs(bc-cc))));
++          if(d<bd){ bd=d; best=[r,c,dh,dw]; }
++        }
++        if(best){
++          const g=newReg('MERDİVEN','merdiven',0);
++          for(let r=best[0];r<best[0]+best[2];r++)for(let c=best[1];c<best[1]+best[3];c++){
++            const i=r*cols+c; cm[i]=g.id; g.cells.push(i); }
++          return g;
++        }
++      }
++    }
++    return null;
++  }
+   function layoutVillaSofa(cells, u, addStair, claimedArea){
+     let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+     cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+diff --git a/tests/villa-stair-entrance.js b/tests/villa-stair-entrance.js
+new file mode 100644
+index 0000000..b181a4a
+--- /dev/null
++++ b/tests/villa-stair-entrance.js
+@@ -0,0 +1,119 @@
++/* BUG doğrulama: çok katlı villada (a) iç merdiven MUTLAKA yerleşir, (b) giriş kapısı
++   antrenin hangi cepheye düştüğünden bağımsız yerleşir, (c) runChecks gerçek merdiven
++   denetimi yapar. L/T (layoutVillaSofa bail eden) + dikdörtgen (regresyon) villalar.
++   node tests/villa-stair-entrance.js */
++function stubEl(tag){ return {
++  tag, attrs:{}, children:[], style:{}, dataset:{}, _ih:'',
++  set innerHTML(v){ this._ih=v; this.children=[]; }, get innerHTML(){ return this._ih; },
++  appendChild(c){ this.children.push(c); return c; },
++  addEventListener(){}, querySelectorAll(){ return []; }, querySelector(){ return null; },
++  classList:{toggle(){},add(){},remove(){}},
++  setAttribute(k,v){ this.attrs[k]=v; }, getAttribute(k){ return this.attrs[k]; },
++  getBoundingClientRect(){ return {width:1200,height:800,left:0,top:0}; },
++  textContent:'', value:'', disabled:false, onclick:null, click(){}, parentElement:null, offsetHeight:0
++};}
++const byId={}; const getEl=id=>byId[id]||(byId[id]=stubEl('div'));
++getEl('binaTipi').value='villa'; getEl('katSayisi').value='2'; getEl('katYuk').value='2.9';
++global.document={getElementById:getEl, createElement:t=>stubEl(t), createElementNS:(n,t)=>stubEl(t),
++  querySelectorAll:()=>[], querySelector:()=>null, addEventListener(){}, body:stubEl('body')};
++global.window={addEventListener(){}};
++global.XMLSerializer=function(){this.serializeToString=()=>'';};
++global.Image=function(){}; global.Blob=function(){}; global.URL={createObjectURL:()=>''};
++const {extractAppScript}=require('./support/app-js');
++const src=extractAppScript();
++
++let pass=0, fail=0;
++const T=(name,cond)=>{ if(cond){pass++; console.log('  [ok]  '+name);} else {fail++; console.log('  [FAIL] '+name);} };
++
++eval(src+`
++;global.RUNV=(poly, spec)=>{
++  pts=poly.map(p=>({x:p[0],y:p[1]})); closed=true;
++  unitSpecs=[spec];
++  customCutsZ=null; unitLayout={}; balconies=[];
++  doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
++  generate();
++  const stair=plan.regions.find(g=>g.type==='merdiven'&&g.cells.length);
++  const doors=computeDoors();
++  const entry=doors.find(d=>d.kind==='unit'&&d.e);
++  const checks=runChecks();
++  const note=checks.find(x=>/iç merdiven/.test(x.t||''));
++  const u=plan.unitObjs[0];
++  const beds=u.rooms.filter(g=>g.type==='yatak'&&g.cells.length).length;
++  const bads=checks.filter(x=>x.s==='bad').map(x=>x.t);
++  return {
++    hasStair: !!stair,
++    stairArea: stair? (stair.cells.length*0.25) : 0,
++    hasEntry: !!entry,
++    entryEdge: entry? (entry.e.h? 'yatay' : 'dikey') : null,
++    noteStatus: note? note.s : null,
++    noteText: note? note.t : null,
++    villa: !!plan.villa,
++    beds, bads
++  };
++};
++;global.BUG3_WEST=()=>{
++  const cols=4, rows=6, inside=new Array(rows*cols).fill(1);
++  const cm=new Array(rows*cols).fill(1);                 // varsayılan: SALON (id 1)
++  for(let r=1;r<rows-1;r++) cm[r*cols+0]=0;             // sol sütun ortası = ANTRE (id 0): YALNIZ batı dış cepheye değer (kuzey/güney salona komşu)
++  const antre={id:0,name:'ANTRE',type:'antre',cells:[]}, salon={id:1,name:'SALON',type:'salon',cells:[]};
++  for(let i=0;i<rows*cols;i++)(cm[i]===0?antre:salon).cells.push(i);
++  plan={villa:true, rows, cols, inside, cm, minX:0, minY:0,
++        regions:[antre,salon], unitObjs:[{antre, rooms:[antre,salon], spec:{}}]};
++  doorOverrides={}; doorHidden={}; extraDoors=[];
++  const d=computeDoors().find(x=>x.kind==='unit');
++  return d && d.e ? (d.e.h? 'yatay':'dikey') : null;
++};`);
++
++/* L-villa: antre büyük olasılıkla güney DIŞI bir cepheye düşer; doluluk 157/192=0.82<0.85 → bail */
++const L=[[0,0],[16,0],[16,7],[9,7],[9,12],[0,12]];
++/* T-villa: doluluk 100/180=0.56<0.85 → bail */
++const Tp=[[0,0],[15,0],[15,4],[10,4],[10,12],[5,12],[5,4],[0,4]];
++/* dikdörtgen villa: layoutVillaSofa başarılı (regresyon — merdiven first-class olmalı) */
++const R=[[0,0],[14,0],[14,11],[0,11]];
++
++console.log('\n=== case_villa_L_5p1 (2 kat, 5+1 ensuite, L taban) ===');
++{ const r=global.RUNV(L,{oda:5,salon:1,ensuite:true,acik:false,adet:1});
++  console.log('   merdiven alanı='+r.stairArea.toFixed(1)+'m²  giriş kenarı='+r.entryEdge+'  yatak='+r.beds+'  not='+r.noteStatus);
++  console.log('   not: '+r.noteText);
++  T('L: villa planı üretildi', r.villa);
++  T('L: iç merdiven YERLEŞTİ (BUG1)', r.hasStair);
++  T('L: merdiven makul boyutta (≥6m²)', r.stairArea>=6);
++  T('L: giriş kapısı yerleşti (BUG3)', r.hasEntry);
++  T('L: merdiven notu OK (BUG2 maskeleme yok)', r.noteStatus==='ok');
++  r.bads.forEach(b=>console.log('     · bad: '+b));
++}
++
++console.log('\n=== villa_T_3p1 (2 kat, 3+1 ensuite, T taban) ===');
++{ const r=global.RUNV(Tp,{oda:3,salon:1,ensuite:true,acik:false,adet:1});
++  console.log('   merdiven alanı='+r.stairArea.toFixed(1)+'m²  giriş kenarı='+r.entryEdge+'  yatak='+r.beds+'  not='+r.noteStatus);
++  T('T: iç merdiven YERLEŞTİ (BUG1)', r.hasStair);
++  T('T: giriş kapısı yerleşti (BUG3)', r.hasEntry);
++  T('T: merdiven notu OK', r.noteStatus==='ok');
++}
++
++console.log('\n=== villa_rect_4p1 (2 kat, 4+1 ensuite, dikdörtgen — REGRESYON) ===');
++{ const r=global.RUNV(R,{oda:4,salon:1,ensuite:true,acik:false,adet:1});
++  console.log('   merdiven alanı='+r.stairArea.toFixed(1)+'m²  giriş kenarı='+r.entryEdge+'  yatak='+r.beds+'  not='+r.noteStatus);
++  T('rect: iç merdiven first-class (regresyon)', r.hasStair);
++  T('rect: giriş kapısı yerleşti', r.hasEntry);
++  T('rect: merdiven notu OK', r.noteStatus==='ok');
++}
++
++/* tek katlı villa: merdiven istenmez, not basılmaz (yanlış bad olmamalı) */
++console.log('\n=== villa_1kat (tek kat — merdiven istenmez) ===');
++getEl('katSayisi').value='1';
++{ const r=global.RUNV(R,{oda:3,salon:1,ensuite:true,acik:false,adet:1});
++  T('1kat: merdiven notu yok (kat>1 değil)', r.noteText===null);
++}
++
++/* BUG3 izole: antresi YALNIZ batı cepheye değen sentetik villa (güney dış kenar YOK).
++   Pre-fix: güney dışında dış cephe test edilmediği için kapı HİÇ yerleşmezdi. */
++console.log('\n=== BUG3 izole: antre yalnız BATI cepheye değiyor ===');
++{ const edge=global.BUG3_WEST();
++  console.log('   giriş kenarı = '+edge);
++  T('BUG3: batı-cepheli antrede giriş kapısı yerleşti', edge!==null);
++  T('BUG3: kapı dikey (batı) kenarda', edge==='dikey');
++}
++
++console.log('\n'+(fail? ('FAIL — '+fail+' başarısız, '+pass+' geçti') : ('TÜM TESTLER GEÇTİ ('+pass+')')));
++process.exit(fail? 1:0);

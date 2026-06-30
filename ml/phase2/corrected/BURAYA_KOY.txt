@@ -1,0 +1,1 @@
+KPTA\x27dan düzelttiğin SVG/JSON dosyalarını buraya koy, sonra:  python3 ml/phase2/ingest.py

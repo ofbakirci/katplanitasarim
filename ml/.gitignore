@@ -1,0 +1,29 @@
+# Generated ML artifacts — regenerate locally, never commit (kept out of git so
+# the tracked ml/ tree is pure source: engine/gen/train code + docs).
+#
+# Datasets:   node ml/gen_dataset.js [N] [seed]   (DATA_DIR env overrides 'data')
+# EDA/preds:  python3 ml/prepare.py ; python3 ml/train.py
+# Phase-2:    node ml/phase2/gen_cases.js ; python3 ml/phase2/ingest.py
+
+data/
+data_*/
+out/
+out_*/
+*.bin
+*.pt
+__pycache__/
+*.pyc
+
+# phase-2 hand-correction outputs (regenerated/derived — never commit)
+phase2/finetune/
+phase2/preview/
+# phase-2 case pack: KEEP IN REPO. The user opens these in KPTA, hand-corrects
+# them, and re-exports — so they must persist (small JSONs, safe to track).
+!phase2/cases/
+!phase2/cases/*.json
+# batch 2 case pack: same deal — KEEP IN REPO (user opens + hand-corrects these).
+!phase2/cases_batch2/
+!phase2/cases_batch2/*.json
+# keep the placeholder that tells the user where to drop corrected exports
+phase2/corrected/*
+!phase2/corrected/BURAYA_KOY.txt

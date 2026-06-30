@@ -1,0 +1,513 @@
+[
+  {
+    "id": "apt_rect_1p1",
+    "label": "1+1 tek tip, dar dikdörtgen",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "rect",
+    "program": [
+      0,
+      5,
+      1,
+      2,
+      2,
+      2,
+      0,
+      2,
+      1,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 20,
+    "cols": 24,
+    "regions": 14,
+    "bad": 4,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_rect_1p1.json"
+  },
+  {
+    "id": "apt_rect_2p1x2",
+    "label": "2+1 x2, orta dikdörtgen",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "rect",
+    "program": [
+      0,
+      5,
+      1,
+      2,
+      4,
+      2,
+      0,
+      2,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 24,
+    "cols": 32,
+    "regions": 15,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_rect_2p1x2.json"
+  },
+  {
+    "id": "apt_rect_3p1x2",
+    "label": "3+1 x2, geniş dikdörtgen",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "rect",
+    "program": [
+      0,
+      6,
+      1,
+      2,
+      6,
+      2,
+      2,
+      2,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 26,
+    "cols": 40,
+    "regions": 22,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_rect_3p1x2.json"
+  },
+  {
+    "id": "apt_rect_4p1x2",
+    "label": "4+1 x2, büyük dikdörtgen",
+    "bina": "apartman",
+    "kat": 8,
+    "shape": "rect",
+    "program": [
+      0,
+      8,
+      1,
+      2,
+      8,
+      2,
+      2,
+      2,
+      4,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 30,
+    "cols": 48,
+    "regions": 23,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_apt_rect_4p1x2.json"
+  },
+  {
+    "id": "apt_rect_studio",
+    "label": "Stüdyo (1+0) x3",
+    "bina": "apartman",
+    "kat": 4,
+    "shape": "rect",
+    "program": [
+      0,
+      4,
+      1,
+      3,
+      3,
+      0,
+      0,
+      0,
+      1,
+      3
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 0,
+        "ensuite": false,
+        "acik": false,
+        "adet": 3
+      }
+    ],
+    "rows": 22,
+    "cols": 30,
+    "regions": 18,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_rect_studio.json"
+  },
+  {
+    "id": "apt_rect_mixed",
+    "label": "Karışık: 1+1 x2 + 2+1 x1",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "rect",
+    "program": [
+      0,
+      6,
+      2,
+      3,
+      4,
+      3,
+      1,
+      3,
+      1.3333333333333333,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 2
+      },
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 24,
+    "cols": 36,
+    "regions": 19,
+    "bad": 4,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_rect_mixed.json"
+  },
+  {
+    "id": "apt_L_2p1_3p1",
+    "label": "L plan: 2+1 + 3+1",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "L",
+    "program": [
+      0,
+      5,
+      2,
+      2,
+      5,
+      2,
+      1,
+      2,
+      2.5,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 1
+      },
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 32,
+    "cols": 40,
+    "regions": 18,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_apt_L_2p1_3p1.json"
+  },
+  {
+    "id": "apt_L_1p1x3",
+    "label": "L plan: 1+1 x3",
+    "bina": "apartman",
+    "kat": 7,
+    "shape": "L",
+    "program": [
+      0,
+      7,
+      1,
+      3,
+      3,
+      3,
+      0,
+      3,
+      1,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 3
+      }
+    ],
+    "rows": 28,
+    "cols": 36,
+    "regions": 17,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_apt_L_1p1x3.json"
+  },
+  {
+    "id": "apt_T_3p1x3",
+    "label": "T plan: 3+1 x3",
+    "bina": "apartman",
+    "kat": 7,
+    "shape": "T",
+    "program": [
+      0,
+      7,
+      1,
+      3,
+      9,
+      3,
+      3,
+      3,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 3
+      }
+    ],
+    "rows": 32,
+    "cols": 44,
+    "regions": 29,
+    "bad": 5,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_T_3p1x3.json"
+  },
+  {
+    "id": "apt_T_mixed",
+    "label": "T plan karışık: 2+1 + 1+1",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "T",
+    "program": [
+      0,
+      6,
+      2,
+      3,
+      4,
+      3,
+      1,
+      3,
+      1.3333333333333333,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      },
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 30,
+    "cols": 40,
+    "regions": 19,
+    "bad": 3,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_T_mixed.json"
+  },
+  {
+    "id": "apt_tight_1p1_tall",
+    "label": "Sınırda: dar+çok katlı 1+1",
+    "bina": "apartman",
+    "kat": 10,
+    "shape": "rect",
+    "program": [
+      0,
+      10,
+      1,
+      2,
+      2,
+      2,
+      0,
+      0,
+      1,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 2
+      }
+    ],
+    "rows": 20,
+    "cols": 22,
+    "regions": 16,
+    "bad": 6,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_apt_tight_1p1_tall.json"
+  },
+  {
+    "id": "villa_rect_4p1",
+    "label": "Villa 4+1, dikdörtgen",
+    "bina": "villa",
+    "kat": 2,
+    "shape": "rect",
+    "program": [
+      1,
+      2,
+      1,
+      1,
+      4,
+      1,
+      1,
+      1,
+      4,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 24,
+    "cols": 28,
+    "regions": 9,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_villa_rect_4p1.json"
+  },
+  {
+    "id": "villa_L_5p1",
+    "label": "Villa 5+1 ensuite, L plan",
+    "bina": "villa",
+    "kat": 2,
+    "shape": "L",
+    "program": [
+      1,
+      2,
+      1,
+      1,
+      5,
+      1,
+      1,
+      1,
+      5,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 5,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 28,
+    "cols": 32,
+    "regions": 8,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_villa_L_5p1.json"
+  },
+  {
+    "id": "villa_T_3p1",
+    "label": "Villa 3+1, T plan tek kat",
+    "bina": "villa",
+    "kat": 1,
+    "shape": "T",
+    "program": [
+      1,
+      1,
+      1,
+      1,
+      3,
+      1,
+      1,
+      1,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 26,
+    "cols": 30,
+    "regions": 8,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_villa_T_3p1.json"
+  }
+]

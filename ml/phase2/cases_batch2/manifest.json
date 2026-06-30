@@ -1,0 +1,1005 @@
+[
+  {
+    "id": "b2_apt_rect_2p1x3_closed",
+    "label": "2+1 x3 kapalı mutfak, çok daireli kat",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "rect",
+    "pattern": "gereksiz-koridor",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 3,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      6,
+      1,
+      3,
+      6,
+      3,
+      0,
+      0,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 3
+      }
+    ],
+    "rows": 26,
+    "cols": 40,
+    "regions": 23,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_2p1x3_closed.json"
+  },
+  {
+    "id": "b2_apt_rect_3p1x2_closed",
+    "label": "3+1 x2 kapalı mutfak, geniş daire",
+    "bina": "apartman",
+    "kat": 7,
+    "shape": "rect",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 2,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      7,
+      1,
+      2,
+      6,
+      2,
+      2,
+      0,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 2
+      }
+    ],
+    "rows": 28,
+    "cols": 40,
+    "regions": 23,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_3p1x2_closed.json"
+  },
+  {
+    "id": "b2_apt_rect_3p1x3_closed",
+    "label": "3+1 x3 kapalı mutfak, büyük kat",
+    "bina": "apartman",
+    "kat": 8,
+    "shape": "rect",
+    "pattern": "karisik",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 3,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      8,
+      1,
+      3,
+      9,
+      3,
+      3,
+      0,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 3
+      }
+    ],
+    "rows": 28,
+    "cols": 52,
+    "regions": 32,
+    "bad": 3,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_3p1x3_closed.json"
+  },
+  {
+    "id": "b2_apt_rect_4p1x2_closed",
+    "label": "4+1 x2 kapalı mutfak ensuite",
+    "bina": "apartman",
+    "kat": 9,
+    "shape": "rect",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 2,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      9,
+      1,
+      2,
+      8,
+      2,
+      2,
+      0,
+      4,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 2
+      }
+    ],
+    "rows": 32,
+    "cols": 48,
+    "regions": 25,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_4p1x2_closed.json"
+  },
+  {
+    "id": "b2_apt_L_3p1x2_closed",
+    "label": "L plan 3+1 x2 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "L",
+    "pattern": "gereksiz-koridor",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 2,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      6,
+      1,
+      2,
+      6,
+      2,
+      2,
+      0,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 2
+      }
+    ],
+    "rows": 32,
+    "cols": 44,
+    "regions": 23,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_L_3p1x2_closed.json"
+  },
+  {
+    "id": "b2_apt_L_2p1_3p1_closed",
+    "label": "L plan 2+1 + 3+1 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "L",
+    "pattern": "karisik",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 2,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      5,
+      2,
+      2,
+      5,
+      2,
+      1,
+      0,
+      2.5,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 1
+      },
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 1
+      }
+    ],
+    "rows": 32,
+    "cols": 40,
+    "regions": 20,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_L_2p1_3p1_closed.json"
+  },
+  {
+    "id": "b2_apt_T_3p1x2_closed",
+    "label": "T plan 3+1 x2 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 7,
+    "shape": "T",
+    "pattern": "gereksiz-koridor",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 2,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      7,
+      1,
+      2,
+      6,
+      2,
+      2,
+      0,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 2
+      }
+    ],
+    "rows": 32,
+    "cols": 44,
+    "regions": 23,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_T_3p1x2_closed.json"
+  },
+  {
+    "id": "b2_apt_T_4p1_closed",
+    "label": "T plan 4+1 tek büyük daire kapalı mutfak",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "T",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 1,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      5,
+      1,
+      1,
+      4,
+      1,
+      1,
+      0,
+      4,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 1
+      }
+    ],
+    "rows": 30,
+    "cols": 40,
+    "regions": 11,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_T_4p1_closed.json"
+  },
+  {
+    "id": "b2_apt_rect_2p1x4_closed",
+    "label": "2+1 x4 kapalı mutfak, kalabalık kat",
+    "bina": "apartman",
+    "kat": 8,
+    "shape": "rect",
+    "pattern": "gereksiz-koridor",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 4,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      8,
+      1,
+      4,
+      8,
+      4,
+      0,
+      0,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 4
+      }
+    ],
+    "rows": 28,
+    "cols": 48,
+    "regions": 29,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_2p1x4_closed.json"
+  },
+  {
+    "id": "b2_apt_rect_mixed_closed",
+    "label": "Karışık 1+1 x2 + 2+1 x2 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "rect",
+    "pattern": "karisik",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 4,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      6,
+      2,
+      4,
+      6,
+      4,
+      2,
+      0,
+      1.5,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 2
+      },
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 2
+      }
+    ],
+    "rows": 26,
+    "cols": 44,
+    "regions": 29,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_mixed_closed.json"
+  },
+  {
+    "id": "b2_apt_L_4p1_3p1_closed",
+    "label": "L plan 4+1 + 3+1 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 7,
+    "shape": "L",
+    "pattern": "karisik",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 2,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      7,
+      2,
+      2,
+      7,
+      2,
+      2,
+      0,
+      3.5,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 1
+      },
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 1
+      }
+    ],
+    "rows": 36,
+    "cols": 48,
+    "regions": 24,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_L_4p1_3p1_closed.json"
+  },
+  {
+    "id": "b2_apt_rect_1p1x3_closed",
+    "label": "1+1 x3 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "rect",
+    "pattern": "kapali-mutfak",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 3,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      6,
+      1,
+      3,
+      3,
+      3,
+      0,
+      0,
+      1,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 3
+      }
+    ],
+    "rows": 24,
+    "cols": 32,
+    "regions": 20,
+    "bad": 3,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_1p1x3_closed.json"
+  },
+  {
+    "id": "b2_apt_tight_2p1x2_closed",
+    "label": "Sınırda dar 2+1 x2 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 9,
+    "shape": "rect",
+    "pattern": "kapali-mutfak",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 2,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      9,
+      1,
+      2,
+      4,
+      2,
+      0,
+      0,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 2
+      }
+    ],
+    "rows": 22,
+    "cols": 26,
+    "regions": 17,
+    "bad": 4,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_tight_2p1x2_closed.json"
+  },
+  {
+    "id": "b2_villa_rect_4p1_closed",
+    "label": "Villa 4+1 kapalı mutfak ensuite",
+    "bina": "villa",
+    "kat": 2,
+    "shape": "rect",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 1,
+    "mutfakAcikUnits": 0,
+    "program": [
+      1,
+      2,
+      1,
+      1,
+      4,
+      1,
+      1,
+      0,
+      4,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 1
+      }
+    ],
+    "rows": 24,
+    "cols": 30,
+    "regions": 10,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_b2_villa_rect_4p1_closed.json"
+  },
+  {
+    "id": "b2_villa_L_5p1_closed",
+    "label": "Villa 5+1 kapalı mutfak ensuite, L plan",
+    "bina": "villa",
+    "kat": 2,
+    "shape": "L",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 1,
+    "mutfakAcikUnits": 0,
+    "program": [
+      1,
+      2,
+      1,
+      1,
+      5,
+      1,
+      1,
+      0,
+      5,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 5,
+        "salon": 1,
+        "ensuite": true,
+        "acik": false,
+        "adet": 1
+      }
+    ],
+    "rows": 30,
+    "cols": 34,
+    "regions": 11,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_villa_L_5p1_closed.json"
+  },
+  {
+    "id": "b2_apt_T_2p1x3_closed",
+    "label": "T plan 2+1 x3 kapalı mutfak",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "T",
+    "pattern": "gereksiz-koridor",
+    "mutfak": "kapalı",
+    "mutfakKapaliUnits": 3,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      6,
+      1,
+      3,
+      6,
+      3,
+      0,
+      0,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": false,
+        "adet": 3
+      }
+    ],
+    "rows": 30,
+    "cols": 42,
+    "regions": 23,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_T_2p1x3_closed.json"
+  },
+  {
+    "id": "b2_apt_rect_2p1x2_open",
+    "label": "2+1 x2 açık mutfak",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "rect",
+    "pattern": "kapali-mutfak",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 2,
+    "program": [
+      0,
+      5,
+      1,
+      2,
+      4,
+      2,
+      0,
+      2,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 24,
+    "cols": 32,
+    "regions": 15,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_2p1x2_open.json"
+  },
+  {
+    "id": "b2_apt_rect_3p1x2_open",
+    "label": "3+1 x2 açık mutfak ensuite",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "rect",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 2,
+    "program": [
+      0,
+      6,
+      1,
+      2,
+      6,
+      2,
+      2,
+      2,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 26,
+    "cols": 40,
+    "regions": 22,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_3p1x2_open.json"
+  },
+  {
+    "id": "b2_apt_L_2p1x2_open",
+    "label": "L plan 2+1 x2 açık mutfak",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "L",
+    "pattern": "gereksiz-koridor",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 2,
+    "program": [
+      0,
+      5,
+      1,
+      2,
+      4,
+      2,
+      0,
+      2,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 2,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 2
+      }
+    ],
+    "rows": 30,
+    "cols": 38,
+    "regions": 16,
+    "bad": 4,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_L_2p1x2_open.json"
+  },
+  {
+    "id": "b2_apt_rect_1p1x3_open",
+    "label": "1+1 x3 açık mutfak, çok daireli",
+    "bina": "apartman",
+    "kat": 7,
+    "shape": "rect",
+    "pattern": "gereksiz-koridor",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 3,
+    "program": [
+      0,
+      7,
+      1,
+      3,
+      3,
+      3,
+      0,
+      3,
+      1,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 3
+      }
+    ],
+    "rows": 22,
+    "cols": 34,
+    "regions": 17,
+    "bad": 2,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_1p1x3_open.json"
+  },
+  {
+    "id": "b2_apt_T_3p1_open",
+    "label": "T plan 3+1 açık mutfak ensuite",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "T",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 1,
+    "program": [
+      0,
+      5,
+      1,
+      1,
+      3,
+      1,
+      1,
+      1,
+      3,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 28,
+    "cols": 36,
+    "regions": 12,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_b2_apt_T_3p1_open.json"
+  },
+  {
+    "id": "b2_apt_rect_mixed_open",
+    "label": "Karışık 1+1 + 3+1 açık mutfak",
+    "bina": "apartman",
+    "kat": 6,
+    "shape": "rect",
+    "pattern": "karisik",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 2,
+    "program": [
+      0,
+      6,
+      2,
+      2,
+      4,
+      2,
+      1,
+      2,
+      2,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 1,
+        "ensuite": false,
+        "acik": true,
+        "adet": 1
+      },
+      {
+        "oda": 3,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 24,
+    "cols": 38,
+    "regions": 17,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_mixed_open.json"
+  },
+  {
+    "id": "b2_villa_T_4p1_open",
+    "label": "Villa 4+1 açık mutfak ensuite, T plan",
+    "bina": "villa",
+    "kat": 2,
+    "shape": "T",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 1,
+    "program": [
+      1,
+      2,
+      1,
+      1,
+      4,
+      1,
+      1,
+      1,
+      4,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 28,
+    "cols": 32,
+    "regions": 9,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_villa_T_4p1_open.json"
+  },
+  {
+    "id": "b2_apt_rect_4p1_open",
+    "label": "4+1 tek büyük daire açık mutfak",
+    "bina": "apartman",
+    "kat": 5,
+    "shape": "rect",
+    "pattern": "salon-fazla-buyuk",
+    "mutfak": "açık",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 1,
+    "program": [
+      0,
+      5,
+      1,
+      1,
+      4,
+      1,
+      1,
+      1,
+      4,
+      0
+    ],
+    "specs": [
+      {
+        "oda": 4,
+        "salon": 1,
+        "ensuite": true,
+        "acik": true,
+        "adet": 1
+      }
+    ],
+    "rows": 28,
+    "cols": 36,
+    "regions": 13,
+    "bad": 0,
+    "valid": true,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_4p1_open.json"
+  },
+  {
+    "id": "b2_apt_rect_studio_open",
+    "label": "Stüdyo (1+0) x3",
+    "bina": "apartman",
+    "kat": 4,
+    "shape": "rect",
+    "pattern": "kapali-mutfak",
+    "mutfak": "n/a",
+    "mutfakKapaliUnits": 0,
+    "mutfakAcikUnits": 0,
+    "program": [
+      0,
+      4,
+      1,
+      3,
+      3,
+      0,
+      0,
+      3,
+      1,
+      3
+    ],
+    "specs": [
+      {
+        "oda": 1,
+        "salon": 0,
+        "ensuite": false,
+        "acik": true,
+        "adet": 3
+      }
+    ],
+    "rows": 22,
+    "cols": 30,
+    "regions": 14,
+    "bad": 1,
+    "valid": false,
+    "roundtripOk": true,
+    "file": "case_b2_apt_rect_studio_open.json"
+  }
+]

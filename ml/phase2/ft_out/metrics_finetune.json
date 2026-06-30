@@ -1,0 +1,54 @@
+{
+  "lr": 0.0001,
+  "epochs": 60,
+  "nTrain": 10,
+  "nHeldout": 4,
+  "heldout": [
+    "case_apt_rect_2p1x2.svg",
+    "case_apt_rect_mixed.svg",
+    "case_apt_rect_studio.svg",
+    "case_villa_L_5p1.svg"
+  ],
+  "bestEp": 10,
+  "bestHeldoutMiouCorr": 0.23207302902434152,
+  "miouCorr_before": 0.21889904853459757,
+  "miouCorr_after": 0.23207302902434152,
+  "shares": {
+    "salon": {
+      "engine": 0.4554107397109392,
+      "base": 0.3596478974138549,
+      "finetuned": 0.38274032993946555,
+      "userTarget": 0.371872201626191
+    },
+    "yatak": {
+      "engine": 0.2032919929570528,
+      "base": 0.22516883988376674,
+      "finetuned": 0.2172840019208038,
+      "userTarget": 0.31586063706658785
+    },
+    "koridor": {
+      "engine": 0.09919507575757575,
+      "base": 0.1030401672979798,
+      "finetuned": 0.09692432133838383,
+      "userTarget": 0.046977588383838385
+    },
+    "antre": {
+      "engine": 0.05133711897342216,
+      "base": 0.07480450560570241,
+      "finetuned": 0.0700045949297944,
+      "userTarget": 0.07837706352084678
+    },
+    "mutfak": {
+      "engine": 0.0,
+      "base": 0.0,
+      "finetuned": 0.0,
+      "userTarget": 0.0
+    },
+    "banyo": {
+      "engine": 0.07251946548821549,
+      "base": 0.09517109817143062,
+      "finetuned": 0.08901386426319936,
+      "userTarget": 0.0720759931988323
+    }
+  }
+}
