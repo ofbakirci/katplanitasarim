@@ -30,7 +30,8 @@ const strictTests = [
   'tests/export.js',
   'tests/ai-temiz.js',
   'tests/test27.js',
-  'tests/antre-test.js'
+  'tests/antre-test.js',
+  'tests/camera-prompt.js'
 ];
 
 const smokeTests = [

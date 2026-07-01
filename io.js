@@ -708,6 +708,115 @@ function cameraViewInfo(map, cam){
   const furniture_seen=furnitureSeen(viewedRooms, cone, fpPolyArea(cone));
   return { room_id:chosen.id, room_weights:weights, cone_spills:spills, cone_polygon_px:cpoly, cone_polygon_norm:cnorm, furniture_seen:furniture_seen };
 }
+
+/* ============================================================================
+   KAMERA RENDER PROMPT (Opsiyon 1 — text-guided)
+   Bir kamera export objesinden (exportCameras/cameraViewInfo çıktısı) + haritadan
+   İngilizce iç-mekan render prompt'u kurar. SAF fonksiyon (yan etkisiz) → window'a
+   açılır (cameraViewInfo gibi) ve tests/camera-prompt.js kapsar. nano-banana'ya
+   METİN olarak gider (opsiyon 2 = kameranın kendi-açı PNG'si, view3d.snapCameraDataURL).
+   ============================================================================ */
+// mobilya key → İngilizce isim (liste içinde bare-noun; view3d.js FURN_TR ile aynı anahtarlar).
+const FP_FURN_EN = {
+  sofa_2:'two-seat sofa', sofa_3:'three-seat sofa', sectional_l:'L-shaped sectional', armchair:'armchair',
+  pouf:'pouf', coffee_table:'coffee table', side_table:'side table', tv_unit:'TV unit', tv:'wall-mounted TV',
+  bookcase:'bookcase', console:'console table', rug:'area rug', dining_table_4:'dining table for four',
+  dining_table_6:'dining table for six', dining_chair:'dining chairs', sideboard:'sideboard',
+  bed_single:'single bed', bed_double:'double bed', bed_queen:'queen bed', bed_king:'king bed',
+  nightstand:'nightstands', wardrobe_2:'wardrobe', wardrobe_3:'wardrobe', wardrobe_4:'wardrobe',
+  dresser:'dresser', vanity:'vanity table', bench:'bench', counter:'kitchen counter', island:'kitchen island',
+  fridge:'refrigerator', oven_hob:'cooktop and oven', dishwasher:'dishwasher', sink:'sink',
+  toilet:'toilet', washbasin:'washbasin', bathtub:'bathtub', shower_tray:'shower', washer:'washing machine',
+  shoe_cabinet:'shoe cabinet', coat_rack:'coat rack', desk:'desk', office_chair:'office chair',
+  plant:'potted plant', bistro_table:'bistro table', bistro_chair:'bistro chairs'
+};
+// oda-tipi → varsayılan mobilya cümle-parçası (kamera hiç mobilya GÖRMÜYORSA / sahne boşsa).
+const FP_ROOM_DEFAULT_EN = {
+  living:'sofas, a coffee table and a media unit', living_kitchen:'sofas, a dining table and a kitchen counter',
+  kitchen:'kitchen counters, cabinets and appliances', bedroom:'a bed and a wardrobe',
+  bathroom:'a bathtub, a toilet and a washbasin', wc:'a toilet and a washbasin',
+  hall:'no furniture, an open passage', studio:'a bed, a sofa and a kitchenette',
+  study:'a desk and a bookcase', storage:'shelving units', balcony:'outdoor seating', room:'simple furniture'
+};
+// çekirdek (yapı elemanı) → mobilyasız beton/çelik betimi.
+const FP_CORE_EN = {
+  stairs:'a bare concrete staircase with metal railings and no furniture',
+  elevator:'an elevator shaft with metal doors and no furniture',
+  fire_stairs:'a bare concrete and steel fire-escape stairwell with no furniture',
+  shaft:'a technical shaft with no furniture'
+};
+const FP_LENS_PHRASE = { 16:'ultra-wide 16 mm', 24:'24 mm wide-angle', 35:'35 mm', 50:'50 mm short-telephoto' };
+const FP_HEIGHT_PHRASE = { low:'a low camera height (~0.9 m)', eye:'eye height (~1.5 m)', high:'an elevated height (~2.1 m)' };
+const FP_LIGHT_EN = { warm:'warm golden interior daylight with soft shadows and visible lamp glow',
+  arch:'bright neutral architectural daylight', maq:'soft even studio lighting' };
+const FP_MATERIAL_EN = { warm:'warm oak-and-tile materials with a cozy premium finish',
+  arch:'light oak floors and clean white plaster walls', maq:'matte white architectural scale-model materials' };
+// id → oda (daire odaları + ortak alanlar) endeksi; komşu-oda ve ev-odası aramaları için.
+function fpRoomIndex(map){
+  const ix={};
+  ((map&&map.units)||[]).forEach(u=>(u.rooms||[]).forEach(r=>{ if(r&&r.id) ix[r.id]=r; }));
+  ((map&&map.common_areas)||[]).forEach(r=>{ if(r&&r.id) ix[r.id]=r; });
+  return ix;
+}
+function fpUnitOfRoom(map, roomId){
+  return ((map&&map.units)||[]).find(u=>(u.rooms||[]).some(r=>r.id===roomId)) || null;
+}
+// ["a","b","c"] → "a, b and c" (Oxford-'and'; virgülsüz tek/çift).
+function fpOxfordList(a){
+  if(!a||!a.length) return '';
+  if(a.length===1) return a[0];
+  if(a.length===2) return a[0]+' and '+a[1];
+  return a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+}
+function cameraRenderPrompt(map, cam, opts){
+  opts=opts||{}; cam=cam||{};
+  const style=opts.style||'warm';
+  const ix=fpRoomIndex(map);
+  const home=cam.room_id ? ix[cam.room_id] : null;
+  const typeEnum=home ? (home.type||'room') : 'room';
+  const roomEn=(home && home.name_en) ? String(home.name_en).toLowerCase() : 'room';
+  const unit=fpUnitOfRoom(map, cam.room_id);
+  // birim etiketi = "2+1"/"3+1"/"stüdyo"; Türkçe parantezli ek (ör. "(ebeveyn banyolu)") İngilizce prompt'a sızmasın.
+  const unitLabel=(unit && unit.type) ? String(unit.type).split(' (')[0].trim() : '';
+  const isCore=!!FP_CORE_EN[typeEnum];
+
+  // bakış yönü: koni komşu oda(lar)a taşıyorsa "looking toward the X", değilse "looking across the room".
+  let looking='looking across the room';
+  const others=((cam.room_weights)||[]).filter(w=>w && w.room_id && w.room_id!==cam.room_id);
+  if((cam.cone_spills || others.length) ){
+    const nb=others.map(w=>ix[w.room_id]).filter(Boolean)[0];
+    if(nb && nb.name_en) looking='looking toward the '+String(nb.name_en).toLowerCase();
+  }
+
+  // kadrajdaki mobilya (prominansa göre sıralı furniture_seen'den ilk ~5 benzersiz tip).
+  const names=[]; const used={};
+  ((cam.furniture_seen)||[]).forEach(f=>{ const en=f&&FP_FURN_EN[f.type]; if(en && !used[f.type]){ used[f.type]=1; names.push(en); } });
+  const top=names.slice(0,5);
+  let furnPhrase;
+  if(isCore) furnPhrase=FP_CORE_EN[typeEnum];
+  else if(top.length) furnPhrase='In view: '+fpOxfordList(top)+'.';
+  else furnPhrase='The room contains '+(FP_ROOM_DEFAULT_EN[typeEnum]||'simple furniture')+'.';
+
+  const lens=cam.lens_mm||24, lensP=FP_LENS_PHRASE[lens]||(lens+' mm');
+  const height=cam.height||'eye', heightP=FP_HEIGHT_PHRASE[height]||FP_HEIGHT_PHRASE.eye;
+  const unitP=unitLabel ? (' of a '+unitLabel+' apartment') : '';
+
+  const brief={ room_en:roomEn, room_type:typeEnum, unit_label:unitLabel, height:height,
+                looking:looking, furniture_en:top, lens_mm:lens, is_core:isCore };
+
+  let prompt;
+  if(isCore){
+    prompt='Photorealistic interior architectural photograph of a residential building core: '+furnPhrase+
+      ' Viewed at '+heightP+', '+lensP+', perfectly horizontal and eye-level (not top-down, not a high angle). '+
+      (FP_LIGHT_EN[style]||FP_LIGHT_EN.warm)+'. Photoreal, high detail. No people, no text.';
+  } else {
+    prompt='Photorealistic interior real-estate photograph. Standing at '+heightP+' inside the '+roomEn+unitP+', '+
+      looking+'. '+lensP+', perfectly horizontal, eye-level (not top-down, not a high angle). '+furnPhrase+' '+
+      (FP_LIGHT_EN[style]||FP_LIGHT_EN.warm)+', '+(FP_MATERIAL_EN[style]||FP_MATERIAL_EN.warm)+
+      '. Photoreal, high detail. No people, no text.';
+  }
+  return { brief:brief, prompt:prompt };
+}
 function fpDownload(name, text, mime){
   const blob=new Blob([text],{type:mime||'application/octet-stream'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
@@ -718,7 +827,7 @@ function exportFloorplanMapFiles(){
   fpDownload('floorplan-map.json', JSON.stringify(map,null,2), 'application/json');
   setTimeout(()=>fpDownload('floorplan-overlay.svg', buildFloorplanOverlaySVG(map), 'image/svg+xml'), 300);
 }
-if(typeof window!=='undefined'){ window.buildFloorplanMap=buildFloorplanMap; window.buildFloorplanOverlaySVG=buildFloorplanOverlaySVG; window.cameraViewInfo=cameraViewInfo; }
+if(typeof window!=='undefined'){ window.buildFloorplanMap=buildFloorplanMap; window.buildFloorplanOverlaySVG=buildFloorplanOverlaySVG; window.cameraViewInfo=cameraViewInfo; window.cameraRenderPrompt=cameraRenderPrompt; }
 
 /* ============================================================================
    AI render girdileri → dataURL (indirme YOK). Mesken prototip "Planı Boya"
