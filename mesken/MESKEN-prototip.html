@@ -228,6 +228,24 @@ button{font-family:inherit;cursor:pointer}
   .step .lab{display:none}
   .aside.l{width:0;display:none}
 }
+
+/* ---- adım 5: kamera A/B render galerisi ---- */
+#camGallery{width:100%}
+.camrow{margin-bottom:18px}
+.camrow-h{font-size:12px;font-weight:600;letter-spacing:.04em;color:var(--ink);margin:0 0 8px}
+.camrow-h .muted{font-weight:500}
+.campair{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.campair:has(.campane:only-child){grid-template-columns:1fr;max-width:460px}
+.campane{position:relative;border:1.5px solid var(--line);border-radius:var(--r-lg,14px);background:var(--panel);overflow:hidden;min-height:150px;margin:0}
+.campane-img{display:block;width:100%;height:auto;cursor:zoom-in}
+.campane-h{position:absolute;top:8px;left:8px;display:flex;gap:7px;align-items:center;background:rgba(20,16,12,.62);color:#fff;border-radius:999px;padding:3px 10px;font-size:11px;backdrop-filter:blur(3px)}
+.campane-h b{font-weight:700}
+.campane-h span{opacity:.8;font-size:10px}
+.campane.loading,.campane.err{display:flex;flex-direction:column;align-items:flex-start;justify-content:center}
+.campane-msg{display:flex;align-items:center;gap:9px;color:var(--muted);font-size:12px;padding:20px 16px;width:100%;justify-content:center}
+.campane.err .campane-msg{color:#b4553f}
+.spin{width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--acc,#c98a5a);border-radius:50%;display:inline-block;animation:camspin .8s linear infinite}
+@keyframes camspin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -286,13 +304,13 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     {tr:'Sınır + Yerleşim', en:'Plan'}, {tr:'3B', en:'3D'}, {tr:'Boya', en:'Paint'},
     {tr:'Kamera', en:'Camera'}, {tr:'Döşe', en:'Furnish'}
   ];
-  var CTA = {1:'3B Görüntüle',2:'Planı Boya',3:'Kamerayı Kur',4:'Mekânı Döşe',5:'Planı Dışa Aktar'};
+  var CTA = {1:'3B Görüntüle',2:'Planı Boya',3:'Kamerayı Kur',4:'İç Mekânı Render Et',5:'Planı Dışa Aktar'};
   var HINT = {
     1:'Bina sınırını çizin ve “Yerleşimi Oluştur” ile planı üretin (Profesyonel modda parsel + imar da var). İpucu: boşluk (Space) tuşunu basılı tutarak planı kaydırın. Sonra 3B’de inceleyin.',
     2:'3B dollhouse’u döndürüp yakınlaştırın — render için istediğiniz açıyı bulun. “Planı Boya” deyince o açı kilitlenir.',
     3:'Kilitli 3B açısından üretilen fotoreal render. Stili değiştirebilirsiniz.',
     4:'Boyalı render solda; sağdaki 3B mesh’e tıklayarak kamera yerleştirin. Her kamera için render yöntemini (prompt / kendi-açı görsel) seçip metnini düzenleyin.',
-    5:'Stili seçin, döşeme ürünlerini inceleyin ve pazaryerine aktarın.'
+    5:'Her kameranın iç mekân render’ı A (kural-tabanlı prompt) ve B (kendi-açı görsel) olarak yan yana üretilir. Stili seçin, döşeme ürünlerini inceleyin ve pazaryerine aktarın.'
   };
   var STYLES = [
     {key:'warm', label:'Sıcak',  dot:'#c98a5a', desc:'Ahşap zemin, mobilya ve sıcak ışık — cozy dollhouse.'},
@@ -311,6 +329,8 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     lockedView:null,         // adım 2→3 geçişinde kilitlenen 3B açısı {position,target,up,fov}
     isoSnap:null,            // o açıdan alınan renk-kodlu izometrik PNG (dataURL) → nano girdisi
     cameras:[],              // adım 4'te view3d 3B mesh'ten export edilen kameralar (§3.3 şeması)
+    cameraRenders:[],        // adım 5'te her kamera için köprüden dönen A/B iç-mekan render'ları
+    cameraRendering:false,   // kamera render akışı sürüyor mu (galeri per-kart spinner'ları için)
     devExport: /(dev|camexport|camexp)/i.test((location.hash||'')+(location.search||''))  // gizli kamera export açık mı (?dev / #camexport / Alt+Shift+E)
   };
 
@@ -367,6 +387,66 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       state.paintRender=img;
       return img;
     });
+  }
+
+  // ── adım 4→5: tek kamerayı köprüye yolla → A (prompt) + B (kendi-açı) render'ı ──
+  // cam = exportCameras objesi (prompt [ops.1] + snapshot [ops.2] + render_method taşır).
+  function postCamera(cam, style){
+    return fetch(RENDER_BASE+'/camera', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ id:cam.id, prompt:cam.prompt||'', snapshot:cam.snapshot||'',
+        method:cam.render_method||'both', style:style||'warm' })
+    }).then(function(r){ return r.json(); }).then(function(j){
+      if(!j) throw new Error('Kamera render sunucusu boş yanıt verdi');
+      return j;   // { ok, id, a, b, aError, bError, error }
+    });
+  }
+  // Yerleştirilen tüm kameraları SIRAYLA render et; her sonuç gelince galeriyi tazele (tam-ekran spinner YOK,
+  // kullanıcı A/B'lerin tek tek dolmasını izler). Tüm workflow "tekte" — adım 4 CTA'sından tetiklenir.
+  function runCameraRenders(){
+    var cams=state.cameras||[];
+    if(!cams.length){ state.cameraRendering=false; return; }
+    state.cameraRendering=true;
+    var i=0;
+    function next(){
+      if(i>=cams.length){ state.cameraRendering=false; refreshCamGallery(); toast('Kamera render’ları hazır'); return; }
+      var idx=i, cam=cams[i];
+      postCamera(cam, state.paintStyle).then(function(res){
+        var r=state.cameraRenders[idx]; if(r){ r.a=res.a||null; r.b=res.b||null; r.aErr=res.aError||null; r.bErr=res.bError||null;
+          if(!res.ok && !res.a && !res.b) r.err=res.error||'render başarısız'; r.pending=false; }
+      }).catch(function(err){
+        var r=state.cameraRenders[idx]; if(r){ r.pending=false; r.err=String(err&&err.message||err);
+          var down=/Failed to fetch|NetworkError|ECONNREFUSED|fetch/i.test(r.err); if(down) r.err='Köprü kapalı (npm run mesken:server)'; }
+      }).then(function(){ i++; refreshCamGallery(); next(); });
+    }
+    refreshCamGallery(); next();
+  }
+  // tek kart görseli: yükleniyor / hata / render (tıkla = lightbox).
+  function camPane(label, tag, src, err, pending){
+    var head='<div class="campane-h"><b>'+label+'</b><span>'+tag+'</span></div>';
+    if(src) return '<figure class="campane"><img class="campane-img" data-src="'+src+'" src="'+src+'" alt="'+label+'">'+head+'</figure>';
+    if(pending) return '<div class="campane loading">'+head+'<div class="campane-msg"><span class="spin"></span>render ediliyor…</div></div>';
+    return '<div class="campane err">'+head+'<div class="campane-msg">'+(err||'—')+'</div></div>';
+  }
+  function camGalleryHTML(){
+    var rows=(state.cameraRenders||[]).map(function(r,n){
+      var m=r.method||'both', panes='';
+      if(m!=='snapshot') panes+=camPane('A · Prompt','yaratıcı', r.a, r.aErr||r.err, r.pending);
+      if(m!=='prompt')   panes+=camPane('B · Kendi Açı','geometri', r.b, r.bErr||r.err, r.pending);
+      var room=r.room_id?(' · '+r.room_id):'';
+      return '<div class="camrow"><div class="camrow-h">Kamera '+(n+1)+room+
+        (r.pending?' <span class="muted">· render ediliyor</span>':'')+'</div>'+
+        '<div class="campair">'+panes+'</div></div>';
+    }).join('');
+    var note=state.cameraRendering
+      ? '<p class="muted" style="font-size:11px;margin:0 0 8px">İç mekân render’ları sırayla üretiliyor — her kamera için A (prompt) ve B (kendi açı) yan yana.</p>'
+      : '<p class="muted" style="font-size:11px;margin:0 0 8px">Her kamera için A (kural-tabanlı prompt) ve B (kendi-açı görsel) render’ı. Görsele tıklayıp büyütün.</p>';
+    return note+rows;
+  }
+  function refreshCamGallery(){
+    var g=$('camGallery'); if(!g) return;
+    g.innerHTML=camGalleryHTML();
+    g.querySelectorAll('.campane-img').forEach(function(im){ im.onclick=function(){ openLB(im.getAttribute('data-src')); }; });
   }
 
   var $ = function(id){ return document.getElementById(id); };
@@ -575,11 +655,17 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     var heroStyle=styleObj(PRESET_STYLE[preset]||'arch');
     var heroImg=state.paintRender||PLACEHOLDER_IMG;   // adım 2'de üretilen gerçek render (döşeme katmanı ileride eklenecek)
 
-    // ----- center: furnished render hero -----
-    M.innerHTML='<div class="camwrap" style="max-width:780px">'+
+    // ----- center: kamera A/B galerisi (varsa) + döşeli render hero -----
+    var hasCams=(state.cameraRenders&&state.cameraRenders.length);
+    var galleryBlock=hasCams
+      ? '<div class="camwrap" style="max-width:900px"><div class="camstage-title">İç Mekân Kamera Render’ları · A / B</div><div id="camGallery"></div></div>'
+      : '';
+    M.innerHTML=galleryBlock+
+      '<div class="camwrap" style="max-width:780px'+(hasCams?';margin-top:18px':'')+'">'+
       '<div class="camstage-title">Döşeli Render · '+preset+'</div>'+
       '<div class="heroframe"><img class="heroimg" id="furnishHero" src="'+heroImg+'" alt="Döşeli render"><div class="caption">Döşeli render · '+preset+' stili · tam ekran için tıklayın</div></div>'+
     '</div>';
+    if(hasCams) refreshCamGallery();
 
     // ----- left: marketplace -----
     var PRESETS=['Modern','Scandinavian','Warm Minimal'];
@@ -638,7 +724,17 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     if(s===1){ busyStaged(['Sınır analiz ediliyor…','Daireler yerleştiriliyor…','Yerleşim optimize ediliyor…'], function(){ ensureLayout(); advance(2); }); }   // yerleşim garanti → 3B
     else if(s===2){ lockView(); startPaintRender(); }   // açıyı kilitle (Faz 2) → GERÇEK render köprüsü (nano-banana-pro) → adım 3
     else if(s===3){ busyStaged(['Kamera sahnesi kuruluyor…','3B mesh hazırlanıyor…'], function(){ advance(4); }); }
-    else if(s===4){ captureCameras(); busyStaged(['Kameralar kaydediliyor…','Mekân döşeniyor…'], function(){ advance(5); }); }
+    else if(s===4){
+      captureCameras();
+      var cams=state.cameras||[];
+      // A/B iskeletini şimdi kur (adım 5 galerisi bunu okur; render sonuçları akınca dolar).
+      state.cameraRenders=cams.map(function(c){ return { id:c.id, room_id:c.room_id||null,
+        method:c.render_method||'both', a:null, b:null, aErr:null, bErr:null, err:null, pending:true }; });
+      var labels=cams.length
+        ? ['Kameralar kaydediliyor ('+cams.length+')…','Render sahnesi hazırlanıyor…']
+        : ['Kamera yok — döşemeye geçiliyor…'];
+      busyStaged(labels, function(){ advance(5); if(cams.length) runCameraRenders(); });
+    }
     else { toast('Sunum PDF’i dışa aktarıldı'); }
   };
   $('backBtn').onclick=function(){ if(state.playing) return; if(state.step>1){ state.step--; showStep(); } };
