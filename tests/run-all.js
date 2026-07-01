@@ -17,6 +17,7 @@ const strictTests = [
   'tests/avlu-blok.js',
   'tests/wall-drag.js',
   'tests/koridor-daralt.js',
+  'tests/koridor-genislik.js',
   'tests/cut-preserve.js',
   'tests/heal-disconnect.js',
   'tests/repair-import.js',

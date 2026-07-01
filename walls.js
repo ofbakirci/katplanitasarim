@@ -42,6 +42,27 @@ function calcRegionMetrics(g, cols, minX, minY){
     g.freeW=(2*Math.min(lf,rg)+1)*M; g.freeH=(2*Math.min(un,dn)+1)*M;
   }
 }
+/* GERÇEK koridor min genişliği (m) — bbox tabanlı g.minSide bir bant hücre hücre oyulup
+   zikzağa dönse bile "hâlâ geniş" der (bbox yüksekliği değişmez). Bu fonksiyon baskın eksende
+   (yatay/dikey bant) her dik kesitin kalınlığını ölçüp minimumu döndürür → 0,5 m'lik zikzağı
+   yakalar. rectifyCorridor guard'ı + checks.js ortak hol denetimi bunu kullanır (tek kaynak).
+   SINIR: baskın eksene dik ölçer; L/T holünde ince bir DİKEY sap (ör. "Holü çekirdeğe uzat")
+   fark edilmeyebilir (güvenli yön: az-uyarır) — asıl bant daralması her zaman yakalanır. */
+function corridorMinWidth(g, cols){
+  const cells=g&&g.cells; if(!cells||!cells.length) return 0;
+  if(cells.length<2) return M;
+  let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+  for(const i of cells){ const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c; }
+  const set=new Set(cells), horiz=(c1-c0)>=(r1-r0);
+  const runMax=arr=>{ arr.sort((a,b)=>a-b); let mx=1,cur=1;
+    for(let k=1;k<=arr.length;k++){ if(k<arr.length&&arr[k]===arr[k-1]+1)cur++; else{ if(cur>mx)mx=cur; cur=1; } } return mx; };
+  let minTh=Infinity;
+  if(horiz){ for(let c=c0;c<=c1;c++){ const rr=[]; for(let r=r0;r<=r1;r++) if(set.has(r*cols+c)) rr.push(r);
+      if(rr.length){ const t=runMax(rr); if(t<minTh) minTh=t; } } }
+  else     { for(let r=r0;r<=r1;r++){ const cc=[]; for(let c=c0;c<=c1;c++) if(set.has(r*cols+c)) cc.push(c);
+      if(cc.length){ const t=runMax(cc); if(t<minTh) minTh=t; } } }
+  return minTh===Infinity? 0 : minTh*M;
+}
 function computeWallRuns(){
   const p=plan; if(!p) return [];
   const unitOf=new Map();

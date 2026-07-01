@@ -1723,7 +1723,9 @@ function generate(keepCuts){
         const recvRectBefore=rectRatio(recv);
         if(!moveWallStep(run,dir)) return;
         calcRegionMetrics(corridor, cols, minX, minY);
-        const corridorBad = corridor.minSide < REG.koridorMin-1e-6 || !regConnected(corridor);
+        /* bbox tabanlı corridor.minSide bir bandı hücre hücre 0,5 m zikzağa oysa bile "hâlâ
+           1,5 m" der → guard hiç tetiklenmez. GERÇEK dik kesit genişliğini ölç (walls.js). */
+        const corridorBad = corridorMinWidth(corridor, cols) < REG.koridorMin-1e-6 || !regConnected(corridor);
         const recvBad = !corridorBad && rectRatio(recv) < recvRectBefore-1e-6;
         const reqStructs = baseline.get(corridor.id)||[];
         const adjBad = !corridorBad && !recvBad && reqStructs.some(s=>!touches(s,corridor));

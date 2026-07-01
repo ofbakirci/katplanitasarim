@@ -213,7 +213,17 @@ function collectChecks(){
   if(p.katKullanim && p.katKullanim!=='konut'){
     collectUsageChecks(add, p);
   } else if(!p.villa){
-    add('ok',`Ortak hol genişliği 1,50 m olarak yerleştirildi (min ${REG.koridorMin.toLocaleString('tr-TR')} m).`);
+    /* GERÇEK ölçüm: eskiden statik "1,50 m yerleştirildi/ok" yazardı → 0,5 m'ye oyulmuş
+       (zikzak) koridoru bile ok gösteriyordu. corridorMinWidth (walls.js) baskın eksende
+       en dar kesiti ölçer; < koridorMin ise kaçış/erişim bloke → kırmızı. */
+    { const kor=p.regions.find(g=>g.type==='koridor'&&g.cells.length);
+      if(kor){ const w=corridorMinWidth(kor, p.cols);
+        if(w < REG.koridorMin-1e-6)
+          add('bad',`Apartman holü en dar yerinde ${fmt(w)} m < ${REG.koridorMin.toLocaleString('tr-TR')} m — koridor daralmış (kaçış/erişim engellenir). Holü genişletin veya yeniden üretin.`, kor.id);
+        else
+          add('ok',`Apartman holü en dar yeri ${fmt(w)} m ≥ ${REG.koridorMin.toLocaleString('tr-TR')} m.`, kor.id);
+      }
+    }
     const hasMerd=p.regions.some(g=>g.type==='merdiven'&&g.cells.length);
     add(hasMerd?'ok':'bad', hasMerd
       ? `Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ ${REG.merdivenMin.toLocaleString('tr-TR')} m (konut).`
