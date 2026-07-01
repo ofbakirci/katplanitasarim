@@ -335,11 +335,18 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     if(w && typeof w.mskExportRenderInputs==='function'){ try{ return w.mskExportRenderInputs(); }catch(e){ return Promise.reject(e); } }
     return Promise.reject(new Error('Motor export fonksiyonu bulunamadı (mskExportRenderInputs).'));
   }
+  // Debug kaydı (AI'ya GİTMEZ; server yok sayar, sadece render-debug/.../00_request.json'a düşer).
+  // İKİ AYRI ŞEY — karıştırma:
+  //   paintAngle = 3B mesh'i boyamak için adım 2→3'te KİLİTLENEN açı. Kamera DEĞİL; iso snap'i üreten bakış.
+  //   cameras    = boya adımından SONRA (adım 4) YERLEŞTİRİLEN vitrin kameraları (room_id/heading/lens); adım 3'te boş.
+  function debugFields(){
+    return { paintAngle: state.lockedView || null, cameras: state.cameras || [] };
+  }
   // Köprü sunucuya POST /render. style → prompt'a geçer.
   function postRender(inputs, style){
     return fetch(RENDER_BASE+'/render', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({edges:inputs.edges, paint:inputs.paint, style:style||'warm'})
+      body:JSON.stringify(Object.assign({edges:inputs.edges, paint:inputs.paint, style:style||'warm'}, debugFields()))
     }).then(function(r){ return r.json(); }).then(function(j){
       if(!j || !j.ok) throw new Error((j&&j.error)||'Render sunucusu hata verdi');
       return j.image;   // dataURL
@@ -349,7 +356,7 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
   function postRenderIso(iso, style){
     return fetch(RENDER_BASE+'/render', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({iso:iso, style:style||'warm'})
+      body:JSON.stringify(Object.assign({iso:iso, style:style||'warm'}, debugFields()))
     }).then(function(r){ return r.json(); }).then(function(j){
       if(!j || !j.ok) throw new Error((j&&j.error)||'Render sunucusu hata verdi');
       return j.image;
