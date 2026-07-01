@@ -700,45 +700,7 @@ document.getElementById('tbToggle').onclick=()=>{
   const off=tb.classList.toggle('collapsed');
   document.getElementById('tbToggle').textContent=off?'»':'«';
 };
-/* ---- onboarding stepper ---- */
-(()=>{
-  const STEPS_DESKTOP=[
-    {t:'Sınırı çizin', h:'<b>'+icon('draw','inl')+' Çiz</b> aracıyla tıklayarak bina dış sınırını oluşturun; kenarlar 15°’ye ve 0,5 m ızgaraya oturur. Başlangıç noktasına tıklayınca sınır kapanır. Hızlı denemek için <b>'+icon('sample','inl')+' Örnek sınır</b>.'},
-    {t:'Parsel, balkon, avlu', h:'<b>'+icon('parcel','inl')+' Parsel</b> ile arsa sınırını çizin; bahçe alanı, TAKS ve çekme mesafeleri hesaplanır. <b>'+icon('balcony','inl')+' Balkon</b> aracında dış duvara tıklayıp balkon ekleyin (SAĞ TIK siler). <b>'+icon('avlu','inl')+' Avlu</b> aracıyla bina sınırı içine sürükleyerek aydınlık avlusu oyun (SAĞ TIK siler) — avluya bakan oda kenarları cephe/havalandırma sayılır.'},
-    {t:'Yerleşim ve site', h:'Sol panelden daire tiplerini ayarlayın ve <b>Yerleşimi Oluştur</b>’a basın; mevzuat paneli canlı güncellenir. Birden çok bina için <b>Site (çoklu blok)</b> anahtarını açın: üstteki <b>Blok A · B · C…</b> sekmelerinden her bloğu ayrı planlayın (adlar otomatik), TAKS/KAKS parsel geneli hesaplanır. Araç çubuğundaki <b>'+icon('blok','inl')+' Site</b> ile genel görünüme geçin — blokları parselde sürükleyerek konumlandırın, bloğa tıklayınca düzenlemeye döner. <b>⧉ Kopyala</b> aktif bloğu çoğaltır; <b>SVG/PNG indir</b> site açıkken tüm blokları tek tuvalde verir.'},
-    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaçlar daire ayırıcılarını, <b>kare</b> tutamaçlar oda duvarlarını taşır. Bir odaya <b>SAĞ TIK</b>: oda ekle / sil / tipini değiştir / takas / böl; antreye sağ tık: kırp. <b>'+icon('door','inl')+' Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT TIK</b> kapı ekler, kapıya ÇİFT TIK siler, SAĞ TIK otomatik yere döndürür. <b>'+icon('structure','inl')+' Yapı</b> aracı çekirdeği (merdiven, asansör, teknik şaft, yangın merdiveni) öne çıkarır: <b>orta tutamaç</b> ile taşıyın, <b>kare</b> tutamaçlardan boyutlandırın; bina sınırını köşelerinden sürükleyin, <b>+</b> ile yeni köşe ekleyin. Çekirdek bir <b>iskelettir</b>: kilitli kalır, daireler etrafına dizilir, "Yerleşimi Oluştur" onu sıfırlamaz (sıfırlamak için "'+icon('clear','inl')+' Yapı iskeletini sıfırla"). Dokunmatik ekranda: <b>uzun basış</b> = sağ tık, <b>çift dokunuş</b> = çift tık, <b>iki parmak</b> = yakınlaştır, boşta sürükleme = kaydır. Not: Yerleşimi yeniden oluşturmak elle yapılan değişiklikleri sıfırlar.'},
-    {t:'Kontrol ve dışa aktarım', h:'<b>'+icon('undo','inl')+' Geri al</b> elle yapılan değişiklikleri adım adım geri alır. Mevzuat kontrolleri yeşile dönünce <b>SVG / PNG indir</b> ile dışa aktarın.'}
-  ];
-  const STEPS_MOBILE=[
-    {t:'Sınırı çizin', h:'<b>'+icon('draw','inl')+' Çiz</b> aracında ekrana <b>dokunarak</b> köşe ekleyin; başlangıç noktasına dokununca sınır kapanır. <b>Boşta sürükleme</b> görünümü kaydırır, <b>iki parmak</b> yakınlaştırır. Hızlı denemek için <b>'+icon('sample','inl')+' Örnek sınır</b>.'},
-    {t:'Parsel, balkon, avlu', h:'<b>'+icon('parcel','inl')+' Parsel</b> ile arsa sınırını çizin. <b>'+icon('balcony','inl')+' Balkon</b> aracında dış duvara dokunup balkon ekleyin (<b>uzun basış</b> siler). <b>'+icon('avlu','inl')+' Avlu</b> aracında bina içine parmağınızı sürükleyerek aydınlık avlusu oyun (uzun basış siler).'},
-    {t:'Yerleşim ve site', h:'Sol üstteki <b>'+icon('menu','inl')+'</b> menüden daire tiplerini girin ve <b>Yerleşimi Oluştur</b>’a basın. Aynı menüdeki <b>Site (çoklu blok)</b> anahtarıyla birden çok bina ekleyin; üstteki <b>Blok A · B · C…</b> sekmelerinden geçin (adlar otomatik).'},
-    {t:'İnce ayar yapın', h:'<b>Turuncu yuvarlak</b> tutamaç daire ayırıcısını, <b>kare</b> tutamaç oda duvarını taşır — parmağınızla sürükleyin. Bir odaya <b>UZUN BASIN</b>: oda ekle / sil / tipini değiştir / takas / böl. <b>'+icon('door','inl')+' Kapı</b> aracında kapıları sürükleyin; duvara <b>ÇİFT DOKUNUŞ</b> kapı ekler, kapıya çift dokunuş siler. <b>'+icon('structure','inl')+' Yapı</b> aracı çekirdeği (merdiven, asansör, şaft, yangın merd.) öne çıkarır: <b>orta tutamaç</b> ile taşıyın, kare tutamaçlardan boyutlandırın. Not: Yerleşimi yeniden oluşturmak elle değişiklikleri sıfırlar.'},
-    {t:'Kontrol ve dışa aktarım', h:'<b>'+icon('undo','inl')+' Geri al</b> değişiklikleri adım adım geri alır. Alttaki <b>Daire Tablosu</b> başlığına dokununca açılır. Kontroller yeşile dönünce menüden <b>SVG / PNG indir</b>.'}
-  ];
-  const STEPS=(typeof matchMedia==='function'&&matchMedia('(max-width: 700px)').matches)? STEPS_MOBILE : STEPS_DESKTOP;
-  const onb=document.getElementById('onb'), body=document.getElementById('onbBody'),
-        dots=document.getElementById('onbDots'), step=document.getElementById('onbStep'),
-        prev=document.getElementById('onbPrev'), next=document.getElementById('onbNext');
-  let i=0;
-  dots.innerHTML=STEPS.map(()=>'<i></i>').join('');
-  const render=()=>{
-    body.innerHTML='<b>'+STEPS[i].t+'</b><br>'+STEPS[i].h;
-    step.textContent=(i+1)+'/'+STEPS.length;
-    [...dots.children].forEach((d,k)=>d.classList.toggle('on',k===i));
-    prev.style.visibility=i?'visible':'hidden';
-    next.innerHTML=i===STEPS.length-1?'Bitti '+icon('check','inl'):'İleri ›';
-  };
-  const close=()=>{onb.classList.add('collapsed'); try{localStorage.setItem('kpOnboardSeen','1');}catch(e){}};
-  prev.onclick=()=>{if(i>0){i--;render();}};
-  next.onclick=()=>{i<STEPS.length-1?(i++,render()):close();};
-  document.getElementById('onbClose').onclick=e=>{e.stopPropagation(); close();};
-  document.getElementById('onbHead').onclick=e=>{if(onb.classList.contains('collapsed')){onb.classList.remove('collapsed'); i=0; render();}};
-  [...dots.children].forEach((d,k)=>d.onclick=()=>{i=k;render();});
-  let seen=false; try{seen=!!localStorage.getItem('kpOnboardSeen');}catch(e){}
-  if(seen) onb.classList.add('collapsed');
-  render();
-})();
+/* onboarding ("Nasıl kullanılır?") kutusu kaldırıldı (kullanıcı isteği). */
 document.getElementById('tDraw').onclick=()=>setMode('draw');
 document.getElementById('tParcel').onclick=()=>setMode('parcel');
 document.getElementById('tBalk').onclick=()=>setMode('balkon');

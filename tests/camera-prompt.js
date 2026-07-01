@@ -85,7 +85,7 @@ if (bedroom) {
   assertCommon('yatak', p);
   if (out.brief.room_type !== 'bedroom') fail('yatak: brief.room_type=' + out.brief.room_type + ' (bedroom bekleniyordu)');
   if (!/inside the (master )?bedroom/i.test(p)) fail('yatak: "inside the bedroom" yok → ' + p.slice(0, 90));
-  if (!/apartment/.test(p)) fail('yatak: birim etiketi ("apartment") yok');
+  if (/apartment/.test(p)) fail('yatak: daire tipi/büyüklüğü ("... apartment") prompt\'a SIZMAMALI (kafa karıştırıyor) → ' + p.slice(0, 90));
   if (!/35 mm/.test(p)) fail('yatak: "35 mm" lens ifadesi yok');
   if (!/a bed and a wardrobe/.test(p)) fail('yatak: mobilyasız varsayılan ("a bed and a wardrobe") yok');
   if (fails === 0) ok('yatak odası prompt: ' + p);

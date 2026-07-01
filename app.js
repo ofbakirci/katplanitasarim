@@ -401,6 +401,7 @@ function renderFloorTabs(){
   const box=document.getElementById('floorTabs');
   const title=document.getElementById('unitSecTitle');
   if(!box) return;
+  makeStripDraggable('floorTabs');   // "KAT" grip'inden sürüklenebilir
   const villa=document.getElementById('binaTipi').value==='villa';
   if(!floorsOn()){
     box.style.display='none';
@@ -413,6 +414,7 @@ function renderFloorTabs(){
   }
   const total=totalFloors();
   box.style.display='flex'; box.innerHTML='';
+  { const g=document.createElement('span'); g.className='bl'; g.textContent='KAT'; g.title='Sürükle: kutuyu taşı'; box.appendChild(g); }
   for(let k=total-1;k>=0;k--){   // üstten alta: en üst kat solda, bodrumlar sağda (kat istifi gibi)
     const b=document.createElement('button');
     const st=floorState(k);
@@ -431,21 +433,35 @@ function renderFloorTabs(){
   syncKatKullanimUI();
   positionOnb();
 }
-/* "Nasıl kullanılır?" kartını (onb) sol-üst yığına göre konumlandır: kat sekmeleri ve/veya
-   park çubuğu görünürken kartı onların ALTINA kaydır — yoksa kart (ampul) en üst kat sekmesinin
-   üstünü örter. Hiçbiri görünmüyorsa inline top'u temizle → CSS varsayılanı (masaüstü 60 / mobil 74). */
+/* Sol-üst yüzen şeritleri (blok/kat sekmeleri + park çubuğu) dikey araç rayının SAĞINDA üst üste yığ.
+   Elle sürüklenen (dataset.moved) kutuya dokunma — kendi bıraktığı yerde kalır. */
 function positionOnb(){
   if(typeof getComputedStyle!=='function') return; // tarayıcı dışı (test) ortamı: atla
   const seen=e=>e && e.offsetParent!==null && getComputedStyle(e).display!=='none';
-  /* sol yığın: blok sekmeleri → kat sekmeleri → park çubuğu, her biri bir öncekinin altına.
-     Taban 56px (araç çubuğunun altı); görünür her şerit yığına eklenir. */
-  let top=56, placed=false;
+  // masaüstü: dikey rayın SAĞINDA, üstten (10) · mobil (≤700): YATAY araç çubuğunun ALTINDA (64)
+  let top=(typeof window!=='undefined' && window.innerWidth<=700) ? 64 : 10;
   ['blockTabs','floorTabs','parkBar'].forEach(id=>{
     const e=document.getElementById(id);
-    if(e && e.style && seen(e)){ e.style.top=top+'px'; top+=e.offsetHeight+6; placed=true; }
+    if(!(e && e.style && seen(e))) return;
+    if(e.dataset && e.dataset.moved) return;         // kullanıcı sürükledi → otomatik yığından çıkar
+    e.style.top=top+'px'; top+=e.offsetHeight+6;
   });
-  const onb=document.getElementById('onb');
-  if(onb&&onb.style) onb.style.top = placed? (top+2)+'px' : '';
+}
+/* Yüzen şerit kutusunu (blok/kat sekmeleri) grip'ten (.bl etiketi) sürüklenebilir yap — unitTable deseni.
+   Kutu innerHTML ile yeniden çizildiğinden dinleyici KUTUYA (kalıcı) bağlanır; grip her çizimde yenilenir. */
+function makeStripDraggable(id){
+  const box=document.getElementById(id); if(!box || box.__dragWired) return; box.__dragWired=true;
+  let d=null;
+  box.addEventListener('pointerdown',e=>{
+    const h=e.target.closest && e.target.closest('.bl'); if(!h) return;   // yalnız grip'ten sürükle
+    const r=box.getBoundingClientRect(), pr=box.parentElement.getBoundingClientRect();
+    d={dx:e.clientX-r.left, dy:e.clientY-r.top, pr}; box.dataset.moved='1'; box.style.right='auto'; e.preventDefault();
+  });
+  window.addEventListener('pointermove',e=>{ if(!d) return;
+    box.style.left=Math.max(0, e.clientX-d.pr.left-d.dx)+'px';
+    box.style.top =Math.max(0, e.clientY-d.pr.top -d.dy)+'px'; });
+  const end=()=>{ d=null; };
+  window.addEventListener('pointerup',end); window.addEventListener('pointercancel',end);
 }
 function switchFloor(k){
   if(!floorsOn()) return;
@@ -677,10 +693,11 @@ function copyBlock(){
 function renderBlockTabs(){
   const box=document.getElementById('blockTabs');
   if(!box) return;
+  makeStripDraggable('blockTabs');   // "BLOK" grip'inden sürüklenebilir
   updateSiteBtn();
   if(!siteOn()){ box.style.display='none'; positionOnb(); return; }
   box.style.display='flex'; box.innerHTML='';
-  const lbl=document.createElement('span'); lbl.className='bl'; lbl.textContent='BLOK'; box.appendChild(lbl);
+  const lbl=document.createElement('span'); lbl.className='bl'; lbl.textContent='BLOK'; lbl.title='Sürükle: kutuyu taşı'; box.appendChild(lbl);
   blocks.forEach((b,k)=>{
     const btn=document.createElement('button');
     const area=(k===activeBlock)? (closed?shoelace(pts):0) : (b&&b.pts&&b.pts.length>=3?shoelace(b.pts):0);

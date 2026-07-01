@@ -134,23 +134,31 @@
   <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
   <div id="toolbar">
     <button id="tbToggle" title="Araç çubuğunu daralt/genişlet">«</button>
-    <button id="tDraw" class="active" data-ic="draw">Çiz</button>
-    <button id="tParcel" class="pro-only" data-ic="parcel">Parsel</button>
-    <button id="tBalk" data-ic="balcony">Balkon</button>
-    <button id="tAvlu" title="Avlu / iç boşluk: bina sınırı içine sürükleyerek aydınlık avlusu oyun (sağ tık siler). Avluya bakan odalar cephe sayılır." data-ic="avlu">Avlu</button>
-    <button id="tDoor" data-ic="door">Kapı</button>
-    <button id="tStruct" title="Yapı katmanı: merdiven / asansör / şaft / yangın merdivenini taşı ve boyutlandır" data-ic="structure">Yapı</button>
-    <button id="tRoom" title="Oda Çiz: tıklayarak köşe ekleyip kapalı bir alan çizin; içine yeni 'ODA' oluşur (çizdiğiniz dairenin içinde). Başlangıç noktasına tıkla / çift tık = kapat, Esc = iptal. Tipini sağ tık → 'Tipini değiştir' ile (SALON dahil) değiştirin." data-ic="roomdraw">Oda Çiz</button>
-    <button id="tPark" title="Park düzenle: park yerine tıkla=sil, boş yere tıkla=ekle, sürükle=taşı (yalnız otopark/sığınak katı)" style="display:none" data-ic="parking">Park</button>
-    <button id="tSite" title="Site genel görünümü: tüm blokları parselde gör — bloğa tıkla=düzenle, sürükle=parselde taşı (yalnız Site modu)" style="display:none" data-ic="blok">Site</button>
-    <button id="tPan" data-ic="pan">Kaydır</button>
-    <button id="tUndo" data-ic="undo">Geri al</button>
-    <button id="tRedo" data-ic="redo" title="İleri al (yeniden uygula)">İleri al</button>
-    <button id="tHist" data-ic="history" title="Değişiklik geçmişi">Geçmiş</button>
-    <button id="tClear" data-ic="clear">Temizle</button>
-    <button id="tFit" data-ic="fit">Sığdır</button>
-    <button id="tSample" data-ic="sample">Örnek sınır</button>
-    <button id="t3d" title="3B Görünüm: o anki planı gerçek geometriden 3D dollhouse olarak göster (AI yok)">3B</button>
+    <div class="tbgrp">
+      <button id="tDraw" class="active" data-ic="draw" data-tip="Çiz" aria-label="Çiz"></button>
+      <button id="tRoom" data-ic="roomdraw" data-tip="Oda Çiz" aria-label="Oda Çiz"></button>
+      <button id="tDoor" data-ic="door" data-tip="Kapı" aria-label="Kapı"></button>
+      <button id="tBalk" data-ic="balcony" data-tip="Balkon" aria-label="Balkon"></button>
+      <button id="tAvlu" data-ic="avlu" data-tip="Avlu (aydınlık boşluğu)" aria-label="Avlu"></button>
+      <button id="tStruct" data-ic="structure" data-tip="Yapı (çekirdek)" aria-label="Yapı"></button>
+      <button id="tParcel" class="pro-only" data-ic="parcel" data-tip="Parsel" aria-label="Parsel"></button>
+      <button id="tSite" style="display:none" data-ic="blok" data-tip="Site görünümü" aria-label="Site"></button>
+      <button id="tPark" style="display:none" data-ic="parking" data-tip="Park düzeni" aria-label="Park"></button>
+    </div>
+    <div class="tbsep"></div>
+    <div class="tbgrp">
+      <button id="tUndo" data-ic="undo" data-tip="Geri al" aria-label="Geri al"></button>
+      <button id="tRedo" data-ic="redo" data-tip="İleri al" aria-label="İleri al"></button>
+      <button id="tHist" data-ic="history" data-tip="Değişiklik geçmişi" aria-label="Geçmiş"></button>
+      <button id="tClear" data-ic="clear" data-tip="Temizle" aria-label="Temizle"></button>
+    </div>
+    <div class="tbsep"></div>
+    <div class="tbgrp">
+      <button id="tPan" data-ic="pan" data-tip="Kaydır" aria-label="Kaydır"></button>
+      <button id="tFit" data-ic="fit" data-tip="Ekrana sığdır" aria-label="Sığdır"></button>
+      <button id="tSample" data-ic="sample" data-tip="Örnek sınır" aria-label="Örnek sınır"></button>
+      <button id="t3d" class="tb3d" data-ic="cube" data-tip="3B Görünüm" aria-label="3B Görünüm"></button>
+    </div>
   </div>
   <div id="blockTabs"></div>
   <div id="floorTabs"></div>
@@ -161,11 +169,6 @@
     <button data-orient="v">Dikey</button>
     <button id="parkReset" title="Otomatik düzene dön" data-ic="reset">Sıfırla</button>
     <span class="ph">tıkla=ekle/sil · sürükle=taşı</span>
-  </div>
-  <div id="onb">
-    <div id="onbHead"><span class="oIc" data-ic="bulb"></span><span>Nasıl kullanılır? <em id="onbStep"></em></span><button id="onbClose" title="Kapat">×</button></div>
-    <div id="onbBody"></div>
-    <div id="onbFoot"><div id="onbDots"></div><button class="small" id="onbPrev">‹ Geri</button><button class="small" id="onbNext">İleri ›</button></div>
   </div>
   <div id="status"><span>İmleç: <b id="stPos">–</b></span><span>Alan: <b id="stArea">–</b></span><span>Çevre: <b id="stPerim">–</b></span><span id="stDxf" style="color:#b45309"></span></div>
   <div id="zoomCtl" title="Yakınlaştır / Uzaklaştır">

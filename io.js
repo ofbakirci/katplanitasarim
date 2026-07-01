@@ -799,7 +799,9 @@ function cameraRenderPrompt(map, cam, opts){
 
   const lens=cam.lens_mm||24, lensP=FP_LENS_PHRASE[lens]||(lens+' mm');
   const height=cam.height||'eye', heightP=FP_HEIGHT_PHRASE[height]||FP_HEIGHT_PHRASE.eye;
-  const unitP=unitLabel ? (' of a '+unitLabel+' apartment') : '';
+  // NOT: daire tipi/büyüklüğü ("... of a 2+1 apartment") BİLEREK prompt'a KONMUYOR —
+  // görsel modeli oda kadrajı yerine tüm daireyi/ölçeği kurmaya iterek kafa karıştırıyordu.
+  // unit_label yalnız brief metadata'sında kalır (nano'ya giden metne girmez).
 
   const brief={ room_en:roomEn, room_type:typeEnum, unit_label:unitLabel, height:height,
                 looking:looking, furniture_en:top, lens_mm:lens, is_core:isCore };
@@ -810,7 +812,7 @@ function cameraRenderPrompt(map, cam, opts){
       ' Viewed at '+heightP+', '+lensP+', perfectly horizontal and eye-level (not top-down, not a high angle). '+
       (FP_LIGHT_EN[style]||FP_LIGHT_EN.warm)+'. Photoreal, high detail. No people, no text.';
   } else {
-    prompt='Photorealistic interior real-estate photograph. Standing at '+heightP+' inside the '+roomEn+unitP+', '+
+    prompt='Photorealistic interior real-estate photograph. Standing at '+heightP+' inside the '+roomEn+', '+
       looking+'. '+lensP+', perfectly horizontal, eye-level (not top-down, not a high angle). '+furnPhrase+' '+
       (FP_LIGHT_EN[style]||FP_LIGHT_EN.warm)+', '+(FP_MATERIAL_EN[style]||FP_MATERIAL_EN.warm)+
       '. Photoreal, high detail. No people, no text.';

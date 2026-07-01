@@ -244,22 +244,28 @@
       '.v3drailb:hover{background:rgba(255,255,255,.08);color:#f0e6d6}.v3drailb.on{background:#c9a16b;color:#1a1a1f}'+
       '.v3drailx{color:#cf9b9b}.v3drailx:hover{background:rgba(200,90,90,.22);color:#f0d8d8}'+
       '.v3draild{height:1px;background:rgba(255,255,255,.15);margin:3px 4px}'+
-      '#v3dAngleWarn{position:absolute;left:12px;right:12px;top:12px;z-index:5;background:rgba(192,73,43,.96);color:#fff;border-radius:10px;padding:11px 13px;font:12.5px/1.4 system-ui;box-shadow:0 6px 18px rgba(0,0,0,.35);display:none}'+
-      '#v3dAngleWarn button{margin-top:9px;background:#fff;color:#7a2c18;border:0;border-radius:7px;padding:8px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px}'+
-      '#v3dSplit{position:absolute;top:0;height:100%;width:16px;margin-left:-8px;z-index:2;cursor:col-resize;display:none;align-items:center;justify-content:center;touch-action:none}'+
-      '#v3dSplit>i{display:block;width:4px;height:50px;border-radius:3px;background:rgba(201,161,107,.85);box-shadow:0 0 0 1px rgba(0,0,0,.3);transition:height .12s,background .12s}'+
-      '#v3dSplit:hover>i,#v3dSplit.drag>i{height:78px;background:#e0bd86}';
+      // boyalı plan = sol-üstte küçük lightbox küçük-resmi (tıkla→büyüt); slider/split KALDIRILDI (mesh tam genişlik)
+      '#v3dCompareThumb{position:absolute;left:14px;top:14px;z-index:6;width:190px;max-width:38%;background:rgba(24,22,28,.94);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.5);cursor:zoom-in;transition:transform .12s,box-shadow .12s}'+
+      '#v3dCompareThumb:hover{transform:translateY(-1px);box-shadow:0 16px 40px rgba(0,0,0,.62)}'+
+      '#v3dCompareThumb #v3dRefImg{display:block;width:100%;border-radius:8px;background:#0e0c0a}'+
+      '#v3dCompareThumb .v3dcap{display:flex;align-items:center;justify-content:space-between;gap:6px;color:#e8e6e0;font:11px/1.3 system-ui;margin:6px 2px 1px}'+
+      '#v3dCompareThumb .v3dcap .exp{display:inline-flex;align-items:center;gap:3px;opacity:.72}'+
+      '#v3dCompareLB{position:absolute;inset:0;z-index:40;background:rgba(8,7,10,.9);display:none;align-items:center;justify-content:center;cursor:zoom-out;padding:30px}'+
+      '#v3dCompareLB img{max-width:94%;max-height:94%;object-fit:contain;border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,.6)}'+
+      '#v3dAngleWarn{margin-top:8px;background:rgba(192,73,43,.96);color:#fff;border-radius:8px;padding:8px 9px;font:11px/1.35 system-ui;display:none}'+
+      '#v3dAngleWarn button{margin-top:7px;background:#fff;color:#7a2c18;border:0;border-radius:6px;padding:6px 9px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}';
     document.head.appendChild(st);
     host=overlay.querySelector('#v3dHost');
     status=overlay.querySelector('#v3dStatus');
     overlay.addEventListener('click',function(e){
-      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camact],[data-camsel],[data-camdel],[data-furntype],[data-furnact],[data-furnrot],[data-furnsel],[data-furndel],[data-furndesel],[data-v3d]')||e.target;
+      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camact],[data-camsel],[data-camdesel],[data-camdel],[data-furntype],[data-furnact],[data-furnrot],[data-furnsel],[data-furndel],[data-furndesel],[data-v3d]')||e.target;
       const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ setGroup(gp); return; }
       const ch=t.getAttribute&&t.getAttribute('data-camh'); if(ch){ setCamHeight(ch); return; }
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
       const cm=t.getAttribute&&t.getAttribute('data-cammethod'); if(cm){ setCamRenderMethod(cm); return; }
       const ca=t.getAttribute&&t.getAttribute('data-camact'); if(ca){ setPlaceAction(ca); return; }
       const cs=t.getAttribute&&t.getAttribute('data-camsel'); if(cs!=null&&cs!==''){ selectCam(+cs); return; }
+      const cdz=t.getAttribute&&t.getAttribute('data-camdesel'); if(cdz){ deselectCam(); return; }   // çip × = seçimi bırak (silmez)
       const cd=t.getAttribute&&t.getAttribute('data-camdel'); if(cd!=null&&cd!==''){ removeCam(+cd); return; }
       const ft=t.getAttribute&&t.getAttribute('data-furntype'); if(ft){ setFurnType(ft); return; }
       const fa=t.getAttribute&&t.getAttribute('data-furnact'); if(fa){ setFurnAction(fa); return; }
@@ -541,13 +547,27 @@
   // ── Mesken köprüsü: kilitli açıyı oku/uygula + o açıdan PNG dataURL (indirmeden) ──
   // snap() ile aynı kare: EN etiketle render et → dataURL döndür → ekran TR'sini geri koy.
   // Adım 2→3: kullanıcının son baktığı açı = nano'ya gönderilen render açısı.
-  function snapDataURL(){
+  // opts.furnished (opsiyonel): adım 2→3 "Plana Yüksek Sadakat / Yaratıcı Plan Boyama" seçimi.
+  //   true  = MOBİLYALI mesh gönder (Yüksek Sadakat) — hiç mobilya yoksa otomatik döşe.
+  //   false = MOBİLYASIZ mesh gönder (Yaratıcı) — mobilya grubunu GEÇİCİ gizle (kullanıcının mobilyasını SİLMEZ).
+  //   undefined = sahne neyse o. Mobilya sekmesindeki checkbox'tan BAĞIMSIZ (bilinçli kullanıcı kararı).
+  function snapDataURL(opts){
     if(!renderer||!scene||!cam) return null;
+    opts=opts||{};
+    let fg=scene.__furnitureGroup, prevVis=null;
+    if(opts.furnished===true){
+      if((!furnList||!furnList.length) && typeof autoFurnishAll==='function'){ try{ autoFurnishAll(); }catch(e){} }
+      fg=scene.__furnitureGroup;                             // autoFurnish yeni grup kurmuş olabilir → yeniden al
+      if(fg){ prevVis=fg.visible; fg.visible=true; }
+    } else if(opts.furnished===false){
+      if(fg){ prevVis=fg.visible; fg.visible=false; }
+    }
     const labs=(scene.__labels)?scene.__labels.children:[];
     labs.forEach(function(s){ if(s.userData&&s.userData.en) setLabelText(s,s.userData.en); });
     renderer.render(scene,cam);
     const url=renderer.domElement.toDataURL('image/png');
     labs.forEach(function(s){ if(s.userData&&s.userData.tr) setLabelText(s,s.userData.tr); });
+    if(fg && prevVis!==null) fg.visible=prevVis;             // görünürlüğü geri yükle (non-destructive)
     renderer.render(scene,cam);
     return url;
   }
@@ -650,11 +670,11 @@
     const fov=lensToFov(c.lens)*Math.PI/180, R=Math.tan(fov/2)*L;
     const geo=new THREE.ConeGeometry(R,L,30,1,true);   // açık uçlu (içi boş ışın huzmesi)
     geo.translate(0,-L/2,0);                            // apeks lokal orijine (y=0), taban -y'de
-    const col=active?0xe0843a:0x8fa6c0;
+    const col=active?0xffa53a:0x8fa6c0;                        // seçili = parlak turuncu; pasif daha soluk → kontrast artar
     const fill=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:col,transparent:true,
-      opacity:active?0.20:0.10,side:THREE.DoubleSide,depthWrite:false}));
+      opacity:active?0.32:0.07,side:THREE.DoubleSide,depthWrite:false}));
     const edge=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:col,wireframe:true,transparent:true,
-      opacity:active?0.5:0.22,depthWrite:false}));
+      opacity:active?0.85:0.16,depthWrite:false}));
     const cone=new THREE.Group(); cone.add(fill,edge);
     cone.quaternion.setFromUnitVectors(new THREE.Vector3(0,-1,0),dir);   // -y(apeks→taban) → bakış yönü
     cone.position.set(c.pos.x,c.pos.y,c.pos.z);
@@ -665,6 +685,22 @@
       if(n.geometry) n.geometry.dispose();
       if(n.material){ (Array.isArray(n.material)?n.material:[n.material]).forEach(function(m){ if(m&&m.dispose) m.dispose(); }); }
     }); }
+  // SEÇİLİ kamerayı belirginleştir (#6 "seçileni göremiyorum"): zemine parlak turuncu halka + diske + kameraya ince dikey iğne.
+  function makeActiveMarker(c){
+    const grp=new THREE.Group(), COL=0xffa53a;
+    const ring=new THREE.Mesh(new THREE.RingGeometry(0.44,0.62,44),
+      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.92,side:THREE.DoubleSide,depthWrite:false}));
+    ring.rotation.x=-Math.PI/2; ring.position.set(c.pos.x,0.03,c.pos.z);
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(0.44,44),
+      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.16,side:THREE.DoubleSide,depthWrite:false}));
+    disc.rotation.x=-Math.PI/2; disc.position.set(c.pos.x,0.025,c.pos.z);
+    const H=Math.max(0.4,c.pos.y||1.6);
+    const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,H,8),
+      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.5,depthWrite:false}));
+    pin.position.set(c.pos.x,H/2,c.pos.z);
+    grp.add(ring,disc,pin);
+    return grp;
+  }
   function renderCamGizmos(){
     if(!scene) return;
     const g=ensureGizmoGroup();
@@ -672,6 +708,7 @@
     if(!camUIEnabled) return;                                       // gizmolar yalnız kamera adımında
     camList.forEach(function(c,i){
       const active=(i===activeCamIdx);
+      if(active) g.add(makeActiveMarker(c));                        // seçili işaretçi ÖNCE → kamera mesh'i üstte kalsın
       g.add(makeViewCone(c,active));
       g.add(makeCameraMesh(c,active,i));
     });
@@ -684,6 +721,15 @@
 
   // tıklanan nesneden (ya da atasından) kamera indexini bul
   function camIdxFromObj(o){ while(o){ if(o.userData&&o.userData.camIdx!=null) return o.userData.camIdx; o=o.parent; } return -1; }
+  // zemine tıklanan p → güvenli bakış hedefi: YATAY (göz-hizası, "not top-down") + min yatay mesafe.
+  // Kameraya çok yakın / aynı noktaya tıklanınca hedef 'yere' düşüp aşağı bakmasın (#6 "yakın yön → yere bakıyor").
+  function aimTargetFrom(camPos,p){
+    let dx=p.x-camPos.x, dz=p.z-camPos.z, d=Math.hypot(dx,dz);
+    const MIN=0.8;
+    if(d<1e-3){ dx=0; dz=-1; }                       // tam üstüne tıklandı → varsayılan ileri (-Z)
+    else if(d<MIN){ const k=MIN/d; dx*=k; dz*=k; }   // çok yakın → min mesafeye ittir (sivri açı engeli)
+    return { x:camPos.x+dx, y:camPos.y, z:camPos.z+dz };   // y = kamera y'si → tam yatay bakış
+  }
   function scenePick(ev){
     if(!renderer||!scene) return;
     if(!camUIEnabled && !furnMode) return;
@@ -721,17 +767,18 @@
     if(!hits.length) return;
     const p=hits[0].point;                                 // dünya (x,y,z), y≈zemin üstü
     if(placeAction==='aim' && activeCamIdx>=0){             // seçili kamerayı yeni noktaya çevir (#4 açı düzenleme)
-      camList[activeCamIdx].target={x:p.x,y:0.5,z:p.z};
-      renderCamGizmos(); updateCamPanel(); updateCamRender(); logRoom(camList[activeCamIdx]);   // açı değişti → prompt/görsel tazele
+      const cc=camList[activeCamIdx]; cc.target=aimTargetFrom(cc.pos,p);
+      renderCamGizmos(); updateCamPanel(); updateCamRender(); logRoom(cc);   // açı değişti → prompt/görsel tazele
       setHint('Yön güncellendi · başka noktaya tıkla = tekrar çevir');
-    } else if(placeAction==='move' && activeCamIdx>=0){     // seçili kamerayı taşı
+    } else if(placeAction==='move' && activeCamIdx>=0){     // seçili kamerayı taşı — 'Taşı' AÇIK kalır (art arda taşınır); yön için 'Yön'
       const c=camList[activeCamIdx]; c.pos={x:p.x,y:CAM_Y[c.height||'eye'],z:p.z};
-      placeAction='aim'; renderCamGizmos(); syncCamBtns(); logRoom(c);   // action 'aim'e döndü → buton vurgusunu tazele
-      setHint('Kamera taşındı · zemine tıkla = yön çevir');
+      renderCamGizmos(); syncCamBtns(); logRoom(c);
+      setHint('Kamera taşındı · tekrar tıkla = yine taşı · yön için "Yön"');
     } else {                                               // 'add' (ya da seçili yokken): 2 tık = yeni kamera
       if(!pendingPos){ pendingPos={x:p.x,z:p.z}; renderCamGizmos(); setHint('Şimdi kameranın BAKACAĞI noktaya tıkla'); }
       else {
-        const c={ pos:{x:pendingPos.x,y:CAM_Y[camHeight],z:pendingPos.z}, target:{x:p.x,y:0.5,z:p.z}, lens:camLens, height:camHeight };
+        const pos={x:pendingPos.x,y:CAM_Y[camHeight],z:pendingPos.z};
+        const c={ pos:pos, target:aimTargetFrom(pos,p), lens:camLens, height:camHeight };
         camList.push(c); activeCamIdx=camList.length-1; pendingPos=null; placeAction='aim';
         renderCamGizmos(); syncCamBtns(); logRoom(c);   // yeni kamera + action 'aim' → buton vurgusunu tazele
         setHint('Kamera '+camList.length+' kondu · zemine tıkla = yön çevir');
@@ -982,6 +1029,14 @@
     renderCamGizmos(); applyPlaceModeUI();
     setHint('Kamera '+(i+1)+' seçili · Yön / Taşı ya da zemine tıkla');
   }
+  // çip × → seçimi bırak (kamerayı SİLMEZ; silme rail'deki çöp kutusu = data-v3d="camdel")
+  function deselectCam(){
+    if(activeCamIdx<0) return;
+    activeCamIdx=-1; pendingPos=null;
+    if(placeMode) placeAction='add';                        // seçim yok → zemine tıklama yeni kamera ekler
+    renderCamGizmos(); applyPlaceModeUI();
+    setHint('Seçim bırakıldı · kamera kartına ya da sahnedeki kameraya tıkla = seç');
+  }
   function removeCam(i){
     if(i<0||i>=camList.length) return;
     camList.splice(i,1);
@@ -1044,7 +1099,8 @@
         'background:'+(on?'#e0843a':'#3a3a44')+';color:'+(on?'#1a1a1f':'#e8e6e0')+';'+
         'border-radius:7px;padding:4px 6px 4px 7px;font-size:11px;font-weight:700">'+
         ic('camera',12)+(i+1)+
-        '<b data-camdel="'+i+'" title="Sil" style="cursor:pointer;font-weight:700;opacity:.7;padding:0 1px 0 2px">×</b></span>';
+        (on?'<b data-camdesel="1" title="Seçimi bırak" style="cursor:pointer;font-weight:700;opacity:.75;padding:0 1px 0 3px">×</b>':'')+
+        '</span>';
     });
     html+='<span data-camact="add" title="Yeni kamera ekle" style="display:inline-flex;align-items:center;cursor:pointer;'+
       'border:1.5px dashed rgba(255,255,255,.35);color:#c9a16b;border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700">'+ic('plus',13)+'</span>';
@@ -1840,7 +1896,7 @@
   function exportFurniture(){ const map=scene&&scene.__map; if(map) syncFurniturePx(map); return furnList.map(function(f){ return JSON.parse(JSON.stringify(f)); }); }
 
   // ── açılış: boot (three.js + sahne) → full ya da yan-yana (compare) layout ──
-  let compareMode=false, compareRefURL=null, compareSplit=0.5;   // sol referans / sağ 3B oranı (sürüklenebilir bölücü)
+  let compareMode=false, compareRefURL=null;   // adım 4 karşılaştırma: mesh tam genişlik + sol-üst boyalı-plan lightbox
   function boot(){
     ensureOverlay();
     const map = window.buildFloorplanMap && window.buildFloorplanMap();
@@ -1900,55 +1956,42 @@
     });
   }
   // overlay'i full ↔ yan-yana (sol boyalı img / sağ 3B host) arasında geçir + paneli taşı.
+  // overlay: 3B mesh TAM genişlik + sol-üstte küçük "boyalı plan" lightbox küçük-resmi (tıkla→büyüt). Slider/split KALDIRILDI.
   function setCompareLayout(on, paintedURL){
     if(!overlay||!host) return;
-    let ref=overlay.querySelector('#v3dCompareRef');
+    host.style.left='0';                                     // mesh her zaman tam genişlik (yan-yana slider yok)
+    let thumb=overlay.querySelector('#v3dCompareThumb');
     if(on){
-      if(!ref){
-        ref=document.createElement('div'); ref.id='v3dCompareRef';
-        ref.style.cssText='position:absolute;left:0;top:0;width:50%;height:100%;background:#0e0c0a;display:flex;align-items:center;justify-content:center;border-right:2px solid #2a2a30;z-index:1';
-        ref.innerHTML='<img id="v3dRefImg" style="max-width:96%;max-height:92%;object-fit:contain;border-radius:8px" alt="Boyalı render">'+
-          '<div style="position:absolute;top:12px;left:12px;background:rgba(38,38,46,.92);color:#e8e6e0;font:12px system-ui;padding:6px 10px;border-radius:8px">Boyalı render — referans</div>'+
-          '<div id="v3dAngleWarn">Açı değişti — render açısı artık aynı değil; soldaki boyama bu açıyla eşleşmiyor.'+
-            '<br><button data-v3d="rerender">'+ic('camera',13)+'Bu açıda yeniden render al · 14 Kredi</button></div>';
-        overlay.insertBefore(ref, host);
-        // sürüklenebilir bölücü: sol referansı küçült → sağ 3B mesh'i büyüt (kamera yerleşimini daha iyi gör)
-        const split=document.createElement('div'); split.id='v3dSplit';
-        split.title='Sürükle: bölmeyi yeniden boyutlandır';
-        split.innerHTML='<i></i>';
-        overlay.insertBefore(split, host);
-        let dragging=false;
-        function onMove(e){ if(!dragging||!overlay) return;
-          const r=overlay.getBoundingClientRect(), cx=(e.touches&&e.touches[0]?e.touches[0].clientX:e.clientX);
-          compareSplit=(cx-r.left)/(r.width||1); applyCompareSplit(); if(e.cancelable) e.preventDefault(); }
-        function onUp(){ dragging=false; split.classList.remove('drag');
-          window.removeEventListener('pointermove',onMove); window.removeEventListener('pointerup',onUp); }
-        split.addEventListener('pointerdown',function(e){ dragging=true; split.classList.add('drag');
-          window.addEventListener('pointermove',onMove); window.addEventListener('pointerup',onUp); e.preventDefault(); });
+      if(!thumb){
+        thumb=document.createElement('div'); thumb.id='v3dCompareThumb'; thumb.title='Boyalı planı büyüt';
+        thumb.innerHTML='<img id="v3dRefImg" alt="Boyalı plan">'+
+          '<div class="v3dcap"><b>Boyalı plan</b><span class="exp">'+ic('zoom',12)+'büyüt</span></div>'+
+          '<div id="v3dAngleWarn">Açı değişti — boyama bu açıyla eşleşmiyor.'+
+            '<br><button data-v3d="rerender">'+ic('camera',12)+'Bu açıda yeniden render · 14 Kredi</button></div>';
+        overlay.appendChild(thumb);
+        thumb.addEventListener('click',function(e){
+          if(e.target.closest&&e.target.closest('#v3dAngleWarn')) return;   // uyarı/buton kendi işini yapsın
+          openCompareLB();
+        });
       }
-      const img=ref.querySelector('#v3dRefImg');
+      const img=thumb.querySelector('#v3dRefImg');
       // utf8 data-URI (btoa DEĞİL): yer-tutucu metni Türkçe "boyalı" içerir → btoa Latin1 dışı karakterde patlar
-      if(img) img.src=paintedURL||'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260"><rect width="100%" height="100%" fill="#1a1714"/><text x="50%" y="50%" fill="#7a6f60" font-family="system-ui" font-size="16" text-anchor="middle">boyalı render bekleniyor</text></svg>');
-      ref.style.display='flex';
-      const sp=overlay.querySelector('#v3dSplit'); if(sp) sp.style.display='flex';
-      applyCompareSplit();                                   // 3B host → kalan sağ pay; bölücü konumlanır
+      if(img) img.src=paintedURL||'data:image/svg+xml;charset=utf-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="260"><rect width="100%" height="100%" fill="#1a1714"/><text x="50%" y="50%" fill="#7a6f60" font-family="system-ui" font-size="16" text-anchor="middle">boyalı plan bekleniyor</text></svg>');
+      thumb.style.display='block';
     } else {
-      if(ref) ref.style.display='none';
-      const sp=overlay.querySelector('#v3dSplit'); if(sp) sp.style.display='none';
-      host.style.left='0';
+      if(thumb) thumb.style.display='none';
+      const lb=overlay.querySelector('#v3dCompareLB'); if(lb) lb.style.display='none';
     }
     resize();
   }
-  // sol referans / sağ 3B oranını uygula (compareSplit) + canlı 3B'yi yeni genişliğe sığdır.
-  function applyCompareSplit(){
+  // boyalı planı tam-ekran lightbox'ta aç (overlay içinde; herhangi bir yere tıkla = kapat).
+  function openCompareLB(){
     if(!overlay) return;
-    const ref=overlay.querySelector('#v3dCompareRef'), split=overlay.querySelector('#v3dSplit');
-    const f=Math.max(0.14, Math.min(0.86, compareSplit||0.5)); compareSplit=f;
-    const pct=(f*100).toFixed(2)+'%';
-    if(ref) ref.style.width=pct;
-    if(host) host.style.left=pct;
-    if(split) split.style.left=pct;
-    resize();                                                // renderer/kamera yeni en-boy oranına göre güncellenir
+    let lb=overlay.querySelector('#v3dCompareLB');
+    if(!lb){ lb=document.createElement('div'); lb.id='v3dCompareLB'; lb.innerHTML='<img alt="Boyalı plan">';
+      overlay.appendChild(lb); lb.addEventListener('click',function(){ lb.style.display='none'; }); }
+    const src=(overlay.querySelector('#v3dRefImg')||{}).src, im=lb.querySelector('img');
+    if(src&&im){ im.src=src; lb.style.display='flex'; }
   }
   // ── açı kayması uyarısı (adım 4): kullanıcı mesh'i kilitli render açısından çevirirse sol boyamaya uyarı ──
   function viewDir(v){ if(!v||!v.position||!v.target) return null;
