@@ -1663,6 +1663,360 @@ function generate(keepCuts){
       u.rooms=u.rooms.filter(g=>g.cells.length);
     });
   }
+  /* --- (c) bölge-sinyali kanıtlı kural: ortak hol (apartman holü) israfını kes, dairelere
+         aktar. region_signal.py 39 çiftte koridor payı −%6,7 (%85 tutarlı) ve dairelere giden
+         pay +%9,0 (%92) ölçtü — kullanıcının elle yaptığı düzeltmenin motora gömülmüş hali
+         (bkz ml/phase2/DEVIR-finetune.md). moveWallStep (TÜM duvar şeridini kaydırma)
+         kullanılır, ızgara hücresi tek tek kapılmaz → alınan şerit dikdörtgen kalır (mean_rect
+         hedefini bozmaz). Hedef antre/koridor DEĞİL gerçek konut piyesi olmalı (yoksa
+         circ_share değişmez, sadece dolaşım içinde kayar). Asgari hol genişliği
+         (REG.koridorMin) altına düşürmez; aşarsa adım hemen geri alınır. */
+  function rectifyCorridor(){
+    const DWELL=t=>t==='yatak'||t==='salon'||t==='mutfak'||t==='banyo'||t==='wc';
+    /* dolgu oranı (hücre/bbox) = region_signal.py'deki mean_rect ölçütüyle aynı tanım;
+       hamle alıcı odayı daha AZ dikdörtgen yaparsa (çok yönden gelen şerit L/çentik
+       doğurursa) o hamle reddedilir — koridoru kesip dikdörtgenliği bozmak hedefe ters. */
+    const rectRatio=g=>{
+      if(g.cells.length<2) return 1;
+      let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+      g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+      const bbox=(r1-r0+1)*(c1-c0+1);
+      return bbox?g.cells.length/bbox:1;
+    };
+    /* HOL↔ÇEKİRDEK bağlantısı (checks.js'teki "Apartman holü ... komşu değil" denetimiyle
+       AYNI komşuluk tanımı): koridoru daraltırken merdiven/asansör/yangın'a değen yüzü asla
+       koparma. Başlangıçta zaten kopuk olan struct'lar (var olan bad) zorlanmaz — sadece
+       o anda BAĞLI olanların bağlantısı korunur. */
+    const STRUCT=t=>t==='merdiven'||t==='asansor'||t==='yangin';
+    const touches=(structReg,corridorReg)=>{
+      if(!structReg.cells.length||!corridorReg.cells.length) return false;
+      const corSet=new Set(corridorReg.cells);
+      return structReg.cells.some(i=>{ const r=(i/cols)|0,c=i%cols;
+        return [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].some(([rr,cc])=>{
+          if(rr<0||cc<0||rr>=rows||cc>=cols) return false;
+          return corSet.has(rr*cols+cc); }); });
+    };
+    const structRegs=regions.filter(g=>STRUCT(g.type)&&g.cells.length);
+    const baseline=new Map(); // koridor id -> başlangıçta dokunduğu struct'lar (korunacak liste)
+    regions.filter(g=>g.type==='koridor'&&g.cells.length).forEach(kor=>{
+      baseline.set(kor.id, structRegs.filter(s=>touches(s,kor)));
+    });
+    for(let pass=0; pass<24; pass++){
+      plan.wallRuns=computeWallRuns();
+      const cand=plan.wallRuns.filter(run=>{
+        const ra=regions[run.a], rb=regions[run.b];
+        if(ra.type!=='koridor' && rb.type!=='koridor') return false;
+        const recv=ra.type==='koridor'?rb:ra;
+        return unitOfRoom(recv.id)>=0 && DWELL(recv.type);
+      });
+      if(!cand.length) break;
+      cand.sort((x,y)=>{ // yatak odası önce: boşalan alan öncelikle yatağa gitsin
+        const ty=(regions[x.a].type==='koridor'?regions[x.b]:regions[x.a]).type;
+        const tz=(regions[y.a].type==='koridor'?regions[y.b]:regions[y.a]).type;
+        return (ty==='yatak'?0:1)-(tz==='yatak'?0:1); });
+      let moved=false;
+      cand.forEach(run=>{
+        const korA=regions[run.a].type==='koridor';
+        const corridor=korA?regions[run.a]:regions[run.b];
+        const recv=korA?regions[run.b]:regions[run.a];
+        const dir=korA?-1:1; // donör hep koridor olacak şekilde yön seç
+        const recvRectBefore=rectRatio(recv);
+        if(!moveWallStep(run,dir)) return;
+        calcRegionMetrics(corridor, cols, minX, minY);
+        const corridorBad = corridor.minSide < REG.koridorMin-1e-6 || !regConnected(corridor);
+        const recvBad = !corridorBad && rectRatio(recv) < recvRectBefore-1e-6;
+        const reqStructs = baseline.get(corridor.id)||[];
+        const adjBad = !corridorBad && !recvBad && reqStructs.some(s=>!touches(s,corridor));
+        if(corridorBad || recvBad || adjBad){
+          moveWallStep(run,-dir); // asgari genişlik / dikdörtgenlik / çekirdek-erişim ihlali: adımı geri al
+          calcRegionMetrics(corridor, cols, minX, minY);
+          return;
+        }
+        calcRegionMetrics(recv, cols, minX, minY);
+        moved=true;
+      });
+      if(!moved) break;
+    }
+  }
+  /* --- (c) bölge-sinyali kanıtlı kural: oda dikdörtgenliği. region_signal.py 39 çiftte
+         oda dikdörtgenliği (hücre/bbox = mean_rect ölçütü) +%5,9 (%85 tutarlı) ölçtü —
+         kullanıcı L/çentikli odaları düzeltip dikdörtgene yakınlaştırıyor. moveWallStep
+         BURADA KULLANILAMAZ: computeWallRuns yalnız ≥1 m (2 hücre) düz şerit döndürür,
+         küçük çıkıntı/çentikler çoğunlukla daha kısa. Bu yüzden cm[]/cells DOĞRUDAN
+         mutasyona uğrar — moveWallStep'in kendiliğinden sağladığı güvenceyi (bağlantılılık,
+         yasal asgari, komşu bozulmama) burada ELLE kontrol ederiz. */
+  function rectifyRoomShape(){
+    const DWELL=t=>t==='yatak'||t==='salon'||t==='mutfak'||t==='banyo'||t==='wc';
+    const rectRatio=g=>{
+      if(g.cells.length<2) return 1;
+      let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+      g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+      const bbox=(r1-r0+1)*(c1-c0+1);
+      return bbox?g.cells.length/bbox:1;
+    };
+    /* g.cells içine sığan en büyük eksen-hizalı dikdörtgeni bul (klasik histogram
+       algoritması: bbox'a göre yerel ızgara + her sütun için yükseklik). Döndürür:
+       {r0,c0,r1,c1} (dahil aralık) — bu dikdörtgen DIŞINDA kalan hücreler "fazlalık". */
+    const largestRect=g=>{
+      let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+      g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+      const bh=r1-r0+1, bw=c1-c0+1, set=new Set(g.cells);
+      const height=new Array(bw).fill(0);
+      let best={area:0,r0:r0,c0:c0,r1:r0,c1:c0};
+      for(let r=r0;r<=r1;r++){
+        for(let c=c0;c<=c1;c++){
+          const local=c-c0;
+          height[local]=set.has(r*cols+c)?height[local]+1:0;
+        }
+        // histogram üzerinde en büyük dikdörtgen (stack tabanlı)
+        const stack=[]; // {idx,h}
+        for(let local=0; local<=bw; local++){
+          const h=local<bw?height[local]:0;
+          let start=local;
+          while(stack.length && stack[stack.length-1].h>=h){
+            const top=stack.pop();
+            const area=top.h*(local-top.idx);
+            if(area>best.area){
+              best={area, r0:r-top.h+1, c0:c0+top.idx, r1:r, c1:c0+local-1};
+            }
+            start=top.idx;
+          }
+          stack.push({idx:start,h});
+        }
+      }
+      return best;
+    };
+    const inRect=(i,rect)=>{ const r=(i/cols)|0,c=i%cols;
+      return r>=rect.r0&&r<=rect.r1&&c>=rect.c0&&c<=rect.c1; };
+    /* g'nin fazlalık hücresini (excess) çıkardıktan sonra hâlâ tek parça mı? yerel BFS
+       (regConnected'la aynı mantık, ama tek hücre eksik varsayımıyla doğrudan çalışır). */
+    const stillConnectedWithout=(g, excessId)=>{
+      const remain=g.cells.filter(i=>i!==excessId);
+      if(remain.length<2) return true;
+      const set=new Set(remain), st=[remain[0]], seen=new Set([remain[0]]);
+      while(st.length){ const i=st.pop(), r=(i/cols)|0, c=i%cols;
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+          if(rr<0||cc<0||rr>=rows||cc>=cols) return;
+          const j=rr*cols+cc; if(set.has(j)&&!seen.has(j)){ seen.add(j); st.push(j); } }); }
+      return seen.size===remain.length;
+    };
+    const floorOf=(u,g)=>{
+      switch(g.type){
+        case 'salon': { const hasKitchen=u.rooms.some(o=>o!==g&&o.type==='mutfak'&&o.cells.length);
+          return hasKitchen?{a:REG.salon.area,s:REG.salon.side}:{a:REG.salonMutfak.area,s:REG.salonMutfak.side}; }
+        case 'yatak': return {a:REG.yatak.area,s:REG.yatak.side};
+        case 'mutfak': return {a:REG.mutfak.area,s:REG.mutfak.side};
+        case 'banyo': return {a:REG.banyo.area,s:REG.banyo.side};
+        case 'wc': return {a:REG.wc.area,s:REG.wc.side};
+        default: return null;
+      }
+    };
+    /* nihai kabul kapısı: ihlal SAYISI artmamalı (kapı yeri, cephe, mevzuat... hepsi bu
+       sayede korunur — slimUnitAntre'deki (rooms.js) aynı desen). badRef yalnız KABUL
+       EDİLEN hamlelerde güncellenir; pahalı olduğundan yalnız diğer ELle kontroller
+       (bağlantılılık/asgari/rectRatio/antre) geçtiğinde çağrılır. collectChecks() (DOM'a
+       yazan runChecks() DEĞİL) kullanılır: bu döngü çok sayıda hücre-hamlesi dener,
+       her denemede panel çizmek saf israf — checks.js plan.wallRuns'a hiç bakmıyor,
+       o yüzden burada computeWallRuns() de atlanır (nihai wallRuns zaten fonksiyon
+       dışında, satır ~1978'de tazelenir). Sonuç ölçütü (badRef karşılaştırması) AYNI. */
+    let badRef=collectChecks().filter(o=>o.s==='bad').length;
+    for(let pass=0; pass<12; pass++){
+      let moved=false;
+      regions.forEach(g=>{
+        if(!g.cells.length || isStructReg(g) || g.type==='koridor') return;
+        const uidx=unitOfRoom(g.id); if(uidx<0) return;
+        if(!DWELL(g.type)) return;
+        if(rectRatio(g)>=0.92) return;
+        const rect=largestRect(g);
+        const excess=g.cells.filter(i=>!inRect(i,rect));
+        if(!excess.length) return;
+        const u=unitObjs[uidx];
+        excess.forEach(i=>{
+          if(cm[i]!==g.id) return; // önceki hamlede zaten taşınmış olabilir
+          if(rectRatio(g)>=0.92) return; // aynı pass İÇİNDE g zaten yeterince dikdörtgenleşti — fazla hücre alma
+          if(!stillConnectedWithout(g,i)) return; // (a) g kopmamalı
+          const r=(i/cols)|0, c=i%cols;
+          let target=null;
+          [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+            if(target||rr<0||cc<0||rr>=rows||cc>=cols) return;
+            const j=rr*cols+cc; if(!inside[j]||cm[j]<0||cm[j]===g.id) return;
+            const h=regions[cm[j]];
+            if(isStructReg(h)||h.type==='koridor') return; // (b) yapı/koridora VERME
+            if(unitOfRoom(h.id)!==uidx) return; // (b) sadece AYNI daireye
+            target=h;
+          });
+          if(!target) return;
+          const h=target;
+          const rectRatioHBefore=rectRatio(h);
+          /* antre erişimi (kapı komşuluğu) hamleden önce-sonra kıyaslanır: g ya da h
+             antreye komşuysa ve hamle sonrası komşuluğu kaybederse (antre-slim.js'in
+             denetlediği "her oda antreye komşu" kuralı) hamle geri alınır. */
+          const antreAdjBefore = u.antre && u.antre.cells.length ? antreAdjSet(u) : null;
+          // hamleyi uygula
+          g.cells=g.cells.filter(x=>x!==i);
+          h.cells.push(i);
+          cm[i]=h.id;
+          calcRegionMetrics(g, cols, minX, minY);
+          calcRegionMetrics(h, cols, minX, minY);
+          const req=floorOf(u,g);
+          const gBad = !regConnected(g) ||
+            (req && g.type!=='antre' && (g.area<req.a-1e-6 || g.minSide<req.s-1e-6));
+          const hBad = !regConnected(h) || rectRatio(h) < rectRatioHBefore-1e-6;
+          let antreBad=false;
+          if(!gBad && !hBad && antreAdjBefore){
+            const antreAdjAfter=antreAdjSet(u);
+            antreBad = [g,h].some(rg=>rg!==u.antre && antreAdjBefore.has(rg.id) && !antreAdjAfter.has(rg.id));
+          }
+          let checksBad=false;
+          if(!gBad && !hBad && !antreBad){
+            const b=collectChecks().filter(o=>o.s==='bad').length;
+            if(b>badRef) checksBad=true; else badRef=b;
+          }
+          if(gBad || hBad || antreBad || checksBad){
+            // geri al: hücreyi g'ye iade et
+            h.cells=h.cells.filter(x=>x!==i);
+            g.cells.push(i);
+            cm[i]=g.id;
+            calcRegionMetrics(g, cols, minX, minY);
+            calcRegionMetrics(h, cols, minX, minY);
+            // NOT: badRef zaten yalnız kabul edilen hamlelerde güncelleniyor (yukarıdaki
+            // else b'ye eşitlenir); burada panel/wallRuns'ı ELle tazelemeye gerek yok —
+            // fonksiyon sonunda (satır ~1978) tek seferde tazelenir (bkz üst yorum).
+            return;
+          }
+          moved=true;
+        });
+      });
+      if(!moved) break;
+    }
+  }
+  /* --- (c) bölge-sinyali kanıtlı kural: daire alan dengeleme. region_signal.py 39 çiftte
+         daire-alan eşitsizliği (unit_area_cv = std/mean) −0,08 ölçtü (gürültülü ama ortalama
+         adil yönde) — kullanıcı büyük daireden küçüğe pay aktarıyor. Felsefe: en adil daire
+         dağılımı (bkz DEVIR-finetune.md). "Zaten eşitse dokunma": cv küçükse ya da tek daire
+         varsa HİÇBİR ŞEY yapılmaz (zorunlu kural, aksi halde gürültülü sinyali gereksiz yere
+         zorlamış oluruz). moveWallStep (TÜM duvar şeridini kaydırma) kullanılır — donör/alıcı
+         AYNI daireye ait DEĞİL, İKİ FARKLI DAİREYE ait olduğundan moveWallStep'in kendi
+         unitOfRoom(donor)!==unitOfRoom(recv) guard'ı burada TETİKLENMEZ (daireler asla
+         birbirini yutmaz, sadece sınır 1 hücre kayar). */
+  function rectifyUnitBalance(){
+    const DWELL=t=>t==='yatak'||t==='salon'||t==='mutfak'||t==='banyo'||t==='wc';
+    const rectRatio=g=>{
+      if(g.cells.length<2) return 1;
+      let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+      g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
+      const bbox=(r1-r0+1)*(c1-c0+1);
+      return bbox?g.cells.length/bbox:1;
+    };
+    /* daire başına toplam hücre (koridor/yapı hariç — unitOfRoom zaten yalnız daire
+       odaları için >=0 döner). */
+    const unitCells=()=>{
+      const m=new Map();
+      regions.forEach(g=>{ if(!g.cells.length) return; const k=unitOfRoom(g.id); if(k<0) return;
+        m.set(k,(m.get(k)||0)+g.cells.length); });
+      return m;
+    };
+    /* region_signal.py ile AYNI tanım: cv = std/mean (nüfus std, ddof=0). */
+    const calcCv=m=>{
+      const vals=[...m.values()];
+      if(vals.length<2) return 0;
+      const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+      if(mean<=0) return 0;
+      const variance=vals.reduce((a,b)=>a+(b-mean)*(b-mean),0)/vals.length;
+      return Math.sqrt(variance)/mean;
+    };
+    /* eşik 0,06 değil 0,15: gerçek vakalarda (mesken/inputs/master1.svg, altın/stabil dosya,
+       unit_area_cv≈0,13) küçük daire kümeleri arasında zaten "makul dengeli" sayılıyor — tek
+       hücrelik bir kaydırma bile stabil altın plana dokunuyor (dagitim-baseline.js STABLE
+       regresyonu). 0,15 gerçekten dengesiz vakaları (kat-plani-37/41/42, cv 0,29-0,48) hâlâ
+       yakalar, "zaten eşit" olanı (spread ~1,3x) rahat bırakır — "esitse dokunma" kuralının
+       ruhu budur. */
+    const CV_TARGET=0.15;
+    let ua=unitCells();
+    if(ua.size<2 || calcCv(ua)<CV_TARGET) return; // "zaten eşitse/tek daireyse dokunma" — ZORUNLU
+    /* dairenin zorunlu piyeslerinin (spec'e göre salon/mutfak-ayrımı dahil) yasal asgari
+       alan/kısa-kenarı — rectifyRoomShape'teki floorOf ile AYNI mantık (aynı closure'da
+       tekrar tanımlanır, iki fonksiyon birbirinden bağımsız kalsın diye). */
+    const floorOf=(u,g)=>{
+      switch(g.type){
+        case 'salon': { const hasKitchen=u.rooms.some(o=>o!==g&&o.type==='mutfak'&&o.cells.length);
+          return hasKitchen?{a:REG.salon.area,s:REG.salon.side}:{a:REG.salonMutfak.area,s:REG.salonMutfak.side}; }
+        case 'yatak': return {a:REG.yatak.area,s:REG.yatak.side};
+        case 'mutfak': return {a:REG.mutfak.area,s:REG.mutfak.side};
+        case 'banyo': return {a:REG.banyo.area,s:REG.banyo.side};
+        case 'wc': return {a:REG.wc.area,s:REG.wc.side};
+        default: return null;
+      }
+    };
+    for(let pass=0; pass<24; pass++){
+      plan.wallRuns=computeWallRuns();
+      ua=unitCells();
+      if(ua.size<2 || calcCv(ua)<CV_TARGET) break;
+      const cand=plan.wallRuns.filter(run=>{
+        if(!run.ext) return false;
+        const ra=regions[run.a], rb=regions[run.b];
+        const ka=unitOfRoom(ra.id), kb=unitOfRoom(rb.id);
+        return ka>=0 && kb>=0 && ka!==kb && DWELL(ra.type) && DWELL(rb.type);
+      });
+      if(!cand.length) break;
+      // en dengesiz (alan farkı en büyük) çift önce ele alınsın
+      cand.sort((x,y)=>{
+        const dx=Math.abs((ua.get(unitOfRoom(regions[x.a].id))||0)-(ua.get(unitOfRoom(regions[x.b].id))||0));
+        const dy=Math.abs((ua.get(unitOfRoom(regions[y.a].id))||0)-(ua.get(unitOfRoom(regions[y.b].id))||0));
+        return dy-dx;
+      });
+      let moved=false;
+      for(const run of cand){
+        ua=unitCells();
+        if(ua.size<2 || calcCv(ua)<CV_TARGET) break;
+        const ra=regions[run.a], rb=regions[run.b];
+        const ka=unitOfRoom(ra.id), kb=unitOfRoom(rb.id);
+        const areaA=ua.get(ka)||0, areaB=ua.get(kb)||0;
+        if(Math.abs(areaA-areaB)<1e-9) continue; // bu sınırın iki tarafı zaten eşit — dokunma
+        const diffBefore=Math.abs(areaA-areaB);
+        // donör = BÜYÜK daireye ait taraf; alıcı = KÜÇÜK daireye ait taraf
+        const aIsBigger=areaA>areaB;
+        const dir=aIsBigger? -1 : 1; // dir>0: a büyür (b'den alır) → a küçükse dir=+1; a büyükse dir=-1
+        const donor=aIsBigger?ra:rb, recv=aIsBigger?rb:ra;
+        const donorU=unitOfRoom(donor.id);
+        const recvRectBefore=rectRatio(recv);
+        const res=moveWallStep(run,dir);
+        if(!res) continue;
+        if(res==='merged') continue; // teorik olarak DWELL+DWELL iki farklı dairede asla olmaz (canAbsorb ayrı daireyi engeller) — yine de oluşursa geri alınamayacağından dokunmadan geç
+        calcRegionMetrics(donor, cols, minX, minY);
+        calcRegionMetrics(recv, cols, minX, minY);
+        const uDonor=unitObjs[donorU];
+        const req=uDonor? floorOf(uDonor, donor) : null;
+        const donorBad = !regConnected(donor) ||
+          (req && (donor.area<req.a-1e-6 || donor.minSide<req.s-1e-6));
+        /* alıcı dikdörtgenliği KATI "hiç düşmesin" değil, rectifyRoomShape'teki "yeterince
+           dikdörtgen" eşiğiyle (0,92) AYNI tolerans: koridor tarafında olduğu gibi burada da
+           şerit uzunluğu odanın kendi genişliğinden büyük olabilir (donör/alıcı boyut farkı
+           çok büyük — tam da dengelenmesi gereken vaka), bu da alıcıda küçük bir çentik
+           doğurur. Zaten ≥0,92 iyi kabul edilen bir odayı birkaç yüzdelik puan düşürmek
+           (recvRectBefore'a göre KÜÇÜK bir gerileme) mean_rect hedefini bozacak kadar önemli
+           değil — ama 0,92'nin ALTINA düşürüyorsa (gerçekten L/çentik doğuruyorsa) hâlâ ret. */
+        const recvRectAfter=rectRatio(recv);
+        const recvBad = !regConnected(recv) ||
+          (recvRectAfter < recvRectBefore-1e-6 && recvRectAfter < 0.92);
+        let overshootBad=false;
+        if(!donorBad && !recvBad){
+          const newUa=unitCells();
+          const newAreaA=newUa.get(ka)||0, newAreaB=newUa.get(kb)||0;
+          const diffAfter=Math.abs(newAreaA-newAreaB);
+          if(diffAfter>diffBefore+1e-9) overshootBad=true; // aşırı düzeltme: fark küçülmedi, büyüdü
+        }
+        if(donorBad || recvBad || overshootBad){
+          moveWallStep(run,-dir); // asgari/dikdörtgenlik/overshoot ihlali: adımı geri al
+          calcRegionMetrics(donor, cols, minX, minY);
+          calcRegionMetrics(recv, cols, minX, minY);
+          continue;
+        }
+        moved=true;
+      }
+      if(!moved) break;
+    }
+  }
   /* --- zorunlu banyo eksikse: antreye komşu en büyük odadan oyulur --- */
   function carveMissing(){
     unitObjs.forEach(u=>{
@@ -1747,6 +2101,11 @@ function generate(keepCuts){
   slimAntres(); // antre fazlalığı (kör uç kol, odaya sokulan çıkıntı, şişkin yuva) odalara geri verilir
   /* slim sonrası odalar büyüdü: ilk turda yer bulamayan eb. banyo şimdi sığabilir */
   ensureEnsuite();
+  regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
+  plan.wallRuns=computeWallRuns();
+  rectifyCorridor(); // (c) ortak hol israfını dairelere aktar — bkz fonksiyon üstü yorum
+  rectifyRoomShape(); // (c) oda dikdörtgenliği — bkz fonksiyon üstü yorum
+  rectifyUnitBalance(); // (c) daire alan dengeleme — bkz fonksiyon üstü yorum
   regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
   plan.wallRuns=computeWallRuns();
   runChecks();

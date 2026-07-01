@@ -11,12 +11,12 @@
       55,
       57
     ],
-    "regionCount": 36,
+    "regionCount": 35,
     "salonAreas": [
-      170,
-      225.25,
-      411.5,
-      508.75
+      345.25,
+      392.5,
+      489.5,
+      516
     ],
     "bad": 4,
     "info": 9,
@@ -40,9 +40,9 @@
       52.75
     ],
     "bad": 0,
-    "info": 3,
+    "info": 6,
     "ok": 11,
-    "checkTotal": 14
+    "checkTotal": 17
   },
   "mesken/inputs/master1.svg": {
     "kind": "stable",
@@ -62,8 +62,8 @@
       24.5,
       27.25,
       33.25,
-      38.25,
-      41.75
+      36.75,
+      39.5
     ],
     "bad": 1,
     "info": 5,
@@ -85,15 +85,15 @@
     "regionCount": 34,
     "salonAreas": [
       23.5,
-      35.5,
-      36,
-      39,
-      39.25
+      32.25,
+      36.75,
+      37,
+      37
     ],
-    "bad": 0,
+    "bad": 1,
     "info": 6,
     "ok": 25,
-    "checkTotal": 31
+    "checkTotal": 32
   },
   "mesken/referans-kat-planlari/bugs/kat-plani-42.svg": {
     "kind": "watch",
@@ -107,17 +107,18 @@
       16,
       18
     ],
-    "regionCount": 31,
+    "regionCount": 30,
     "salonAreas": [
-      25.25,
-      31,
-      36,
-      42.25,
-      44.5
+      0,
+      33.75,
+      33.75,
+      46.5,
+      47.5,
+      53.75
     ],
-    "bad": 0,
-    "info": 4,
-    "ok": 25,
-    "checkTotal": 29
+    "bad": 1,
+    "info": 6,
+    "ok": 24,
+    "checkTotal": 31
   }
 }

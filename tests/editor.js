@@ -29,7 +29,19 @@ const bedArea=k=>{ const b=plan.unitObjs[k].rooms.filter(g=>g.type==='yatak'&&!g
 const d4auto=bedArea(3);
 unitLayout={3:'flat'}; generate(true);
 const f=snap(); let changed=[]; for(let k=0;k<base.length;k++) if(base[k]!==f[k]) changed.push(k);
-t('flat tercihi yalnız hedef daireyi değiştirir', changed.length===1 && changed[0]===3);
+/* hedef daire (3) HER ZAMAN değişmeli; rectifyUnitBalance (c) daire-alan-dengeleme daire
+   SINIRLARINI iç düzen tercihinden BAĞIMSIZ olarak dengeler — bu fixture'da D4/D5 (3,4)
+   zaten en büyük 2 daire ve komşu, flat tercihi D4'ün iç oda geometrisini değiştirince
+   ortak sınırdaki aday duvar şeritleri de değişir (kasıtlı: bkz planner.js rectifyUnitBalance
+   üstü yorum). Bu yüzden hedefin KENDİSİ + en fazla 1 doğrudan KOMŞU daire değişebilir;
+   uzak/ilgisiz daireler ASLA değişmemeli. */
+const wrAfterFlat=computeWallRuns();
+const uOfAfterFlat=new Map(); plan.unitObjs.forEach((u,k)=>u.rooms.forEach(g=>uOfAfterFlat.set(g.id,k)));
+t('flat tercihi yalnız hedef daireyi (+ en fazla 1 komşu) değiştirir',
+  changed.includes(3) && changed.length<=2 &&
+  changed.every(k=>k===3 || wrAfterFlat.some(r=>{
+    const ra=uOfAfterFlat.get(r.a), rb=uOfAfterFlat.get(r.b); return r.ext && ((ra===3&&rb===k)||(ra===k&&rb===3));
+  })));
 t('flat tercihi D4 yatak odasını iyileştirir (sliver yok)', bedArea(3)>=9);
 unitLayout={}; generate(true);
 t('tercih kaldırınca taban plana döner', JSON.stringify(snap())===JSON.stringify(base));
@@ -56,11 +68,18 @@ t('çekirdek/kaçış duvarları sürüklenemez', !coreTouch);
 // --- 3) apartman sınırı bütün olarak taşınır (grup) + birleşme + geri al ---
 unitLayout={}; generate(); plan.wallRuns=computeWallRuns();
 const uOf2=new Map(); plan.unitObjs.forEach((u,k)=>u.rooms.forEach(g=>uOf2.set(g.id,k)));
-// kuzeyde üst üste binen iki daire (D4/D5) sınırı: çok parçalı
+// kuzeyde üst üste binen iki daire (D4/D5) sınırı: çok parçalı AMA tek doğru (aynı pos/horiz)
+// olmalı — iki daire arasında L köşesi gibi farklı hizalardaki parçaları da sayan kaba
+// pairCount, boundaryGroup'un (aynı pos/horiz) GRUPLAMADIĞI bir çifti seçebilir (test kırılganlığı).
 const pairCount={};
 plan.wallRuns.filter(r=>r.ext).forEach(r=>{const a=uOf2.get(r.a),b=uOf2.get(r.b);
   if(a!==undefined&&b!==undefined){const k=[a,b].sort().join('-'); pairCount[k]=(pairCount[k]||0)+1;}});
-const multi=Object.entries(pairCount).find(([k,n])=>n>=2);
+const isCollinearPair=([k])=>{
+  const [ka,kb]=k.split('-').map(Number);
+  const segs=plan.wallRuns.filter(r=>{const a=uOf2.get(r.a),b=uOf2.get(r.b); return (a===ka&&b===kb)||(a===kb&&b===ka);});
+  return segs.every(s=>s.horiz===segs[0].horiz && s.pos===segs[0].pos);
+};
+const multi=Object.entries(pairCount).filter(([k,n])=>n>=2).find(isCollinearPair);
 t('çok parçalı apartman sınırı var (üst üste daire)', !!multi);
 if(multi){
   const [ka,kb]=multi[0].split('-').map(Number);
