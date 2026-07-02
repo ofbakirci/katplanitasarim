@@ -179,6 +179,7 @@ svg.addEventListener('mousemove',e=>{
   }
   if(spacePan){ syncPanCursor(); return; }   // space basılı: imleç grab kalsın, hover/işaretçi mantığı çalışmasın
   if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)||(mode==='roomdraw'&&plan)){ hoverP=snapPoint(sx,sy); render(); }
+  else if(mode==='parcel'&&parcelClosed){ setStatusHint('Parsel kapalı — yol cephesi seçmek için bir kenara tıklayın','#4a7c4a'); svg.style.cursor='pointer'; }  // B6: kalıcı ipucu
   else if(mode==='balkon'){
     const wx=S2Wx(sx), wy=S2Wy(sy);
     const h=hitBalk(wx,wy);
@@ -301,7 +302,8 @@ svg.addEventListener('mousedown',e=>{
       return;
     }
     const p=snapPoint(sx,sy);
-    if(p.closing){ parcelClosed=true; hoverP=null; balkChecksRefresh(); render(); return; }
+    if(p.closing){ parcelClosed=true; hoverP=null; balkChecksRefresh();
+      setStatusHint('Parsel kapalı — yol cephesi seçmek için bir kenara tıklayın','#4a7c4a'); render(); return; }  // B6: kapanış geri bildirimi
     if(parcelPts.length && p.x===parcelPts[parcelPts.length-1].x && p.y===parcelPts[parcelPts.length-1].y) return;
     parcelPts.push({x:p.x,y:p.y}); render(); return;
   }

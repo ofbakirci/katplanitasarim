@@ -226,7 +226,8 @@ function render(){
     const g=el('g',{}); svg.appendChild(g);
     let d='M'+parcelPts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
     if(parcelClosed) d+='Z';
-    g.appendChild(el('path',{d,fill:parcelClosed?'rgba(106,153,78,.13)':'none',stroke:'#4a7c4a','stroke-width':2,'stroke-dasharray':'9 5','stroke-linejoin':'miter'}));
+    /* B6: kapanınca kontur kesikliden DÜZE döner (kapanış anı görsel olarak fark edilir) */
+    g.appendChild(el('path',{d,fill:parcelClosed?'rgba(106,153,78,.13)':'none',stroke:'#4a7c4a','stroke-width':parcelClosed?2.4:2,'stroke-dasharray':parcelClosed?'none':'9 5','stroke-linejoin':'miter'}));
     /* FAZ 5: seçili yol cephesi (ön çekme bu kenara uygulanır) */
     if(parcelClosed && typeof psFrontEdge!=='undefined' && psFrontEdge>=0 && psFrontEdge<parcelPts.length){
       const a=parcelPts[psFrontEdge], b=parcelPts[(psFrontEdge+1)%parcelPts.length];
