@@ -109,8 +109,18 @@ function collectGroundEntranceCheck(add, p, ground, ayri){
   if(ayri) add('bad', 'Zemin katta apartman holü bina dış sınırına değmiyor → apartman/bina giriş kapısı yerleştirilemez. Holü\'yü dış cepheye sürükleyip uzatın.', kor.id);
   else      add('info', 'Apartman holü bina dış sınırına değmiyor → zemin katta apartman/bina giriş kapısı yerleştirilemez (tek tip kat zemini de temsil eder). Zemini ayrı planlıyorsanız "Katları ayrı planla" ile zemin katında holü\'yü dış cepheye uzatın.', kor.id);
 }
+/* B7: piyes-ölçüsü ihlallerinde panel düğmesinin göstereceği düzeltme ÖNERİSİ (sadece
+   yönlendirme — otomatik düzeltme YOK). Denetim metni/mesajı DEĞİŞMEZ; yalnız satıra
+   opsiyonel action meta'sı eklenir (bad/info sayıları etkilenmez). */
+const FIX_HINT={
+  salon:'Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın.',
+  yatak:'Komşu duvarı sürükleyerek yatak odasını büyütün.',
+  mutfak:'Komşu duvarı sürükleyerek mutfağı büyütün.',
+  banyo:'Komşu duvarı sürükleyerek banyoyu büyütün.',
+  wc:'Komşu duvarı sürükleyerek WC\'yi büyütün.'
+};
 function collectChecks(){
-  const out=[], add=(s,t,reg,unit)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit});
+  const out=[], add=(s,t,reg,unit,action)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit,action:action||null});
   const p=plan;
   if(typeof planAutoRepaired!=='undefined' && planAutoRepaired)
     add('info','İçe aktarılan düzen bozuktu (apartman holü bağımsız bölüm alanını yutmuştu, odalar hücresiz kalmıştı) → spec ve ayırıcılardan otomatik yeniden üretildi. Elle yapılmış oda düzenlemeleri korunamadı.');
@@ -123,11 +133,11 @@ function collectChecks(){
     if(salon){ const comb=!u.rooms.some(g=>g.type==='mutfak'); // ayrı mutfak yoksa salon+mutfak ölçütü
       const req=comb?REG.salonMutfak:REG.salon;
       add(salon.area>=req.area&&salon.minSide>=req.side?'ok':'bad',
-        `${tag} — ${comb?'Salon+Mutfak':'Salon'}: ${fmt(salon.area)} m² / dar kenar ${fmt(salon.minSide)} m (min ${fmt(req.area)} m², ${fmt(req.side)} m)`, salon.id); }
+        `${tag} — ${comb?'Salon+Mutfak':'Salon'}: ${fmt(salon.area)} m² / dar kenar ${fmt(salon.minSide)} m (min ${fmt(req.area)} m², ${fmt(req.side)} m)`, salon.id, null, {hint:FIX_HINT.salon}); }
     const beds=find('yatak');
     if(beds.length){ const best=beds.reduce((a,b)=>b.area>a.area?b:a);
       add(best.area>=REG.yatak.area&&best.minSide>=REG.yatak.side?'ok':'bad',
-        `${tag} — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü ${fmt(best.area)} m² / ${fmt(best.minSide)} m`, best.id); }
+        `${tag} — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü ${fmt(best.area)} m² / ${fmt(best.minSide)} m`, best.id, null, {hint:FIX_HINT.yatak}); }
     /* istenen oda programı tam yerleşti mi? (villa + katları ayrı: salon=0 stüdyo değil, yatak eksilmez) */
     const wantBeds=(u.spec.salon===0&&!(p.villa&&floorsOn()))? Math.max(0,u.spec.oda-1) : u.spec.oda;
     if(beds.length<wantBeds) add('bad', `${tag} — ${wantBeds} yatak odasından ${beds.length} tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).`, null, k);
@@ -136,7 +146,7 @@ function collectChecks(){
       const ebb=u.rooms.find(g=>g.name==='EB. BANYO'&&g.cells.length);
       if(!ebb) add('bad', `${tag} — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).`, null, k);
       else add(ebb.area>=REG.banyo.area&&ebb.minSide>=REG.banyo.side?'ok':'bad',
-        `${tag} — Eb. banyo: ${fmt(ebb.area)} m² / ${fmt(ebb.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ebb.id);
+        `${tag} — Eb. banyo: ${fmt(ebb.area)} m² / ${fmt(ebb.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ebb.id, null, {hint:FIX_HINT.banyo});
     }
     const banAll=u.rooms.find(g=>g.type==='banyo');
     if(!banAll) add('bad', `${tag} — Banyo yerleştirilemedi!`, null, k);
@@ -146,13 +156,13 @@ function collectChecks(){
       add('bad', `${tag} — Salon/oturma odası yerleştirilemedi (yasal zorunlu piyes)!`, null, k);
     // ince-uzun mutfak uyarısı kaldırıldı (tasarım tercihi, mevzuat sorunu değil)
     if(mut) add(mut.area>=REG.mutfak.area&&mut.minSide>=REG.mutfak.side?'ok':'bad',
-      `${tag} — Mutfak: ${fmt(mut.area)} m² / ${fmt(mut.minSide)} m (min ${fmt(REG.mutfak.area)} m², ${fmt(REG.mutfak.side)} m)`, mut.id);
+      `${tag} — Mutfak: ${fmt(mut.area)} m² / ${fmt(mut.minSide)} m (min ${fmt(REG.mutfak.area)} m², ${fmt(REG.mutfak.side)} m)`, mut.id, null, {hint:FIX_HINT.mutfak});
     const ban=u.rooms.find(g=>g.type==='banyo'&&!g.name.startsWith('EB'));
     if(ban) add(ban.area>=REG.banyo.area&&ban.minSide>=REG.banyo.side?'ok':'bad',
-      `${tag} — Banyo: ${fmt(ban.area)} m² / ${fmt(ban.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ban.id);
+      `${tag} — Banyo: ${fmt(ban.area)} m² / ${fmt(ban.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ban.id, null, {hint:FIX_HINT.banyo});
     const wc=u.rooms.find(g=>g.type==='wc');
     if(wc) add(wc.area>=REG.wc.area&&wc.minSide>=REG.wc.side?'ok':'bad',
-      `${tag} — WC: ${fmt(wc.area)} m² / ${fmt(wc.minSide)} m (min ${fmt(REG.wc.area)} m², ${fmt(REG.wc.side)} m)`, wc.id);
+      `${tag} — WC: ${fmt(wc.area)} m² / ${fmt(wc.minSide)} m (min ${fmt(REG.wc.area)} m², ${fmt(REG.wc.side)} m)`, wc.id, null, {hint:FIX_HINT.wc});
     /* doğal ışık: yaşama mekânları (salon, yatak odası) dış cepheye dokunmalı —
        PAİY md.30: piyeslerde pencere alanı ≥ taban alanının 1/8'i */
     u.rooms.forEach(g=>{ if(!g.cells.length||(g.type!=='salon'&&g.type!=='yatak'&&g.type!=='mutfak')) return;
@@ -479,6 +489,14 @@ function renderChecks(out){
     const msg=document.createElement('span'); msg.textContent=o.t; d.appendChild(msg);
     if(o.reg!=null){ d.title='Plana odaklamak için tıklayın'; d.onclick=()=>focusRegion(o.reg); }
     else if(o.unit!=null){ d.title='Daireye odaklamak için tıklayın'; d.onclick=()=>focusUnit(o.unit); }
+    /* B7: ihlalden eyleme köprü — odağa git + durum çubuğunda düzeltme önerisi (otomatik düzeltme YOK) */
+    if(o.s==='bad' && o.action && o.reg!=null){
+      const btn=document.createElement('button'); btn.className='chkAct'; btn.type='button';
+      btn.textContent='Öneri'; btn.title='Odağa git ve nasıl düzeltileceğini göster';
+      btn.onclick=ev=>{ ev.stopPropagation(); focusRegion(o.reg);
+        if(typeof setStatusHint==='function') setStatusHint(o.action.hint,'#b35a2e'); };
+      d.appendChild(btn);
+    }
     box.appendChild(d); });
 }
 function runChecks(){

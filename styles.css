@@ -232,6 +232,10 @@
   .legend i{width:11px; height:11px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,.15);}
   .chk.click{cursor:pointer;}
   .chk.click:hover{border-color:var(--acc); background:#fdf6f0;}
+  /* B7: denetim satırından eyleme köprü düğmesi (odağa git + öneri) */
+  .chk .chkAct{margin-left:auto; flex-shrink:0; align-self:flex-start; padding:2px 8px; font-size:11px; font-weight:700;
+    border:1px solid var(--bad); border-radius:5px; background:#fff; color:var(--bad); cursor:pointer; white-space:nowrap;}
+  .chk .chkAct:hover{background:var(--bad); color:#fff;}
   /* yüzen daire tablosu */
   #unitTable{position:absolute; top:10px; right:10px; width:280px; max-height:calc(100% - 90px);
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
