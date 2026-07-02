@@ -477,6 +477,21 @@ window.addEventListener('keydown',e=>{
   if(e.key!=='Escape' || mode!=='roomdraw' || !roomPts.length) return;
   roomPts=[]; hoverP=null; render();
 });
+/* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
+   pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.
+   Space/Esc/Ctrl+Z/Y'ye DOKUNMAZ (ayrı handler'lar); form alanı + sürükleme ortasında YUTULUR. */
+const MODE_KEYS={d:'tDraw',o:'tRoom',k:'tDoor',b:'tBalk',a:'tAvlu',y:'tStruct',p:'tParcel',t:'tPark',s:'tSite'};
+window.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey) return;          // Ctrl/Cmd/Alt kombinasyonları başka handler'larda
+  if(dragging) return;                                 // sürükleme ortasında mod değişimi yok (B1 dragOverlay yarım kalmasın)
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
+  const id=MODE_KEYS[(e.key||'').toLowerCase()];
+  if(!id) return;
+  const btn=document.getElementById(id);
+  if(!btn || btn.disabled || getComputedStyle(btn).display==='none') return;   // gizli (pro-only/site kapalı/park yok) → kısayol da yok
+  e.preventDefault(); btn.click();
+});
 /* son elle düzenlemeyi geri al; geçmiş boşsa false döner (Geri Al eski davranışına düşer).
    Pop'tan ÖNCE o anki TAM durumu redoHistory'ye iter → İleri Al her tip için çalışır
    (heterojen delta-undo'larla uyumlu: ilk geri-al delta ile, sonrası iki yönde snapshot ile). */
