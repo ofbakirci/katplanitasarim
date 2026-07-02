@@ -72,6 +72,8 @@ function slimUnitAntre(u){
     }
     if(!did) break;
   }
+  /* A3 (BRIEF konsolidasyon): 240 guard doldu = antre hedef kalınlığa inemedi (sessiz vazgeçme). */
+  if(guard>240) console.warn(`[KPTA] slimUnitAntre iterasyon limiti (240) — antre ${(an.cells.length*M*M).toFixed(1)} m2 hala kalin`);
   recalc();
   return changed;
 }

@@ -1592,6 +1592,10 @@ function generate(keepCuts){
           }
           if(!took) return;
         }
+        /* A3 (BRIEF konsolidasyon): 30 iterasyon bitti ama oda hala hedef altında =
+           sessiz vazgeçme → iz bırak (davranış değişmez, yalnız uyarı). */
+        { const bF=bbox(room); if(Math.min(bF.w,bF.h)<req.s||bF.a<req.a)
+            console.warn(`[KPTA] repairUnits iterasyon limiti (30) — ${room.name||room.type} ${bF.a.toFixed(1)} m2 hedefe ulasmadi`); }
       };
       const beds=u.rooms.filter(g=>g.type==='yatak'&&g.cells.length);
       grow(u.rooms.find(g=>g.type==='banyo'&&!g.name.startsWith('EB')));
@@ -1701,7 +1705,7 @@ function generate(keepCuts){
     regions.filter(g=>g.type==='koridor'&&g.cells.length).forEach(kor=>{
       baseline.set(kor.id, structRegs.filter(s=>touches(s,kor)));
     });
-    for(let pass=0; pass<24; pass++){
+    let pass; for(pass=0; pass<24; pass++){
       plan.wallRuns=computeWallRuns();
       const cand=plan.wallRuns.filter(run=>{
         const ra=regions[run.a], rb=regions[run.b];
@@ -1739,6 +1743,9 @@ function generate(keepCuts){
       });
       if(!moved) break;
     }
+    /* A3 (BRIEF konsolidasyon): 24 pass doldu (break olmadan) = koridor/hol israfı
+       dairelere tam aktarılamadı — sessiz vazgeçme (davranış değişmez, yalnız uyarı). */
+    if(pass>=24) console.warn('[KPTA] rectifyCorridor iterasyon limiti (24) doldu — koridor israfi tam aktarilamadi');
   }
   /* --- apartman holü UÇ budama: koridor bandı generation'da tüm eni (c=0→cols) claim
          edilir (satır ~586); hiçbir antre/çekirdeğe komşu olmayan UÇ sütunları (dikeyde
