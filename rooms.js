@@ -37,11 +37,11 @@ function slimUnitAntre(u){
   /* komb (omurga) dairede taban daha yüksek: omurga, orta odaların kapı hattıdır —
      3,5 m²'ye kemirilirse odalar köşe temasıyla 4+ m derinliğe şişer (v21 ince
      ayarında kullanıcı omurgayı ~%13-15'te tuttu) */
-  const uArea=u.rooms.reduce((s,g)=>s+g.cells.length,0)*M*M;
+  const uArea=u.rooms.reduce((s,g)=>s+areaOfCells(g.cells),0);
   const slimFloor = u.comb? Math.max(6, uArea*0.12) : 3.5;
   let changed=false, guard=0;
   for(;;){
-    if(an.cells.length*M*M<=slimFloor || guard++>REG.iter.slimAntre) break;
+    if(areaOfCells(an.cells)<=slimFloor || guard++>REG.iter.slimAntre) break;
     const runs=computeWallRuns().filter(rn=>{
       const other = rn.a===an.id? rn.b : (rn.b===an.id? rn.a : -1);
       if(other<0) return false;
@@ -61,7 +61,7 @@ function slimUnitAntre(u){
       if(res!==true) continue;                   // birleşme olamaz (canAbsorb antreyi korur)
       /* ucuz ön elemeler */
       const adjNow=antreAdjSet(u);
-      let ok = an.cells.length*M*M>=slimFloor && thinCells(an)<=thin0;
+      let ok = areaOfCells(an.cells)>=slimFloor && thinCells(an)<=thin0;
       if(ok) for(const id2 of mustAdj){ const g2=p.regions[id2];
         if(g2&&g2.cells.length&&!adjNow.has(id2)){ ok=false; break; } }
       /* asıl kapı: runChecks ihlal sayısı artmamalı (kapı yeri, dış cephe,
@@ -73,7 +73,7 @@ function slimUnitAntre(u){
     if(!did) break;
   }
   /* A3 (BRIEF konsolidasyon): guard limiti doldu = antre hedef kalınlığa inemedi (sessiz vazgeçme). */
-  if(guard>REG.iter.slimAntre) console.warn(`[KPTA] slimUnitAntre iterasyon limiti (${REG.iter.slimAntre}) — antre ${(an.cells.length*M*M).toFixed(1)} m2 hala kalin`);
+  if(guard>REG.iter.slimAntre) console.warn(`[KPTA] slimUnitAntre iterasyon limiti (${REG.iter.slimAntre}) — antre ${areaOfCells(an.cells).toFixed(1)} m2 hala kalin`);
   recalc();
   return changed;
 }
@@ -774,7 +774,7 @@ svg.addEventListener('contextmenu',e=>{
           hoverWall=null; hoverRoomId=null; plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); hideRoomMenu(); }
         else failO(err); };
       const hasKor=plan.regions.some(o=>o.type==='koridor'&&o.cells.length);
-      let html=`<div class="mh">${escapeHtml(g.name)} · ${fmt(g.cells.length*M*M)} m²</div><hr>`;
+      let html=`<div class="mh">${escapeHtml(g.name)} · ${fmt(g.area)} m²</div><hr>`;
       if(hasKor) html+=`<div class="mi" data-otokor="1">Apartman holüne kat (çekirdek erişimi aç)</div>`;
       html+=`<div class="mi del" data-odis="1">Komşulara dağıtıp sil</div>`
           + `<hr><div class="mh">Yapı elemanı ekle (tıkladığınız yere)</div>`
@@ -862,7 +862,7 @@ svg.addEventListener('contextmenu',e=>{
   const showSwap=()=>{
     let html=`<div class="mh">${escapeHtml(g.name)} ↔ takas edilecek oda</div><hr>`;
     u.rooms.forEach(o=>{ if(o===g||!o.cells.length||o===u.antre||o.type==='merdiven'||o.name==='EB. BANYO') return;
-      html+=`<div class="mi" data-swap="${o.id}">${escapeHtml(o.name)} (${fmt(o.cells.length*M*M)} m²)</div>`; });
+      html+=`<div class="mi" data-swap="${o.id}">${escapeHtml(o.name)} (${fmt(o.area)} m²)</div>`; });
     html+=`<hr><div class="mi" data-back="1">‹ Geri</div>`;
     roomMenu.innerHTML=html; place();
     roomMenu.querySelectorAll('.mi[data-swap]').forEach(mi=>mi.onclick=()=>{
@@ -873,7 +873,7 @@ svg.addEventListener('contextmenu',e=>{
   const showSwapUnit=()=>{
     let html=`<div class="mh">D${k+1} · ${escapeHtml(unitTag(u.spec))} ↔ takas edilecek daire</div><hr>`;
     plan.unitObjs.forEach((o,j)=>{ if(j===k||!o.rooms.some(x=>x.cells.length)) return;
-      const m2=o.rooms.reduce((s,g)=>s+g.cells.length,0)*M*M;
+      const m2=o.rooms.reduce((s,g)=>s+g.area,0);
       html+=`<div class="mi" data-swapunit="${j}">D${j+1} · ${escapeHtml(unitTag(o.spec))} (${fmt(m2)} m²)</div>`; });
     html+=`<hr><div class="mi" data-back="1">‹ Geri</div>`;
     roomMenu.innerHTML=html; place();

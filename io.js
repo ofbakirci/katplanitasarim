@@ -498,7 +498,7 @@ function fpRegionGeom(g, fr){
     polygon_norm:polygon_px.map(p=>fr.norm(p)),
     centroid_norm:fr.norm(centroid_px),
     label_anchor_norm:fr.norm(label_anchor_px),
-    area_m2:+(g.cells.length*M*M).toFixed(2),
+    area_m2:+areaOfCells(g.cells).toFixed(2),
     furniture:[]                                    // §Faz5 şema: mobilya alanı (buildFloorplanMap store'dan doldurur)
   };
 }

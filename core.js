@@ -138,6 +138,13 @@ function regLabelEN(reg){
 }
 
 /* ================= ortak yardımcılar ================= */
+/* Hücre dizisi alanı (m²) — TEK FORMÜL KAYNAĞI (A4 konsolidasyon, 2026-07-02).
+   Izgara hücresi M×M = 0,5×0,5 = 0,25 m²; alan = hücre sayısı × M². Motorun ~40
+   çağrı noktasında `cells.length*M*M` inline tekrarlıyordu; canlı bölge metriği
+   (calcRegionMetrics → g.area) burada üretilir, keyfi/mutasyon-halindeki hücre
+   dizileri de buradan geçer. Boş/tanımsız dizi → 0 (çağrı yerlerindeki eski
+   `cells?cells.length:0` muhafızıyla birebir). SAF TAŞIMA: M sabit → değer değişmez. */
+function areaOfCells(cells){ return (cells ? cells.length : 0) * M * M; }
 const fmt = v => (Math.round(v*100)/100).toLocaleString('tr-TR');
 const escapeHtml = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function snapG(v){ return Math.round(v/M)*M; }

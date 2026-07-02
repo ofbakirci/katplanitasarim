@@ -397,7 +397,7 @@ function generate(keepCuts){
          cepler (< ~9 m²) komşu hol/dükkâna katılır — sliver dükkân doğmaz. */
       if(!customCutsZ || customCutsZ.length!==comps.length) customCutsZ=comps.map(()=>null);
       comps.forEach((comp,zi)=>{
-        if(comp.length*M*M < 9){               // küçük cep: lobiye, yoksa komşu dükkâna kat
+        if(areaOfCells(comp) < 9){             // küçük cep: lobiye, yoksa komşu dükkâna kat
           let t=adjReg(comp,'koridor'); if(t<0) t=adjReg(comp,'dukkan');
           if(t>=0){ const g=regions[t]; comp.forEach(i=>{ cm[i]=g.id; g.cells.push(i); }); }
           customCutsZ[zi]=[]; return;
@@ -727,12 +727,12 @@ function generate(keepCuts){
       return inside[j]&&cm[j]>=0&&regions[cm[j]].type==='koridor'; };
     const zones=[];
     comps.forEach(comp=>{
-      if(comp.length*M*M<20){ const dp=newReg('ORTAK DEPO','teknik'); comp.forEach(i=>{cm[i]=dp.id;dp.cells.push(i);}); return; }
+      if(areaOfCells(comp)<20){ const dp=newReg('ORTAK DEPO','teknik'); comp.forEach(i=>{cm[i]=dp.id;dp.cells.push(i);}); return; }
       const cnt={N:0,S:0,E:0,W:0};
       comp.forEach(i=>{ const r=(i/cols)|0,c3=i%cols;
         if(isKorC(r+1,c3))cnt.N++; if(isKorC(r-1,c3))cnt.S++; if(isKorC(r,c3+1))cnt.W++; if(isKorC(r,c3-1))cnt.E++; });
       const side=['N','S','E','W'].reduce((a,b)=>cnt[b]>cnt[a]?b:a,'N');
-      zones.push({cells:comp, side, area:comp.length*M*M});
+      zones.push({cells:comp, side, area:areaOfCells(comp)});
     });
     zones.sort((a,b)=>b.area-a.area);
 
@@ -856,7 +856,7 @@ function generate(keepCuts){
       }
     }
     let free = stairReg? all.filter(i=>cm[i]===-1) : all;
-    let stairA = stairReg? stairReg.cells.length*M*M : 0;
+    let stairA = stairReg? areaOfCells(stairReg.cells) : 0;
     let vu = layoutVillaSofa(free, unitSpecs[0], wantStair, stairA);
     if(!vu){
       /* BUG-FIX (çok katlı villada iç merdiven): L/T tabanda layoutVillaSofa
@@ -866,7 +866,7 @@ function generate(keepCuts){
          şekli ne olursa olsun) → layoutUnit kalan alanda merdivensiz çalışsın. */
       if(wantStair && !stairReg){
         stairReg=reserveVillaStair(free);
-        if(stairReg){ free=all.filter(i=>cm[i]===-1); stairA=stairReg.cells.length*M*M; wantStair=false; }
+        if(stairReg){ free=all.filter(i=>cm[i]===-1); stairA=areaOfCells(stairReg.cells); wantStair=false; }
       }
       vu = layoutUnit(free, unitSpecs[0], 'N', wantStair);
     }
@@ -920,7 +920,7 @@ function generate(keepCuts){
     const depth2=(r1-r0+1)*M, width2=(c1-c0+1)*M;
     if(depth2<8||width2<8) return null; // sığ/dar villada tek yüklü T-plan daha doğru
     /* claimedArea: önceden sabitlenmiş merdiven (üst kat) — doluluk/kapasiteler tam alanla hesaplanır */
-    const area=cells.length*M*M + (claimedArea||0);
+    const area=areaOfCells(cells) + (claimedArea||0);
     /* taban dikdörtgenden çok sapıyorsa (L-villa) eski yol: bant varsayımı bozulur */
     if(area/(depth2*width2)<0.85) return null;
     const unit={spec:u, rooms:[], antre:null};
@@ -1063,7 +1063,7 @@ function generate(keepCuts){
     const ui = (uIdx==null? unitObjs.length : uIdx);            // daire indeksi (açık verilebilir → post-gen relayout)
     unit.uIdx = ui;                                             // assignCols + relayout region.unit etiketi için
     const layoutMode = unitLayout[ui] || 'auto'; // bu dairenin iç düzen tercihi
-    const area=cells.length*M*M;
+    const area=areaOfCells(cells);
     const horiz = side==='N'||side==='S';
     const alOf = horiz ? (i=>i%cols) : (i=>(i/cols)|0);   // hole paralel eksen
     const dpRaw = horiz ? (i=>(i/cols)|0) : (i=>i%cols);  // derinlik ekseni
@@ -1292,7 +1292,7 @@ function generate(keepCuts){
           pushedBeds.forEach(r=>{ entry.splice(entry.indexOf(r),1); entry.unshift(r); });
       }
     }
-    const stripArea=entryCells.length*M*M, sumT2=entry.reduce((s,r)=>s+(r.t||0),0);
+    const stripArea=areaOfCells(entryCells), sumT2=entry.reduce((s,r)=>s+(r.t||0),0);
     if(stripArea-sumT2>1){ // artık önce odalara (üst sınıra kadar), antreye en çok 9 m²
       let exc=stripArea-sumT2;
       entry.forEach(r=>{ if(exc<=0||r===antreDef||!r.cap) return;
@@ -1301,7 +1301,7 @@ function generate(keepCuts){
     }
     entry.forEach(r=>{ r.w=r.t||r.w; });
     /* cephe hedefleri: yatak odaları üst sınırlı, artan alan salona akar */
-    const facArea=facCells.length*M*M;
+    const facArea=areaOfCells(facCells);
     fac.forEach(r=>{ r.t=Math.min(r.cap||1e9, Math.max(r.ms*r.ms, r.w*scale)); });
     const facSum=fac.reduce((s,r)=>s+r.t,0);
     const salonDef=fac.find(r=>r.salon)||fac[0];
@@ -1533,7 +1533,7 @@ function generate(keepCuts){
     };
     const bbox=g=>{ let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
       g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
-      return {r0,r1,c0,c1,a:g.cells.length*M*M,w:(c1-c0+1)*M,h:(r1-r0+1)*M}; };
+      return {r0,r1,c0,c1,a:areaOfCells(g.cells),w:(c1-c0+1)*M,h:(r1-r0+1)*M}; };
     unitObjs.forEach(u=>{
       const grow=room=>{
         if(!room||!room.cells.length) return;
@@ -1560,10 +1560,10 @@ function generate(keepCuts){
             const don=regions[cm[sc[0]]];
             if(don===room||!u.rooms.includes(don)||don.type==='merdiven') return;
             const df=floorOf(don)||{a:6,s:2};
-            if(don.cells.length*M*M - sc.length*M*M < df.a+0.5) return; // donör kendi minimumunun altına düşmesin
+            if(areaOfCells(don.cells) - areaOfCells(sc) < df.a+0.5) return; // donör kendi minimumunun altına düşmesin
             const widens = isCol===(b.w<=b.h); // dar kenarı büyütüyor mu
             if(needS && !widens) return; // dar kenar sorunluyken boyuna büyüme yasak (banyo koridoru olmasın)
-            cand.push({sc,don,score:(don.cells.length*M*M-df.a)+(needS&&widens?1000:0)-(don===u.antre?500:0)});
+            cand.push({sc,don,score:(areaOfCells(don.cells)-df.a)+(needS&&widens?1000:0)-(don===u.antre?500:0)});
           });
           if(!cand.length) return;
           cand.sort((a,b2)=>b2.score-a.score);
@@ -1612,7 +1612,7 @@ function generate(keepCuts){
         if(!g.cells.length||g===u.antre||g.type==='merdiven') return;
         let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
         g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c;});
-        const side=Math.min((r1-r0+1)*M,(c1-c0+1)*M), a=g.cells.length*M*M;
+        const side=Math.min((r1-r0+1)*M,(c1-c0+1)*M), a=areaOfCells(g.cells);
         const sliver = g.type==='wc' ? (side<0.9||a<1.1)
                      : g.type==='banyo' ? (side<1.2||a<2.8)   // 2×1,5 m eb. banyo meşru (purge yemesin)
                      : (side<1.4||a<3.5);
@@ -2139,7 +2139,7 @@ function generate(keepCuts){
         if(host){ kil.name='EB. BANYO'; kil.type='banyo'; kil.ebHost=host.id; host.name='EB. YATAK ODASI'; return; }
       }
       const host=beds.find(g=>g.name==='EB. YATAK ODASI')||beds.reduce((a,b)=>b.cells.length>a.cells.length?b:a);
-      const ar=u.rooms.reduce((s,g)=>s+g.cells.length,0)*M*M;
+      const ar=u.rooms.reduce((s,g)=>s+areaOfCells(g.cells),0);
       if(carveCornerBath(u, host, ar>140?5:4)) host.name='EB. YATAK ODASI';
     });
   }
@@ -2237,7 +2237,7 @@ function planLooksBroken(){
     const hol=p.regions.find(g=>g&&g.type==='koridor');
     if(hol&&hol.cells){
       const armCells=hol.cells.filter(ci=>{ const r=(ci/p.cols)|0; return r<p.corridorR0||r>p.corridorR1; });
-      if(armCells.length*M*M>10){
+      if(areaOfCells(armCells)>10){
         const armSet=new Set(armCells);
         /* bant hücreleri (corridorR0..R1 arasındaki hol hücreleri) */
         const bandSet=new Set(hol.cells.filter(ci=>{ const r=(ci/p.cols)|0; return r>=p.corridorR0&&r<=p.corridorR1; }));

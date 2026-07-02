@@ -4,7 +4,7 @@
    duvar 0,5 m'lik hücre şeritleri aktararak hareket eder; her adımda
    mevzuat denetimi (runChecks) ve daire tablosu canlı yenilenir. */
 function calcRegionMetrics(g, cols, minX, minY){
-  g.area=g.cells.length*M*M;
+  g.area=areaOfCells(g.cells);
   let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9,sr=0,sc=0;
   g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; r0=Math.min(r0,r);r1=Math.max(r1,r);c0=Math.min(c0,c);c1=Math.max(c1,c);sr+=r;sc+=c;});
   g.bw=g.cells.length?(c1-c0+1)*M:0; g.bh=g.cells.length?(r1-r0+1)*M:0;
