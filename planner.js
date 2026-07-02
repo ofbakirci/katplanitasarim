@@ -148,7 +148,7 @@ function generate(keepCuts){
       }
     }
     if(bR1<bR0||bC1<bC0) return null;
-    if(bA < 0.45*totalIn) return null;        // belirgin gövde yok (L/U/egzotik) → band düzeni
+    if(bA < REG.layout.govdeOran*totalIn) return null; // belirgin gövde yok (L/U/egzotik) → band düzeni
     const inBody=(r,c)=>r>=bR0&&r<=bR1&&c>=bC0&&c<=bC1;
     /* 2) gövde dikdörtgeni dışındaki bağlı bileşenler = kulak adayları */
     const seen=new Uint8Array(rows*cols), ears=[];
@@ -926,18 +926,18 @@ function generate(keepCuts){
     const unit={spec:u, rooms:[], antre:null};
     const sr0=r0+Math.round((r1-r0+1)/2)-1, sr1=sr0+2; // 1,5 m omurga (orta)
     const nBeds=Math.max(0,u.oda), hasEns=u.ensuite&&nBeds>0;
-    const bedCap=Math.max(20,area*0.12);
+    const bedCap=Math.max(REG.cap.yatak.taban,area*REG.cap.yatak.oran);
     const S=[], N=[]; // güney (giriş cephesi): salon+mutfak+eb; kuzey: merdiven+banyo+yataklar
     /* YALNIZ "katları ayrı planla" açıkken salon=0 = SALONSUZ KAT (yatak katı): salon da
        mutfak da eklenmez — mutfak yaşam katına aittir; bir katta salon olması yeter
        (ev genelini runChecks denetler). Kapalıyken eski davranış: salon hep konur. */
     if(u.salon>0 || !floorsOn()){
       S.push({name:u.acik?'SALON + MUTFAK':'SALON',type:'salon',w:u.acik?26:20,ms:3.0});
-      if(!u.acik) S.push({name:'MUTFAK',type:'mutfak',w:8,ms:2.0,cap:Math.max(13,area*0.085)});
+      if(!u.acik) S.push({name:'MUTFAK',type:'mutfak',w:8,ms:2.0,cap:Math.max(REG.cap.mutfak.taban,area*REG.cap.mutfak.oran)});
     }
     if(addStair) N.push({name:'MERDİVEN',type:'merdiven',w:7,ms:2.5,cap:14});
-    N.push({name:'BANYO',type:'banyo',w:4.5,ms:1.5,cap:Math.max(6.5,area*0.04)});
-    if(hasEns) S.push({name:'EB. YATAK ODASI',type:'yatak',w:15.5,ms:2.5,eb:true,cap:Math.max(26,area*0.15)});
+    N.push({name:'BANYO',type:'banyo',w:4.5,ms:1.5,cap:Math.max(REG.cap.banyo.taban,area*REG.cap.banyo.oran)});
+    if(hasEns) S.push({name:'EB. YATAK ODASI',type:'yatak',w:15.5,ms:2.5,eb:true,cap:Math.max(REG.cap.ebYatak.taban,area*REG.cap.ebYatak.oran)});
     /* düz yataklar: pratik genişlik payıyla (3,2 m) en boş banda — kapasite dolunca
        yine de eklenir, assignCols kuyruk odayı boş bırakır (dürüst rapor) */
     const capS=width2-1, capN=width2; // güneyden 1 m giriş kolu düşer
@@ -1090,11 +1090,11 @@ function generate(keepCuts){
     const entry=[], fac=[];
     /* büyük dairede ıslak hacimler ve mutfak da büyür — salon tek başına şişmez */
     /* mutfak dar kenarı: tezgah+insan+makine ≥2 m; yalnız gerçekten küçük dairede (≤45 m²) yasal 1,5 m */
-    if(!combined&&!noSalon) entry.push({name:'MUTFAK',type:'mutfak',w:8,min:3.6,cap:Math.max(13,area*0.085),ms:area<=45?1.5:(area>120?2.5:2.0)});
-    entry.push({name:'BANYO',type:'banyo',w:4.5,min:3.4,cap:Math.max(6.5,area*0.04),ms:1.5});
+    if(!combined&&!noSalon) entry.push({name:'MUTFAK',type:'mutfak',w:8,min:3.6,cap:Math.max(REG.cap.mutfak.taban,area*REG.cap.mutfak.oran),ms:area<=REG.layout.kucukDaire?1.5:(area>REG.layout.buyukDaire?2.5:2.0)});
+    entry.push({name:'BANYO',type:'banyo',w:4.5,min:3.4,cap:Math.max(REG.cap.banyo.taban,area*REG.cap.banyo.oran),ms:1.5});
     /* SIĞ daire (≤9 m derin, tek yüklü T-plan — kullanıcının hedef görseli): antre kompakt
        tutulur, alan odalara akar. Derin/çok bantlı dairede eski davranış korunur (regresyon yok). */
-    const shallowU = depthM<=9 && area<=140;
+    const shallowU = depthM<=REG.layout.sigDerinlik && area<=REG.layout.sigMaxAlan;
     const antreDef={name:'ANTRE',type:'antre',w:shallowU?3:4,min:2.2,cap:shallowU?5:7,ms:shallowU?1.4:1.5};
     entry.push(antreDef);
     if(addStair) entry.push({name:'MERDİVEN',type:'merdiven',w:7,min:6,cap:14,ms:2.5});
@@ -1102,7 +1102,7 @@ function generate(keepCuts){
        vaka-1'de iki dairede de kılçık WC'yi silip KİLER yaptı (v22 dersi) */
     if(nBeds>=3){
       if(hasEns) entry.push({name:'KİLER',type:'antre',w:1.8,min:1.5,cap:4,ms:1.0});
-      else entry.push({name:'WC',type:'wc',w:1.8,min:1.5,cap:Math.max(2.6,area*0.018),ms:1.0});
+      else entry.push({name:'WC',type:'wc',w:1.8,min:1.5,cap:Math.max(REG.cap.wc.taban,area*REG.cap.wc.oran),ms:1.0});
     }
     if(studio) fac.push({name:'STÜDYO',type:'salon',w:24,ms:3.0});
     else if(!noSalon){
@@ -1110,7 +1110,7 @@ function generate(keepCuts){
       for(let s=1;s<u.salon;s++) fac.push({name:'OTURMA ODASI',type:'salon',w:16,ms:3.0,cap:24});
     }
     /* yatak odası üst sınırı daire büyüklüğüyle ölçeklenir: artan alan salona akar */
-    const bedCap=Math.max(20, area*0.12), ebCap=Math.max(26, area*0.15), bedMs=area>120?3.0:2.5;
+    const bedCap=Math.max(REG.cap.yatak.taban, area*REG.cap.yatak.oran), ebCap=Math.max(REG.cap.ebYatak.taban, area*REG.cap.ebYatak.oran), bedMs=area>REG.layout.buyukDaire?3.0:2.5;
     for(let b=0;b<nBeds-(hasEns?1:0);b++) fac.push({name:'YATAK ODASI',type:'yatak',w:11,ms:bedMs,cap:bedCap});
     let ebDef=null;
     if(hasEns){ ebDef={name:'EB. YATAK ODASI',type:'yatak',w:15.5,ms:bedMs,eb:true,cap:ebCap}; fac.push(ebDef); }
@@ -1137,7 +1137,7 @@ function generate(keepCuts){
     const midBeds=[];
     const wantRail = layoutMode==='flat' ? false
                    : layoutMode==='rail' ? (fac.length>1 && depthM>=8)
-                   : (fac.length>1 && widthM/fac.length<3.2 && depthM>=10.5);
+                   : (fac.length>1 && widthM/fac.length<3.2 && depthM>=REG.layout.railDerinlik);
     if(wantRail){
       const maxFac=Math.max(1, Math.floor(widthM/3.2));
       while(fac.length>maxFac){
@@ -1164,7 +1164,7 @@ function generate(keepCuts){
     const wetDef=mutDef||(mutToFac? entry.find(r=>r.type==='banyo') : null);
     const idealD = wetDef? Math.sqrt((wetDef.t||8)/1.35) : 0;
     /* giriş sırasına yatak itildiyse sıra ≥2,5 m olmalı (2 m yatak yasadışı) */
-    const minD = entryHasRoom? 2.5 : ((wetDef&&area>45)? 2.0 : 1.5);
+    const minD = entryHasRoom? REG.layout.girisMinD.oda : ((wetDef&&area>REG.layout.kucukDaire)? REG.layout.girisMinD.islak : REG.layout.girisMinD.taban);
     let entryD=Math.min(entryHasRoom?3.5:3.0,
       Math.max(minD, snapG(Math.max(entry.reduce((s,r)=>s+r.t,0)/widthM, idealD))));
     let holD=1.0; // daire içi hol kolu (kompakt; alan oda programına kalsın)
@@ -1211,7 +1211,7 @@ function generate(keepCuts){
     /* kiler: yalnız 110 m²+ dairede; ensuite İSTENEN dairede eşik 130 m² —
        program (eb. banyo) dururken lüks (kiler) çizilmez (v20→v21 dersi: kullanıcı
        110 m² dairelerde kileri silip yerine eb. banyo koydu) */
-    if(!combU && area>=(hasEns?130:110) && fullEntryArea-sumT>4
+    if(!combU && area>=(hasEns?REG.layout.kilerMinEns:REG.layout.kilerMin) && fullEntryArea-sumT>4
        && !entry.some(r=>r.name==='KİLER')) kilerT=Math.min(4, fullEntryArea-sumT);
     const minColsSum=entry.reduce((s,r)=>s+Math.max(2, Math.round((r.ms||1)/M)),0);
     const needAls=Math.max(6, minColsSum, Math.ceil((sumT+kilerT+0.5)/entryD/M)); // her oda asgari genişliğini bulsun
@@ -1441,7 +1441,7 @@ function generate(keepCuts){
     /* ebeveyn banyosu: odada en çok hücre kapsayan pencereden oyulur (kırpık önlenir) */
     if(ebDef){
       const ebReg=unit.rooms.find(g=>g.name==='EB. YATAK ODASI');
-      carveCornerBath(unit, ebReg, area>140?5:4);
+      carveCornerBath(unit, ebReg, area>REG.layout.ebBanyoBuyuk?5:4);
     }
     unit.rooms=unit.rooms.filter(g=>g.cells.length); // hücre alamayan oda (ör. sığmayan WC) plandan düşer
     if(unit.antre&&!unit.antre.cells.length) unit.antre=null;
@@ -1538,7 +1538,7 @@ function generate(keepCuts){
       const grow=room=>{
         if(!room||!room.cells.length) return;
         const req=floorOf(room); if(!req) return;
-        for(let iter=0; iter<30; iter++){
+        for(let iter=0; iter<REG.iter.repairUnits; iter++){
           const b=bbox(room);
           const needS=Math.min(b.w,b.h)<req.s, needA=b.a<req.a;
           if(!needS&&!needA) return;
@@ -1595,7 +1595,7 @@ function generate(keepCuts){
         /* A3 (BRIEF konsolidasyon): 30 iterasyon bitti ama oda hala hedef altında =
            sessiz vazgeçme → iz bırak (davranış değişmez, yalnız uyarı). */
         { const bF=bbox(room); if(Math.min(bF.w,bF.h)<req.s||bF.a<req.a)
-            console.warn(`[KPTA] repairUnits iterasyon limiti (30) — ${room.name||room.type} ${bF.a.toFixed(1)} m2 hedefe ulasmadi`); }
+            console.warn(`[KPTA] repairUnits iterasyon limiti (${REG.iter.repairUnits}) — ${room.name||room.type} ${bF.a.toFixed(1)} m2 hedefe ulasmadi`); }
       };
       const beds=u.rooms.filter(g=>g.type==='yatak'&&g.cells.length);
       grow(u.rooms.find(g=>g.type==='banyo'&&!g.name.startsWith('EB')));
@@ -1705,7 +1705,7 @@ function generate(keepCuts){
     regions.filter(g=>g.type==='koridor'&&g.cells.length).forEach(kor=>{
       baseline.set(kor.id, structRegs.filter(s=>touches(s,kor)));
     });
-    let pass; for(pass=0; pass<24; pass++){
+    let pass; for(pass=0; pass<REG.iter.rectifyCorridor; pass++){
       plan.wallRuns=computeWallRuns();
       const cand=plan.wallRuns.filter(run=>{
         const ra=regions[run.a], rb=regions[run.b];
@@ -1743,9 +1743,9 @@ function generate(keepCuts){
       });
       if(!moved) break;
     }
-    /* A3 (BRIEF konsolidasyon): 24 pass doldu (break olmadan) = koridor/hol israfı
+    /* A3 (BRIEF konsolidasyon): pass limiti doldu (break olmadan) = koridor/hol israfı
        dairelere tam aktarılamadı — sessiz vazgeçme (davranış değişmez, yalnız uyarı). */
-    if(pass>=24) console.warn('[KPTA] rectifyCorridor iterasyon limiti (24) doldu — koridor israfi tam aktarilamadi');
+    if(pass>=REG.iter.rectifyCorridor) console.warn(`[KPTA] rectifyCorridor iterasyon limiti (${REG.iter.rectifyCorridor}) doldu — koridor israfi tam aktarilamadi`);
   }
   /* --- apartman holü UÇ budama: koridor bandı generation'da tüm eni (c=0→cols) claim
          edilir (satır ~586); hiçbir antre/çekirdeğe komşu olmayan UÇ sütunları (dikeyde
@@ -1789,7 +1789,7 @@ function generate(keepCuts){
       const attempt=(L,sink)=>{
         const moves=[], touched=new Set();
         const pref = sink>0 ? (horiz?[[1,0],[-1,0]]:[[0,1],[0,-1]]) : (horiz?[[-1,0],[1,0]]:[[0,-1],[0,1]]);
-        for(let pass=0; pass<8; pass++){
+        for(let pass=0; pass<REG.iter.corridorEndDrain; pass++){
           let moved=false;
           const cs=kor.cells.filter(i=>lineOf(i)===L).sort((a,b)=> sink>0? perp(b)-perp(a) : perp(a)-perp(b));
           for(const i of cs){ if(cm[i]!==kor.id) continue;
@@ -2027,7 +2027,7 @@ function generate(keepCuts){
         default: return null;
       }
     };
-    for(let pass=0; pass<24; pass++){
+    for(let pass=0; pass<REG.iter.rectifyUnitBalance; pass++){
       plan.wallRuns=computeWallRuns();
       ua=unitCells();
       if(ua.size<2 || calcCv(ua)<CV_TARGET) break;

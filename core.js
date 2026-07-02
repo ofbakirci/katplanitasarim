@@ -18,7 +18,40 @@ const REG = {
   siginakMinM2:12.0, siginakKisiM2:1.0,
   /* Otopark Yönetmeliği (Ek-1, konut/mesken) — daire brüt alanına göre asgari otopark */
   otoparkBrutKats:1.25,       // şematik net daire alanı → brüt yaklaşığı
-  otoparkKonut:[{max:80, oto:1/3}, {max:120, oto:1/2}, {max:180, oto:1}, {max:1e9, oto:2}]
+  otoparkKonut:[{max:80, oto:1/3}, {max:120, oto:1/2}, {max:180, oto:1}, {max:1e9, oto:2}],
+  /* ── LAYOUT / ONARIM iç eşikleri (A2 konsolidasyon, 2026-07-02) ─────────────
+     Yukarıdaki mevzuat sabitlerinden AYRI bölüm: bunlar yönetmelik değil, motorun
+     elle-ayarlı karar eşikleri (planner.js/rooms.js'ten SAF TAŞIMA, değer birebir).
+     Değer değiştirmek motor çıktısını değiştirir → tests/snapshot-regression.js
+     birebir korunmalı; bilinçli ayar sonrası baseline `--write` ile tazelenir. */
+  iter:{ // onarım/düzeltme döngülerinin guard limitleri (dolunca A3 console.warn iz bırakır)
+    repairUnits:30,        // planner.js repairUnits: yasal-asgari oda onarım turu
+    rectifyCorridor:24,    // planner.js rectifyCorridor: koridor israfını dairelere aktarma geçişi
+    rectifyUnitBalance:24, // planner.js rectifyUnitBalance: daire alan dengeleme geçişi (CV hedefi)
+    corridorEndDrain:8,    // planner.js rectifyCorridorEnds: ölü uç sütununu kaskad boşaltma turu
+    slimAntre:240          // rooms.js slimUnitAntre: kalın antre hücre-devri emniyet sayacı
+  },
+  cap:{ /* oda üst-sınırı: cap = max(taban, daireAlanı×oran) — büyük dairede ıslak
+           hacim/yatak ölçekli büyür, artan alan salona akar (v22 dersi). layoutUnit
+           ve layoutVillaSofa (iki paralel blok) aynı tabloyu kullanır. */
+    mutfak:{oran:0.085, taban:13},
+    banyo:{oran:0.04, taban:6.5},
+    yatak:{oran:0.12, taban:20},
+    ebYatak:{oran:0.15, taban:26},
+    wc:{oran:0.018, taban:2.6}  // ikinci tuvalet (3+ yatakta, ensuite yoksa)
+  },
+  layout:{ // layoutUnit karar eşikleri (alan m², derinlik m)
+    kucukDaire:45,      // ≤45: mutfak dar kenarı yasal 1,5 m'e iner; >45: ıslak-hacimli giriş şeridi min 2,0 m derinlik
+    buyukDaire:120,     // >120: boyut sınıfı — mutfak dar kenarı 2,5 m, yatak 3,0 m
+    sigMaxAlan:140,     // sığ tek-yüklü T-plan (shallowU) üst alan sınırı
+    ebBanyoBuyuk:140,   // >140: köşe eb-banyosu 5 m² (değilse 4) — sigMaxAlan'dan BAĞIMSIZ eşik, ayrı ayarlanabilir
+    kilerMin:110,       // kiler yalnız 110 m²+ dairede (v20→v21: kullanıcı kileri silip eb. banyo koydu)
+    kilerMinEns:130,    // ensuite İSTENEN dairede kiler eşiği 130 — program (eb. banyo) dururken lüks çizilmez
+    sigDerinlik:9,      // derinlik ≤9 → sığ daire (shallowU: antre kompakt, alan odalara)
+    railDerinlik:10.5,  // derinlik ≥10,5 → demiryolu planı (yataklar derinlikte katmanlanır)
+    girisMinD:{oda:2.5, islak:2.0, taban:1.5}, // giriş şeridi asgari derinliği: yatak/merdiven itildiyse / ıslak-hacimli >45 m² / diğer
+    govdeOran:0.45      // kulak algısı: gövde alanı < taban×0,45 → belirgin gövde yok, band düzeni
+  }
 };
 /* ── Yangın / merdiven / asansör — çekirdek ölçü eşikleri ─────────────────────
    TEK DOĞRU KAYNAK: mesken/referans-kat-planlari/yangin-merdiven-kurallari.json

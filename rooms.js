@@ -41,7 +41,7 @@ function slimUnitAntre(u){
   const slimFloor = u.comb? Math.max(6, uArea*0.12) : 3.5;
   let changed=false, guard=0;
   for(;;){
-    if(an.cells.length*M*M<=slimFloor || guard++>240) break;
+    if(an.cells.length*M*M<=slimFloor || guard++>REG.iter.slimAntre) break;
     const runs=computeWallRuns().filter(rn=>{
       const other = rn.a===an.id? rn.b : (rn.b===an.id? rn.a : -1);
       if(other<0) return false;
@@ -72,8 +72,8 @@ function slimUnitAntre(u){
     }
     if(!did) break;
   }
-  /* A3 (BRIEF konsolidasyon): 240 guard doldu = antre hedef kalınlığa inemedi (sessiz vazgeçme). */
-  if(guard>240) console.warn(`[KPTA] slimUnitAntre iterasyon limiti (240) — antre ${(an.cells.length*M*M).toFixed(1)} m2 hala kalin`);
+  /* A3 (BRIEF konsolidasyon): guard limiti doldu = antre hedef kalınlığa inemedi (sessiz vazgeçme). */
+  if(guard>REG.iter.slimAntre) console.warn(`[KPTA] slimUnitAntre iterasyon limiti (${REG.iter.slimAntre}) — antre ${(an.cells.length*M*M).toFixed(1)} m2 hala kalin`);
   recalc();
   return changed;
 }
