@@ -113,7 +113,7 @@ function renderUnits(){
        yalnız ilgili kartın başlığını tazele. */
     const card=e.target.closest('.unitCard'), tg=card&&card.querySelector('.tag');
     if(tg) tg.textContent=unitTag(unitSpecs[i]);
-    resetCuts(); safeGen();
+    resetCuts(); debSafeGen();   // B5: stepper basılı-tut → tek üretim (200 ms trailing)
   }));
   box.querySelectorAll('.del').forEach(b=>b.addEventListener('click',e=>{
     unitSpecs.splice(+e.target.dataset.i,1); renderUnits(); resetCuts(); safeGen();
@@ -122,18 +122,28 @@ function renderUnits(){
 /* UI kaynaklı yeniden üretim güvenli sarmalayıcı: generate() içinde beklenmeyen bir hata
    olsa bile olay işleyicisi yarıda kalıp arayüzü bozmasın (konsola yaz, akış sürsün). */
 function safeGen(){ try{ if(plan) generate(); }catch(err){ console.error('generate() hata:', err); } }
+/* B5: spec input'ları (özellikle stepper basılı-tut) her tetikte generate() koşturuyordu →
+   büyük planda UI donuyordu. Trailing debounce: son değişiklikten 200 ms sonra TEK safeGen.
+   Değer mutasyonu ÇAĞIRANDA senkron kalır; yalnız üretim ertelenir. Test ortamında
+   (setTimeout stub'ı) ms geçer; testler generate()'i doğrudan çağırdığından etkilenmez. */
+let _debGenT=null;
+function debSafeGen(delay){
+  if(typeof setTimeout!=='function'){ safeGen(); return; }
+  clearTimeout(_debGenT);
+  _debGenT=setTimeout(()=>{ _debGenT=null; safeGen(); }, delay||200);
+}
 document.getElementById('addUnit').addEventListener('click',()=>{
   if(document.getElementById('binaTipi').value==='villa') return;
   unitSpecs.push({oda:3, salon:1, ensuite:true, acik:false, adet:1}); renderUnits(); resetCuts(); safeGen();
 });
 document.getElementById('binaTipi').addEventListener('change',()=>{ lockedCore=null; updateStructResetBtn(); renderUnits(); updateKatAyriUI(); resetCuts(); safeGen(); });
 document.getElementById('koridorYon').addEventListener('change',e=>{ koridorYon=e.target.value; resetCuts(); safeGen(); });
-['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ onFloorCountChange(); safeGen(); }));
+['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ onFloorCountChange(); debSafeGen(); }));
 ['katSayisi','katYuk'].forEach(id=>makeStepper(document.getElementById(id)));
 document.getElementById('bodrumSayisi').addEventListener('change',()=>{
   const bi=document.getElementById('bodrumSayisi');
   bodrumSayisi=Math.max(0,Math.min(4,+bi.value||0)); bi.value=String(bodrumSayisi); // global ÖNCE güncellenir (reflow okur)
-  onFloorCountChange(); safeGen();
+  onFloorCountChange(); debSafeGen();
 });
 makeStepper(document.getElementById('bodrumSayisi'));
 
