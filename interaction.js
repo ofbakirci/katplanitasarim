@@ -700,11 +700,34 @@ function updateParkBtn(){
   if(!ok && mode==='park') setMode('draw');
 }
 /* araç çubuğu */
+/* B2: mod rozeti — aktif mod adı + tek satır ipucu (emoji YOK; ikon inline SVG).
+   Varsayılan modlar (draw/pan) sade kalsın diye rozet gizlenir; park kendi çubuğunu gösterir. */
+const MODE_BADGE={
+  parcel:  {ic:'parcel',    name:'Parsel',  hint:'Kenarlara tıklayarak arsa sınırını çiz; kapatmak için başa dön'},
+  balkon:  {ic:'balcony',   name:'Balkon',  hint:'Dış duvara tıkla-ekle; tutamaçlardan boyutlandır'},
+  avlu:    {ic:'avlu',      name:'Avlu',    hint:'Sınır içinde sürükleyerek aydınlık boşluğu oy'},
+  door:    {ic:'door',      name:'Kapı',    hint:'Kapıyı sürükleyerek komşu duvara taşı'},
+  struct:  {ic:'structure', name:'Yapı',    hint:'Çekirdek ve bina köşe tutamaçlarından boyutlandır'},
+  roomdraw:{ic:'roomdraw',  name:'Oda Çiz', hint:'Kapalı poligon çizerek yeni oda oluştur'},
+  site:    {ic:'blok',      name:'Site',    hint:'Blokları sürükleyerek yerleştir'}
+};
+function updateModeBadge(m){
+  const bg=document.getElementById('modeBadge'); if(!bg) return;
+  const info=MODE_BADGE[m];
+  if(!info){ bg.style.display='none'; return; }
+  bg.querySelector('.mbName').innerHTML=(typeof icon==='function'?icon(info.ic):'')+'<span>'+info.name+'</span>';
+  bg.querySelector('.mbHint').textContent=info.hint;
+  bg.style.display='flex';
+  /* villa/site sekmeleri ya da park çubuğu görünüyorsa rozeti bir satır aşağı it */
+  const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
+  bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
+}
 const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; roomPts=[];
   for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
   if(m==='park') showParkBar();
+  updateModeBadge(m);
   positionOnb();
   svg.classList.toggle('panning',m==='pan'); render(); };
 document.getElementById('tbToggle').onclick=()=>{
