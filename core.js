@@ -145,6 +145,28 @@ function regLabelEN(reg){
    dizileri de buradan geçer. Boş/tanımsız dizi → 0 (çağrı yerlerindeki eski
    `cells?cells.length:0` muhafızıyla birebir). SAF TAŞIMA: M sabit → değer değişmez. */
 function areaOfCells(cells){ return (cells ? cells.length : 0) * M * M; }
+/* ── A5: perf enstrümantasyon (opsiyonel, VARSAYILAN KAPALI) ─────────────────
+   KPTA_PROFILE bayrağı açıkken generate() faz süreleri toplanır ve tek satırda
+   basılır ([PERF] ...). KAPALIYKEN sıfır davranış/çıktı farkı garanti: PROF.wrap
+   yalnız fn()'i döndürür, PROF.time/add erken çıkar → tests/snapshot-regression.js
+   BİREBİR korunur. Ölçüm mantık yolunu değiştirmez, plan çıktısına dokunmaz.
+   Kullanım (tarayıcı konsolu ya da test): KPTA_PROFILE=true; generate();
+   performance globali headless Node'da olmayabilir → now() guard'lı (yoksa 0). */
+let KPTA_PROFILE = false;
+const PROF = {
+  _t:{}, _order:[],
+  now(){ return (typeof performance!=='undefined' && performance && performance.now) ? performance.now() : 0; },
+  reset(){ this._t={}; this._order=[]; },
+  add(label, ms){ if(!(label in this._t)){ this._t[label]=0; this._order.push(label); } this._t[label]+=ms; },
+  /* fn() süresini label'a EKLER; bayrak kapalıysa doğrudan fn() (sıfır ek iş). */
+  wrap(label, fn){ if(!KPTA_PROFILE) return fn(); const t=this.now(); const r=fn(); this.add(label, this.now()-t); return r; },
+  report(tag){
+    if(!KPTA_PROFILE) return;
+    const parts=this._order.map(k=>`${k} ${this._t[k].toFixed(2)}ms`);
+    const tot=this._order.reduce((a,k)=>a+this._t[k],0);
+    console.log(`[PERF]${tag?' '+tag:''} toplam ${tot.toFixed(2)}ms | ${parts.join(' | ')}`);
+  }
+};
 const fmt = v => (Math.round(v*100)/100).toLocaleString('tr-TR');
 const escapeHtml = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function snapG(v){ return Math.round(v/M)*M; }

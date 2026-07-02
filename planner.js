@@ -66,6 +66,8 @@ function parkingForPlan(pl, vertical){
 }
 function generate(keepCuts){
   if(!closed) return;
+  if(KPTA_PROFILE) PROF.reset();   // A5: faz süre profili (bayrak kapalıysa sıfır iş)
+  let _pp=0;                        // A5: geçici faz-başlangıç zamanı (inline bloklar için)
   planAutoRepaired=false;   // kullanıcı üretimi/temiz üretim "otomatik onarıldı" değildir (repairImportedPlan sonradan işaretler)
   const villa = document.getElementById('binaTipi').value==='villa';
   const kat = Math.max(1,+document.getElementById('katSayisi').value||1);
@@ -81,10 +83,12 @@ function generate(keepCuts){
   /* iç avlular footprint'ten oyulur: merkezi avluda kalan hücre dışarı sayılır →
      motor avlunun etrafına sarar, avluya bakan oda kenarları cephe (komşu !inside) olur */
   const avlus=(typeof courtyards!=='undefined' && courtyards)? courtyards.filter(av=>av&&av.poly&&av.poly.length>=3) : [];
+  if(KPTA_PROFILE) _pp=PROF.now();
   for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
     const cx=minX+(c+.5)*M, cy=minY+(r+.5)*M;
     if(pip(cx,cy,pts) && !avlus.some(av=>pip(cx,cy,av.poly))) inside[r*cols+c]=1;
   }
+  if(KPTA_PROFILE) PROF.add('inside', PROF.now()-_pp);
   const cm=new Int16Array(rows*cols).fill(-1);
   const regions=[];
   const newReg=(name,type,unit)=>{const g={id:regions.length,name,type,unit:unit==null?-1:unit,cells:[]};regions.push(g);return g;};
@@ -244,6 +248,7 @@ function generate(keepCuts){
     out.coreAxis=coreAxis;
     return out;
   }
+  if(KPTA_PROFILE) _pp=PROF.now();
   let autoCore=null;
   if(!villa && !lockedCore && !floorsOn() && perFloor>=2){
     try{ autoCore=detectEarCore(); }catch(e){ console.error('kulak algılama:',e); autoCore=null; }
@@ -270,6 +275,7 @@ function generate(keepCuts){
     coreLock.forEach(e=>{ const g=newReg(e.name,e.type); claimRect(g,e.r0,e.c0,e.h,e.w);
       if((e.type==='merdiven'||e.type==='yangin')&&g.cells.length) stairs.push({r0:e.r0,c0:e.c0,h:e.h,w:e.w}); });
   }
+  if(KPTA_PROFILE){ PROF.add('cekirdek', PROF.now()-_pp); _pp=PROF.now(); } // yerlesim (koridor+zon+layoutUnit) başlar
 
   /* ================= KAT KULLANIM TİPİ (konut dışı) =================
      Apartman + katları ayrı planlanırken bu kat ticari/otopark/sığınak olabilir.
@@ -1058,7 +1064,14 @@ function generate(keepCuts){
     ebReg.cells=keep;
     return true;
   }
+  /* A5: layoutUnit çağrı sürelerinin TOPLAMI ('layoutUnit' alt-kalemi). Bayrak
+     kapalıysa doğrudan impl'e düşer (ek iş yok); açıkken her çağrı biriktirilir. */
   function layoutUnit(cells, u, side, addStair, uIdx){
+    if(!KPTA_PROFILE) return _layoutUnitImpl(cells, u, side, addStair, uIdx);
+    const _t=PROF.now(); const _r=_layoutUnitImpl(cells, u, side, addStair, uIdx);
+    PROF.add('layoutUnit', PROF.now()-_t); return _r;
+  }
+  function _layoutUnitImpl(cells, u, side, addStair, uIdx){
     const unit={spec:u, rooms:[], antre:null, side};            // side: daire takası/relayout için saklanır
     const ui = (uIdx==null? unitObjs.length : uIdx);            // daire indeksi (açık verilebilir → post-gen relayout)
     unit.uIdx = ui;                                             // assignCols + relayout region.unit etiketi için
@@ -2143,13 +2156,14 @@ function generate(keepCuts){
       if(carveCornerBath(u, host, ar>140?5:4)) host.name='EB. YATAK ODASI';
     });
   }
-  fixOrphans();
-  repairUnits();
-  purgeSlivers();
-  meltNoAccess();
-  carveMissing();
-  ensureEnsuite();
-  fixOrphans();
+  if(KPTA_PROFILE) PROF.add('yerlesim', PROF.now()-_pp); // koridor+zon+layoutUnit toplamı (layoutUnit alt-kalem ayrı)
+  PROF.wrap('fixOrphans', fixOrphans);
+  PROF.wrap('repairUnits', repairUnits);
+  PROF.wrap('purgeSlivers', purgeSlivers);
+  PROF.wrap('meltNoAccess', meltNoAccess);
+  PROF.wrap('carveMissing', carveMissing);
+  PROF.wrap('ensureEnsuite', ensureEnsuite);
+  PROF.wrap('fixOrphans', fixOrphans);
 
   /* --- bölge metrikleri --- */
   regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
@@ -2177,25 +2191,26 @@ function generate(keepCuts){
   doorOverrides={}; extraDoors=[]; doorHidden={}; // bölge kimlikleri yeniden doğdu: elle kapı ayarları bayat
   editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'||e.type==='__snap'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (ulayout/corelock/bound tam durum taşır, hayatta kalır)
   plan.wallRuns=computeWallRuns();
-  slimAntres(); // antre fazlalığı (kör uç kol, odaya sokulan çıkıntı, şişkin yuva) odalara geri verilir
+  PROF.wrap('slimAntres', slimAntres); // antre fazlalığı (kör uç kol, odaya sokulan çıkıntı, şişkin yuva) odalara geri verilir
   /* slim sonrası odalar büyüdü: ilk turda yer bulamayan eb. banyo şimdi sığabilir */
-  ensureEnsuite();
+  PROF.wrap('ensureEnsuite', ensureEnsuite);
   regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
   plan.wallRuns=computeWallRuns();
-  rectifyCorridor(); // (c) ortak hol israfını dairelere aktar — bkz fonksiyon üstü yorum
-  rectifyCorridorEnds(); // apartman holü cepheye dayanan ölü UÇLARINI odalara devret — bkz fonksiyon üstü yorum
-  rectifyRoomShape(); // (c) oda dikdörtgenliği — bkz fonksiyon üstü yorum
-  rectifyUnitBalance(); // (c) daire alan dengeleme — bkz fonksiyon üstü yorum
+  PROF.wrap('rectifyCorridor', rectifyCorridor); // (c) ortak hol israfını dairelere aktar — bkz fonksiyon üstü yorum
+  PROF.wrap('rectifyCorridorEnds', rectifyCorridorEnds); // apartman holü cepheye dayanan ölü UÇLARINI odalara devret — bkz fonksiyon üstü yorum
+  PROF.wrap('rectifyRoomShape', rectifyRoomShape); // (c) oda dikdörtgenliği — bkz fonksiyon üstü yorum
+  PROF.wrap('rectifyUnitBalance', rectifyUnitBalance); // (c) daire alan dengeleme — bkz fonksiyon üstü yorum
   regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
   plan.wallRuns=computeWallRuns();
-  runChecks();
+  PROF.wrap('runChecks', runChecks);
   buildUnitTable();
   renderFloorTabs();
   updateStructResetBtn();
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
   document.getElementById('aiOutputBtn').disabled=false;
-  render();
+  PROF.wrap('render', render);
+  PROF.report(`${cols*M}x${rows*M}m kat=${kat}`);
 }
 
 /* ===== İÇE AKTARILAN BOZUK DÜZEN OTOMATİK ONARIMI (yalnız dosya yükleme yolu) =====

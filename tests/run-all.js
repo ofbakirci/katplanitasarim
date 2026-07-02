@@ -52,7 +52,8 @@ const smokeTests = [
 ];
 
 const diagnosticTests = [
-  'tests/replay-kulak.js'
+  'tests/replay-kulak.js',
+  'tests/perf-smoke.js'
 ];
 
 const includeSmoke = process.argv.includes('--smoke');
