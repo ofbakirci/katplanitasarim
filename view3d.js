@@ -577,27 +577,43 @@
   // 3B etiketler GİZLİ (temiz kontrol görseli); duvarlar tam-yükseklik (iç mekan kapansın).
   // nano'ya img2img "realistic + estetik yap, geometriyi koru" olarak gider (adım 2-3 mesh-snap
   // reçetesinin göz-hizası, kamera-başı versiyonu). Her şey render sonrası GERİ yüklenir.
+  // C2: SABİT çözünürlük kilidi — snapshot çıktısı viewport'tan/ekrandan BAĞIMSIZ 1440×810 PNG.
+  // Neden: eskiden domElement viewport boyutunda render alıyordu → aynı kamera farklı ekranda
+  // farklı boyutta img2img girdisi üretiyordu (nano tutarsız). pixelRatio de kilitlenir yoksa
+  // retina'da 2× buffer (2880×1620) çıkardı. Boyut/aspect/pixelRatio try/finally ile BİREBİR geri
+  // yüklenir → ana render döngüsü ve kamera-yerleştirme worldToPx px_delta=0 değişmezi korunur.
   function snapCameraDataURL(which){
     if(!renderer||!scene||!cam) return null;
     const c=(typeof which==='number')?camList[which]:which;
     if(!c||!c.pos||!c.target) return null;
+    const savedSize=renderer.getSize(new THREE.Vector2());
+    if(savedSize.x<1||savedSize.y<1) return null;              // viewport 0×0 (ekran-arası/gizli) → render çöker, reddet
     const savedView=getView();                                 // orbit açısı + fov (geri koymak için)
+    const savAspect=cam.aspect, savPR=renderer.getPixelRatio();// aspect+pixelRatio getView kapsamaz → ayrı sakla
     const savRoof=roofOn, savGiz=camGizmos?camGizmos.visible:true;
     const labels=scene.__labels, savLbl=labels?labels.visible:true;
-    if(camGizmos) camGizmos.visible=false;                     // kamera modelleri/koni kadrajda olmasın
-    if(labels) labels.visible=false;                           // 3B etiketler görünmesin
-    if(!roofOn){ roofOn=true; applyRoof(); }                   // iç mekan: duvarlar tam-yükseklik → oda kapanır
-    cam.up.set(0,1,0);
-    cam.position.set(c.pos.x,c.pos.y,c.pos.z);
-    cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
-    cam.fov=lensToFov(c.lens); cam.updateProjectionMatrix();
-    renderer.render(scene,cam);
-    const url=renderer.domElement.toDataURL('image/png');
-    if(labels) labels.visible=savLbl;
-    if(camGizmos) camGizmos.visible=savGiz;
-    if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }        // çatı durumunu geri al
-    if(savedView) restoreView(savedView);                      // orbit açısı + fov geri
-    renderer.render(scene,cam);
+    let url=null;
+    try{
+      if(camGizmos) camGizmos.visible=false;                   // kamera modelleri/koni kadrajda olmasın
+      if(labels) labels.visible=false;                         // 3B etiketler görünmesin
+      if(!roofOn){ roofOn=true; applyRoof(); }                 // iç mekan: duvarlar tam-yükseklik → oda kapanır
+      renderer.setPixelRatio(1); renderer.setSize(1440,810,false);  // sabit 16:9; updateStyle=false ŞART (canvas CSS bozulmasın)
+      cam.up.set(0,1,0);
+      cam.position.set(c.pos.x,c.pos.y,c.pos.z);
+      cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
+      cam.fov=lensToFov(c.lens); cam.aspect=16/9; cam.updateProjectionMatrix();
+      renderer.render(scene,cam);
+      url=renderer.domElement.toDataURL('image/png');
+    } finally {
+      renderer.setPixelRatio(savPR); renderer.setSize(savedSize.x,savedSize.y,false);  // BİREBİR geri (hata olsa bile)
+      cam.aspect=savAspect;
+      if(labels) labels.visible=savLbl;
+      if(camGizmos) camGizmos.visible=savGiz;
+      if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }      // çatı durumunu geri al
+      if(savedView) restoreView(savedView);                    // orbit açısı + fov geri (updateProjectionMatrix içeride)
+      else cam.updateProjectionMatrix();                       // savedView yoksa aspect restore'unu yansıt
+      renderer.render(scene,cam);
+    }
     return url;
   }
   // tüm kameraları dolaş → {id, snapshot} dizisi (adım 4'ten çıkışta captureCameras ile).
