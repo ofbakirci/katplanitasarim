@@ -1,5 +1,11 @@
 name: Test
 
+# Repo PUBLIC — bu dosyaya sir/yerel path/disk adi YAZMA.
+# CI'da `npm run build` KOSMA: postbuild (mesken/build-prototip.js) gitignored
+# mesken/ asset'lerine (02_PROTOTIP/prototip.template.html vb.) ihtiyac duyar,
+# runner'da yoktur -> patlar. Onun yerine yalniz tekdosya bundle: `node tools/bundle.js`
+# (postbuild lifecycle'i tetiklenmez). Mesken asset'leri repoya EKLENMEZ.
+
 on:
   push:
   pull_request:
@@ -14,13 +20,27 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
 
-      - name: Syntax
+      # Lockfile yok -> `npm ci` KULLANMA. Proje bagimliliksiz oldugu icin bu adim
+      # bugun no-op'a yakin; ileride bagimlilik eklenirse yeri hazir.
+      - name: Install
+        run: npm install
+
+      # DEVIR-NOTU: "acik kalan if blogu tum script'i kirdi" vakasinin otomasyonu.
+      - name: Node syntax check (tum kok .js)
+        run: for f in *.js; do echo "node --check $f"; node --check "$f"; done
+
+      # Test destek katmani app.js'i script etiketlerinden birlestirir; ayrica dogrula.
+      - name: Assembled app.js syntax
         run: npm run test:syntax
 
-      - name: Unit and editor checks
+      - name: Unit + editor testleri (strict)
         run: npm test
 
-      - name: Smoke reports
+      - name: Smoke raporlari
         run: npm run test:smoke
+
+      # Tekdosya bundle (postbuild YOK — mesken prototip'i tetiklemez).
+      - name: Tekdosya bundle
+        run: node tools/bundle.js
