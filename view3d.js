@@ -16,7 +16,7 @@
   // camUIEnabled: kamera bölümü YALNIZ adım 4'te (openCompare) görünür — adım 2 (salt 3B izleme) ASLA göstermez.
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
   let placeMode=false, camUIEnabled=false, placeAction='aim', camList=[], activeCamIdx=-1, pendingPos=null, camHeight='eye', camLens=24, camPlanSig=null;
-  let camRenderMethod='both';   // her kameranın render yöntemi: 'prompt' (opsiyon 1) | 'snapshot' (opsiyon 2) | 'both' (A/B). exportCameras'a girer.
+  let camRenderMethod='snapshot';   // C7 (2026-07-03): B (kendi-açı/snapshot, sadık) VARSAYILAN — 1× maliyet. 'prompt' (A) ve 'both' (A/B, 2×) istek-üzerine seçilir. exportCameras'a girer.
   let camGizmos=null, raycaster=null, pickerWired=false;
   // ── katlanabilir panel: sağ kenarda ikon-rail + açılır çekmece (mesh'i örtmez) ──
   let activeGroup=null, lockedViewRef=null, onReRenderCb=null, angleDrift=false, lastHint='';
@@ -410,6 +410,7 @@
     // fit için: model merkezde (0,0,0); gerçek yarı-genişlikler (sıkı köşe-projeksiyonu fit'i)
     scene.__hx=(maxX-minX)/2; scene.__hz=(maxZ-minZ)/2;
     scene.__cx=cx; scene.__cz=cz; scene.__map=map;          // world↔px ters çevirim + kamera export için
+    scene.__span=Math.hypot(maxX-minX, maxZ-minZ);          // sahne çapı (C6 depth-map far aralığı)
     const G=new THREE.Group(); G.position.set(-cx,0,-cz); scene.add(G); scene.__floorGroup=G;
     const walls=new THREE.Group(); walls.position.set(-cx,0,-cz); scene.add(walls); scene.__walls=walls;
     const lintels=new THREE.Group(); lintels.position.set(-cx,0,-cz); lintels.visible=roofOn; scene.add(lintels); scene.__lintels=lintels;
@@ -612,6 +613,53 @@
       if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }      // çatı durumunu geri al
       if(savedView) restoreView(savedView);                    // orbit açısı + fov geri (updateProjectionMatrix içeride)
       else cam.updateProjectionMatrix();                       // savedView yoksa aspect restore'unu yansıt
+      renderer.render(scene,cam);
+    }
+    return url;
+  }
+
+  // ── C6 (kaçış yolu): kameranın KENDİ açısından DEPTH haritası → PNG dataURL ──
+  // snapCameraDataURL ikizi; fark: scene.overrideMaterial=MeshDepthMaterial → renkli mesh yerine
+  // derinlik (yakın=beyaz, uzak=siyah; BasicDepthPacking). C2 disiplini AYNEN: sabit 1440×810,
+  // pixelRatio=1, aspect=16/9, try/finally ile BİREBİR geri. Amaç: nano-banana deprecate olursa
+  // ControlNet-Depth (Flux vb.) kaçış yolu — ŞU AN pipeline'a BAĞLI DEĞİL, yalnız üretilebilir.
+  // Depth aralığı iyi olsun diye kameranın near/far'ı geçici sahne çapına göre daraltılır (restore'lu).
+  let _depthMat=null;
+  function snapCameraDepthMap(which){
+    if(!renderer||!scene||!cam) return null;
+    const c=(typeof which==='number')?camList[which]:which;
+    if(!c||!c.pos||!c.target) return null;
+    const savedSize=renderer.getSize(new THREE.Vector2());
+    if(savedSize.x<1||savedSize.y<1) return null;              // viewport 0×0 → render çöker, reddet
+    const savedView=getView();
+    const savAspect=cam.aspect, savPR=renderer.getPixelRatio(), savNear=cam.near, savFar=cam.far;
+    const savRoof=roofOn, savGiz=camGizmos?camGizmos.visible:true;
+    const labels=scene.__labels, savLbl=labels?labels.visible:true;
+    const savOverride=scene.overrideMaterial, savBg=scene.background;
+    let url=null;
+    try{
+      if(!_depthMat) _depthMat=new THREE.MeshDepthMaterial({ depthPacking:THREE.BasicDepthPacking });
+      if(camGizmos) camGizmos.visible=false;
+      if(labels) labels.visible=false;
+      if(!roofOn){ roofOn=true; applyRoof(); }                 // iç mekan tam-yükseklik → depth dolu
+      renderer.setPixelRatio(1); renderer.setSize(1440,810,false);
+      cam.up.set(0,1,0);
+      cam.position.set(c.pos.x,c.pos.y,c.pos.z);
+      cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
+      cam.fov=lensToFov(c.lens); cam.aspect=16/9;
+      cam.near=0.1; cam.far=Math.max(6, 2.2*(scene.__span||24));// depth aralığını sahneye sığdır
+      cam.updateProjectionMatrix();
+      scene.overrideMaterial=_depthMat; scene.background=null;
+      renderer.render(scene,cam);
+      url=renderer.domElement.toDataURL('image/png');
+    } finally {
+      scene.overrideMaterial=savOverride; scene.background=savBg;
+      renderer.setPixelRatio(savPR); renderer.setSize(savedSize.x,savedSize.y,false);
+      cam.aspect=savAspect; cam.near=savNear; cam.far=savFar;
+      if(labels) labels.visible=savLbl;
+      if(camGizmos) camGizmos.visible=savGiz;
+      if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }
+      if(savedView) restoreView(savedView); else cam.updateProjectionMatrix();
       renderer.render(scene,cam);
     }
     return url;
@@ -2034,7 +2082,7 @@
 
   // dışa aç + buton bağla
   window.View3D = { open:open, openCompare:openCompare, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
-    snapCameraDataURL:snapCameraDataURL, captureCameraSnapshots:captureCameraSnapshots,
+    snapCameraDataURL:snapCameraDataURL, snapCameraDepthMap:snapCameraDepthMap, captureCameraSnapshots:captureCameraSnapshots,
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
     clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras,
     // mobilya: map'ten furnList'i tazele + çiz (test + Faz 3). getMap = canlı harita erişimi.
