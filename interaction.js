@@ -118,8 +118,7 @@ svg.addEventListener('mousemove',e=>{
     if(dragging.type==='cut'){
       const v=snapG(dragging.horiz? S2Wx(sx) : S2Wy(sy));
       dragging.arr[dragging.idx]=Math.min(dragging.max, Math.max(dragging.min, v));
-      generate(true);
-      restoreEditedFootprints(dragging.preUnits);   // footprint'i değişmeyen dairelerin elle düzenini geri kur
+      drawCutGhost(dragging, sx, sy);   // B1: drag SIRASINDA generate YOK — yalnız hayalet önizleme; reflow BIRAKINCA
     }
     if(dragging.type==='wall'){ dragWallTo(sx,sy); }
     if(dragging.type==='struct'){ dragStructTo(sx,sy); }
@@ -368,11 +367,24 @@ window.addEventListener('mouseup',finishDrag);
 /* sürükleme biterken değişikliği geçmişe yaz (Geri Al için) */
 function finishDrag(){
   if(!dragging) return;
+  clearDragOverlay();   // B1: cut/duvar sürükleme hayalet katmanını kaldır
   if(dragging.type==='cut'){
-    generate(true); // not: generate duvar girdilerini geçmişten siler — cut girdisi SONRA yazılır
-    restoreEditedFootprints(dragging.preUnits);   // footprint'i değişmeyen dairelerin elle düzenini geri kur
-    if(dragging.undo && JSON.stringify(dragging.undo)!==JSON.stringify(customCutsZ) && dragging.preSnap)
-      pushEdit({type:'cut', state:dragging.preSnap}); // geri al: cut-öncesi TAM duruma birebir dön (restoreState)
+    /* B1: reflow yalnız BIRAKINCA. Büyük planda (48x27) ~5 sn sürebilir → önce imleci
+       progress'e al, tarayıcı boyayabilsin diye commit'i bir sonraki makro-göreve ertele.
+       setTimeout kullan (rAF DEĞİL): arka-plan/odaksız sekmede rAF durur → commit asılı kalırdı. */
+    const d=dragging; dragging=null;
+    svg.style.cursor='progress';
+    const commit=()=>{
+      try{
+        generate(true); // not: generate duvar girdilerini geçmişten siler — cut girdisi SONRA yazılır
+        restoreEditedFootprints(d.preUnits);   // footprint'i değişmeyen dairelerin elle düzenini geri kur
+        if(d.undo && JSON.stringify(d.undo)!==JSON.stringify(customCutsZ) && d.preSnap)
+          pushEdit({type:'cut', state:d.preSnap}); // geri al: cut-öncesi TAM duruma birebir dön (restoreState)
+      } finally { svg.style.cursor=''; syncPanCursor(); }
+    };
+    if(typeof setTimeout==='function') setTimeout(commit, 0);
+    else commit();
+    return;
   } else if(dragging.type==='wall' && dragging.snap && plan){
     if(snapshotChanged(dragging.snap))
       pushEdit({type:'wallsnap', snap:dragging.snap});

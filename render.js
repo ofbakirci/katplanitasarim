@@ -671,7 +671,7 @@ function renderPlan(){
         const cx= zu.horiz? W2Sx(v) : W2Sx(zu.perp);
         const cy= zu.horiz? W2Sy(zu.perp) : W2Sy(v);
         const c=el('circle',{cx,cy,r:9,fill:'#b35a2e',stroke:'#fff','stroke-width':2.5,cursor:zu.horiz?'ew-resize':'ns-resize'});
-        c.dataset.cut=JSON.stringify({zi:zu.zi,idx,horiz:zu.horiz,min:zu.min,max:zu.max});
+        c.dataset.cut=JSON.stringify({zi:zu.zi,idx,horiz:zu.horiz,min:zu.min,max:zu.max,perp:zu.perp});
         g.appendChild(c);
       });
     });
@@ -706,8 +706,84 @@ function hitCutHandle(sx,sy){
     if(dx*dx+dy*dy<=225*HITSC*HITSC){
       const info=JSON.parse(h.dataset.cut);
       if(!customCutsZ||!customCutsZ[info.zi]) return null;
-      return {type:'cut', arr:customCutsZ[info.zi], idx:info.idx, horiz:info.horiz, min:info.min, max:info.max};
+      return {type:'cut', arr:customCutsZ[info.zi], idx:info.idx, horiz:info.horiz, min:info.min, max:info.max, perp:info.perp};
     }
   }
   return null;
+}
+/* ================= B1: cut / duvar sürükleme hayalet önizleme =================
+   Sürükleme SIRASINDA artık generate() KOŞMAZ (48x27 planda ~5 sn/frame). Yalnız hafif
+   bir hayalet katman (#dragOverlay) güncellenir: kesikli ayırıcı çizgisi + canlı ölçü
+   etiketi. Gerçek yeniden-yerleşim BIRAKINCA (finishDrag) tek sefer olur (bilinçli takas:
+   canlı reflow -> drop'ta reflow, akıcılık için). */
+function dragOverlay(){                          // tek seferlik üst katman; her çağrıda temizlenir + en üste taşınır
+  let g=document.getElementById('dragOverlay');
+  if(!g){ g=el('g',{id:'dragOverlay'}); }
+  svg.appendChild(g);                            // render() svg'yi sıfırlasa da tekrar en üste eklenir
+  g.innerHTML='';
+  return g;
+}
+function clearDragOverlay(){ const g=document.getElementById('dragOverlay'); if(g&&g.parentNode) g.parentNode.removeChild(g); }
+/* imleç yanında koyu ölçü rozeti (canvas dışına taşarsa yön çevirir) */
+function dragMeasureLabel(g, px, py, text){
+  const pad=5, fs=12, w=Math.round(text.length*6.6)+pad*2, h=fs+pad*2;
+  const r=svg.getBoundingClientRect();
+  let x=px+16, y=py-h-12;
+  if(x+w>r.width) x=px-w-16; if(x<0) x=4;
+  if(y<0) y=py+16; if(y+h>r.height) y=r.height-h-2;
+  g.appendChild(el('rect',{x,y,width:w,height:h,rx:4,fill:'#2b2b2b',opacity:0.92}));
+  const t=el('text',{x:x+w/2,y:y+h/2+1,'text-anchor':'middle','dominant-baseline':'middle',
+    'font-size':fs,fill:'#fff','font-weight':'600','font-family':'system-ui,-apple-system,sans-serif'});
+  t.textContent=text; g.appendChild(t);
+}
+/* ayırıcının içinde durduğu bandın DERİNLİK (hole-cephe) ekseni dünya-aralığı (hücre taraması, grab'de bir kez) */
+function cutBandDepth(d){
+  if(!plan) return null;
+  const {minX,minY,rows,cols,inside,cm,regions}=plan;
+  const isBand=j=> j>=0 && j<rows*cols && inside[j] && cm[j]>=0
+     && regions[cm[j]].type!=='koridor' && !isStructReg(regions[cm[j]]);
+  const v0=d.arr[d.idx];
+  if(d.horiz){                                   // bölünme x ekseninde → derinlik y ekseni
+    let c=Math.round((v0-minX)/M); c=Math.max(0,Math.min(cols-1,c));
+    let rp=Math.round((d.perp-minY)/M); rp=Math.max(0,Math.min(rows-1,rp));
+    if(!isBand(rp*cols+c)){ let f=-1; for(let dr=1;dr<rows;dr++){ if(isBand((rp-dr)*cols+c)){f=rp-dr;break;} if(isBand((rp+dr)*cols+c)){f=rp+dr;break;} } if(f<0) return null; rp=f; }
+    let r0=rp,r1=rp; while(r0>0&&isBand((r0-1)*cols+c)) r0--; while(r1<rows-1&&isBand((r1+1)*cols+c)) r1++;
+    return [minY+r0*M, minY+(r1+1)*M];
+  } else {                                        // bölünme y ekseninde → derinlik x ekseni
+    let r=Math.round((v0-minY)/M); r=Math.max(0,Math.min(rows-1,r));
+    let cp=Math.round((d.perp-minX)/M); cp=Math.max(0,Math.min(cols-1,cp));
+    if(!isBand(r*cols+cp)){ let f=-1; for(let dc=1;dc<cols;dc++){ if(isBand(r*cols+cp-dc)){f=cp-dc;break;} if(isBand(r*cols+cp+dc)){f=cp+dc;break;} } if(f<0) return null; cp=f; }
+    let c0=cp,c1=cp; while(c0>0&&isBand(r*cols+c0-1)) c0--; while(c1<cols-1&&isBand(r*cols+c1+1)) c1++;
+    return [minX+c0*M, minX+(c1+1)*M];
+  }
+}
+function drawCutGhost(d,sx,sy){
+  if(!plan) return;
+  const g=dragOverlay();
+  const v=d.arr[d.idx];
+  if(d.bandDepth===undefined) d.bandDepth=cutBandDepth(d);
+  const span=d.bandDepth||[d.perp-6, d.perp+6];   // tarama başarısız olursa görsel yedek
+  let x1,y1,x2,y2, hx,hy;
+  if(d.horiz){ x1=x2=W2Sx(v); y1=W2Sy(span[0]); y2=W2Sy(span[1]); hx=W2Sx(v); hy=W2Sy(d.perp); }
+  else { y1=y2=W2Sy(v); x1=W2Sx(span[0]); x2=W2Sx(span[1]); hx=W2Sx(d.perp); hy=W2Sy(v); }
+  g.appendChild(el('line',{x1,y1,x2,y2,stroke:'#b35a2e','stroke-width':2.5,'stroke-dasharray':'8 5','stroke-linecap':'round',opacity:0.95}));
+  g.appendChild(el('circle',{cx:hx,cy:hy,r:9,fill:'#b35a2e',stroke:'#fff','stroke-width':2.5}));
+  /* iki yandaki bant genişliği: konumsal komşu cut'lar, uçlarda bölge kenarı (zStart/zEnd).
+     zoneUI min/max, planner.js'te bölge kenarından 2 hücre içeridedir (base+(aMin+2)*M) → +/-2*M ile gerçek kenar. */
+  if(d.zStart===undefined){ d.zStart=d.min-2*M; d.zEnd=d.max+2*M; }
+  const arr=d.arr, i=d.idx;
+  const lo = i>0? arr[i-1] : d.zStart;
+  const hi = i<arr.length-1? arr[i+1] : d.zEnd;
+  dragMeasureLabel(g, sx, sy, fmt(Math.max(0,v-lo))+' m | '+fmt(Math.max(0,hi-v))+' m');
+}
+/* mavi duvar sürüklerken komşu iki bölgenin canlı W×H'i (moveWallStep sonucunu beklemeden) */
+function drawWallMeasure(run){
+  if(!plan||!run) return;
+  const g=dragOverlay();
+  const mx = run.horiz? plan.minX+((run.lo+run.hi)/2)*M : plan.minX+run.pos*M;
+  const my = run.horiz? plan.minY+run.pos*M : plan.minY+((run.lo+run.hi)/2)*M;
+  const parts=[];
+  [run.a,run.b].forEach(id=>{ const gg=plan.regions[id];
+    if(gg&&gg.cells&&gg.cells.length){ const b=regBox(gg); parts.push(fmt(b[2]-b[0])+'×'+fmt(b[3]-b[1])+' m'); } });
+  if(parts.length) dragMeasureLabel(g, W2Sx(mx), W2Sy(my), parts.join('   '));
 }

@@ -253,4 +253,5 @@ function dragWallTo(sx,sy){
   dragging.run=nr||run;
   hoverWall=nr||null;
   runChecks(); buildUnitTable(); render();   // canlı yeniden denetim
+  drawWallMeasure(dragging.run);             // B1: sürüklenen duvarın komşu bölgelerinin canlı W×H'i
 }
