@@ -512,7 +512,9 @@ window.addEventListener('keydown',e=>{
   const id=MODE_KEYS[(e.key||'').toLowerCase()];
   if(!id) return;
   const btn=document.getElementById(id);
-  if(!btn || btn.disabled || getComputedStyle(btn).display==='none') return;   // gizli (pro-only/site kapalı/park yok) → kısayol da yok
+  // yalnız GERÇEKTEN kullanılamaz düğme (pro-only kapalı / site kapalı / park yok — düğmenin KENDİ display'i none) → kısayol yok.
+  // Collapsed toolbar kısayolu KAPATMAZ: ata .tbgrp display:none olsa da düğmenin kendi computed display'i 'flex' kalır → aktif (bilinçli; kısayol tam da toolbar gizliyken değerli).
+  if(!btn || btn.disabled || getComputedStyle(btn).display==='none') return;
   e.preventDefault(); btn.click();
 });
 /* son elle düzenlemeyi geri al; geçmiş boşsa false döner (Geri Al eski davranışına düşer).
