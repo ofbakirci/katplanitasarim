@@ -1,0 +1,2329 @@
+{
+  "std-32x16": {
+    "grid": {
+      "rows": 32,
+      "cols": 64
+    },
+    "regionCount": 26,
+    "regions": [
+      {
+        "name": "APARTMAN HOLÜ",
+        "type": "koridor",
+        "unit": -1,
+        "area": 26.25,
+        "w": 17.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 105
+      },
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": -1,
+        "area": 15,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ASANSÖR",
+        "type": "asansor",
+        "unit": -1,
+        "area": 6,
+        "w": 2,
+        "h": 3,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "ŞAFT",
+        "type": "teknik",
+        "unit": -1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 19.5,
+        "w": 6,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 78
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 15.75,
+        "w": 9,
+        "h": 3,
+        "minSide": 3,
+        "cells": 63
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 0,
+        "area": 58.5,
+        "w": 7,
+        "h": 9,
+        "minSide": 7,
+        "cells": 234
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 0,
+        "area": 9,
+        "w": 2,
+        "h": 4.5,
+        "minSide": 2,
+        "cells": 36
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 13.5,
+        "w": 3,
+        "h": 4.5,
+        "minSide": 3,
+        "cells": 54
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 18.5,
+        "w": 5,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 74
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 12,
+        "w": 6,
+        "h": 2,
+        "minSide": 2,
+        "cells": 48
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 1,
+        "area": 9,
+        "w": 7,
+        "h": 3,
+        "minSide": 3,
+        "cells": 36
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 1,
+        "area": 48,
+        "w": 7,
+        "h": 7.5,
+        "minSide": 7,
+        "cells": 192
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 1,
+        "area": 9,
+        "w": 2,
+        "h": 4.5,
+        "minSide": 2,
+        "cells": 36
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 13.5,
+        "w": 3,
+        "h": 4.5,
+        "minSide": 3,
+        "cells": 54
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 27.5,
+        "w": 5,
+        "h": 9,
+        "minSide": 5,
+        "cells": 110
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 2,
+        "area": 10.5,
+        "w": 7,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 42
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 2,
+        "area": 8,
+        "w": 6.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 32
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 31,
+        "w": 7,
+        "h": 7,
+        "minSide": 7,
+        "cells": 124
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 2,
+        "area": 53,
+        "w": 12,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 212
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 3,
+        "area": 7.5,
+        "w": 5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 30
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 3,
+        "area": 4.5,
+        "w": 3,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 18
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 3,
+        "area": 66.25,
+        "w": 13,
+        "h": 7,
+        "minSide": 7,
+        "cells": 265
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 22.25,
+        "w": 3.5,
+        "h": 7,
+        "minSide": 3.5,
+        "cells": 89
+      }
+    ],
+    "units": [
+      138.75,
+      123,
+      102.5,
+      100.5
+    ],
+    "doors": 22,
+    "bad": 0,
+    "info": 7
+  },
+  "apt-21x18": {
+    "grid": {
+      "rows": 36,
+      "cols": 42
+    },
+    "regionCount": 47,
+    "regions": [
+      {
+        "name": "APARTMAN HOLÜ",
+        "type": "koridor",
+        "unit": -1,
+        "area": 19.5,
+        "w": 13,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 78
+      },
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": -1,
+        "area": 15,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ASANSÖR",
+        "type": "asansor",
+        "unit": -1,
+        "area": 6,
+        "w": 2,
+        "h": 3,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "ŞAFT",
+        "type": "teknik",
+        "unit": -1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 12.5,
+        "w": 2.5,
+        "h": 5,
+        "minSide": 2.5,
+        "cells": 50
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 12.5,
+        "w": 2.5,
+        "h": 5,
+        "minSide": 2.5,
+        "cells": 50
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 0,
+        "area": 10,
+        "w": 2,
+        "h": 5,
+        "minSide": 2,
+        "cells": 40
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 4,
+        "w": 4,
+        "h": 1,
+        "minSide": 1,
+        "cells": 16
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 0,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 0,
+        "area": 15,
+        "w": 4,
+        "h": 4,
+        "minSide": 4,
+        "cells": 60
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 9,
+        "w": 3,
+        "h": 5,
+        "minSide": 3,
+        "cells": 36
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 1,
+        "area": 8.5,
+        "w": 2,
+        "h": 5,
+        "minSide": 2,
+        "cells": 34
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 5.25,
+        "w": 1.5,
+        "h": 3.5,
+        "minSide": 1.5,
+        "cells": 21
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 1,
+        "area": 15.25,
+        "w": 6,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 61
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 1,
+        "area": 17,
+        "w": 4,
+        "h": 5,
+        "minSide": 4,
+        "cells": 68
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 11,
+        "w": 3,
+        "h": 5,
+        "minSide": 3,
+        "cells": 44
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 2,
+        "area": 7,
+        "w": 2,
+        "h": 3.5,
+        "minSide": 2,
+        "cells": 28
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 2,
+        "area": 5.25,
+        "w": 1.5,
+        "h": 3.5,
+        "minSide": 1.5,
+        "cells": 21
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 2,
+        "area": 15.25,
+        "w": 6,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 61
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 2,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 2,
+        "area": 17,
+        "w": 4,
+        "h": 5,
+        "minSide": 4,
+        "cells": 68
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 11,
+        "w": 3,
+        "h": 5,
+        "minSide": 3,
+        "cells": 44
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 8.75,
+        "w": 2.5,
+        "h": 3.5,
+        "minSide": 2.5,
+        "cells": 35
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 8.75,
+        "w": 2.5,
+        "h": 3.5,
+        "minSide": 2.5,
+        "cells": 35
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 3,
+        "area": 5.25,
+        "w": 1.5,
+        "h": 3.5,
+        "minSide": 1.5,
+        "cells": 21
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 3,
+        "area": 5.25,
+        "w": 1.5,
+        "h": 3.5,
+        "minSide": 1.5,
+        "cells": 21
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 3,
+        "area": 6,
+        "w": 6,
+        "h": 1,
+        "minSide": 1,
+        "cells": 24
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 3,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 3,
+        "area": 24.25,
+        "w": 6.5,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 97
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 19.25,
+        "w": 5,
+        "h": 5,
+        "minSide": 5,
+        "cells": 77
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 3,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 4,
+        "area": 7,
+        "w": 2,
+        "h": 3.5,
+        "minSide": 2,
+        "cells": 28
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 4,
+        "area": 10.5,
+        "w": 3,
+        "h": 3.5,
+        "minSide": 3,
+        "cells": 42
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 4,
+        "area": 8.5,
+        "w": 5,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 34
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 4,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 4,
+        "area": 27.25,
+        "w": 6,
+        "h": 5,
+        "minSide": 5,
+        "cells": 109
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 4,
+        "area": 12.25,
+        "w": 3.5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 49
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 3,
+        "w": 2,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 12
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 2,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      }
+    ],
+    "units": [
+      70,
+      61,
+      59.5,
+      81.5,
+      65.5
+    ],
+    "doors": 30,
+    "bad": 8,
+    "info": 7
+  },
+  "L-shape": {
+    "grid": {
+      "rows": 34,
+      "cols": 68
+    },
+    "regionCount": 40,
+    "regions": [
+      {
+        "name": "APARTMAN HOLÜ",
+        "type": "koridor",
+        "unit": -1,
+        "area": 50.25,
+        "w": 33.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 201
+      },
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": -1,
+        "area": 15,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ASANSÖR",
+        "type": "asansor",
+        "unit": -1,
+        "area": 6,
+        "w": 2,
+        "h": 3,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "TEKNİK / ŞAFT",
+        "type": "teknik",
+        "unit": -1,
+        "area": 4.5,
+        "w": 1.5,
+        "h": 3,
+        "minSide": 1.5,
+        "cells": 18
+      },
+      {
+        "name": "YANGIN MERD.",
+        "type": "yangin",
+        "unit": -1,
+        "area": 8.75,
+        "w": 2.5,
+        "h": 3.5,
+        "minSide": 2.5,
+        "cells": 35
+      },
+      {
+        "name": "ŞAFT",
+        "type": "teknik",
+        "unit": -1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 7.5,
+        "w": 3,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 30
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 0,
+        "area": 5,
+        "w": 2,
+        "h": 2.5,
+        "minSide": 2,
+        "cells": 20
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 5,
+        "w": 2,
+        "h": 2.5,
+        "minSide": 2,
+        "cells": 20
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 8.5,
+        "w": 6,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 34
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 0,
+        "area": 17,
+        "w": 5,
+        "h": 4,
+        "minSide": 4,
+        "cells": 68
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 9,
+        "w": 3,
+        "h": 3,
+        "minSide": 3,
+        "cells": 36
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 1,
+        "area": 5,
+        "w": 2,
+        "h": 2.5,
+        "minSide": 2,
+        "cells": 20
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 3.75,
+        "w": 1.5,
+        "h": 2.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 1,
+        "area": 6,
+        "w": 3.5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 24
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 7.5,
+        "w": 3,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 30
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 1,
+        "area": 14.5,
+        "w": 4.5,
+        "h": 4,
+        "minSide": 4,
+        "cells": 58
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 12,
+        "w": 3,
+        "h": 4,
+        "minSide": 3,
+        "cells": 48
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 2,
+        "area": 5,
+        "w": 2,
+        "h": 2.5,
+        "minSide": 2,
+        "cells": 20
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 2,
+        "area": 3.75,
+        "w": 1.5,
+        "h": 2.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 2,
+        "area": 6,
+        "w": 3.5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 24
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 7.5,
+        "w": 3,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 30
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 2,
+        "area": 14.5,
+        "w": 4.5,
+        "h": 4,
+        "minSide": 4,
+        "cells": 58
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 12,
+        "w": 3,
+        "h": 4,
+        "minSide": 3,
+        "cells": 48
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 3,
+        "area": 4.5,
+        "w": 4,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 18
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 3,
+        "area": 3.75,
+        "w": 1.5,
+        "h": 2.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 3,
+        "area": 17.5,
+        "w": 4,
+        "h": 5.5,
+        "minSide": 4,
+        "cells": 70
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 10,
+        "w": 2.5,
+        "h": 4,
+        "minSide": 2.5,
+        "cells": 40
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 4,
+        "area": 3.75,
+        "w": 3.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 4,
+        "area": 3.75,
+        "w": 1.5,
+        "h": 2.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 4,
+        "area": 17,
+        "w": 3.5,
+        "h": 5.5,
+        "minSide": 3.5,
+        "cells": 68
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 4,
+        "area": 12,
+        "w": 2.5,
+        "h": 8,
+        "minSide": 2.5,
+        "cells": 48
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 5,
+        "area": 3.75,
+        "w": 1.5,
+        "h": 2.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 5,
+        "area": 6,
+        "w": 3,
+        "h": 3.5,
+        "minSide": 3,
+        "cells": 24
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 5,
+        "area": 22,
+        "w": 4,
+        "h": 5.5,
+        "minSide": 4,
+        "cells": 88
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 5,
+        "area": 15,
+        "w": 2.5,
+        "h": 6,
+        "minSide": 2.5,
+        "cells": 60
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 6,
+        "area": 6.75,
+        "w": 4.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 27
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 6,
+        "area": 4.5,
+        "w": 2.5,
+        "h": 2,
+        "minSide": 2,
+        "cells": 18
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 6,
+        "area": 22.75,
+        "w": 5.5,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 91
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 6,
+        "area": 11,
+        "w": 2.5,
+        "h": 6,
+        "minSide": 2.5,
+        "cells": 44
+      }
+    ],
+    "units": [
+      52,
+      48.75,
+      48.75,
+      35.75,
+      36.5,
+      46.75,
+      45
+    ],
+    "doors": 33,
+    "bad": 6,
+    "info": 5
+  },
+  "deep-48x27": {
+    "grid": {
+      "rows": 54,
+      "cols": 96
+    },
+    "regionCount": 56,
+    "regions": [
+      {
+        "name": "APARTMAN HOLÜ",
+        "type": "koridor",
+        "unit": -1,
+        "area": 162,
+        "w": 38.5,
+        "h": 27,
+        "minSide": 27,
+        "cells": 648
+      },
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": -1,
+        "area": 15,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ASANSÖR",
+        "type": "asansor",
+        "unit": -1,
+        "area": 6,
+        "w": 2,
+        "h": 3,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "TEKNİK / ŞAFT",
+        "type": "teknik",
+        "unit": -1,
+        "area": 4.5,
+        "w": 1.5,
+        "h": 3,
+        "minSide": 1.5,
+        "cells": 18
+      },
+      {
+        "name": "YANGIN MERD.",
+        "type": "yangin",
+        "unit": -1,
+        "area": 8.75,
+        "w": 2.5,
+        "h": 3.5,
+        "minSide": 2.5,
+        "cells": 35
+      },
+      {
+        "name": "ŞAFT",
+        "type": "teknik",
+        "unit": -1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 0,
+        "area": 17.5,
+        "w": 3.5,
+        "h": 5,
+        "minSide": 3.5,
+        "cells": 70
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 10.5,
+        "w": 3.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 42
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 10.25,
+        "w": 4,
+        "h": 7,
+        "minSide": 4,
+        "cells": 41
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 0,
+        "area": 4.5,
+        "w": 3,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 18
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 0,
+        "area": 45.25,
+        "w": 8.5,
+        "h": 5.5,
+        "minSide": 5.5,
+        "cells": 181
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 22.5,
+        "w": 7.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 90
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 22.5,
+        "w": 7.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 90
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 25.5,
+        "w": 11.5,
+        "h": 4,
+        "minSide": 4,
+        "cells": 102
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 6.25,
+        "w": 2.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 25
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 1,
+        "area": 75,
+        "w": 15,
+        "h": 5,
+        "minSide": 5,
+        "cells": 300
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 27,
+        "w": 4.5,
+        "h": 6,
+        "minSide": 4.5,
+        "cells": 108
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 1,
+        "area": 11,
+        "w": 4,
+        "h": 8,
+        "minSide": 4,
+        "cells": 44
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 1,
+        "area": 51,
+        "w": 11.5,
+        "h": 6,
+        "minSide": 6,
+        "cells": 204
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 17.5,
+        "w": 7.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 70
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 13.75,
+        "w": 2.5,
+        "h": 5.5,
+        "minSide": 2.5,
+        "cells": 55
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 17.5,
+        "w": 5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 70
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 2,
+        "area": 20,
+        "w": 4,
+        "h": 5,
+        "minSide": 4,
+        "cells": 80
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 2,
+        "area": 24,
+        "w": 4,
+        "h": 6,
+        "minSide": 4,
+        "cells": 96
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 2,
+        "area": 11,
+        "w": 4,
+        "h": 8,
+        "minSide": 4,
+        "cells": 44
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 2,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 2,
+        "area": 48,
+        "w": 11,
+        "h": 6,
+        "minSide": 6,
+        "cells": 192
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 16,
+        "w": 7,
+        "h": 3,
+        "minSide": 3,
+        "cells": 64
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 13.75,
+        "w": 2.5,
+        "h": 5.5,
+        "minSide": 2.5,
+        "cells": 55
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 2,
+        "area": 15.75,
+        "w": 4.5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 63
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 3,
+        "area": 24.5,
+        "w": 3.5,
+        "h": 7,
+        "minSide": 3.5,
+        "cells": 98
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 3,
+        "area": 8.75,
+        "w": 3.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 35
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 3,
+        "area": 10.5,
+        "w": 4,
+        "h": 7,
+        "minSide": 4,
+        "cells": 42
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 3,
+        "area": 4.5,
+        "w": 3,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 18
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 3,
+        "area": 44,
+        "w": 8,
+        "h": 5.5,
+        "minSide": 5.5,
+        "cells": 176
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 21,
+        "w": 7,
+        "h": 3,
+        "minSide": 3,
+        "cells": 84
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 21,
+        "w": 7,
+        "h": 3,
+        "minSide": 3,
+        "cells": 84
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 26,
+        "w": 10.5,
+        "h": 4.5,
+        "minSide": 4.5,
+        "cells": 104
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 3,
+        "area": 6,
+        "w": 3,
+        "h": 2,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 4,
+        "area": 12,
+        "w": 1.5,
+        "h": 8,
+        "minSide": 1.5,
+        "cells": 48
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 4,
+        "area": 5,
+        "w": 2.5,
+        "h": 2,
+        "minSide": 2,
+        "cells": 20
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 4,
+        "area": 3.75,
+        "w": 1.5,
+        "h": 2.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 4,
+        "area": 68,
+        "w": 9.5,
+        "h": 8,
+        "minSide": 8,
+        "cells": 272
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 4,
+        "area": 25.5,
+        "w": 8.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 102
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 4,
+        "area": 23.75,
+        "w": 10.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 95
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 4,
+        "area": 6,
+        "w": 3,
+        "h": 2,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 5,
+        "area": 9.75,
+        "w": 8.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 39
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 5,
+        "area": 3.5,
+        "w": 1.5,
+        "h": 2.5,
+        "minSide": 1.5,
+        "cells": 14
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 5,
+        "area": 57,
+        "w": 8,
+        "h": 12,
+        "minSide": 8,
+        "cells": 228
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 5,
+        "area": 33,
+        "w": 3,
+        "h": 11,
+        "minSide": 3,
+        "cells": 132
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 5,
+        "area": 35.5,
+        "w": 3,
+        "h": 14.5,
+        "minSide": 3,
+        "cells": 142
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 5,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      },
+      {
+        "name": "ORTAK DEPO",
+        "type": "teknik",
+        "unit": -1,
+        "area": 120.75,
+        "w": 10.5,
+        "h": 12.5,
+        "minSide": 10.5,
+        "cells": 483
+      }
+    ],
+    "units": [
+      164.75,
+      212.75,
+      148.5,
+      166.25,
+      144,
+      142.75
+    ],
+    "doors": 43,
+    "bad": 11,
+    "info": 12
+  },
+  "villa-5+1": {
+    "grid": {
+      "rows": 22,
+      "cols": 28
+    },
+    "regionCount": 11,
+    "regions": [
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 19.75,
+        "w": 14,
+        "h": 6,
+        "minSide": 6,
+        "cells": 79
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 0,
+        "area": 25,
+        "w": 5,
+        "h": 5,
+        "minSide": 5,
+        "cells": 100
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 0,
+        "area": 9,
+        "w": 2,
+        "h": 4.5,
+        "minSide": 2,
+        "cells": 36
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 9.5,
+        "w": 3.5,
+        "h": 4.5,
+        "minSide": 3.5,
+        "cells": 38
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 11.25,
+        "w": 2.5,
+        "h": 4.5,
+        "minSide": 2.5,
+        "cells": 45
+      },
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": 0,
+        "area": 12.5,
+        "w": 2.5,
+        "h": 5,
+        "minSide": 2.5,
+        "cells": 50
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 7.5,
+        "w": 1.5,
+        "h": 5,
+        "minSide": 1.5,
+        "cells": 30
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 17.5,
+        "w": 3.5,
+        "h": 5,
+        "minSide": 3.5,
+        "cells": 70
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 19.25,
+        "w": 3.5,
+        "h": 5.5,
+        "minSide": 3.5,
+        "cells": 77
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 16.5,
+        "w": 3,
+        "h": 5.5,
+        "minSide": 3,
+        "cells": 66
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 6.25,
+        "w": 2.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 25
+      }
+    ],
+    "units": [
+      154
+    ],
+    "doors": 11,
+    "bad": 0,
+    "info": 1
+  },
+  "single-unit": {
+    "grid": {
+      "rows": 24,
+      "cols": 32
+    },
+    "regionCount": 11,
+    "regions": [
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": -1,
+        "area": 15,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ASANSÖR",
+        "type": "asansor",
+        "unit": -1,
+        "area": 6,
+        "w": 2,
+        "h": 3,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "APARTMAN HOLÜ",
+        "type": "koridor",
+        "unit": -1,
+        "area": 10.5,
+        "w": 7,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 42
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 12,
+        "w": 6,
+        "h": 2,
+        "minSide": 2,
+        "cells": 48
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 7.5,
+        "w": 5.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 30
+      },
+      {
+        "name": "KİLER",
+        "type": "antre",
+        "unit": 0,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 0,
+        "area": 65,
+        "w": 13,
+        "h": 5.5,
+        "minSide": 5.5,
+        "cells": 260
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 0,
+        "area": 19.5,
+        "w": 3,
+        "h": 6.5,
+        "minSide": 3,
+        "cells": 78
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 19.5,
+        "w": 3,
+        "h": 6.5,
+        "minSide": 3,
+        "cells": 78
+      },
+      {
+        "name": "EB. YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 30.75,
+        "w": 4.5,
+        "h": 12,
+        "minSide": 4.5,
+        "cells": 123
+      },
+      {
+        "name": "EB. BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 6.25,
+        "w": 2.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 25
+      }
+    ],
+    "units": [
+      160.5
+    ],
+    "doors": 7,
+    "bad": 0,
+    "info": 3
+  },
+  "comb-40x12": {
+    "grid": {
+      "rows": 24,
+      "cols": 80
+    },
+    "regionCount": 29,
+    "regions": [
+      {
+        "name": "APARTMAN HOLÜ",
+        "type": "koridor",
+        "unit": -1,
+        "area": 43.5,
+        "w": 29,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 174
+      },
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": -1,
+        "area": 15,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ASANSÖR",
+        "type": "asansor",
+        "unit": -1,
+        "area": 6,
+        "w": 2,
+        "h": 3,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "ŞAFT",
+        "type": "teknik",
+        "unit": -1,
+        "area": 0,
+        "w": 0,
+        "h": 0,
+        "minSide": 0,
+        "cells": 0
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 9.75,
+        "w": 6.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 39
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 6,
+        "w": 4.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 24
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 0,
+        "area": 45,
+        "w": 9,
+        "h": 7,
+        "minSide": 7,
+        "cells": 180
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 12,
+        "w": 4,
+        "h": 3,
+        "minSide": 3,
+        "cells": 48
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 10.5,
+        "w": 3.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 42
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 9.75,
+        "w": 6.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 39
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 1,
+        "area": 6,
+        "w": 4.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 24
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 1,
+        "area": 36,
+        "w": 9,
+        "h": 5.5,
+        "minSide": 5.5,
+        "cells": 144
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 12,
+        "w": 4,
+        "h": 3,
+        "minSide": 3,
+        "cells": 48
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 10.5,
+        "w": 3.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 42
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 2,
+        "area": 6.75,
+        "w": 4.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 27
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 2,
+        "area": 4.75,
+        "w": 2.5,
+        "h": 2.5,
+        "minSide": 2.5,
+        "cells": 19
+      },
+      {
+        "name": "SALON + MUTFAK",
+        "type": "salon",
+        "unit": 2,
+        "area": 36.75,
+        "w": 9,
+        "h": 5.5,
+        "minSide": 5.5,
+        "cells": 147
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 10.5,
+        "w": 3.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 42
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 2,
+        "area": 15,
+        "w": 3,
+        "h": 7,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 3,
+        "area": 11.25,
+        "w": 7.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 45
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 3,
+        "area": 51,
+        "w": 9.5,
+        "h": 6.5,
+        "minSide": 6.5,
+        "cells": 204
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 3,
+        "area": 10.5,
+        "w": 3,
+        "h": 3.5,
+        "minSide": 3,
+        "cells": 42
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 3,
+        "area": 17.5,
+        "w": 5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 70
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 3,
+        "area": 4.5,
+        "w": 1.5,
+        "h": 5,
+        "minSide": 1.5,
+        "cells": 18
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 4,
+        "area": 11.25,
+        "w": 7.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 45
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 4,
+        "area": 42.75,
+        "w": 12.5,
+        "h": 5,
+        "minSide": 5,
+        "cells": 171
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 4,
+        "area": 12.25,
+        "w": 3.5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 49
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 4,
+        "area": 15.75,
+        "w": 4.5,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 63
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 4,
+        "area": 7.5,
+        "w": 1.5,
+        "h": 5,
+        "minSide": 1.5,
+        "cells": 30
+      }
+    ],
+    "units": [
+      83.25,
+      74.25,
+      73.75,
+      94.75,
+      89.5
+    ],
+    "doors": 25,
+    "bad": 0,
+    "info": 5
+  }
+}

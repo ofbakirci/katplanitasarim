@@ -527,8 +527,11 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     var d=eDoc(); if(!d) return;
     try{
       var want=(state.mode==='pro');
-      var site=d.getElementById('siteMod');
-      if(site && site.checked!==want){ site.click(); }
+      // Motorun KENDİ Basit/Profesyonel seçicisini sür → .pro-only (parsel + imar) görünür/gizli olur.
+      // (siteMod = "Site çoklu blok" AYRI bir kontrol; mod seçicisi DEĞİL — önceki hâli parsel'i açmıyordu.)
+      var already = d.body && d.body.classList.contains(want ? 'mode-pro' : 'mode-basic');
+      var mbtn = d.getElementById(want ? 'modePro' : 'modeBasic');
+      if(mbtn && !already){ mbtn.click(); }
       var tag=$('modeTag'); if(tag) tag.textContent = want?'Profesyonel':'Basit';
       // ÇİFT TOGGLE FIX: motor (iframe) kendi Basit/Profesyonel seçicisini gösterir;
       // Mesken'in dış başlığında zaten #modeSeg var → iframe içindekini gizle (tek toggle).
