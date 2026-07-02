@@ -399,6 +399,15 @@ function fpRoomEnum(reg){
   if(nm==='KİLER'||nm==='ORTAK DEPO') return 'storage';
   return FP_TYPE_ENUM[reg.type] || 'room';
 }
+/* C3: tip TANINIYOR mu — fpRoomEnum'ın SESSIZ 'room' fallback dalını (nötr bej = _def) yakalar.
+   Ad-tabanlı override'lar (SALON+MUTFAK/STÜDYO/EB.YATAK/ÇALIŞMA/KİLER) VE FP_TYPE_ENUM eşleşmesi = tanınır;
+   reg.type haritada yoksa (yeni/typo tip) = tanınmaz → colorFor _def bej'e düşürür, nano tipi yanlış okur. */
+function fpTypeRecognized(reg){
+  const nm=(reg.name||'').trim().toLocaleUpperCase('tr-TR');
+  if(nm.indexOf('SALON + MUTFAK')===0 || nm==='STÜDYO' || nm.indexOf('EB. YATAK')===0 ||
+     nm.indexOf('EBEVEYN')===0 || nm.indexOf('ÇALIŞMA')===0 || nm==='KİLER' || nm==='ORTAK DEPO') return true;
+  return FP_TYPE_ENUM[reg.type]!=null;
+}
 /* bir hücre kümesinin dik açılı dış sınır poligonu (ızgara köşe koordinatında [c,r]).
    Yarı-kenar yönlendirmesi (bölge solda) → kapalı halka; düz duvardaki ara köşeler atılır. */
 function fpCellOutline(cells, cols){
@@ -557,6 +566,17 @@ function buildFloorplanMap(opt){
       const a=fr.px(e.h?e.x+c0:e.x, e.h?e.y:e.y+c0), b=fr.px(e.h?e.x+c1:e.x, e.h?e.y:e.y+c1);
       return { kind:d.kind, orient:e.h?'h':'v', width_m:+Wd.toFixed(2),
                p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; });
+  // C3: tanınmayan oda tipi denetimi — enum sessizce 'room'/_def bej'e düşen bölge oranı >%5 → uyar + export'a işle.
+  // Normal planda (motor bilinen tipleri üretir) 0 tanınmaz → uyarı YOK. Denetim/alanlar değişmez.
+  const warnings=[];
+  let _tTot=0,_tUnk=0;
+  plan.unitObjs.forEach(u=>u.rooms.forEach(g=>{ if(!g.cells.length) return; _tTot++; if(!fpTypeRecognized(g)) _tUnk++; }));
+  plan.regions.forEach(g=>{ if(g.cells.length && g.unit<0){ _tTot++; if(!fpTypeRecognized(g)) _tUnk++; } });
+  if(_tTot>0 && _tUnk/_tTot>0.05){
+    warnings.push({ code:'room_type_fallback', unknown:_tUnk, total:_tTot, ratio:+(_tUnk/_tTot).toFixed(3),
+      message:_tUnk+'/'+_tTot+' bölge tanınmayan tipte → nötr bej (_def) renge düştü; AI render tipi yanlış okuyabilir' });
+    if(typeof console!=='undefined' && console.warn) console.warn('[KPTA] Oda tipi fallback: '+_tUnk+'/'+_tTot+' bölge nötr bej (>%5) → AI tipi yanlış okuyabilir');
+  }
   return {
     render:{ file:(opt&&opt.file)||'kat-plani-AI-boyama.png', width:fr.W, height:fr.H,
       aspect:+(fr.W/fr.H).toFixed(4), target_aspect:+FP_RENDER_ASPECT.toFixed(4) },
@@ -565,7 +585,7 @@ function buildFloorplanMap(opt){
     scale:{ metersPerPixel:mpp, origin_px:fr.px(0,0),
       formula:'px = world_m * '+(fr.S*fr.SC)+' + origin_px ; world_m = (px - origin_px) * metersPerPixel',
       norm_formula:'render_px_x = x_norm * renderWidth ; render_px_y = y_norm * renderHeight (kadraj render oranında → her iki eksen tek çarpan)' },
-    units, common_areas:common, doors
+    units, common_areas:common, doors, warnings
   };
 }
 /* render üstüne bindirilebilen doğrulama SVG'si (aynı viewBox; düz string → headless de çalışır) */
