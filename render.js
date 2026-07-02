@@ -670,7 +670,9 @@ function renderPlan(){
       (customCutsZ[zu.zi]||[]).forEach((v,idx)=>{
         const cx= zu.horiz? W2Sx(v) : W2Sx(zu.perp);
         const cy= zu.horiz? W2Sy(zu.perp) : W2Sy(v);
-        const c=el('circle',{cx,cy,r:9,fill:'#b35a2e',stroke:'#fff','stroke-width':2.5,cursor:zu.horiz?'ew-resize':'ns-resize'});
+        const hov = hoverCut && hoverCut.zi===zu.zi && hoverCut.idx===idx;   // B4: hover'da büyür/parlar
+        if(hov) g.appendChild(el('circle',{cx,cy,r:15,fill:'#b35a2e',opacity:0.18,'pointer-events':'none'}));  // hâle
+        const c=el('circle',{cx,cy,r:hov?11.5:9,fill:'#b35a2e',stroke:'#fff','stroke-width':hov?3:2.5,cursor:zu.horiz?'ew-resize':'ns-resize'});
         c.dataset.cut=JSON.stringify({zi:zu.zi,idx,horiz:zu.horiz,min:zu.min,max:zu.max,perp:zu.perp});
         g.appendChild(c);
       });
@@ -690,10 +692,12 @@ function renderPlan(){
       p.wallRuns.forEach(rn=>{
         const mx = rn.horiz? p.minX+((rn.lo+rn.hi)/2)*M : p.minX+rn.pos*M;
         const my = rn.horiz? p.minY+rn.pos*M : p.minY+((rn.lo+rn.hi)/2)*M;
-        const hs=rn.ext?5.2:4.5, col=rn.ext?EXTC:'#b35a2e';
+        const on=rn===act, col=rn.ext?EXTC:'#b35a2e';                 // B4: hover'da büyür/parlar
+        const hs=(rn.ext?5.2:4.5)*(on?1.55:1);
+        if(on) g.appendChild(el('circle',{cx:W2Sx(mx),cy:W2Sy(my),r:hs+4,fill:col,opacity:0.16,'pointer-events':'none'}));  // hâle
         g.appendChild(el(rn.ext?'circle':'rect', rn.ext
-          ? {cx:W2Sx(mx),cy:W2Sy(my),r:hs,fill:rn===act?col:'#fff',stroke:col,'stroke-width':1.8,cursor:rn.horiz?'ns-resize':'ew-resize'}
-          : {x:W2Sx(mx)-hs,y:W2Sy(my)-hs,width:hs*2,height:hs*2,rx:1.5,fill:rn===act?col:'#fff',stroke:col,'stroke-width':1.6,cursor:rn.horiz?'ns-resize':'ew-resize'}));
+          ? {cx:W2Sx(mx),cy:W2Sy(my),r:hs,fill:on?col:'#fff',stroke:col,'stroke-width':on?2.4:1.8,cursor:rn.horiz?'ns-resize':'ew-resize'}
+          : {x:W2Sx(mx)-hs,y:W2Sy(my)-hs,width:hs*2,height:hs*2,rx:1.5,fill:on?col:'#fff',stroke:col,'stroke-width':on?2.2:1.6,cursor:rn.horiz?'ns-resize':'ew-resize'}));
       });
     }
   }
@@ -706,7 +710,7 @@ function hitCutHandle(sx,sy){
     if(dx*dx+dy*dy<=225*HITSC*HITSC){
       const info=JSON.parse(h.dataset.cut);
       if(!customCutsZ||!customCutsZ[info.zi]) return null;
-      return {type:'cut', arr:customCutsZ[info.zi], idx:info.idx, horiz:info.horiz, min:info.min, max:info.max, perp:info.perp};
+      return {type:'cut', zi:info.zi, arr:customCutsZ[info.zi], idx:info.idx, horiz:info.horiz, min:info.min, max:info.max, perp:info.perp};
     }
   }
   return null;

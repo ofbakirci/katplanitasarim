@@ -182,10 +182,15 @@ function renderStructLayer(){
     t.textContent=reg.name; sg.appendChild(t);
     const t2=el('text',{x:cx,y:cy+fs,'text-anchor':'middle','font-size':fs*0.85,fill:'#6b5e4d'});
     t2.textContent=fmt((b.c1-b.c0+1)*M)+' × '+fmt((b.r1-b.r0+1)*M)+' m'; sg.appendChild(t2);
-    /* tutamaçlar: 4 köşe + 4 kenar (kare) + merkez (taşı, yuvarlak) */
+    /* tutamaçlar — ÇEKİRDEK ailesi: mavi kareler (boyutlandır) + mavi daire (taşı).
+       B4: bina sınırı tutamaçlarından (turuncu daireler) ayrışsın diye kareler mavi
+       dolgulu; hover'da büyür + hâle. hoverStructH.kind==='core' ise eşleşen büyür. */
     const HS=Math.max(5,pxPerM*0.32);
+    const coreHov=h=> hoverStructH&&hoverStructH.kind==='core'&&hoverStructH.regId===reg.id&&hoverStructH.handle===h;
     const sq=(hx,hy,handle,cur)=>{
-      const e=el('rect',{x:hx-HS,y:hy-HS,width:HS*2,height:HS*2,rx:1.5,fill:'#fff',stroke:'#2f6f8f','stroke-width':2,cursor:cur,'data-hx':hx,'data-hy':hy});
+      const on=coreHov(handle), s=HS*(on?1.4:1);
+      if(on) sg.appendChild(el('circle',{cx:hx,cy:hy,r:s+4,fill:'#2f6f8f',opacity:0.16,'pointer-events':'none'}));
+      const e=el('rect',{x:hx-s,y:hy-s,width:s*2,height:s*2,rx:1.5,fill:on?'#2f6f8f':'#dcebf2',stroke:'#2f6f8f','stroke-width':on?2.6:2,cursor:cur,'data-hx':hx,'data-hy':hy});
       e.dataset.struct=JSON.stringify({regId:reg.id,handle}); sg.appendChild(e);
     };
     const eW=wx(b.c0), eE=wx(b.c1+1), eN=wy(b.r0), eS=wy(b.r1+1), mC=wx((b.c0+b.c1+1)/2), mR=wy((b.r0+b.r1+1)/2);
@@ -193,26 +198,33 @@ function renderStructLayer(){
     sq(eW,eS,'sw','nesw-resize'); sq(eE,eS,'se','nwse-resize');
     sq(mC,eN,'n','ns-resize'); sq(mC,eS,'s','ns-resize');
     sq(eW,mR,'w','ew-resize'); sq(eE,mR,'e','ew-resize');
-    const mv=el('circle',{cx:mC,cy:mR,r:HS*1.5,fill:'#2f6f8f',stroke:'#fff','stroke-width':2,cursor:'move','data-hx':mC,'data-hy':mR});
+    const mvOn=coreHov('move'), mvR=HS*1.5*(mvOn?1.3:1);
+    if(mvOn) sg.appendChild(el('circle',{cx:mC,cy:mR,r:mvR+4,fill:'#2f6f8f',opacity:0.16,'pointer-events':'none'}));
+    const mv=el('circle',{cx:mC,cy:mR,r:mvR,fill:'#2f6f8f',stroke:'#fff','stroke-width':2,cursor:'move','data-hx':mC,'data-hy':mR});
     mv.dataset.struct=JSON.stringify({regId:reg.id,handle:'move'}); sg.appendChild(mv);
-    const cr=HS*1.5*0.55;   // taşı tutamacı = artı/crosshair (emoji yok, SVG çizgi)
+    const cr=mvR*0.55;   // taşı tutamacı = artı/crosshair (emoji yok, SVG çizgi)
     sg.appendChild(el('path',{d:'M'+(mC-cr)+' '+mR+'h'+(2*cr)+'M'+mC+' '+(mR-cr)+'v'+(2*cr),stroke:'#fff','stroke-width':2,'stroke-linecap':'round',fill:'none','pointer-events':'none'}));
   });
-  /* --- bina sınırı: köşe tutamakları (taşı) + kenar ortası (+ anchor ekle) --- */
+  /* --- bina sınırı: köşe tutamakları (taşı) + kenar ortası (+ anchor ekle) ---
+     TURUNCU aile (çekirdek mavisinden ayrı). B4: hover'da büyür + hâle. */
   if(closed && pts.length>=3){
     const bg=el('g',{}); sg.appendChild(bg);
     bg.appendChild(el('path',{d:'M'+pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z',
       fill:'none', stroke:'#b35a2e', 'stroke-width':Math.max(2.5,pxPerM*0.16), opacity:0.9}));
     const er=Math.max(4,pxPerM*0.22), vr=Math.max(5,pxPerM*0.3);
+    const bHov=(kind,i)=> hoverStructH&&hoverStructH.kind===kind&&hoverStructH.idx===i;
     for(let i=0;i<pts.length;i++){
       const a=pts[i], b=pts[(i+1)%pts.length], mx=W2Sx((a.x+b.x)/2), my=W2Sy((a.y+b.y)/2);
-      const e=el('circle',{cx:mx,cy:my,r:er,fill:'#fff',stroke:'#b35a2e','stroke-width':1.5,'stroke-dasharray':'2 2',cursor:'copy','data-hx':mx,'data-hy':my});
+      const on=bHov('bedge',i), r=er*(on?1.45:1);
+      if(on) bg.appendChild(el('circle',{cx:mx,cy:my,r:r+3,fill:'#b35a2e',opacity:0.16,'pointer-events':'none'}));
+      const e=el('circle',{cx:mx,cy:my,r,fill:'#fff',stroke:'#b35a2e','stroke-width':1.5,'stroke-dasharray':'2 2',cursor:'copy','data-hx':mx,'data-hy':my});
       e.dataset.bedge=i; bg.appendChild(e);
-      const t=el('text',{x:mx,y:my+er*0.55,'text-anchor':'middle','font-size':er*1.4,fill:'#b35a2e','font-weight':'700','pointer-events':'none'}); t.textContent='+'; bg.appendChild(t);
+      const t=el('text',{x:mx,y:my+r*0.55,'text-anchor':'middle','font-size':r*1.4,fill:'#b35a2e','font-weight':'700','pointer-events':'none'}); t.textContent='+'; bg.appendChild(t);
     }
     pts.forEach((p,i)=>{
-      const cx=W2Sx(p.x), cy=W2Sy(p.y);
-      const e=el('circle',{cx,cy,r:vr,fill:'#b35a2e',stroke:'#fff','stroke-width':2,cursor:'move','data-hx':cx,'data-hy':cy});
+      const cx=W2Sx(p.x), cy=W2Sy(p.y), on=bHov('bvert',i), r=vr*(on?1.35:1);
+      if(on) bg.appendChild(el('circle',{cx,cy,r:r+4,fill:'#b35a2e',opacity:0.16,'pointer-events':'none'}));
+      const e=el('circle',{cx,cy,r,fill:'#b35a2e',stroke:'#fff','stroke-width':2,cursor:'move','data-hx':cx,'data-hy':cy});
       e.dataset.bvert=i; bg.appendChild(e);
     });
   }

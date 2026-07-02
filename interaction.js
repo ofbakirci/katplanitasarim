@@ -4,6 +4,10 @@
    içinde olduğumuz araca (çiz/yapı/kapı…) kesintisiz dönülür (mode HİÇ değişmez). */
 let spacePan=false;
 function syncPanCursor(){ svg.classList.toggle('panning', mode==='pan' || spacePan || (dragging&&dragging.type==='pan')); }
+/* B4: durum çubuğu tek-satır tutamaç ipucu (turuncu/mavi ayrımını görünür kılar).
+   color verilmezse renk temizlenir. Mobilde #status gizli → dokunmatiği etkilemez. */
+function setStatusHint(txt,color){ const e=document.getElementById('stHint'); if(!e) return;
+  e.textContent=txt||''; if(color) e.style.color=color; }
 function activePoly(){ if(mode==='roomdraw') return {arr:roomPts, cl:false}; return mode==='parcel'? {arr:parcelPts, cl:parcelClosed} : {arr:pts, cl:closed}; }
 function snapPoint(sx,sy){
   let x=snapG(S2Wx(sx)), y=snapG(S2Wy(sy));
@@ -191,11 +195,21 @@ svg.addEventListener('mousemove',e=>{
   else if(mode==='struct'){
     if(!plan) return;
     const h=hitStructHandle(sx,sy);
+    let hsH=null;
     if(h){ svg.style.cursor = h.handle==='move'?'move'
       : h.handle==='n'||h.handle==='s'?'ns-resize'
       : h.handle==='e'||h.handle==='w'?'ew-resize'
-      : h.handle==='nw'||h.handle==='se'?'nwse-resize':'nesw-resize'; }
-    else { const bh=hitBoundaryHandle(sx,sy); svg.style.cursor = bh? (bh.kind==='edge'?'copy':'move') : ''; }
+      : h.handle==='nw'||h.handle==='se'?'nwse-resize':'nesw-resize';
+      hsH={kind:'core',regId:h.regId,handle:h.handle};
+      setStatusHint('Çekirdek — tutamaçtan taşı/boyutlandır','#2f6f8f');   // B4: mavi = çekirdek öğesi
+    }
+    else { const bh=hitBoundaryHandle(sx,sy); svg.style.cursor = bh? (bh.kind==='edge'?'copy':'move') : '';
+      if(bh){ hsH={kind:bh.kind==='edge'?'bedge':'bvert',idx:bh.idx};
+        setStatusHint(bh.kind==='edge'?'Bina kenarı — anchor eklemek için tıkla':'Bina köşesi — sürükleyerek taşı','#b35a2e'); }  // turuncu = bina sınırı
+      else setStatusHint('');
+    }
+    const key=o=>o? (o.kind+':'+(o.regId!=null?o.regId+'/'+o.handle:o.idx)) : null;
+    if(key(hsH)!==key(hoverStructH)){ hoverStructH=hsH; render(); }
   }
   else if(mode==='park'){
     if(!plan||!plan.parking) return;
@@ -216,17 +230,24 @@ svg.addEventListener('mousemove',e=>{
     svg.style.cursor = (siteOn()&&hitBlock(S2Wx(sx),S2Wy(sy))>=0)? 'move' : '';
   }
   else if(plan && closed && mode!=='parcel'){ // oda duvarı + oda ölçüsü vurgusu
-    const w=(mode==='pan')? null : (hitCutHandle(sx,sy)? null : hitWallRun(sx,sy));
+    const cutH=(mode==='pan')? null : hitCutHandle(sx,sy);
+    const w=(mode==='pan'||cutH)? null : hitWallRun(sx,sy);
     if(mode!=='pan') svg.style.cursor = w? (w.horiz?'ns-resize':'ew-resize') : '';
     let hr=null;
     { const c=Math.floor((S2Wx(sx)-plan.minX)/M), r2=Math.floor((S2Wy(sy)-plan.minY)/M);
       if(r2>=0&&c>=0&&r2<plan.rows&&c<plan.cols){ const j=r2*plan.cols+c;
         if(plan.inside[j]&&plan.cm[j]>=0&&plan.regions[plan.cm[j]].type!=='koridor') hr=plan.cm[j]; } }
-    if(w!==hoverWall || hr!==hoverRoomId){ hoverWall=w; hoverRoomId=hr; render(); }
+    /* B4: cut (turuncu) / duvar (mavi) hover — durum çubuğu ipucu + tutamaç hâlesi */
+    const ck=cutH? cutH.zi+','+cutH.idx : null, oldCk=hoverCut? hoverCut.zi+','+hoverCut.idx : null;
+    if(cutH) setStatusHint('Daire sınırı — bırakınca iki daire yeniden dizilir','#b35a2e');
+    else if(w) setStatusHint('Duvar — odalar korunarak kayar','#2f6f8f');
+    else setStatusHint('');
+    if(w!==hoverWall || hr!==hoverRoomId || ck!==oldCk){ hoverWall=w; hoverRoomId=hr; hoverCut=cutH?{zi:cutH.zi,idx:cutH.idx}:null; render(); }
   }
 });
 svg.addEventListener('mouseleave',()=>{
-  if(hoverWall||hoverRoomId!=null){ hoverWall=null; hoverRoomId=null; render(); } });
+  setStatusHint('');
+  if(hoverWall||hoverRoomId!=null||hoverCut||hoverStructH){ hoverWall=null; hoverRoomId=null; hoverCut=null; hoverStructH=null; render(); } });
 svg.addEventListener('mousedown',e=>{
   const r=svg.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
   if(e.button===1 || mode==='pan' || (spacePan && e.button===0)){ dragging={type:'pan',sx,sy,px:panX,py:panY}; e.preventDefault(); return; }
@@ -737,7 +758,7 @@ function updateModeBadge(m){
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; roomPts=[];
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
   for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
