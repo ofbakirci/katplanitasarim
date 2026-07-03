@@ -52,6 +52,19 @@ const REG = {
     girisMinD:{oda:2.5, islak:2.0, taban:1.5}, // giriş şeridi asgari derinliği: yatak/merdiven itildiyse / ıslak-hacimli >45 m² / diğer
     govdeOran:0.45      // kulak algısı: gövde alanı < taban×0,45 → belirgin gövde yok, band düzeni
   },
+  checks:{ /* ── checks.js panel-uyarı eşikleri (A7 konsolidasyon, 2026-07-03) ────────
+       Mevzuat DEĞİL: denetim panelinin heuristik info/bad eşikleri (şişme, biçim
+       doluluğu, ortalama-daire gerçekçiliği, villa merdiven hizası). checks.js'ten
+       SAF TAŞIMA — değer birebir; tests/checks-metin.js korur. */
+    sismeTaban:22, sismeSalon:13, sismeOda:23, sismeEnsuite:5, // daire "makul m²" hedefi (unitTag başına şişme sinyali)
+    sismeFactor:1.4,          // daire alanı hedef×1.4'ü aşarsa "şişme" info
+    salonPayTaban:45,         // salon-payı info alt eşiği (m²): Math.max(45, daire×oran)
+    salonPayOran:0.5,         // salon dairenin bu oranını aşarsa "salona aktı" info
+    bicimDoluluk:0.55,        // oda kapsayan dikdörtgeninin en az bu kadarını doldurmalı
+    daireHedefTaban:30, daireHedefOda:15, daireHedefSalon:25, daireHedefEnsuite:6, // ortalama-daire gerçekçilik hedefi (targetOf)
+    daireBuyukFactor:1.6,     // ortalama daire hedefin bu katını aşarsa "taban fazla" info
+    merdivenHizaTol:0.26      // villa iç merdiven düşey hiza toleransı (m)
+  },
   /* ── DUVAR KALINLIĞI (L1-A1, 2026-07-03) — tip bazlı, metre ───────────────────
      Ortogonal duvar GÖRSEL/EXPORT katmanı: duvar koşusu MERKEZ-çizgi kabul edilir,
      render ±t/2 dolu bant çizer. Hücre modeli / bölge alanları / layoutUnit / onarım

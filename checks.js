@@ -181,16 +181,16 @@ function ruleUnitRooms(add,p){
        (>%50) yedek sinyal. Yalnız INFO — yerleşim değişmez. Detay: MOTOR-DAGITIM-KURALLARI.md */
     if(salon&&salon.cells.length){
       const totU=u.rooms.reduce((s,g)=>s+g.area,0);
-      const sp=u.spec, tM2=22+13*(sp.salon||0)+23*(sp.oda||0)+(sp.ensuite?5:0);
-      if(totU>tM2*1.4)
+      const C=REG.checks, sp=u.spec, tM2=C.sismeTaban+C.sismeSalon*(sp.salon||0)+C.sismeOda*(sp.oda||0)+(sp.ensuite?C.sismeEnsuite:0);
+      if(totU>tM2*C.sismeFactor)
         add('info', `${tag} — Daire ${fmt(totU)} m² (${unitTag(sp)} için makul ~${fmt(tM2)} m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.`, salon.id);
-      else if(salon.area>Math.max(45, totU*0.5))
+      else if(salon.area>Math.max(C.salonPayTaban, totU*C.salonPayOran))
         add('info', `${tag} — Salon ${fmt(salon.area)} m² (dairenin %${Math.round(100*salon.area/totU)}'i): artık taban alanı salona aktı. Daire sayısını artırın veya derinliği azaltın.`, salon.id);
     }
     /* biçim denetimi: oda, kapsayan dikdörtgeninin en az %55'ini doldurmalı */
     u.rooms.forEach(g=>{ if(!g.cells.length||g.type==='antre'||g.bw*g.bh<=0) return;
       const fill=g.area/(g.bw*g.bh);
-      if(fill<0.55) add('bad', `${tag} — ${g.name} biçimsiz (dikdörtgen doluluk %${Math.round(fill*100)}). Ayırıcıyı sürükleyerek veya daire sayısını azaltarak düzeltin.`, g.id); });
+      if(fill<REG.checks.bicimDoluluk) add('bad', `${tag} — ${g.name} biçimsiz (dikdörtgen doluluk %${Math.round(fill*100)}). Ayırıcıyı sürükleyerek veya daire sayısını azaltarak düzeltin.`, g.id); });
     /* erişim denetimi: her oda antreye (EB. BANYO eb. yatak odasına) komşu olmalı — duvar sürüklenince canlı izlenir */
     if(u.antre&&u.antre.cells.length){
       u.rooms.forEach(g=>{
@@ -302,10 +302,10 @@ function ruleFloor(add,p){
     if(p.unitObjs.length<p.perFloor) add('bad',`${p.perFloor} daireden ${p.unitObjs.length} tanesi yerleştirilebildi — bölge cepheleri daha fazla daireye yetmiyor. Daire sayısını azaltın veya tabanı genişletin.`);
     /* daire büyüklüğü gerçekçiliği: ortalama daire hedefin çok üstündeyse taban bu adede fazla */
     if(p.unitObjs.length){
-      const targetOf=s2=>30 + s2.oda*15 + s2.salon*25 + (s2.ensuite?6:0);
+      const C=REG.checks, targetOf=s2=>C.daireHedefTaban + s2.oda*C.daireHedefOda + s2.salon*C.daireHedefSalon + (s2.ensuite?C.daireHedefEnsuite:0);
       const tTot=p.unitObjs.reduce((s,u2)=>s+targetOf(u2.spec),0);
       const aTot=p.unitObjs.reduce((s,u2)=>s+u2.rooms.reduce((q,g)=>q+g.area,0),0);
-      if(tTot>0 && aTot/tTot>1.6)
+      if(tTot>0 && aTot/tTot>C.daireBuyukFactor)
         add('info',`Ortalama daire ${fmt(aTot/p.unitObjs.length)} m² — bu programın hedefinin ~${fmt(aTot/tTot)} katı. Bu tabana kat başına ~${Math.round(p.perFloor*aTot/tTot)} daire daha uygun olur.`);
     }
     add('info','İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.');
@@ -360,8 +360,8 @@ function ruleFloor(add,p){
           let tum=true, var2=false;
           for(let k=1;k<p.kat;k++){ if(!fl[k]) continue; var2=true;
             if(!sb[k]){ add('bad',`${floorName(k)} planında iç merdiven yok — "Yerleşimi Oluştur" ile yeniden üretin.`); tum=false; continue; }
-            const ayni=Math.abs(sb[k].x0-sb[0].x0)<0.26&&Math.abs(sb[k].y0-sb[0].y0)<0.26
-                     &&Math.abs(sb[k].x1-sb[0].x1)<0.26&&Math.abs(sb[k].y1-sb[0].y1)<0.26;
+            const ayni=Math.abs(sb[k].x0-sb[0].x0)<REG.checks.merdivenHizaTol&&Math.abs(sb[k].y0-sb[0].y0)<REG.checks.merdivenHizaTol
+                     &&Math.abs(sb[k].x1-sb[0].x1)<REG.checks.merdivenHizaTol&&Math.abs(sb[k].y1-sb[0].y1)<REG.checks.merdivenHizaTol;
             if(!ayni){ add('bad',`${floorName(k)} iç merdiveni zemin katla düşeyde hizalı değil (kat sınırı merdiveni kesiyor olabilir) — katı yeniden üretin.`); tum=false; }
           }
           if(var2&&tum) add('ok','İç merdiven tüm katlarda aynı konumda — düşey hiza korunuyor.');
