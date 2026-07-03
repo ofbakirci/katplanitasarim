@@ -320,10 +320,20 @@
     return threeLoading;
   }
 
+  // ── 3B-UX-A1: GEZİNME AYARLARI — tek yer (motor değil, view3d yerel). Kullanıcı geri bildirimi:
+  //   "döndürme hassasiyeti de kaydırma da kötü" → hassasiyet DÜŞÜK + kısa/taşmayan sönümleme.
+  // rotateSpeed: eski 0.78 çok tepkiliydi → 0.5 (daha sakin çevirme).
+  // rotDamp:    dönme ataleti sönümü (yüksek = daha çabuk durur, taşma az). eski dampingFactor 0.12 → 0.2.
+  // panSpeed:   kaydırma çarpanı (1 = piksel-tam). 0.85 → biraz daha kontrollü.
+  // panDamp:    kaydırma ataleti sönümü (rotDamp ikizi). eskiden pan aynı dampingFactor'ü kullanıyordu.
+  // zoomDamp:   damped-zoom yaklaşım oranı (yüksek = daha çabuk oturur). 0.16 korundu (his iyiydi).
+  // tweenMs:    seçili-objeye/kilide yumuşak hedef geçişi süresi (A3/A4). kısa, snap değil.
+  const NAV = { rotateSpeed:0.5, rotDamp:0.2, panSpeed:0.85, panDamp:0.2, zoomDamp:0.16, tweenMs:280 };
   // ---- minimal OrbitControls (r128) — damped rotasyon + damped zoom (radiusTarget) ----
   function attachOrbit(o,d){
     const c={object:o,domElement:d,target:new THREE.Vector3(),enabled:true,
-      enableDamping:true,dampingFactor:0.12,rotateSpeed:0.78,zoomDamp:0.16,
+      enableDamping:true,dampingFactor:NAV.rotDamp,rotateSpeed:NAV.rotateSpeed,zoomDamp:NAV.zoomDamp,
+      panDamp:NAV.panDamp,noRotate:false,
       minDistance:3,maxDistance:800,maxPolarAngle:Math.PI/2.02};
     let sph=new THREE.Spherical(),sphD=new THREE.Spherical(),panOff=new THREE.Vector3(),
       radiusTarget=null,rotS=new THREE.Vector2(),rotE=new THREE.Vector2(),panS=new THREE.Vector2(),state=-1;
@@ -337,23 +347,35 @@
       sph.phi=Math.max(0.01,Math.min(c.maxPolarAngle,sph.phi)); sph.makeSafe();
       if(radiusTarget==null) radiusTarget=sph.radius; radiusTarget=clampD(radiusTarget);
       sph.radius+=(radiusTarget-sph.radius)*c.zoomDamp; sph.radius=clampD(sph.radius);  // damped zoom
+      applyTargetTween();                                     // A3/A4: hedef yumuşak geçişi (aktifse target'ı çeker)
       c.target.add(panOff); off.setFromSpherical(sph).applyQuaternion(qi);
       o.position.copy(c.target).add(off); o.lookAt(c.target);
-      if(c.enableDamping){ sphD.theta*=(1-c.dampingFactor); sphD.phi*=(1-c.dampingFactor); panOff.multiplyScalar(1-c.dampingFactor); }
+      if(c.enableDamping){ sphD.theta*=(1-c.dampingFactor); sphD.phi*=(1-c.dampingFactor); panOff.multiplyScalar(1-c.panDamp); }
       else { sphD.set(0,0,0); panOff.set(0,0,0); }
     };
+    // A3/A4: controls.target'ı hedef noktaya kısa tween ile taşı (zoom mesafesi DEĞİŞMEZ — sadece bakış noktası)
+    let twFrom=null, twTo=null, twT0=0, twMs=NAV.tweenMs;
+    c.tweenTarget=function(pt,ms){ if(!pt) return; twFrom=c.target.clone(); twTo=new THREE.Vector3(pt.x,(pt.y!=null?pt.y:c.target.y),pt.z); twT0=(typeof performance!=='undefined'?performance.now():Date.now()); twMs=(ms!=null?ms:NAV.tweenMs); };
+    c.cancelTween=function(){ twFrom=twTo=null; };
+    function applyTargetTween(){ if(!twTo) return;
+      const now=(typeof performance!=='undefined'?performance.now():Date.now()), k=twMs>0?Math.min(1,(now-twT0)/twMs):1;
+      const e=k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2;             // easeInOutQuad (kısa, taşmayan)
+      c.target.lerpVectors(twFrom,twTo,e);
+      if(k>=1){ twFrom=twTo=null; } }
     c.getDistance=function(){ return o.position.distanceTo(c.target); };
     c.setDistanceTarget=function(r){ radiusTarget=clampD(r); };
     // konum dışarıdan set edildiyse (setView/fit) hedefi mevcut mesafeye sabitle + atalet sıfırla
-    c.sync=function(){ radiusTarget=clampD(o.position.distanceTo(c.target)); sphD.set(0,0,0); panOff.set(0,0,0); };
+    c.sync=function(){ radiusTarget=clampD(o.position.distanceTo(c.target)); sphD.set(0,0,0); panOff.set(0,0,0); c.cancelTween(); };
     function pan(dx,dy){ const off=new THREE.Vector3().copy(o.position).sub(c.target),
-      td=off.length()*Math.tan((o.fov/2)*Math.PI/180);
-      const X=new THREE.Vector3().setFromMatrixColumn(o.matrix,0).multiplyScalar(-2*dx*td/d.clientHeight);
-      const Y=new THREE.Vector3().setFromMatrixColumn(o.matrix,1).multiplyScalar(2*dy*td/d.clientHeight);
+      td=off.length()*Math.tan((o.fov/2)*Math.PI/180), ps=NAV.panSpeed;
+      const X=new THREE.Vector3().setFromMatrixColumn(o.matrix,0).multiplyScalar(-2*dx*ps*td/d.clientHeight);
+      const Y=new THREE.Vector3().setFromMatrixColumn(o.matrix,1).multiplyScalar(2*dy*ps*td/d.clientHeight);
       panOff.add(X).add(Y); }
+    // A4: noRotate (kuşbakışı kilidi) → sol-sürükle döndürMEZ, KAYDIRIR (pan+zoom serbest kalır)
     function down(e){ if(!c.enabled) return;   // kamera yerleştirme açıkken mesh kilitli (döndür/kaydır kapalı)
-      if(e.button===0 && !spacePan){ state=0; rotS.set(e.clientX,e.clientY); }    // sol = döndür
-      else { state=2; panS.set(e.clientX,e.clientY); d.style.cursor='grabbing'; }  // sağ/orta VEYA Space+sol = kaydır
+      c.cancelTween();                                                         // kullanıcı tutunca tween'i bırak
+      if(e.button===0 && !spacePan && !c.noRotate){ state=0; rotS.set(e.clientX,e.clientY); }    // sol = döndür
+      else { state=2; panS.set(e.clientX,e.clientY); d.style.cursor='grabbing'; }  // sağ/orta VEYA Space+sol VEYA kilit = kaydır
       window.addEventListener('mousemove',move); window.addEventListener('mouseup',up); }
     function move(e){ if(!c.enabled) return;   // kilit sürüş ortasında devreye girerse hareketi kes
       if(state===0){ rotE.set(e.clientX,e.clientY);
@@ -364,7 +386,7 @@
     function wheel(e){ e.preventDefault(); if(!c.enabled) return;   // kilitliyken tekerlek-zoom da kapalı (panel zoom slider'ı açık kalır)
       if(furnMode && activeFurnIdx>=0) return;                      // mobilya seçili → tekerlek onu döndürür (attachPicker), zoom yapma
       const base=(radiusTarget==null?c.getDistance():radiusTarget);
-      c.setDistanceTarget(base*(e.deltaY<0?0.9:1.111)); }
+      c.setDistanceTarget(base*(e.deltaY<0?0.9:1.111)); }         // zoom mesafesi ayrı — hedef-tween'e dokunmaz (target sabit kalır)
     // Space basılı tut → sol-sürükle KAYDIRIR (2B editör konvansiyonu); bırakınca döndürmeye döner
     function isTyping(t){ return t&&(t.isContentEditable||t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'); }
     function keyDown(e){ if(e.code!=='Space'&&e.key!==' ') return; if(!c.enabled||isTyping(e.target)) return;
