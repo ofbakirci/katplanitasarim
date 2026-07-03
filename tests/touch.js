@@ -97,6 +97,20 @@ fire('touchstart',[tp(300,300)]);
 fire('touchmove',[tp(400,300)]);
 T('hareket uzun basışı iptal etti', lpCb===null);
 fire('touchend',[]);
+
+/* --- 7. avlu modunda mevcut avluya dokun-sürükle = TAŞIMA (pan değil) — AV-2 mobil paritesi --- */
+courtyards=[{poly:rectPoly(2,2,4,4)}]; avluChanged();
+T('avlu kuruldu', courtyards.length===1 && !!plan);
+mode='avlu';
+const av0=Math.min(...courtyards[0].poly.map(p=>p.x));
+const bx=W2Sx(3), by=W2Sy(3), pxA=panX;         // gövde merkezi (3,3) dünya
+fire('touchstart',[tp(bx,by)]);
+fire('touchmove',[tp(bx+pxPerM,by)]);            // +1 m sağa
+fire('touchmove',[tp(bx+pxPerM,by)]);
+fire('touchend',[]);
+const av1=Math.min(...courtyards[0].poly.map(p=>p.x));
+T('avlu gövde sürüklemesi avluyu taşıdı', Math.abs(av1-(av0+1))<0.6);
+T('avlu sürüklemesi canvas kaydırmadı', panX===pxA);
 `);
 console.log(fail? '✗ '+fail+' test başarısız ('+pass+' geçti)' : '✓ tüm dokunmatik testleri geçti ('+pass+')');
 process.exit(fail?1:0);

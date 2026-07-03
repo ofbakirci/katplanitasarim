@@ -28,7 +28,10 @@ if(typeof MouseEvent!=='undefined'){
     let grab=false;
     if(mode==='pan') grab=true;
     else if(mode==='balkon'){ const h=hitBalk(S2Wx(sx),S2Wy(sy)); grab=!!(h&&h.part!=='body'); }
-    else if(mode==='avlu'){ grab=!!(closed && pip(S2Wx(sx),S2Wy(sy),pts) && !hitAvlu(S2Wx(sx),S2Wy(sy))); }
+    else if(mode==='avlu'){ // AV-2 sonrası masaüstü paritesi: mevcut avlu gövde/kenar/köşe = taşı-boyutlandır sürüklemesi;
+      // boşluk = yeni avlu çiz. Dokunmatikte SİLME: avlu-dışı modda uzun basış → mini menü (rooms.js) — burada timer'a düşmez.
+      const hA=(typeof hitAvluHandle==='function')? hitAvluHandle(S2Wx(sx),S2Wy(sy)) : null;
+      grab = hA? true : !!(closed && pip(S2Wx(sx),S2Wy(sy),pts)); }
     else if(mode==='site'){ grab=(typeof hitBlock==='function' && hitBlock(S2Wx(sx),S2Wy(sy))>=0); }
     else if(mode==='door'){ grab=!!(plan&&hitDoor(sx,sy)); }
     else if(plan&&closed&&mode!=='parcel'){ grab=!!(hitCutHandle(sx,sy)||hitWallRun(sx,sy)); }
