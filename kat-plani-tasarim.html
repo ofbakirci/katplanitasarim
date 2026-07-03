@@ -129,6 +129,14 @@
         <input type="file" id="impFile" accept=".svg,image/svg+xml,.json" style="display:none">
       </div>
       <div style="margin-top:4px; font-size:11px; color:#9c8e76; line-height:1.35">Bu araçtan indirilen SVG'ler plan durumunu içinde taşır: içe aktarınca elle düzenlemeler dâhil aynen geri gelir. Eski (durumsuz) SVG'ler geometriden çözümlenir.</div>
+      <details id="trainSec" class="wt-sec pro-only">
+        <summary>Eğitim günlüğü <small id="trainCount">(0 kayıt)</small></summary>
+        <div class="wt-hint">İndirilen/render'a gönderilen planlar yerelde tercih verisi olarak birikir (ağ yok). İleride yerleşim sıralayıcının eğitimi için.</div>
+        <div style="display:flex; gap:6px; margin-top:8px;">
+          <button class="small" id="trainDumpBtn" style="flex:1">JSONL indir</button>
+          <button class="small" id="trainClearBtn" style="flex:1">Temizle</button>
+        </div>
+      </details>
     </div>
     <div class="sec">
       <h2>Mevzuat Kontrolü</h2>

@@ -291,6 +291,7 @@ function exportSVG(){
   }
   const blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='kat-plani.svg'; a.click();
+  if(typeof trainLog!=='undefined'){ trainLog.record('svg'); if(typeof updateTrainLogUI==='function') updateTrainLogUI(); }   // kabul = zayıf-pozitif tercih sinyali (self-training)
 }
 function exportPNG(){
   const {clone,W,H}=exportClone();
@@ -299,7 +300,8 @@ function exportPNG(){
   img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2;
     const ctx=cv.getContext('2d'); ctx.fillStyle='#faf8f3'; ctx.fillRect(0,0,cv.width,cv.height);
     ctx.scale(2,2); ctx.drawImage(img,0,0);
-    const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani.png'; a.click(); };
+    const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani.png'; a.click();
+    if(typeof trainLog!=='undefined'){ trainLog.record('png'); if(typeof updateTrainLogUI==='function') updateTrainLogUI(); } };   // kabul (self-training); AI-boyama/edge/wall PNG'leri DEBUG → loglanmaz
   img.src=data;
 }
 /* ============================================================================
@@ -411,6 +413,7 @@ function exportDXF(){
   const dxf=buildDXF();
   if(!dxf){ alert('Önce bir yerleşim oluşturun.'); return; }
   fpDownload('kat-plani.dxf', dxf, 'image/vnd.dxf');
+  if(typeof trainLog!=='undefined'){ trainLog.record('dxf'); if(typeof updateTrainLogUI==='function') updateTrainLogUI(); }   // kabul = zayıf-pozitif tercih sinyali (self-training)
 }
 if(typeof window!=='undefined'){ window.buildDXF=buildDXF; }
 /* AI boyama (Higgsfield / nano-banana) tabanı — TEMİZ: SADECE oda dolgu rengi + net siyah
@@ -1016,7 +1019,12 @@ if(typeof window!=='undefined'){
   window.mskExportEdgesDataURL=exportEdgesDataURL;    // kenar maskesi PNG
   // Mesken'in kullanacağı tek giriş: ikisini birlikte üret (sıralı, render() çakışmasın)
   window.mskExportRenderInputs=function(){
-    return exportEdgesDataURL().then(edges=>exportPaintDataURL().then(paint=>({edges,paint})));
+    return exportEdgesDataURL().then(edges=>exportPaintDataURL().then(paint=>{
+      // Plan 3B render'a gitti = zayıf-pozitif kabul (self-training). Mesken köprüsü TEK
+      // giriş → tek kayıt; ara PNG'ler (edges/paint) DEBUG sayılır, ayrıca loglanmaz.
+      if(typeof trainLog!=='undefined'){ trainLog.record('render'); if(typeof updateTrainLogUI==='function') updateTrainLogUI(); }
+      return {edges,paint};
+    }));
   };
 }
 /* AI Output: tek tıkla DÖRT dosya — renkli boyama tabanı + duvar kenar haritası
@@ -1033,6 +1041,20 @@ document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
 document.getElementById('dxfBtn').onclick=exportDXF;
 document.getElementById('aiOutputBtn').onclick=exportAIOutput;
+/* ── Eğitim günlüğü UI (self-training veri musluğu) — kayıt sayısı + JSONL indir + temizle ── */
+function updateTrainLogUI(){
+  const c=document.getElementById('trainCount'); if(!c||typeof trainLog==='undefined') return;
+  const n=trainLog.count(); c.textContent='('+n+' kayıt)';
+}
+if(typeof window!=='undefined') window.updateTrainLogUI=updateTrainLogUI;
+(function(){
+  const dumpBtn=document.getElementById('trainDumpBtn'), clearBtn=document.getElementById('trainClearBtn');
+  if(dumpBtn) dumpBtn.onclick=()=>{ const txt=trainLog.toJSONL();
+    if(!txt){ alert('Henüz eğitim kaydı yok.'); return; }
+    fpDownload('kpta-egitim-gunlugu.jsonl', txt+'\n', 'application/x-ndjson'); };
+  if(clearBtn) clearBtn.onclick=()=>{ trainLog.clear(); updateTrainLogUI(); };
+  updateTrainLogUI();
+})();
 
 /* ================= içe aktarma =================
    1) kpState gömülü SVG / .json → restoreState (birebir geri yükleme)

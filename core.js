@@ -198,6 +198,67 @@ const PROF = {
     console.log(`[PERF]${tag?' '+tag:''} toplam ${tot.toFixed(2)}ms | ${parts.join(' | ')}`);
   }
 };
+/* ── SELF-TRAINING VERİ MUSLUĞU (Paket D ön-adım, 2026-07-03) ─────────────────
+   Karar (hafıza: self-training): motor render'a giden/indirilen planlardan kendini
+   eğitebilir; KABUL = zayıf-pozitif tercih sinyali; DEBUG indirmesi HARİÇ. Amaç:
+   ileride ML ranker için tercih verisi BUGÜNDEN birikmeye başlasın (ağ YOK, yerel).
+
+   Kayıt biçimi: {t:<ISO>, ev:'accept', kind:'svg'|'png'|'dxf'|'render',
+     edits:<editHistory özeti: {n, byType}>, spec:<unitSpecs kopyası>, state:<stateSnapshot()>}.
+   Depo: localStorage 'kptaTrainLog' — RING BUFFER: en fazla MAX kayıt VE toplam
+   ~SOFT_LIMIT bayt (yeni kayıt sığmıyorsa en eskiler düşer). Tek kayıt >BIG_ONE ise
+   state'siz özet kaydedilir (dev plan durumu buffer'ı tek başına doldurmasın).
+   localStorage YOKSA (headless/test) sessiz no-op — motor/testler etkilenmez.
+
+   HANGİ İNDİRME "KABUL" SAYILIR (io.js kancaları):
+     · SVG indir / PNG indir / DXF indir  → kullanıcı planı dışarı taşıdı = zayıf-pozitif
+     · Mesken render köprüsü (mskExportRenderInputs) → plan 3B render'a gitti = zayıf-pozitif
+   HANGİSİ DEBUG (KANCA YOK — karar):
+     · AI-boyama / controlnet-edges / duvar-sınırı PNG (exportAIPaintPNG/EdgeMask/WallBoundary)
+       = render HATTININ ARA ÇIKTILARI / tanı görselleri, nihai kullanıcı kabulü değil.
+       AI Output düğmesi bu üçünü + haritayı toplu üretir → tek "render" kabulü zaten
+       mesken köprüsünden gelir; ara PNG'leri loglamak sinyali kirletir (aynı plan defalarca). */
+const trainLog = (function(){
+  const KEY='kptaTrainLog', MAX=20, SOFT_LIMIT=2.5*1024*1024, BIG_ONE=1024*1024;
+  function ls(){ try{ return (typeof localStorage!=='undefined') ? localStorage : null; }catch(e){ return null; } }
+  function load(){ const s=ls(); if(!s) return []; try{ const a=JSON.parse(s.getItem(KEY)||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+  function save(arr){ const s=ls(); if(!s) return false; try{ s.setItem(KEY, JSON.stringify(arr)); return true; }catch(e){ return false; } }
+  function editsSummary(){
+    try{
+      if(typeof editHistory==='undefined' || !Array.isArray(editHistory)) return {n:0, byType:{}};
+      const byType={}; editHistory.forEach(e=>{ const t=(e&&e.type)||'?'; byType[t]=(byType[t]||0)+1; });
+      return {n:editHistory.length, byType};
+    }catch(e){ return {n:0, byType:{}}; }
+  }
+  function bytes(arr){ try{ return JSON.stringify(arr).length; }catch(e){ return Infinity; } }
+  /* ring-buffer sığdır: MAX kayıt VE ~SOFT_LIMIT bayt üstüne çıkma → en eskiyi düşür. */
+  function fit(arr){
+    while(arr.length>MAX) arr.shift();
+    while(arr.length>1 && bytes(arr)>SOFT_LIMIT) arr.shift();
+    return arr;
+  }
+  return {
+    /* kind: 'svg'|'png'|'dxf'|'render'. localStorage yoksa sessiz no-op (false döner). */
+    record(kind){
+      const s=ls(); if(!s) return false;
+      let spec=[]; try{ if(typeof unitSpecs!=='undefined' && Array.isArray(unitSpecs)) spec=unitSpecs.map(u=>({...u})); }catch(e){}
+      const rec={ t:new Date().toISOString(), ev:'accept', kind:String(kind||'?'),
+        edits:editsSummary(), spec };
+      let st=null; try{ if(typeof stateSnapshot==='function') st=stateSnapshot(false, true); }catch(e){ st=null; }
+      /* tek kayıt >BIG_ONE (dev plan durumu) → state'siz özet kaydet, buffer'ı doldurma. */
+      if(st){ const withState={...rec, state:st};
+        if(bytes([withState])<=BIG_ONE){ rec.state=st; } else { rec.stateOmitted=true; } }
+      const arr=fit(load().concat([rec]));
+      return save(arr);
+    },
+    count(){ return load().length; },
+    all(){ return load(); },
+    clear(){ const s=ls(); if(!s) return false; try{ s.removeItem(KEY); return true; }catch(e){ return false; } },
+    /* JSONL: satır başına bir geçerli JSON kaydı (ML pipeline dostu). */
+    toJSONL(){ return load().map(r=>JSON.stringify(r)).join('\n'); }
+  };
+})();
+if(typeof window!=='undefined') window.trainLog=trainLog;
 const fmt = v => (Math.round(v*100)/100).toLocaleString('tr-TR');
 const escapeHtml = s => String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 function snapG(v){ return Math.round(v/M)*M; }
