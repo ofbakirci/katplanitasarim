@@ -268,7 +268,9 @@
   /* devre dışı araç butonu (ör. ileri-al boşken) */
   #toolbar button:disabled, #toolbar button:disabled:hover{opacity:.45; cursor:not-allowed; color:var(--muted); border-color:var(--line);}
   /* yüzen değişiklik geçmişi paneli */
-  #histPanel{position:absolute; left:10px; bottom:48px; width:240px; max-height:calc(100% - 180px);
+  /* left:64px — dikey toolbar sütununun (left:10 + ~54px) SAĞI; left:10'da kısa pencerede
+     yukarı büyüyen panel toolbar'ın (z:8) altında kalıyordu (panel z:7, bilinçli: menüleri örtmesin) */
+  #histPanel{position:absolute; left:64px; bottom:48px; width:240px; max-height:calc(100% - 180px);
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
     box-shadow:0 3px 12px rgba(0,0,0,.10); display:none; flex-direction:column; overflow:hidden; z-index:7;}
   #hpHead{display:flex; justify-content:space-between; align-items:center; padding:8px 11px;
@@ -313,6 +315,7 @@
   }
   @media (max-width: 700px){         /* telefon düzeni */
     body{height:100dvh;}
+    #histPanel{left:10px;}           /* mobilde toolbar yatay/üstte — sol sütun boş, kenara yanaş */
     header{padding:8px 10px; gap:8px;}
     header h1{font-size:14px;}
     header .sub{display:none;}
