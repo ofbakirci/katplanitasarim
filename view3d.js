@@ -39,6 +39,10 @@
   // furnMode/furnAction/pendingFurnType = Faz 2 (manuel düzenleyici). spacePan = Space basılı tut → sol-sürükle kaydırır (2B editördeki gibi).
   let furnList=[], activeFurnIdx=-1, furnMode=false, furnAction='move', pendingFurnType='sofa_3', spacePan=false;
   let furnUIEnabled=false, lastFurnHint='';   // furnUIEnabled = "Mobilya" rail grubu görünür (open/openCompare açar)
+  // ── B2 (3B-UX-B2): mobilya PALETİ alt dock (kamera dock ikizi) + HAYALET yerleştirme ──
+  // furnDockCat: paletin açık kategori sekmesi (FURN_PALETTE indexi). furnGhost: kuşbakışı-kilitli
+  //   yerleştirme hayaleti {type, mesh, pos, rot, valid} — imleci izler, tık=bırak, Esc/sağ-tık=vazgeç.
+  let furnDockCat=0, furnGhost=null;
   // katalog + TR karşılıkları (UI tip seçici + prompt cümlesi)
   const FURN_TR = {
     sofa_2:'İkili Kanepe', sofa_3:'Üçlü Kanepe', sectional_l:'Köşe Kanepe', armchair:'Koltuk', pouf:'Puf',
@@ -118,11 +122,25 @@
     bolt:'<path d="M13 2 3 14h7l-1 8 10-12h-7z"/>',
     rotccw:'<path d="M3 2v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L3 8"/>',          // saat yönü TERSİ döndür
     rotcw:'<path d="M21 2v6h-6"/><path d="M21 12A9 9 0 1 1 18.36 5.64L21 8"/>',          // saat yönü döndür
+    copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',   // çoğalt
     sofa:'<path d="M5 11V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 13a2 2 0 0 1 4 0v3h10v-3a2 2 0 0 1 4 0v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'  // mobilya rail ikonu
   };
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:'+s+';height:'+s+';display:inline-block;flex:none;vertical-align:-2px;cursor:inherit">'+(ICONS[name]||'')+'</svg>'; }
+  // B2-1: mobilya PALET küçük-resmi — üstten görünüş (kuşbakışı) şematik. FURN_DIM w/d oranıyla
+  //   minik dikdörtgen (+ ön-yön çizgisi). box 28×28, EMOJİ YOK, saf inline SVG. Kategori rengi çerçeve.
+  function furnThumb(type){
+    const d=(typeof FURN_DIM!=='undefined'&&FURN_DIM[type])||{w:0.6,d:0.6};
+    const w=d.w||0.6, dp=d.d||0.6, mx=Math.max(w,dp)||1;
+    const bw=Math.max(6,Math.round(20*w/mx)), bd=Math.max(6,Math.round(20*dp/mx));
+    const x=Math.round((28-bw)/2), y=Math.round((28-bd)/2);
+    // ön yön = +Z (alt kenar) → küçük çizgi item'ın "önünü" işaretler (yataklarda baş ucu okunur)
+    return '<svg viewBox="0 0 28 28" style="width:28px;height:28px;display:block;pointer-events:none">'+
+      '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bd+'" rx="1.5" fill="rgba(201,161,107,.28)" stroke="#c9a16b" stroke-width="1.3"/>'+
+      '<line x1="'+x+'" y1="'+(y+bd)+'" x2="'+(x+bw)+'" y2="'+(y+bd)+'" stroke="#e0843a" stroke-width="1.6"/>'+
+    '</svg>';
+  }
 
   // çekmece içeriği — grup başına kontroller (data-* öznitelikleri var olan delege handler'a gider)
   function groupHTML(g){
@@ -144,29 +162,11 @@
     if(g==='camera') return '<div class="v3dgh">Kamera</div>'+
       '<div class="v3dnote">Kamera araçları ekranın altındaki panelde: kamera şeridi, Ekle/Yön/Taşı/Sil, '+
       'yükseklik, bakış açısı, objektif, gün saati.</div>';
-    if(g==='furniture'){
-      const types=FURN_PALETTE.map(function(c){ return '<div class="v3dlbl" style="margin:7px 0 2px">'+c.g+'</div>'+
-        '<div style="display:flex;gap:3px;flex-wrap:wrap">'+c.items.map(function(t){ return '<button data-furntype="'+t+'" class="v3db v3dtype" style="padding:4px 6px;font-size:10px">'+FURN_TR[t]+'</button>'; }).join('')+'</div>'; }).join('');
-      return '<div class="v3dgh">Mobilya</div>'+
-        // RENDER on/off — işaretli = sahne döşeli (3B snap'i nano'ya mobilyalı gider) · işaretsiz = boş mekan
-        '<label title="3B render (nano) mobilyalı mı boş mu olsun" style="display:flex;align-items:center;gap:8px;margin:2px 0 9px;cursor:pointer;font-size:12px;font-weight:600">'+
-          '<input type="checkbox" data-v3d="furnrender" id="v3dFurnRender" '+(furnList.length?'checked':'')+' style="width:16px;height:16px;accent-color:#7bbf8a;cursor:pointer">Render\'a mobilya ekle</label>'+
-        '<button data-v3d="furnauto" class="v3db v3dgreen" style="width:100%">'+ic('bolt',13)+'Yeniden döşe</button>'+
-        '<button data-v3d="furnedit" id="v3dFurnBtn" class="v3db" style="width:100%;margin-top:6px">'+ic('move',13)+'Düzenlemeyi aç</button>'+
-        '<div id="v3dFurnHint" class="v3dnote" style="min-height:12px;margin-top:6px"></div>'+
-        '<div id="v3dFurnStrip" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px"></div>'+
-        '<div id="v3dFurnCtl" style="display:none;margin-top:10px">'+
-          '<div class="v3dlbl">Seçili — sürükle taşı · tekerlek/R döndür · Del/Backspace sil · Esc bırak</div>'+
-          '<div style="display:flex;gap:4px">'+
-            '<button data-furnrot="-90" class="v3db" title="Sola 90°">'+ic('rotccw',12)+'</button>'+
-            '<button data-furnrot="90" class="v3db" title="Sağa 90°">'+ic('rotcw',12)+'</button>'+
-            '<button data-v3d="furnfocus" class="v3db" title="Seçiliye odakla (F)">'+ic('target',12)+'Odakla</button>'+
-            '<button data-v3d="furndel" class="v3db v3ddanger" title="Sil (Del / Backspace)">'+ic('trash',12)+'</button></div>'+
-          '<div class="v3dlbl">Tip: boşken seç → zemine tıkla = EKLE · bir mobilya seçiliyken = onun tipini DEĞİŞTİR</div>'+
-          '<div id="v3dFurnTypes">'+types+'</div>'+
-          '<button data-v3d="furnclear" class="v3db v3dgray" style="width:100%;margin-top:8px">Tümünü temizle</button>'+
-        '</div>';
-    }
+    // B2-1: Mobilya arayüzü çekmeceden ÇIKTI → alt kenar DOCK (#v3dFurnDock, kamera dock ikizi):
+    //   kategori sekmeleri + kuşbakışı küçük-resim paleti + otomatik döşe + render on/off.
+    if(g==='furniture') return '<div class="v3dgh">Mobilya</div>'+
+      '<div class="v3dnote">Mobilya paleti ekranın altındaki panelde: kategori sekmeleri, parça küçük-resimleri, '+
+      'otomatik döşe. Parçaya tıkla → zeminde tıklayarak yerleştir.</div>';
     return '';
   }
   function railGroups(){
@@ -190,7 +190,11 @@
     d.style.display='block'; d.innerHTML=groupHTML(activeGroup);
     // B1-2: kamera araçları artık alt DOCK'ta (renderCamDock). Çekmece grubu yalnız yönlendirme notu (groupHTML).
     if(activeGroup==='camera'){ renderCamDock(); }
-    if(activeGroup==='furniture'){ updateFurnPanel(); applyFurnModeUI(); setFurnHint(lastFurnHint); }
+    // B2-1: mobilya dock yalnız mobilya grubunda görünür (kamera dock deseni); başka grupta gizle.
+    if(activeGroup==='furniture'){
+      renderFurnDock();
+      const cd=overlay.querySelector('#v3dCamDock'); if(cd) cd.style.display='none';   // iki dock aynı anda görünmesin (adım 4: kamera+mobilya ikisi de etkin)
+    } else { const fd=overlay.querySelector('#v3dFurnDock'); if(fd){ fd.style.display='none'; fd.innerHTML=''; } }
   }
   function setGroup(g){
     const prev=activeGroup;
@@ -200,6 +204,9 @@
     const wasLockGroup=(prev==='camera'||prev==='furniture');
     if(inLockGroup && !wasLockGroup) enterTopLock(true);       // serbest görünümden kilit grubuna → kilitle (serbest açıyı sakla)
     else if(!inLockGroup && wasLockGroup) releaseTopLockToFree(); // kilit grubundan çıkış → serbest açı geri
+    // B2-4: MOBİLYA grubundan BAŞKA gruba geçiş → düzenleme + seçim + yarım hayalet otomatik temizlenir
+    if(prev==='camera' && activeGroup!=='camera' && placeMode) setPlaceMode(false);   // kamera grubundan çıkış → yerleştirme açık kalmasın
+    syncFurnModeToGroup();                                                            // grup 'furniture' değilse furnMode kapanır (ghost+seçim temizler)
     renderRail(); renderDrawer(); updateLockBtn();
   }
   // ── B1-1: YÖN KÜRESİ (viewcube) ─────────────────────────────────────────────────
@@ -336,7 +343,17 @@
         '</div>'+
       '</div>'+
       // B1-2: KAMERA DOCK — kamera moduna girince alt kenara yaslanır (setCamUI gösterir/gizler). İçeriği renderCamDock kurar.
-      '<div id="v3dCamDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>';
+      '<div id="v3dCamDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>'+
+      // B2-1: MOBİLYA DOCK — mobilya grubuna girince alt kenara yaslanır (renderFurnDock kurar). Kamera dock ikizi.
+      '<div id="v3dFurnDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>'+
+      // B2-3: seçili mobilyanın yanında YÜZEN mini araç çubuğu (döndür/çoğalt/odakla/sil). loop'ta konumlanır.
+      '<div id="v3dFurnBar" style="position:absolute;z-index:6;display:none;gap:4px;background:rgba(28,28,34,.96);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:5px;box-shadow:0 8px 26px rgba(0,0,0,.5);backdrop-filter:blur(8px)">'+
+        '<button data-furnrot="-90" class="v3dfb" title="Sola 90°">'+ic('rotccw',15)+'</button>'+
+        '<button data-furnrot="90" class="v3dfb" title="Sağa 90°">'+ic('rotcw',15)+'</button>'+
+        '<button data-v3d="furndup" class="v3dfb" title="Çoğalt (Ctrl+D)">'+ic('copy',15)+'</button>'+
+        '<button data-v3d="furnfocus" class="v3dfb" title="Odakla (F)">'+ic('target',15)+'</button>'+
+        '<button data-v3d="furndel" class="v3dfb v3dfbdanger" title="Sil (Del)">'+ic('trash',15)+'</button>'+
+      '</div>';
     document.body.appendChild(overlay);
     // buton stilleri
     const st=document.createElement('style');
@@ -371,6 +388,29 @@
       '#v3dCamDock.advopen .adv{display:flex}'+
       '#v3dCamDock textarea{width:250px;max-width:44vw;box-sizing:border-box;background:#26262c;color:#e8e6e0;border:1px solid #3a3a44;border-radius:6px;font:11px/1.45 system-ui;padding:6px;resize:vertical}'+
       '#v3dCamDock img.snap{width:200px;max-width:40vw;display:block;border-radius:6px;border:1px solid #3a3a44;background:#111;cursor:pointer}'+
+      // B2-1 mobilya dock (kamera dock görsel dilini paylaşır)
+      '#v3dFurnDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;font:12px/1.4 system-ui,sans-serif}'+
+      '#v3dFurnDock .col{display:flex;flex-direction:column;gap:7px;min-width:0}'+
+      '#v3dFurnDock .sep{width:1px;background:rgba(255,255,255,.10);align-self:stretch}'+
+      '#v3dFurnDock .lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;opacity:.62;font-weight:700;margin-bottom:1px}'+
+      '#v3dFurnDock .row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}'+
+      '#v3dFurnDock .seg button{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
+      '#v3dFurnDock .seg button:hover{filter:brightness(1.12)}'+
+      '#v3dFurnDock .seg button.on{background:#c9a16b;color:#1a1a1f}'+
+      // kategori sekmeleri (yatay şerit) + kaydırılabilir palet ızgarası
+      '#v3dFurnDock .cats{display:flex;gap:4px;flex-wrap:wrap;max-width:150px}'+
+      '#v3dFurnDock .cat{background:#33333c;color:#c9b79a;border:0;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit}'+
+      '#v3dFurnDock .cat:hover{filter:brightness(1.15)}#v3dFurnDock .cat.on{background:#c9a16b;color:#1a1a1f}'+
+      '#v3dFurnDock .palgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;max-width:296px;max-height:132px;overflow-y:auto;padding-right:2px}'+
+      '#v3dFurnDock .pit{display:flex;flex-direction:column;align-items:center;gap:2px;background:#2c2c33;border:1px solid transparent;border-radius:9px;padding:5px 3px 4px;cursor:pointer;font-family:inherit}'+
+      '#v3dFurnDock .pit:hover{background:#3a3a44;border-color:rgba(201,161,107,.5)}'+
+      '#v3dFurnDock .pit.on{border-color:#7bbf8a;background:#33403a}'+
+      '#v3dFurnDock .pit .pn{font-size:8.6px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:62px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer}'+
+      '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:#7bbf8a;cursor:pointer}'+
+      // B2-3 yüzen mini araç çubuğu
+      '.v3dfb{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:8px;background:#33333c;color:#e8e6e0;cursor:pointer;padding:0}'+
+      '.v3dfb:hover{background:#c9a16b;color:#1a1a1f}.v3dfbdanger{background:#5a3a3a;color:#f0d8d8}.v3dfbdanger:hover{background:#7a3a3a;color:#fff}'+
       // boyalı plan = sol-üstte küçük lightbox küçük-resmi (tıkla→büyüt); slider/split KALDIRILDI (mesh tam genişlik)
       '#v3dCompareThumb{position:absolute;left:14px;top:14px;z-index:6;width:190px;max-width:38%;background:rgba(24,22,28,.94);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.5);cursor:zoom-in;transition:transform .12s,box-shadow .12s}'+
       '#v3dCompareThumb:hover{transform:translateY(-1px);box-shadow:0 16px 40px rgba(0,0,0,.62)}'+
@@ -385,7 +425,7 @@
     host=overlay.querySelector('#v3dHost');
     status=overlay.querySelector('#v3dStatus');
     overlay.addEventListener('click',function(e){
-      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camtime],[data-camact],[data-camsel],[data-camdesel],[data-camdel],[data-furntype],[data-furnact],[data-furnrot],[data-furnsel],[data-furndel],[data-furndesel],[data-v3d]')||e.target;
+      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camtime],[data-camact],[data-camsel],[data-camdesel],[data-camdel],[data-furntype],[data-furnact],[data-furnrot],[data-furnsel],[data-furndel],[data-furndesel],[data-furncat],[data-furnpick],[data-v3d]')||e.target;
       const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ setGroup(gp); return; }
       const ch=t.getAttribute&&t.getAttribute('data-camh'); if(ch){ setCamHeight(ch); return; }
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
@@ -396,7 +436,8 @@
       const cdz=t.getAttribute&&t.getAttribute('data-camdesel'); if(cdz){ deselectCam(); return; }   // çip × = seçimi bırak (silmez)
       const cd=t.getAttribute&&t.getAttribute('data-camdel'); if(cd!=null&&cd!==''){ removeCam(+cd); return; }
       const ft=t.getAttribute&&t.getAttribute('data-furntype'); if(ft){ setFurnType(ft); return; }
-      const fa=t.getAttribute&&t.getAttribute('data-furnact'); if(fa){ setFurnAction(fa); return; }
+      const fca=t.getAttribute&&t.getAttribute('data-furncat'); if(fca!=null&&fca!==''){ furnDockCat=+fca; renderFurnDock(); return; }   // B2-1: kategori sekmesi
+      const fpk=t.getAttribute&&t.getAttribute('data-furnpick'); if(fpk){ startFurnGhost(fpk); return; }   // B2-1: palet parçası → hayalet yerleştirme
       const fr=t.getAttribute&&t.getAttribute('data-furnrot'); if(fr){ rotateFurn(+fr); return; }
       const fsel=t.getAttribute&&t.getAttribute('data-furnsel'); if(fsel!=null&&fsel!==''){ selectFurn(+fsel); return; }
       const fdel=t.getAttribute&&t.getAttribute('data-furndel'); if(fdel!=null&&fdel!==''){ removeFurn(+fdel); return; }
@@ -412,6 +453,7 @@
       else if(a==='camdel'){ if(activeCamIdx>=0) removeCam(activeCamIdx); }
       else if(a==='furnedit') toggleFurnMode();
       else if(a==='furnfocus'){ if(activeFurnIdx>=0) focusFurn(activeFurnIdx); }   // A3: seçili mobilyaya odakla
+      else if(a==='furndup'){ if(activeFurnIdx>=0) duplicateFurn(activeFurnIdx); }   // B2-3: mini çubuk çoğalt
       else if(a==='camfocus'){ if(activeCamIdx>=0) focusCam(activeCamIdx); }        // A3: seçili kameraya odakla
       else if(a==='furndel'){ if(activeFurnIdx>=0) removeFurn(activeFurnIdx); }
       else if(a==='furnclear') clearFurn();
@@ -1041,23 +1083,13 @@
     const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
     if(!raycaster) raycaster=new THREE.Raycaster();
     raycaster.setFromCamera({x:nx,y:ny}, cam);
-    // ── MOBİLYA modu: yalnız mobilya (kamera gizmolarına dokunma). mobilya hit → SEÇ; zemin hit → taşı/ekle ──
+    // ── MOBİLYA modu (B2): mobilya hit → SEÇ; boş zemin tık → seçimi bırak. EKLEME palet-hayaleti üzerinden (startFurnGhost). ──
     if(furnMode){
       if(scene.__furnitureGroup){
         const fh=raycaster.intersectObjects(scene.__furnitureGroup.children,true);
         for(let i=0;i<fh.length;i++){ const idx=furnIdxFromObj(fh[i].object); if(idx>=0){ selectFurn(idx); return; } }
       }
-      // zemine tıklama = yalnız "Ekle" modunda yeni mobilya (taşıma artık SÜRÜKLE ile). Eklenen seçili → hemen sürüklenebilir.
-      if(furnAction==='add' && scene.__floorGroup){
-        const fhits=raycaster.intersectObjects(scene.__floorGroup.children,false);
-        if(fhits.length){ const p=fhits[0].point, rid=roomIdAtPoint(p); furnSnapshot();
-          const f={ id:newFurnId(pendingFurnType,rid), type:pendingFurnType, type_tr:FURN_TR[pendingFurnType]||null,
-                    room_id:rid, pos:{x:p.x+(scene.__cx||0), z:p.z+(scene.__cz||0)}, rot_deg:0, scale:1, source:'manual', locked:true };
-          attachFurnToMap(f); furnList.push(f); activeFurnIdx=furnList.length-1;
-          furnAction='move'; renderFurniture(); updateFurnPanel(); persistFurniture(); setFurnHint((FURN_TR[f.type]||f.type)+' eklendi · sürükleyerek taşı'); return;
-        }
-      }
-      if(furnAction!=='add' && activeFurnIdx>=0) selectFurn(-1);   // boş zemine tıkla = seçimi bırak
+      if(activeFurnIdx>=0) selectFurn(-1);   // boş zemine tıkla = seçimi bırak
       return;
     }
     // 1) önce kamera gizmosuna tıklandı mı? (SEÇ) — yerleştirme açık ya da kapalı, her zaman
@@ -1175,11 +1207,78 @@
   function duplicateFurn(i){ if(i<0||i>=furnList.length) return; furnSnapshot(); const o=furnList[i];
     const f=JSON.parse(JSON.stringify(o)); f.id=newFurnId(f.type,f.room_id); f.pos={x:o.pos.x+0.3,z:o.pos.z+0.3}; f.source='manual'; f.locked=true;
     attachFurnToMap(f); furnList.push(f); activeFurnIdx=furnList.length-1; renderFurniture(); updateFurnPanel(); persistFurniture(); setFurnHint('Çoğaltıldı (Ctrl+D)'); }
+  /* ── B2-1: HAYALET yerleştirme — palet parçasına tık → kuşbakışı-kilitli görünümde imleci izleyen yarı-saydam
+     mesh (geçerli=normal, geçersiz=kırmızı, furnFits mantığı). Tık=bırak (gerçek mobilya, seçili). Esc/sağ-tık=vazgeç.
+     Bırakınca hayalet çıkar (spam-yerleştirme değil; tekrar için palete tekrar tıkla). */
+  function startFurnGhost(type){
+    if(!furnMode) setFurnMode(true);
+    cancelFurnGhost(); if(activeFurnIdx>=0) selectFurn(-1);
+    const G=scene&&scene.__furnitureGroup; if(!G){ pendingFurnType=type; return; }
+    const mesh=buildFurnMesh({ type:type, rot_deg:0 }); mesh.visible=false;
+    mesh.traverse(function(n){ if(n.isMesh && n.material){ n.material=n.material.clone(); n.material.transparent=true; n.material.opacity=0.55; } });
+    G.add(mesh);
+    furnGhost={ type:type, mesh:mesh, pos:null, rot:0, valid:false };
+    pendingFurnType=type;
+    if(renderer) renderer.domElement.style.cursor='copy';
+    setFurnHint((FURN_TR[type]||type)+' — zeminde tıklayarak yerleştir · Esc / sağ-tık vazgeç');
+    syncFurnTypeBtns();
+  }
+  function moveFurnGhost(ev){
+    if(!furnGhost) return; const hit=furnGroundHitAbs(ev); if(!hit) return;
+    let x=hit.x, z=hit.z, rot=furnGhost.rot;
+    const f={ type:furnGhost.type, rot_deg:rot }; const ra=dragRoomAn(x,z);
+    const snap=ev.shiftKey?null:furnWallSnap(f,x,z,ra); if(snap){ x=snap.x; z=snap.z; rot=snap.rot; }
+    furnGhost.pos={x:x,z:z}; furnGhost.rot=rot;
+    furnGhost.valid=furnDragValid({type:furnGhost.type,__w:null,__d:null}, x, z, rot, snap?null:ra);
+    const m=furnGhost.mesh; if(m){ m.visible=true; m.position.set(x-(scene.__cx||0),0,z-(scene.__cz||0)); m.rotation.y=rot*Math.PI/180; tintFurnMesh(m, !furnGhost.valid); }
+  }
+  function dropFurnGhost(){
+    if(!furnGhost||!furnGhost.pos) return false;
+    if(!furnGhost.valid){ setFurnHint('Geçersiz konum — kırmızı · başka nokta dene · Esc vazgeç'); return false; }
+    const p=furnGhost.pos, rot=furnGhost.rot, type=furnGhost.type;
+    const rid=roomIdAtPoint({x:p.x-(scene.__cx||0), z:p.z-(scene.__cz||0)});
+    furnSnapshot();
+    const f={ id:newFurnId(type,rid), type:type, type_tr:FURN_TR[type]||null, room_id:rid,
+              pos:{x:p.x,z:p.z}, rot_deg:rot, scale:1, source:'manual', locked:true };
+    attachFurnToMap(f); furnList.push(f); activeFurnIdx=furnList.length-1;
+    cancelFurnGhost();
+    renderFurniture(); updateFurnPanel(); persistFurniture();
+    setFurnHint((FURN_TR[type]||type)+' yerleşti · sürükle taşı · tekerlek/R döndür · Del sil');
+    return true;
+  }
+  function cancelFurnGhost(){
+    if(!furnGhost) return; const m=furnGhost.mesh;
+    if(m&&m.parent) m.parent.remove(m); if(m) disposeFurn(m);
+    furnGhost=null; if(renderer) renderer.domElement.style.cursor=''; syncFurnTypeBtns();
+  }
+  // B2-3: seçili mobilyanın YÜZEN mini araç çubuğu — dünya konumunu ekrana projekte et, çubuğu üstüne yerleştir (kenarda taşmaz).
+  function updateFurnBar(){
+    const bar=overlay&&overlay.querySelector('#v3dFurnBar'); if(!bar) return;
+    const show=(furnMode && !furnGhost && activeFurnIdx>=0 && activeFurnIdx<furnList.length && scene && cam && renderer);
+    if(!show){ bar.style.display='none'; return; }
+    const f=furnList[activeFurnIdx];
+    const dim=FURN_DIM[f.type]||{h:0.8};
+    const v=new THREE.Vector3(f.pos.x-(scene.__cx||0), (dim.h||0.8)+0.15, f.pos.z-(scene.__cz||0)).project(cam);
+    const rect=renderer.domElement.getBoundingClientRect();
+    const sx=rect.left+(v.x*0.5+0.5)*rect.width, sy=rect.top+(-v.y*0.5+0.5)*rect.height;
+    bar.style.display=(v.z<1)?'flex':'none'; if(v.z>=1) return;   // kamera arkasında → gizle
+    const bw=bar.offsetWidth||180, bh=bar.offsetHeight||42;
+    let left=sx-bw/2, top=sy-bh-14;
+    left=Math.max(8, Math.min(window.innerWidth-bw-8, left));     // ekran kenarında taşmaz
+    top=Math.max(8, Math.min(window.innerHeight-bh-8, top));
+    bar.style.left=left.toFixed(0)+'px'; bar.style.top=top.toFixed(0)+'px';
+  }
   function onFurnKey(e){ if(!furnMode) return;
     const t=e.target, tag=t&&t.tagName;
     if(t&&(t.isContentEditable||tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')) return;     // A4: başka input'ta yazarken dokunma
+    // B2-1: HAYALET yerleştirme aktifken — R döndürür, Esc vazgeçer (öncelik hayalette)
+    if(furnGhost){
+      if(e.key==='Escape'){ e.preventDefault(); cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); return; }
+      if(e.key==='r'||e.key==='R'){ e.preventDefault(); furnGhost.rot=((((furnGhost.rot||0)+(e.shiftKey?-15:15))%360)+360)%360; return; }
+      return;
+    }
     if((e.key==='z'||e.key==='Z')&&(e.ctrlKey||e.metaKey)){ e.preventDefault(); furnUndoPop(); return; }   // A5: geri al
-    if(e.key==='Escape'){ e.preventDefault(); if(furnAction==='add'){ furnAction='move'; applyFurnModeUI(); setFurnHint('Ekleme iptal'); } else if(activeFurnIdx>=0) selectFurn(-1); return; }  // Esc = ekleme modunu iptal / seçimi bırak (silmez)
+    if(e.key==='Escape'){ e.preventDefault(); if(activeFurnIdx>=0) selectFurn(-1); return; }  // Esc = seçimi bırak (silmez)
     if(activeFurnIdx<0) return;
     if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); removeFurn(activeFurnIdx); }  // Del + Backspace sil (input'ta yazarken yukarıda korumalı → tarayıcı geri-nav tetiklemez)
     else if(e.key==='r'||e.key==='R'){ e.preventDefault(); rotateFurn(e.shiftKey?-15:15); }
@@ -1187,12 +1286,20 @@
   function attachPicker(){
     if(pickerWired||!renderer) return; pickerWired=true;
     const el=renderer.domElement; let sx=0,sy=0,moved=false;
+    // B2-1: HAYALET aktifken sağ-tık = vazgeç (menü açma). contextmenu'yu da yut.
+    el.addEventListener('contextmenu',function(e){ if(furnGhost){ e.preventDefault(); cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); } });
     el.addEventListener('pointerdown',function(e){ sx=e.clientX; sy=e.clientY; moved=false;
-      if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0) beginFurnDrag(e, idx); } });   // Space basılı → mobilyayı tutma, kaydır
+      if(furnGhost){ if(e.button===2){ cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); } return; }   // hayalet: sürükleme başlatma (tık=bırak, pointerup'ta)
+      // B2-2: SÜRÜKLE-vs-PAN — sol-drag MOBİLYANIN ÜSTÜNDE başlarsa taşı; BOŞ zeminde başlarsa PAN (orbit).
+      //   Mobilya seçili olsa bile boş alan pan'dir. Hit-test önceliği: mobilya > zemin-pan.
+      if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0) beginFurnDrag(e, idx); } });
     el.addEventListener('pointermove',function(e){ if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>5) moved=true;
+      if(furnGhost){ moveFurnGhost(e); return; }
       if(furnDrag){ moveFurnDrag(e); return; }
-      if(!spacePan && furnMode && e.buttons===0) el.style.cursor=(furnPickIdx(e)>=0?'grab':''); });   // hover ipucu (Space'te orbit grab imleci kalsın)
+      if(!spacePan && furnMode && e.buttons===0) el.style.cursor=(furnPickIdx(e)>=0?'grab':'');   // boş zemin = pan imleci (mobilya üstü = grab)
+    });
     el.addEventListener('pointerup',function(e){ if(furnDrag){ endFurnDrag(); return; }
+      if(furnGhost){ if(!moved && e.button===0){ moveFurnGhost(e); dropFurnGhost(); } return; }   // hayalet: yerinde tık = bırak (sürükleyip orbit ettiyse bırakmaz)
       if(!spacePan && (camUIEnabled||furnMode)&&!moved&&e.button===0) scenePick(e); });   // Space'te tıklama seçmesin/koymasın (kaydırma kipi)
     // tekerlek = seçili mobilyayı döndür (5° hassas, Shift=1° ince ayar); orbit zoom'u furnMode+seçili iken atlanır (attachOrbit)
     el.addEventListener('wheel',function(e){ if(furnMode && activeFurnIdx>=0){ const f=furnList[activeFurnIdx], st=e.shiftKey?1:5;
@@ -1307,6 +1414,7 @@
     const inLockGroup=(activeGroup==='camera'||activeGroup==='furniture');
     if(inLockGroup && !wasLockGroup) enterTopLock(true);
     else if(!inLockGroup && wasLockGroup) releaseTopLockToFree();
+    syncFurnModeToGroup();                                                    // B2: kamera grubuna geçince furnMode kapanır (mobilya draglenemez)
     renderRail(); renderDrawer(); renderCamGizmos(); renderCamDock(); updateLockBtn();
   }
   function applyPlaceModeUI(){
@@ -1316,7 +1424,7 @@
   // placeMode AÇIK → mesh KİLİTLİ (controls.enabled=false, #3) + zemine tıklama etkin. KAPALI → mesh serbest (döndür/zoom).
   function setPlaceMode(on){
     placeMode=!!on; pendingPos=null;
-    if(placeMode && furnMode){ furnMode=false; applyFurnModeUI(); renderFurniture(); }   // mobilya düzenlemeyi kapat (dışlayan)
+    if(placeMode && furnMode){ cancelFurnGhost(); furnMode=false; if(activeFurnIdx>=0) selectFurn(-1); applyFurnModeUI(); renderFurniture(); }   // B2-4: mobilya düzenlemeyi + hayalet + seçim temizle (dışlayan)
     if(controls) controls.enabled=!placeMode;
     if(placeMode) placeAction=(activeCamIdx>=0)?'aim':'add';
     renderCamGizmos(); applyPlaceModeUI();
@@ -1755,63 +1863,80 @@
     f.rot_deg=((((f.rot_deg||0)+deg)%360)+360)%360; f.source='manual'; f.locked=true;
     renderFurniture(); persistFurniture(); setFurnHint((FURN_TR[f.type]||f.type)+' → '+f.rot_deg+'°');
   }
+  // B2-1: palet parça tipini değiştir. Seçili mobilya varsa TİPİNİ değiştirir; yoksa HAYALET yerleştirme başlar.
   function setFurnType(type){
     if(activeFurnIdx>=0){ const f=furnList[activeFurnIdx]; f.type=type; f.type_tr=FURN_TR[type]||null; f.source='manual'; f.locked=true;
       renderFurniture(); updateFurnPanel(); persistFurniture(); setFurnHint('Tip → '+(FURN_TR[type]||type)); }
-    else { pendingFurnType=type; setFurnAction('add'); setFurnHint('Zemine tıkla → '+(FURN_TR[type]||type)+' ekle'); }
-    syncFurnTypeBtns();
+    else startFurnGhost(type);
   }
-  function setFurnAction(a){
-    if(!furnMode) setFurnMode(true);
-    furnAction=a;
-    if(a==='move' && activeFurnIdx<0) setFurnHint('Önce mobilya seç, sonra zemine tıkla = taşı.');
-    else if(a==='add') setFurnHint('Zemine tıkla → '+(FURN_TR[pendingFurnType]||pendingFurnType)+' ekle.');
-    applyFurnModeUI();
-  }
+  // B2 modeli: mobilya grubu AÇIK = furnMode AÇIK (sahne mobilyası tıklanır/sürüklenir). Ayrı "düzenlemeyi aç"
+  //   toggle YOK — grup açık olması yeter. Ekleme yolu = palet küçük-resmi → hayalet (startFurnGhost).
   function setFurnMode(on){
     furnMode=!!on;
     if(furnMode){ setPlaceMode(false); furnAction='move'; }                              // kamera yerleştirmeyi kapat (dışlayan)
+    else { cancelFurnGhost(); activeFurnIdx=-1; }                                          // B2-4: mod kapanınca hayalet+seçim temizlenir
     if(controls) controls.enabled=!placeMode;                                            // mobilya modu orbit'i KİLİTLEMEZ (yalnız sürükle sırasında)
     renderFurniture(); applyFurnModeUI();
-    setFurnHint(furnMode ? 'Mobilyaya tıkla = seç · SÜRÜKLE = taşı · tekerlek = döndür (Shift ince) · Del/Backspace = sil · Esc / boş zemin = bırak · Space+sürükle = kaydır' : 'Düzenleme kapalı');
+    setFurnHint(furnMode ? 'Mobilyaya tıkla = seç · sürükle = taşı · boş zeminde sürükle = kaydır' : 'Düzenleme kapalı');
   }
   function toggleFurnMode(){ setFurnMode(!furnMode); }
   function setFurnUI(on){
     furnUIEnabled=!!on;
     if(!furnUIEnabled){ if(activeGroup==='furniture') activeGroup='view'; setFurnMode(false); }
+    else syncFurnModeToGroup();                                                           // grup 'furniture' ise düzenleme AÇIK, değilse KAPALI (B2)
     renderRail(); renderDrawer();
   }
-  function applyFurnModeUI(){
-    if(!overlay) return;
-    const btn=overlay.querySelector('#v3dFurnBtn'), ctl=overlay.querySelector('#v3dFurnCtl');
-    if(btn){ btn.classList.toggle('v3dgreen',furnMode); btn.innerHTML=ic('move',13)+(furnMode?'Düzenleme açık — bitir':'Düzenlemeyi aç'); }
-    if(ctl) ctl.style.display=furnMode?'block':'none';
-    syncFurnBtns();
+  // B2: mobilya düzenleme (furnMode) = "mobilya grubu aktif mi" ile eşitlenir. Ayrı toggle yok.
+  //   Grup değişince (setGroup/setCamUI/renderDrawer) çağrılır → mobilya grubuna girince sahne mobilyası tıklanır/sürüklenir.
+  function syncFurnModeToGroup(){
+    const want=(activeGroup==='furniture' && furnUIEnabled);
+    if(want!==furnMode) setFurnMode(want);
   }
-  function syncFurnBtns(){
-    if(!overlay) return;
-    syncFurnTypeBtns(); updateFurnPanel();
-  }
+  function applyFurnModeUI(){ if(!overlay) return; updateFurnBar(); syncFurnBtns(); }
+  function syncFurnBtns(){ if(!overlay) return; syncFurnTypeBtns(); updateFurnPanel(); }
+  // palet küçük-resimlerinden aktif tipi (hayalet ya da seçili) işaretle
   function syncFurnTypeBtns(){
     if(!overlay) return;
-    const sel = activeFurnIdx>=0 ? (furnList[activeFurnIdx]||{}).type : pendingFurnType;
-    overlay.querySelectorAll('.v3dtype').forEach(function(b){ b.style.outline=(b.getAttribute('data-furntype')===sel)?'2px solid #7bbf8a':'none'; });
+    const sel = activeFurnIdx>=0 ? (furnList[activeFurnIdx]||{}).type : (furnGhost?furnGhost.type:null);
+    overlay.querySelectorAll('#v3dFurnDock .pit').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-furnpick')===sel); });
   }
-  // mobilya ŞERİDİ (kamera #v3dCamStrip ikizi): her item seçilebilir çip (etiket + sil ×)
-  // şerit = ÖZET (163 çip değil): sayı + SEÇİLİ item (sil ×). Seçim sahnede mobilyaya tıklayarak yapılır.
+  // ── B2-1: MOBİLYA DOCK (kamera dock ikizi) — kategori sekmeleri + kuşbakışı küçük-resim paleti ──
+  function renderFurnDock(){
+    const dk=overlay&&overlay.querySelector('#v3dFurnDock'); if(!dk) return;
+    if(!furnUIEnabled){ dk.style.display='none'; dk.innerHTML=''; return; }
+    dk.style.display='block';
+    if(furnDockCat<0||furnDockCat>=FURN_PALETTE.length) furnDockCat=0;
+    const cats=FURN_PALETTE.map(function(c,i){ return '<button data-furncat="'+i+'" class="cat'+(i===furnDockCat?' on':'')+'">'+c.g+'</button>'; }).join('');
+    const items=FURN_PALETTE[furnDockCat].items.map(function(t){
+      return '<button data-furnpick="'+t+'" class="pit" title="'+FURN_TR[t]+' — tıkla, sonra zeminde yerleştir">'+
+        furnThumb(t)+'<span class="pn">'+FURN_TR[t]+'</span></button>'; }).join('');
+    let html='<div class="dk">';
+    // sütun 1: kategori sekmeleri
+    html+='<div class="col"><div class="lbl">Kategori</div><div class="cats">'+cats+'</div></div>';
+    html+='<div class="sep"></div>';
+    // sütun 2: seçili kategorinin parçaları (kuşbakışı küçük-resim + ad)
+    html+='<div class="col"><div class="lbl">Parça — tıkla, sonra zemine tıkla</div><div class="palgrid">'+items+'</div></div>';
+    html+='<div class="sep"></div>';
+    // sütun 3: otomatik döşe + render on/off + hint + tümünü temizle
+    html+='<div class="col" style="max-width:190px">'+
+      '<div class="lbl">Otomatik</div>'+
+      '<div class="row seg">'+
+        '<button data-v3d="furnauto" class="green'+(furnList.length?' on':'')+'" style="background:#7bbf8a;color:#13201a">'+ic('bolt',12)+'Yeniden döşe</button>'+
+        '<button data-v3d="furnclear">Temizle</button>'+
+      '</div>'+
+      '<label class="chk" title="3B render (nano) mobilyalı mı boş mu olsun"><input type="checkbox" data-v3d="furnrender" id="v3dFurnRender" '+(furnList.length?'checked':'')+'>Render\'a mobilya ekle</label>'+
+      '<div id="v3dFurnHint" style="font-size:10.5px;opacity:.72;min-height:26px;max-width:190px;line-height:1.35"></div>'+
+    '</div>';
+    html+='</div>';
+    dk.innerHTML=html;
+    setFurnHint(lastFurnHint); syncFurnTypeBtns();
+  }
+  // B2: dock render on/off çipini sahne durumuyla eşle + mini araç çubuğunu tazele + palet vurgusu
   function updateFurnPanel(){
     if(!overlay) return;
-    const rc=overlay.querySelector('#v3dFurnRender'); if(rc) rc.checked=furnList.length>0;   // render on/off çipini sahne durumuyla eşle
-    const strip=overlay.querySelector('#v3dFurnStrip'); if(!strip) return;
-    let html='';
-    if(!furnList.length) html='<span class="v3dnote">Mobilya yok · Otomatik döşe ya da tip seç + Ekle</span>';
-    else {
-      html='<span class="v3dnote">'+furnList.length+' mobilya · sahnede birine tıkla = seç</span>';
-      if(activeFurnIdx>=0 && activeFurnIdx<furnList.length){ const f=furnList[activeFurnIdx];
-        html+='<span style="display:inline-flex;align-items:center;gap:4px;background:#e0843a;color:#1a1a1f;border-radius:7px;padding:4px 6px 4px 8px;font-size:11px;font-weight:700;margin-left:2px">'+
-          (FURN_TR[f.type]||f.type)+'<b data-furndesel="1" title="Seçimi bırak (Esc)" style="cursor:pointer;opacity:.75;padding:0 1px 0 3px">×</b></span>'; }
-    }
-    strip.innerHTML=html;
+    const rc=overlay.querySelector('#v3dFurnRender'); if(rc) rc.checked=furnList.length>0;
+    const au=overlay.querySelector('#v3dFurnDock [data-v3d="furnauto"]'); if(au) au.classList.toggle('on',furnList.length>0);
+    updateFurnBar(); syncFurnTypeBtns();
   }
   function setFurnHint(t){ lastFurnHint=t||''; const h=overlay&&overlay.querySelector('#v3dFurnHint'); if(h) h.textContent=lastFurnHint; }
 
@@ -2456,7 +2581,10 @@
     lockedViewRef=getView(); angleDrift=false; updateAngleWarn();   // yeni açı = yeni kilit
   }
   function close(){ if(overlay) overlay.style.display='none'; setPlaceMode(false);
+    cancelFurnGhost(); if(activeFurnIdx>=0) selectFurn(-1);   // B2-4: kapanışta yarım hayalet + seçim temizlenir
     const dk=overlay&&overlay.querySelector('#v3dCamDock'); if(dk) dk.style.display='none';
+    const fd=overlay&&overlay.querySelector('#v3dFurnDock'); if(fd) fd.style.display='none';
+    const fb=overlay&&overlay.querySelector('#v3dFurnBar'); if(fb) fb.style.display='none';
     topLocked=false; freeSavedView=null; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); } }   // A4: kilit durumunu temizle
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();} }
@@ -2464,6 +2592,7 @@
     if(overlay.style.display!=='none'&&controls){ controls.update(); renderer.render(scene,cam);
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
       updateOrb();                                           // B1-1: yön küresi iğnesini mevcut azimuta döndür (hafif DOM yazımı)
+      if(furnMode && activeFurnIdx>=0 && !furnGhost) updateFurnBar();   // B2-3: yüzen mini araç çubuğunu seçili mobilyanın üstünde tut
       if(zoomEl&&!zoomActive) zoomEl.value=distToSlider(controls.getDistance()); } }
 
   // dışa aç + buton bağla
