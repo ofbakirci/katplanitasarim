@@ -120,8 +120,15 @@ function makeWallClassifier(){
     return 'icBolme';                  // aynı daire iç bölmesi
   };
 }
-/* duvar tipi → kalınlık (m); REG.duvar yoksa güvenli varsayılan (ör. villa prototip erken çağrı) */
-function wallThickM(type){ const D=(typeof REG!=='undefined'&&REG.duvar)||{dis:0.30,daireArasi:0.20,icBolme:0.10,cekirdek:0.25}; return D[type]||D.icBolme; }
+/* duvar tipi → kalınlık (m). Taban = REG.duvar MİNİMUMU (mevzuat); kullanıcı override'ı
+   (wallThick[type]) yalnız minimumdan BÜYÜKse uygulanır (kalınlaştırma serbest, inceltme YOK).
+   REG.duvar yoksa güvenli varsayılan (villa prototip erken çağrı). */
+function wallThickM(type){
+  const D=(typeof REG!=='undefined'&&REG.duvar)||{dis:0.30,daireArasi:0.20,icBolme:0.10,cekirdek:0.25};
+  const min=D[type]||D.icBolme;
+  const ov=(typeof wallThick!=='undefined'&&wallThick)?+wallThick[type]:NaN;
+  return (isFinite(ov)&&ov>min)?ov:min;
+}
 function regConnected(g){
   if(g.cells.length<2) return g.cells.length>0;
   const p=plan, set=new Set(g.cells), st=[g.cells[0]], seen=new Set([g.cells[0]]);

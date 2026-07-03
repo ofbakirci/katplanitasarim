@@ -20,6 +20,16 @@
   .sec h2{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:8px;}
   .row{display:flex; gap:8px; align-items:center; margin-bottom:8px;}
   .row label{font-size:13px; flex:1;}
+  /* Duvar kalınlıkları — katlanır, non-intrusive (varsayılan kapalı, sade tek satır başlık) */
+  .wt-sec{margin-top:2px; border-top:1px solid var(--line); padding-top:6px;}
+  .wt-sec > summary{font-size:12px; color:var(--muted); cursor:pointer; list-style:none; user-select:none; padding:2px 0;}
+  .wt-sec > summary::-webkit-details-marker{display:none;}
+  .wt-sec > summary::before{content:'▸ '; color:var(--muted);}
+  .wt-sec[open] > summary::before{content:'▾ ';}
+  .wt-sec > summary small{color:var(--muted); opacity:.8;}
+  .wt-sec > summary:hover{color:var(--ink);}
+  .wt-sec .row{margin-top:8px;}
+  .wt-hint{font-size:11px; color:var(--muted); line-height:1.4; margin-top:2px;}
   select,input[type=number]{padding:5px 7px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff; color:var(--ink); width:90px;}
   input[type=checkbox]{width:15px; height:15px; accent-color:var(--acc);}
   /* Stepper (custom +/- buttons) */

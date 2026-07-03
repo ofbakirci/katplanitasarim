@@ -142,6 +142,22 @@ document.getElementById('binaTipi').addEventListener('change',()=>{ lockedCore=n
 document.getElementById('koridorYon').addEventListener('change',e=>{ koridorYon=e.target.value; resetCuts(); safeGen(); });
 ['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ onFloorCountChange(); debSafeGen(); }));
 ['katSayisi','katYuk'].forEach(id=>makeStepper(document.getElementById(id)));
+/* Duvar kalınlığı UI (L1-A1): mevzuat minimumunda başlar, kullanıcı yalnız ARTIRABİLİR.
+   Görsel-only (hücre/alan değişmez) → değişince yalnız render() (generate YOK, ucuz). */
+const WT_UI=[['wtDis','dis'],['wtDaire','daireArasi'],['wtIc','icBolme']];
+function syncWallThickUI(){
+  const D=(typeof REG!=='undefined'&&REG.duvar)||{};
+  WT_UI.forEach(([id,t])=>{ const el=document.getElementById(id); if(!el||typeof D[t]!=='number') return;
+    el.min=D[t]; el.max=0.6; const ov=+wallThick[t];
+    el.value=(isFinite(ov)&&ov>D[t]?ov:D[t]).toFixed(2); });
+}
+WT_UI.forEach(([id,t])=>{ const el=document.getElementById(id); if(!el) return;
+  el.addEventListener('change',()=>{ const D=(typeof REG!=='undefined'&&REG.duvar)||{}, min=D[t]; let v=parseFloat(el.value);
+    if(!isFinite(v)||v<=min){ delete wallThick[t]; el.value=min.toFixed(2); }   // min ya da altı → override kaldır (minimuma dön)
+    else { v=Math.min(v,0.6); wallThick[t]=v; el.value=v.toFixed(2); }
+    if(typeof render==='function') render(); });
+});
+syncWallThickUI();
 document.getElementById('bodrumSayisi').addEventListener('change',()=>{
   const bi=document.getElementById('bodrumSayisi');
   bodrumSayisi=Math.max(0,Math.min(4,+bi.value||0)); bi.value=String(bodrumSayisi); // global ÖNCE güncellenir (reflow okur)

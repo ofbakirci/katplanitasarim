@@ -14,7 +14,7 @@ haritası, CI hepsi hazır. L1-A tam da bu ağın üstüne kurulmak için beklet
 
 | Dilim | Durum | Commit | Not |
 |---|---|---|---|
-| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | KOD TAMAM — KULLANICI ONAYI BEKLIYOR | `1e9763b` | Aşağıdaki "L1-A1 bulgular" bölümüne bak. Snapshot BİREBİR, npm test 31/31, build OK, perf render fazı değişmedi (~16ms). Kalınlık DEĞERLERİ + görünüm onayı kullanıcının. |
+| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | ONAYLANDI + kullanıcı-ayarlı eklendi | `1e9763b` + `HASH_WT` | Görünüm kullanıcıca onaylandı. **Kalınlıklar artık KULLANICI-AYARLI** (mevzuat min. varsayılan, yalnız artırılabilir, katlanır non-intrusive UI). Snapshot BİREBİR, npm test 31/31, build OK. Aşağıdaki "L1-A1 bulgular" + "Kullanıcı-ayarlı kalınlık" bölümleri. |
 | **L1-A2** brüt/net alan | BEKLIYOR | — | |
 | **L1-A3** DXF yazıcı (export) | BEKLIYOR | — | |
 | **L1-A4** roundtrip + entegrasyon | BEKLIYOR | — | L1-A3 ile aynı oturum olabilir |
@@ -56,8 +56,36 @@ görünümü onaylanıyor mu? (3) İSTEĞE BAĞLI — mesken render reçetesi gi
 kalınlık): eski örnekle yan yana bir ana-plan boyama render'ı (KREDİ: onay al, 1-2 render) istenirse üretilir
 (`mesken/tests_render/check.py`). C5-R dersi: görsel işlerde son kapı KULLANICI ONAYIDIR.
 
-**Kalınlık ayarı istenirse:** yalnız `core.js REG.duvar` tek satır değiştir → `npm run build`. Kayıt formatına
-girmez (global sabit); kullanıcı-başına özel kalınlık L1-B3'e ertelendi (brief tuzak notu).
+**Kalınlık ayarı istenirse:** yalnız `core.js REG.duvar` tek satır değiştir → `npm run build`.
+
+### Kullanıcı-ayarlı kalınlık (2026-07-03, kullanıcı isteği üzerine — `HASH_WT`)
+
+Kullanıcı kararı: "kalınlıkları kullanıcı belirlesin; iç/dış/daire duvarı MEVZUAT MİNİMUMUNDA
+otomatik başlasın; kullanıcı yalnız DAHA KALIN yapabilsin, intrusive olmayan UI ile." Uygulandı:
+
+- **`core.js REG.duvar`** = artık MEVZUAT MİNİMUMU / varsayılan (semantik güncellendi). Yeni global
+  `let wallThick={}` = kullanıcı override'ı (tip→m).
+- **`walls.js wallThickM(type)`** = taban REG.duvar min; `wallThick[type]` yalnız **min'den BÜYÜKSE**
+  uygulanır (kalınlaştırma serbest, inceltme YOK → mevzuat altına düşmez).
+- **UI (`kat-plani-tasarim.html` #wtSec)** = "Bina Bilgileri" altında **katlanır `<details>`** (varsayılan
+  KAPALI = non-intrusive), 3 sayı input (Dış/Daire arası/İç bölme), `min`=mevzuat, `max`=0.6. Çekirdek
+  UI'da açılmaz (yangın/yapı perde → hep min). `styles.css .wt-sec`.
+- **`app.js`** = `syncWallThickUI()` + change bağlama: min'e clamp → `wallThick` güncelle → **yalnız
+  `render()`** (görsel-only, generate YOK, ucuz). `io.js stateSnapshot/restoreState` = `wallThick`
+  kayda girer/geri gelir (eski kayıt yok → {} = min; validateState bilinmeyen alanı reddetmez).
+
+**Tarayıcı doğrulama (canlı kabuk):** UI mevzuat min'de başlar (0.30/0.20/0.10); dış→0.50 + iç→0.30
+CANLI kalınlaşır, **toplam alan 512→512 DEĞİŞMEZ** (görsel-only kanıtı); dış→0.10 (min altı) input
+0.30'a SNAP + override silinir; save/load roundtrip `{icBolme:0.28}` korunur. Konsol hatasız. Snapshot
+7/7 BİREBİR, npm test 31/31, build (prototip'e indi).
+
+**Kayıt formatı notu:** brief "kullanıcı-başına kalınlık L1-B3'e ertelendi" diyordu — kullanıcı ŞİMDİ
+istedi → `st.wallThick` olarak eklendi (additive, geri-uyumlu, v:1 kırılmadı). L1-B3 tam format işi hâlâ
+ayrı; bu yalnız küçük bir alan.
+
+**ControlNet/paint render:** kullanıcı "deprecated, kullanmıyoruz, elleme hiç" dedi → önerdiğim paralı
+paint-render kıyası İPTAL. Önceki commit'in edges/paint export kalınlık değişikliği (test yeşil, kullanılmayan
+yol) yerinde; o pipeline'a bundan sonra dokunulmaz.
 
 ---
 

@@ -62,10 +62,15 @@ const REG = {
        daireArasi = iki yanda farklı bağımsız bölüm ya da hol sınırı
        cekirdek   = bir yanı çekirdek (merdiven/asansör/yangın/teknik perde duvarı)
        icBolme    = aynı daire iç oda bölmesi
-     Değerler TR pratiğine göre ÖNERİ — kullanıcı görsel üzerinden onaylar; tek tabloda
-     oldukları için sonradan ayar bedava. Brüt alan (L1-A2) bu paylardan türetilecek. */
+     Bu değerler MEVZUAT MİNİMUMU / VARSAYILAN — kullanıcı görsel duvar kalınlığını yalnız
+     ARTIRABİLİR (bkz. wallThick + walls.js wallThickM: override min'in altına inemez). çekirdek
+     UI'da açılmaz (yangın/yapı perde → hep min). Brüt alan (L1-A2) bu paylardan türetilecek. */
   duvar:{ dis:0.30, daireArasi:0.20, icBolme:0.10, cekirdek:0.25 }
 };
+/* Kullanıcının duvar-kalınlığı override'ı (m) — tip başına. Boş/eksik ya da minimumun altı =
+   REG.duvar minimumu kullanılır (walls.js wallThickM clamp'ler). Kayda girer (io.js stateSnapshot);
+   eski kayıtta yoksa {} → hepsi minimum. UI: kat-plani-tasarim.html #wtSec (katlanır, non-intrusive). */
+let wallThick = {};
 /* ── Yangın / merdiven / asansör — çekirdek ölçü eşikleri ─────────────────────
    TEK DOĞRU KAYNAK: mesken/referans-kat-planlari/yangin-merdiven-kurallari.json
    (+ gerekçe/madde: YANGIN-MERDIVEN-ASANSOR-KURALLARI.md). `mesken/` .gitignore'da

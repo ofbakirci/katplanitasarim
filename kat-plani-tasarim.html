@@ -34,6 +34,13 @@
       <div class="row"><label>Koridor yönü</label>
         <select id="koridorYon"><option value="oto">Otomatik</option><option value="yatay">Yatay</option><option value="dikey">Dikey</option></select>
       </div>
+      <details id="wtSec" class="wt-sec">
+        <summary>Duvar kalınlıkları <small>(mevzuat min.)</small></summary>
+        <div class="row"><label>Dış duvar (m)</label><input type="number" id="wtDis" step="0.05"></div>
+        <div class="row"><label>Daire arası (m)</label><input type="number" id="wtDaire" step="0.05"></div>
+        <div class="row"><label>İç bölme (m)</label><input type="number" id="wtIc" step="0.05"></div>
+        <div class="wt-hint">Mevzuat minimumunda başlar; yalnız <b>artırabilirsiniz</b>. Yalnız çizim/görünüm — oda alanlarını değiştirmez.</div>
+      </details>
     </div>
     <div class="sec pro-only" id="parselSec">
       <h2>TKGM Parsel Sorgu</h2>

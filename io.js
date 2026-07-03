@@ -121,6 +121,7 @@ function stateSnapshot(bare, withBlocks){
   const el2=id=>document.getElementById(id).value;
   const st={v:1, app:'kat-plani-tasarim',
     ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk'), koridorYon:koridorYon, bodrumSayisi:String(bodrumSayisi)},
+    wallThick:(typeof wallThick!=='undefined'&&wallThick)?Object.assign({},wallThick):{}, // L1-A1: kullanıcı duvar kalınlığı override'ı (görsel; eksikse minimum)
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
     parcelClosed, parcelRot, parcelImar, balconies:balconies.map(b=>({...b})),
     courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
@@ -199,6 +200,8 @@ function restoreState(st, opt){
   document.getElementById('katSayisi').value=st.ui.katSayisi;
   document.getElementById('katYuk').value=st.ui.katYuk;
   koridorYon=st.ui.koridorYon||'oto'; { const ky=document.getElementById('koridorYon'); if(ky) ky.value=koridorYon; }
+  wallThick=(st.wallThick&&typeof st.wallThick==='object')?Object.assign({},st.wallThick):{}; // L1-A1: duvar kalınlığı override (eski kayıtta yok → {} = minimum)
+  if(typeof syncWallThickUI==='function') syncWallThickUI();
   bodrumSayisi=Math.max(0,+(st.ui.bodrumSayisi||0)||0); villaOffset=bodrumSayisi; // floors dizisi bu offsetle kurulur
   { const bi=document.getElementById('bodrumSayisi'); if(bi) bi.value=String(bodrumSayisi); }
   katKullanim=(st.plan&&st.plan.katKullanim)||'konut'; // bu katın kullanım tipi (per-kat)
