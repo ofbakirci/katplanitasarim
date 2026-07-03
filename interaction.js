@@ -108,6 +108,28 @@ function hitAvlu(wx,wy){ // imleç altındaki avlu (silme/önizleme için)
   for(let i=courtyards.length-1;i>=0;i--){ if(pip(wx,wy,courtyards[i].poly)) return {i, av:courtyards[i]}; }
   return null;
 }
+/* AV-2: imleç altındaki avlu tutamağı — köşe (2-eksen boyut) / kenar (1-eksen boyut) / gövde (taşı).
+   Balkon hitBalk deseniyle aynı ruh; avlu ekseni-hizalı dikdörtgen olduğundan bbox'tan hesaplanır. */
+function avluHandleTol(){ return Math.max(0.3, 7*HITSC/pxPerM); }
+function hitAvluHandle(wx,wy){
+  const tol=avluHandleTol();
+  for(let i=courtyards.length-1;i>=0;i--){
+    const bb=bboxOf(courtyards[i].poly);
+    const corners=[['nw',bb.minX,bb.minY],['ne',bb.maxX,bb.minY],['se',bb.maxX,bb.maxY],['sw',bb.minX,bb.maxY]];
+    for(const [part,cx,cy] of corners){ if(Math.abs(wx-cx)<tol && Math.abs(wy-cy)<tol) return {i,part}; }
+    const onX = wx>bb.minX-tol && wx<bb.maxX+tol, onY = wy>bb.minY-tol && wy<bb.maxY+tol;
+    if(onX && Math.abs(wy-bb.minY)<tol) return {i,part:'n'};
+    if(onX && Math.abs(wy-bb.maxY)<tol) return {i,part:'s'};
+    if(onY && Math.abs(wx-bb.minX)<tol) return {i,part:'w'};
+    if(onY && Math.abs(wx-bb.maxX)<tol) return {i,part:'e'};
+    if(pip(wx,wy,courtyards[i].poly)) return {i,part:'body'};
+  }
+  return null;
+}
+/* AV-2: aday avlu poligonu geçerli mi — 4 köşe de bina sınırı (pts) içinde olmalı (sınır dışına taşamaz).
+   Asgari 1×1 m boyut resize/move mantığında zaten korunur. */
+function avluPolyValid(poly){ return poly && poly.length>=4 && poly.every(p=>pip(p.x,p.y,pts)); }
+const avluCursor={n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',body:'move'};
 /* avlu eklendi/silindi → footprint değişti: plan varsa yeniden üret, kat/blok anlık görüntüsünü tazele */
 function avluChanged(){
   if(plan && closed){ try{ resetCuts(); generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
@@ -127,6 +149,20 @@ svg.addEventListener('mousemove',e=>{
     if(dragging.type==='wall'){ dragWallTo(sx,sy); }
     if(dragging.type==='struct'){ dragStructTo(sx,sy); }
     if(dragging.type==='avlu'){ avluGhost={poly:rectPoly(dragging.x0,dragging.y0,S2Wx(sx),S2Wy(sy))}; render(); }
+    if(dragging.type==='avluMove'){
+      const dx=snapG(S2Wx(sx)-dragging.gx), dy=snapG(S2Wy(sy)-dragging.gy), b=dragging.box0;
+      const poly=rectPoly(b.minX+dx, b.minY+dy, b.maxX+dx, b.maxY+dy);
+      avluGhost={poly, invalid:!avluPolyValid(poly)}; render();
+    }
+    if(dragging.type==='avluResize'){
+      const wx=snapG(S2Wx(sx)), wy=snapG(S2Wy(sy)), p=dragging.part; let {minX,minY,maxX,maxY}=dragging.box0;
+      if(p.indexOf('n')>=0) minY=Math.min(wy, maxY-1);   // min 1 m korunur
+      if(p.indexOf('s')>=0) maxY=Math.max(wy, minY+1);
+      if(p.indexOf('w')>=0) minX=Math.min(wx, maxX-1);
+      if(p.indexOf('e')>=0) maxX=Math.max(wx, minX+1);
+      const poly=rectPoly(minX,minY,maxX,maxY);
+      avluGhost={poly, invalid:!avluPolyValid(poly)}; render();
+    }
     if(dragging.type==='siteMove'){
       const dx=snapG(S2Wx(sx)-dragging.x0), dy=snapG(S2Wy(sy)-dragging.y0);
       dragging.dx=dx; dragging.dy=dy; if(dx||dy) dragging.moved=true;
@@ -225,7 +261,8 @@ svg.addEventListener('mousemove',e=>{
   }
   else if(mode==='avlu'){
     if(!closed){ svg.style.cursor=''; return; }
-    svg.style.cursor = hitAvlu(S2Wx(sx),S2Wy(sy))? 'context-menu' : 'copy';
+    const hh=hitAvluHandle(S2Wx(sx),S2Wy(sy));   // AV-2: köşe/kenar boyut imleci · gövde taşı · boşluk çiz
+    svg.style.cursor = hh? avluCursor[hh.part] : 'copy';
   }
   else if(mode==='site'){
     svg.style.cursor = (siteOn()&&hitBlock(S2Wx(sx),S2Wy(sy))>=0)? 'move' : '';
@@ -322,8 +359,15 @@ svg.addEventListener('mousedown',e=>{
   if(mode==='avlu'){
     if(e.button!==0 || !closed) return;
     const wx=S2Wx(sx), wy=S2Wy(sy);
-    if(hitAvlu(wx,wy)) return;        // mevcut avlu üstünde yeni çizme (silmek için sağ tık)
-    if(!pip(wx,wy,pts)) return;       // yalnız bina sınırı içinde başlar
+    const hh=hitAvluHandle(wx,wy);   // AV-2: mevcut avlu tutamağı → taşı/boyutlandır
+    if(hh){
+      avluDragIdx=hh.i;
+      dragging={type:(hh.part==='body'?'avluMove':'avluResize'), i:hh.i, part:hh.part,
+                prev:courtyardsSnapshot(), box0:bboxOf(courtyards[hh.i].poly), gx:wx, gy:wy};
+      avluGhost={poly:courtyards[hh.i].poly.map(p=>({x:p.x,y:p.y})), invalid:false};
+      e.preventDefault(); render(); return;
+    }
+    if(!pip(wx,wy,pts)) return;       // yalnız bina sınırı içinde yeni çizim başlar
     dragging={type:'avlu', x0:wx, y0:wy, prev:courtyardsSnapshot()};
     avluGhost={poly:rectPoly(wx,wy,wx,wy)};
     e.preventDefault(); return;
@@ -460,6 +504,17 @@ function finishDrag(){
       switchBlock(d.idx); setMode('draw');
     }
     return;
+  } else if(dragging.type==='avluMove' || dragging.type==='avluResize'){
+    const gh=avluGhost, d=dragging; avluGhost=null; avluDragIdx=-1; dragging=null;
+    if(!gh || !gh.poly || gh.invalid){   // geçersiz (sınır dışı) → eski hâle dön
+      courtyards=(d.prev||[]).map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))}));
+      setStatusHint('Avlu bina sınırı dışına taşınamaz','#b35a2e'); render(); return;
+    }
+    if(courtyards[d.i]) courtyards[d.i]={poly:gh.poly};
+    if(JSON.stringify(courtyardsSnapshot())!==JSON.stringify(d.prev)){
+      pushEdit({type:'avlu', prev:d.prev}); avluChanged(); return;   // değişti → geçmişe yaz + yeniden üret
+    }
+    render(); return;   // konum değişmedi
   } else if(dragging.type==='avlu'){
     const gh=avluGhost; avluGhost=null; const prev=dragging.prev; dragging=null;
     if(gh && gh.poly){ const bb=bboxOf(gh.poly);
@@ -745,7 +800,7 @@ function updateParkBtn(){
 const MODE_BADGE={
   parcel:  {ic:'parcel',    name:'Parsel',  hint:'Kenarlara tıklayarak arsa sınırını çiz; kapatmak için başa dön'},
   balkon:  {ic:'balcony',   name:'Balkon',  hint:'Dış duvara tıkla-ekle; tutamaçlardan boyutlandır'},
-  avlu:    {ic:'avlu',      name:'Avlu',    hint:'Sınır içinde sürükleyerek aydınlık boşluğu oy'},
+  avlu:    {ic:'avlu',      name:'Avlu',    hint:'Boşlukta sürükle: yeni avlu · gövde: taşı · kenar/köşe: boyutlandır · sağ tık: sil'},
   door:    {ic:'door',      name:'Kapı',    hint:'Kapıyı sürükleyerek komşu duvara taşı'},
   struct:  {ic:'structure', name:'Yapı',    hint:'Çekirdek ve bina köşe tutamaçlarından boyutlandır'},
   roomdraw:{ic:'roomdraw',  name:'Oda Çiz', hint:'Kapalı poligon çizerek yeni oda oluştur'},
@@ -762,7 +817,7 @@ function updateModeBadge(m){
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
   for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';

@@ -338,9 +338,10 @@ function render(){
     const g=el('g',{}); svg.appendChild(g);
     const drawA=(av,ghost)=>{
       const poly=av.poly; if(!poly||poly.length<3) return;
+      const inval=ghost && av.invalid;   // AV-2: geçersiz (sınır dışı) taşıma/boyut → kırmızı önizleme
       const d='M'+poly.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z';
-      g.appendChild(el('path',{d,fill:ghost?'rgba(47,111,143,.10)':'rgba(120,160,190,.16)',
-        stroke:'#2f6f8f','stroke-width':ghost?1.4:1.8,'stroke-dasharray':ghost?'5 4':'4 3','stroke-linejoin':'miter'}));
+      g.appendChild(el('path',{d,fill:inval?'rgba(179,90,46,.14)':(ghost?'rgba(47,111,143,.10)':'rgba(120,160,190,.16)'),
+        stroke:inval?'#b35a2e':'#2f6f8f','stroke-width':ghost?1.4:1.8,'stroke-dasharray':ghost?'5 4':'4 3','stroke-linejoin':'miter'}));
       if(ghost) return;
       const bb=bboxOf(poly), cx=(bb.minX+bb.maxX)/2, cy=(bb.minY+bb.maxY)/2;
       if(pxPerM>6 && !clean){ /* AVLU etiketi + ölçüsü AI temiz modda yok (boşluk dolgusu kalır) */
@@ -352,8 +353,14 @@ function render(){
           'font-size':fs*0.82,fill:'#3f6f8f'});
         t2.textContent=fmt(bb.maxX-bb.minX)+' × '+fmt(bb.maxY-bb.minY)+' m'; g.appendChild(t2);
       }
+      if(mode==='avlu' && !clean){ /* AV-2: köşe + kenar-ortası boyut tutamaçları (keşfedilebilirlik) */
+        const hp=[[bb.minX,bb.minY],[bb.maxX,bb.minY],[bb.maxX,bb.maxY],[bb.minX,bb.maxY],
+          [cx,bb.minY],[cx,bb.maxY],[bb.minX,cy],[bb.maxX,cy]];
+        hp.forEach(([hx,hy])=>g.appendChild(el('circle',{cx:W2Sx(hx),cy:W2Sy(hy),r:4,
+          fill:'#fff',stroke:'#2f6f8f','stroke-width':1.5})));
+      }
     };
-    if(courtyards) courtyards.forEach(av=>drawA(av,false));
+    if(courtyards) courtyards.forEach((av,idx)=>{ if(idx!==avluDragIdx) drawA(av,false); });   // sürüklenen avlu ghost olarak çizilir
     if(mode==='avlu'&&avluGhost) drawA(avluGhost,true);
   }
 

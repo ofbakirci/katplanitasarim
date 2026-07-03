@@ -707,6 +707,21 @@ svg.addEventListener('contextmenu',e=>{
     return;
   }
   if(!plan) return;
+  const rbA=svg.getBoundingClientRect();
+  if(closed && typeof courtyards!=='undefined' && courtyards.length){   // AV-2: başka moddayken avluya sağ tık → küçük avlu menüsü (avlu hücresizdir → oda menüsü çıkmaz)
+    const ha=hitAvlu(S2Wx(e.clientX-rbA.left), S2Wy(e.clientY-rbA.top));
+    if(ha){
+      const wrapA=roomMenu.parentElement.getBoundingClientRect();
+      roomMenu.innerHTML='<div class="mh">AVLU</div><hr><div class="mi" data-avdel>Avluyu sil</div>';
+      roomMenu.style.display='block';
+      roomMenu.style.left=Math.min(e.clientX-wrapA.left, wrapA.width-170)+'px';
+      roomMenu.style.top =Math.min(e.clientY-wrapA.top,  wrapA.height-roomMenu.offsetHeight-10)+'px';
+      const db=roomMenu.querySelector('.mi[data-avdel]');
+      if(db) db.onclick=()=>{ pushEdit({type:'avlu', prev:courtyardsSnapshot()});
+        courtyards.splice(ha.i,1); avluGhost=null; hideRoomMenu(); avluChanged(); };
+      return;
+    }
+  }
   const rb=svg.getBoundingClientRect(), sx=e.clientX-rb.left, sy=e.clientY-rb.top;
   const c=Math.floor((S2Wx(sx)-plan.minX)/M), r=Math.floor((S2Wy(sy)-plan.minY)/M);
   if(r<0||c<0||r>=plan.rows||c>=plan.cols) return;

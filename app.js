@@ -30,7 +30,8 @@ let psFrontEdge = -1;         // FAZ 5: yola bakan parsel kenarı (parcelPts[i]�
 let balconies = [];           // {ei, t0, t1, depth}: pts[ei]→pts[ei+1] kenarında, dışa doğru
 let hoverBalk = null;         // balkon modu önizleme {ei,t0,t1,depth} | tutamaç vurgusu
 let courtyards = [];          // iç avlular: {poly:[{x,y}...]} (dünya koord). generate() bunları footprint'ten oyar
-let avluGhost = null;         // avlu modunda sürüklenen yeni avlu önizlemesi {poly:[...]} | null
+let avluGhost = null;         // avlu modunda sürüklenen yeni/taşınan avlu önizlemesi {poly:[...], invalid?} | null
+let avluDragIdx = -1;         // AV-2: taşınmakta/boyutlanmakta olan mevcut avlunun indeksi (render solid çizmez, ghost gösterir) | -1
 let doorOverrides = {};       // elle kapı yeri: key -> {h,x,y}; geçersizleşirse otomatiğe düşer
 let extraDoors = [];          // çift tıkla eklenen kapılar: {h,x,y}
 let doorHidden = {};          // çift tıkla silinen otomatik kapılar: key -> true
@@ -791,7 +792,7 @@ function removeBlock(k){
    site parseli (site-ortak) korunur */
 function clearCanvasForNewBlock(){
   pts=[]; roomPts=[]; closed=false; plan=null;
-  balconies=[]; courtyards=[]; avluGhost=null; editHistory=[]; resetCuts();
+  balconies=[]; courtyards=[]; avluGhost=null; avluDragIdx=-1; editHistory=[]; resetCuts();
   doorOverrides={}; extraDoors=[]; doorHidden={};
   villaFloors=null; activeFloor=0; lockedCore=null;
   const ka=document.getElementById('katAyri'); if(ka) ka.checked=false;

@@ -64,6 +64,43 @@ ok(courtyards.length===0, 'sil: avlu kaldırıldı');
 ok(editHistory.some(e=>e.type==='avlu'), 'sil: avlu kaydı geçmişte kalır');
 ok(undoEdit() && courtyards.length===1, 'sil undo: avlu geri geldi');
 ok(insideCount(plan)===inAvlu, 'sil undo: inside birebir avlulu hâle döndü');
+
+/* ===== AV-2) Taşı / boyutlandır / geçersiz-geri-al ===== */
+/* temiz zemin: tek avlu 16..24 × 4..8 */
+courtyards=[{poly:[{x:16,y:4},{x:24,y:4},{x:24,y:8},{x:16,y:8}]}]; editHistory=[]; redoHistory=[]; generate();
+const prevPoly=JSON.stringify(courtyards[0].poly);
+
+/* TAŞI: gövdeyi +2m x taşı (finishDrag avluMove yolunun aynısı) */
+avluDragIdx=0;
+dragging={type:'avluMove', i:0, part:'body', prev:courtyardsSnapshot(), box0:bboxOf(courtyards[0].poly), gx:20, gy:6};
+let mp=rectPoly(18,4,26,8);
+avluGhost={poly:mp, invalid:!avluPolyValid(mp)};
+finishDrag();
+ok(avluDragIdx===-1, 'taşı: avluDragIdx sıfırlandı');
+ok(courtyards.length===1 && bboxOf(courtyards[0].poly).minX===18, 'AV-2 taşı: avlu +2m taşındı (minX 18)');
+ok(editHistory.some(e=>e.type==='avlu'), 'AV-2 taşı: geçmişe yazıldı');
+ok(undoEdit() && JSON.stringify(courtyards[0].poly)===prevPoly, 'AV-2 taşı undo: eski konuma döndü');
+
+/* BOYUTLANDIR: doğu kenarını +4m aç (finishDrag avluResize) */
+const box0=bboxOf(courtyards[0].poly), w0=box0.maxX-box0.minX;
+avluDragIdx=0;
+dragging={type:'avluResize', i:0, part:'e', prev:courtyardsSnapshot(), box0, gx:0, gy:0};
+let rp=rectPoly(box0.minX, box0.minY, box0.maxX+4, box0.maxY);
+avluGhost={poly:rp, invalid:!avluPolyValid(rp)};
+finishDrag();
+ok(Math.abs((bboxOf(courtyards[0].poly).maxX-bboxOf(courtyards[0].poly).minX)-(w0+4))<1e-6, 'AV-2 boyut: genişlik +4m');
+ok(undoEdit() && Math.abs((bboxOf(courtyards[0].poly).maxX-bboxOf(courtyards[0].poly).minX)-w0)<1e-6, 'AV-2 boyut undo: eski genişliğe döndü');
+
+/* GEÇERSİZ: sınır dışına taşı → geri alınır, geçmiş kirlenmez */
+const ehLen=editHistory.length, keepPoly=JSON.stringify(courtyards[0].poly);
+avluDragIdx=0;
+dragging={type:'avluMove', i:0, part:'body', prev:courtyardsSnapshot(), box0:bboxOf(courtyards[0].poly), gx:20, gy:6};
+let op=rectPoly(38,4,46,8);   // maxX 46 > footprint 40 → köşe sınır dışı
+avluGhost={poly:op, invalid:!avluPolyValid(op)};
+ok(avluGhost.invalid, 'AV-2 geçersiz: sınır-dışı aday invalid işaretlendi');
+finishDrag();
+ok(JSON.stringify(courtyards[0].poly)===keepPoly, 'AV-2 geçersiz: avlu eski konumda kaldı (geri alındı)');
+ok(editHistory.length===ehLen, 'AV-2 geçersiz: geçmişe kayıt yazılmadı');
 `);
 
 console.log((fail? '  '+fail+' BAŞARISIZ, ':'✓ ')+'tüm avlu düzenleme testleri '+(fail?'':'geçti ')+'('+pass+')');
