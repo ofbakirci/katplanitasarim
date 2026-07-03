@@ -14,7 +14,7 @@ haritası, CI hepsi hazır. L1-A tam da bu ağın üstüne kurulmak için beklet
 
 | Dilim | Durum | Commit | Not |
 |---|---|---|---|
-| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | ONAYLANDI + kullanıcı-ayarlı eklendi | `1e9763b` + `HASH_WT` | Görünüm kullanıcıca onaylandı. **Kalınlıklar artık KULLANICI-AYARLI** (mevzuat min. varsayılan, yalnız artırılabilir, katlanır non-intrusive UI). Snapshot BİREBİR, npm test 31/31, build OK. Aşağıdaki "L1-A1 bulgular" + "Kullanıcı-ayarlı kalınlık" bölümleri. |
+| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | ONAYLANDI + kullanıcı-ayarlı eklendi | `1e9763b` + `759a5bc` | Görünüm kullanıcıca onaylandı. **Kalınlıklar artık KULLANICI-AYARLI** (mevzuat min. varsayılan, yalnız artırılabilir, katlanır non-intrusive UI). Snapshot BİREBİR, npm test 31/31, build OK. Aşağıdaki "L1-A1 bulgular" + "Kullanıcı-ayarlı kalınlık" bölümleri. |
 | **L1-A2** brüt/net alan | BEKLIYOR | — | |
 | **L1-A3** DXF yazıcı (export) | BEKLIYOR | — | |
 | **L1-A4** roundtrip + entegrasyon | BEKLIYOR | — | L1-A3 ile aynı oturum olabilir |
@@ -58,7 +58,7 @@ kalınlık): eski örnekle yan yana bir ana-plan boyama render'ı (KREDİ: onay 
 
 **Kalınlık ayarı istenirse:** yalnız `core.js REG.duvar` tek satır değiştir → `npm run build`.
 
-### Kullanıcı-ayarlı kalınlık (2026-07-03, kullanıcı isteği üzerine — `HASH_WT`)
+### Kullanıcı-ayarlı kalınlık (2026-07-03, kullanıcı isteği üzerine — `759a5bc`)
 
 Kullanıcı kararı: "kalınlıkları kullanıcı belirlesin; iç/dış/daire duvarı MEVZUAT MİNİMUMUNDA
 otomatik başlasın; kullanıcı yalnız DAHA KALIN yapabilsin, intrusive olmayan UI ile." Uygulandı:
