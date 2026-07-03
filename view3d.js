@@ -671,12 +671,44 @@
     // paylaşılan malzemeler (her duvar için yeni material üretme)
     const matWall=new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92});
     const matDoor=new THREE.MeshStandardMaterial({color:0x8a6a48,roughness:0.7,metalness:0.05}); // kapı eşiği = ahşap kahve
+    // C1-3: KAPALI kanat malzemeleri — duvardan (krem) ayrışan ahşap ton; abartısız.
+    //   iç kapı = açık ahşap, çerçeve = koyu ahşap, kol = mat metal, bina girişi (kind=ext) = daha koyu/vurgulu.
+    const matLeaf=new THREE.MeshStandardMaterial({color:0xb08a5c,roughness:0.62,metalness:0.06});   // iç kanat: sıcak açık ahşap
+    const matLeafExt=new THREE.MeshStandardMaterial({color:0x6d4a30,roughness:0.55,metalness:0.10}); // bina girişi: koyu ahşap
+    const matJamb=new THREE.MeshStandardMaterial({color:0x7a5636,roughness:0.7,metalness:0.05});      // çerçeve/kasa
+    const matHandle=new THREE.MeshStandardMaterial({color:0x9a9a9a,roughness:0.4,metalness:0.6});     // kol
 
     // kapı boşlukları (metre uzayı): map.doors px → px2m. Oda kenarlarıyla AYNI doğrultudadır.
+    // kind: 'ext'=bina girişi, 'unit'=daire girişi, 'inner'/'extra'=iç kapı (kanat tonu için taşınır).
     const doorSegs=(map.doors||[]).map(function(d){
       const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
-      return {ax:a[0],az:a[1],bx:b[0],bz:b[1]};
+      return {ax:a[0],az:a[1],bx:b[0],bz:b[1],kind:d.kind};
     });
+    // C1-3: kapı boşluğuna KAPALI kanat kur (mesh grubu). mx,mz=boşluk ortası, gw=genişlik, ang=duvar açısı,
+    //   kind=kapı türü (ext=bina girişi koyu ton). abartısız: kanat paneli + iki dikey kasa + kol nub'ı.
+    //   Kanat boşluktan hafif dar (kasa payı) + duvar ekseninde ince → kapı "kapalı" okunur, gerçek geometri.
+    function addDoorLeaf(mx,mz,gw,ang,kind,parent){
+      if(gw<0.3) return;                                   // çok dar → kanat koyma (ıslak dolap-kapısı gibi)
+      const grp=new THREE.Group(); grp.position.set(mx,0,mz); grp.rotation.y=ang;
+      const isExt=(kind==='ext');
+      const leafMat=isExt?matLeafExt:matLeaf;
+      const jw=0.06;                                       // kasa (jamb) genişliği
+      const lw=Math.max(0.2,gw-2*jw);                      // kanat net genişliği (kasa payı düşülür)
+      const lt=0.045;                                      // kanat kalınlığı (ince panel)
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,DOOR_H*0.98,lt),leafMat);
+      leaf.position.set(0,DOOR_H*0.98/2,0); leaf.castShadow=true; grp.add(leaf);
+      // iki dikey kasa (kapı çerçevesi) — duvar kalınlığını kapsar, kanattan hafif kalın
+      for(const sgn of [-1,1]){
+        const jm=new THREE.Mesh(new THREE.BoxGeometry(jw,DOOR_H,Math.max(0.22,WALL_T)),matJamb);
+        jm.position.set(sgn*(lw/2+jw/2),DOOR_H/2,0); jm.castShadow=true; grp.add(jm);
+      }
+      // kol imasi — kanadın bir yüzünde küçük çıkıntı (menteşe karşı-kenarına yakın), göz hizasında
+      const hnd=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.12,0.05),matHandle);
+      hnd.position.set(lw*0.36,1.05,lt/2+0.025); hnd.castShadow=true; grp.add(hnd);
+      grp.userData.isLeaf=true;                            // applyRoof: duvarlarla aynı oranda kısalt/geri-al
+      grp.scale.y=roofOn?1:WALL_LOW;                       // build anındaki çatı durumuna uy (duvar segseti gibi)
+      parent.add(grp);
+    }
     // bir oda kenarını (a→b) kur — üstünden geçen kapılarda BOŞLUK bırak, eşik + (tam-yükseklikte) lentö ekle
     function wallEdge(a,b){
       const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz); if(len<0.05) return;
@@ -687,7 +719,7 @@
         const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
         if(e0>0.2||e1>0.2) return;                          // kapı bu duvar doğrultusunda değil (uzaklık toleransı)
         const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
-        if(g1-g0>0.1) gaps.push([g0,g1]);                   // duvarla örtüşen kapı boşluğu
+        if(g1-g0>0.1) gaps.push([g0,g1,d.kind]);            // duvarla örtüşen kapı boşluğu (+kind = kanat tonu)
       });
       gaps.sort(function(p,q){return p[0]-q[0];});
       function seg(s0,s1){ if(s1-s0<0.04) return;
@@ -703,6 +735,11 @@
         th.position.set(mx,0.02,mz); th.rotation.y=ang; th.receiveShadow=true; th.userData.isSill=true; walls.add(th);
         const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,WALL_T),matWall); // lentö: yalnız tam-yükseklikte görünür
         ln.position.set(mx,(DOOR_H+WALL_H)/2,mz); ln.rotation.y=ang; ln.castShadow=true; lintels.add(ln);
+        // C1-3: KAPALI KANAT — kapısız ev "sakil" + nano tek-kapılı dolabı kapı sanabiliyor. Boşluğa
+        //   ince panel + kasa (jamb) + kol imasi ekle. Sahne mesh'i → iso snapshot + kamera B yoluna
+        //   OTOMATİK girer. SPAN mantığına DOKUNMAZ (mx/mz/gw/ang yalnız OKUNUR). Kanat DOOR_H yüksekliğinde;
+        //   dollhouse (roof-off) modunda duvarlarla aynı oranda kısalsın diye isLeaf tag'i (applyRoof ölçekler).
+        addDoorLeaf(mx,mz,gw,ang,g[2],walls);
       });
     }
 
@@ -862,7 +899,8 @@
   }
   function applyRoof(){ if(!scene||!scene.__walls) return;
     scene.__walls.children.forEach(function(w){ if(w.userData.isWall){ w.scale.y=roofOn?1:WALL_LOW;
-      w.position.y=(roofOn?WALL_H:WALL_H*WALL_LOW)/2; } });
+      w.position.y=(roofOn?WALL_H:WALL_H*WALL_LOW)/2; }
+      else if(w.userData.isLeaf){ w.scale.y=roofOn?1:WALL_LOW; } });   // C1-3: kanat da duvarla aynı oranda kısalır (dollhouse)
     if(scene.__lintels) scene.__lintels.visible=roofOn; }   // lentö = kapı başlığı, sadece tam yükseklikte
   // PNG'yi İNGİLİZCE etiketle ver (AI 3D-render İngilizce sever; pipeline'ın geri kalanı da EN).
   // Etiketleri EN'e çevir → render → indir → ekrandaki TR'yi geri koy.
