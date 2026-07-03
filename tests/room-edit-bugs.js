@@ -58,9 +58,11 @@ if(global.__SVG){
   } else T('C: SVG kpState bulundu', false);
 } else console.log('  (input/ortakdeporpoblemi.svg yok — C atlandı)');
 
-/* dağıtarak sil: hücreler korunur, bölge boşalır */
+/* dağıtarak sil: hücreler korunur, bölge boşalır — C'nin planına yaslanır;
+   C atlandıysa (input/ yok, ör. CI) plan null → bu blok da atlanır (çökme değil) */
 {
-  const kor=plan.regions.find(g=>g.type==='koridor'&&g.cells.length);
+  const kor=(typeof plan!=='undefined'&&plan)?plan.regions.find(g=>g.type==='koridor'&&g.cells.length):null;
+  if(!kor) console.log('  (plan yok — C dağıt-sil atlandı)');
   if(kor && kor.cells.length>6){
     const depo=newRegRuntime('ORTAK DEPO','teknik');
     const moved=kor.cells.slice(0,4);
