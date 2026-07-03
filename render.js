@@ -147,7 +147,10 @@ function gardenLabelPos(){
 function drawWallEdgeMask(r){
   if(!(typeof wallBoundaryMode!=='undefined' && wallBoundaryMode)) svg.appendChild(el('rect',{x:0,y:0,width:r.width,height:r.height,fill:'#ffffff'})); // saf beyaz zemin (wallBoundaryMode'da ŞEFFAF → zemin çizilmez)
   const p=plan; if(!p) return;
-  const EW=Math.max(4,pxPerM*0.22);            // iç bölme = dış duvarla EŞİT kalınlık (AI ControlNet ince iç duvarı "açıklık" sanmasın); dış kabuk EW*1.6
+  /* L1-A1: duvar tipine göre GERÇEK kalınlık bant (eski "iç=dış eşitle" dilate hack'inin
+     kalıcı hali) — daireArasi/çekirdek kalın, iç bölme ince kalır; min 3px ControlNet görünürlüğü. */
+  const wcls=makeWallClassifier();
+  const wpx=type=>Math.max(3, wallThickM(type)*pxPerM);
   const g=el('g',{stroke:'#000','stroke-linecap':'square','shape-rendering':'crispEdges'}); svg.appendChild(g);
   const line=(x1,y1,x2,y2,w)=>g.appendChild(el('line',{x1,y1,x2,y2,'stroke-width':w}));
   const id=(rr,cc)=>(rr<0||cc<0||rr>=p.rows||cc>=p.cols||!p.inside[rr*p.cols+cc])?-9:p.cm[rr*p.cols+cc];
@@ -161,15 +164,15 @@ function drawWallEdgeMask(r){
     const x=p.minX+cc*M, y=p.minY+rr*M;
     const seg=(b,x1,y1,x2,y2)=>{ if(a===b) return;                         // aynı bölge → duvar yok
       if(b===-9 && !(onEdge(x1,y1)&&onEdge(x2,y2))) return;                 // eğik dış kenar → pts kapsar
-      line(W2Sx(x1),W2Sy(y1),W2Sx(x2),W2Sy(y2),EW); };
+      line(W2Sx(x1),W2Sy(y1),W2Sx(x2),W2Sy(y2), wpx(b===-9?'dis':wcls(a,b))); };
     seg(id(rr,cc+1), x+M,y, x+M,y+M);                 // sağ komşu (iç duvar ya da dış kabuk)
     seg(id(rr+1,cc), x,y+M, x+M,y+M);                 // alt komşu
     if(cc===0||id(rr,cc-1)===-9) seg(-9, x,y, x,y+M); // sol dış kabuk (iç sol duvar komşunun sağ taramasında çizilir)
     if(rr===0||id(rr-1,cc)===-9) seg(-9, x,y, x+M,y); // üst dış kabuk
   }
-  /* dış kabuk: bina sınır poligonu, en kalın siyah (eğik kenarlar dahil tüm sınırı tek sürekli çizgiyle kapatır) */
+  /* dış kabuk: bina sınır poligonu, dış cephe kalınlığı (eğik kenarlar dahil tüm sınırı tek sürekli çizgiyle kapatır) */
   if(pts.length) g.appendChild(el('path',{d:'M'+pts.map(q=>W2Sx(q.x)+','+W2Sy(q.y)).join('L')+(closed?'Z':''),
-    fill:'none',stroke:'#000','stroke-width':EW*1.6,'stroke-linejoin':'miter','shape-rendering':'crispEdges'}));
+    fill:'none',stroke:'#000','stroke-width':Math.max(4,wallThickM('dis')*pxPerM),'stroke-linejoin':'miter','shape-rendering':'crispEdges'}));
 }
 function render(){
   svg.innerHTML='';
@@ -285,7 +288,8 @@ function render(){
     const g=el('g',{}); svg.appendChild(g);
     let d='M'+pts.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
     if(closed) d+='Z';
-    g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?Math.max(3,pxPerM*0.22):2.5,'stroke-linejoin':'miter'}));
+    // L1-A1: bina dış cephe konturu = dış duvar kalınlığı bandı (pts merkez-çizgi, ±t/2; eğik cephede hücre basamağına değil pts'e hizalı kalır)
+    g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?Math.max(3,wallThickM('dis')*pxPerM):2.5,'stroke-linejoin':'miter'}));
     if(!plan||!closed) pts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#b35a2e','stroke-width':2})));
     if(!clean) polyDims(g, pts, closed, '#6b5e4d'); // dış kenar ölçüleri ("32 m"/"16 m") AI temiz modda yok
     /* --- FAZ 3: pencereler — bina sınırının yaşam odasına (salon/yatak/mutfak) komşu
@@ -352,7 +356,7 @@ function render(){
   /* balkonlar */
   if(closed && mode!=='site' && !clean && (balconies.length || (mode==='balkon'&&hoverBalk&&hoverBalk.ghost))){ /* balkon AI temiz modda çizilmez → kadraj kenar-maskesiyle birebir */
     const g=el('g',{}); svg.appendChild(g);
-    const wallW=plan?Math.max(3,pxPerM*0.22):2.5;
+    const wallW=plan?Math.max(3,wallThickM('dis')*pxPerM):2.5;   // L1-A1: balkon dış cepheye bağlanır → kapı boşluğu (wallW+1) dış duvar kalınlığından geniş kalsın
     const drawB=(b,ghost)=>{
       const q=balkQuad(b);
       g.appendChild(el('path',{d:'M'+q.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z',
@@ -491,15 +495,18 @@ function renderPlan(){
     const dot=(x-A.x)*(B.x-A.x)+(y-A.y)*(B.y-A.y), l2=(B.x-A.x)**2+(B.y-A.y)**2;
     if(dot>=-1e-9&&dot<=l2+1e-9) return true; } return false; };
   const walls=el('g',{stroke:'#2b2620','stroke-linecap':'square'}); gc.appendChild(walls);
+  const wcls=makeWallClassifier();   // L1-A1: hücre-sınırı segmentini duvar tipine sınıfla (dış/daireArasi/çekirdek/icBölme)
   for(let r=0;r<p.rows;r++)for(let c=0;c<p.cols;c++){
     const a=id(r,c); if(a===-9) continue;
     const x=p.minX+c*M, y=p.minY+r*M;
     const draw=(b,x1,y1,x2,y2)=>{ if(a!==b){
       const outer=(b===-9);
       if(outer && !(onEdge(x1,y1)&&onEdge(x2,y2))) return;
+      // L1-A1: duvar koşusu merkez-çizgi; stroke-width = gerçek kalınlık (±t/2 dolu bant, square linecap köşeleri doldurur).
+      // clean (AI boyama) modunda da GERÇEK kalınlık — eski "iç=dış eşitle" dilate hack'i kaldırıldı (daireArasi 0.20 zaten belirgin sinyal).
+      const t=wallThickM(outer?'dis':wcls(a,b))*pxPerM;
       walls.appendChild(el('line',{x1:W2Sx(x1),y1:W2Sy(y1),x2:W2Sx(x2),y2:W2Sy(y2),
-        // AI boyama (clean): iç duvar = dış duvarla EŞİT kalın (model ince duvarı açıklık sanıp mutfak/salonu açık-plan render etmesin). Teknik görünümde iç duvar İNCE kalır.
-        'stroke-width':outer?Math.max(2.5,pxPerM*0.22):(clean?Math.max(2.5,pxPerM*0.22):Math.max(1,pxPerM*0.07))})); } };
+        'stroke-width':Math.max((clean||outer)?2.5:1, t)})); } };
     draw(id(r,c+1), x+M,y, x+M,y+M);
     draw(id(r+1,c), x,y+M, x+M,y+M);
     if(c===0||id(r,c-1)===-9) draw(-9, x,y, x,y+M);
@@ -545,7 +552,8 @@ function renderPlan(){
                           : dr.kind==='inner' ? (dr.reg?dr.reg.id:null) : null;
       sw=drawSwing(e, Math.max(0.6,doorWidthM(dr)-0.1), tgt); }
     const Wd=doorWidthM(dr);   // kapı boşluğu (m): bina 1.5 / daire 1.0 / oda 0.9 / ıslak+balkon 0.8 — orta-nokta e+0.45
-    const gw=clean?Math.max(3,pxPerM*0.3):(dr.kind==='unit'?Math.max(2,pxPerM*0.2):Math.max(1.5,pxPerM*0.12)); // boşluk çizgisi (kalın iç duvardan GENİŞ → açıklık kapanmaz)
+    // boşluk çizgisi kalınlaşan duvardan GENİŞ olmalı (açıklık tam kapanmasın): L1-A1'de oyulan duvarın gerçek kalınlığına göre büyür.
+    const gw=Math.max(clean?Math.max(3,pxPerM*0.3):(dr.kind==='unit'?Math.max(2,pxPerM*0.2):Math.max(1.5,pxPerM*0.12)), wallThickM(doorWallType(dr))*pxPerM+1.5);
     if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.45-Wd/2),y1:W2Sy(e.y),x2:W2Sx(e.x+0.45+Wd/2),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':gw}));
     else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.45-Wd/2),x2:W2Sx(e.x),y2:W2Sy(e.y+0.45+Wd/2),stroke:'#faf8f3','stroke-width':gw}));
     if(dr.kind==='unit'){

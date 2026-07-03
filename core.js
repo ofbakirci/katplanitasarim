@@ -51,7 +51,20 @@ const REG = {
     railDerinlik:10.5,  // derinlik ≥10,5 → demiryolu planı (yataklar derinlikte katmanlanır)
     girisMinD:{oda:2.5, islak:2.0, taban:1.5}, // giriş şeridi asgari derinliği: yatak/merdiven itildiyse / ıslak-hacimli >45 m² / diğer
     govdeOran:0.45      // kulak algısı: gövde alanı < taban×0,45 → belirgin gövde yok, band düzeni
-  }
+  },
+  /* ── DUVAR KALINLIĞI (L1-A1, 2026-07-03) — tip bazlı, metre ───────────────────
+     Ortogonal duvar GÖRSEL/EXPORT katmanı: duvar koşusu MERKEZ-çizgi kabul edilir,
+     render ±t/2 dolu bant çizer. Hücre modeli / bölge alanları / layoutUnit / onarım
+     zinciri DEĞİŞMEZ → tests/snapshot-regression.js birebir kalır (kalınlık yalnız
+     çizim/export). Tip mevcut plandan türetilir (walls.js makeWallClassifier, doors.js
+     doorWallType — computeWallRuns unit/FIXED/isExt konvansiyonuyla tek kaynak):
+       dis        = bir yanı bina dışı (dış cephe)
+       daireArasi = iki yanda farklı bağımsız bölüm ya da hol sınırı
+       cekirdek   = bir yanı çekirdek (merdiven/asansör/yangın/teknik perde duvarı)
+       icBolme    = aynı daire iç oda bölmesi
+     Değerler TR pratiğine göre ÖNERİ — kullanıcı görsel üzerinden onaylar; tek tabloda
+     oldukları için sonradan ayar bedava. Brüt alan (L1-A2) bu paylardan türetilecek. */
+  duvar:{ dis:0.30, daireArasi:0.20, icBolme:0.10, cekirdek:0.25 }
 };
 /* ── Yangın / merdiven / asansör — çekirdek ölçü eşikleri ─────────────────────
    TEK DOĞRU KAYNAK: mesken/referans-kat-planlari/yangin-merdiven-kurallari.json

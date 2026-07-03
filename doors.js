@@ -35,6 +35,16 @@ function doorWidthM(dr){
   if(t==='banyo'||t==='wc'||t==='balkon') return 0.8;                  // ıslak hacim + balkon
   return 0.9;                                                          // oda ve iç mekan kapısı
 }
+/* L1-A1: kapının oyduğu DUVARIN tipi (REG.duvar kalınlığı) — kapı boşluğu bandı bu
+   kalınlıktan geniş çizilir ki kalınlaşan duvarı tam temizlesin. Kapı kind'ından türer
+   (makeWallClassifier ile uyumlu): bina/dükkan girişi=dış cephe, daire girişi=daire arası. */
+function doorWallType(dr){
+  if(!dr) return 'icBolme';
+  if(dr.kind==='ext')   return 'dis';                                  // bina ana girişi / dükkân (dış cephe)
+  if(dr.kind==='extra') return dr.ext ? 'dis' : 'icBolme';            // elle: dış giriş / iç kapı
+  if(dr.kind==='unit')  return 'daireArasi';                          // daire (bağımsız bölüm) girişi = hol sınırı
+  return 'icBolme';                                                    // inner: daire içi oda kapısı
+}
 function computeDoors(){
   const p=plan; if(!p) return [];
   const id=(r,c)=>(r<0||c<0||r>=p.rows||c>=p.cols)?-9:(p.inside[r*p.cols+c]?p.cm[r*p.cols+c]:-9);

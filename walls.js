@@ -99,6 +99,29 @@ function computeWallRuns(){
   hMap.forEach(e=>split(e,1)); vMap.forEach(e=>split(e,0));
   return runs.filter(rn=>rn.hi-rn.lo>=2); // en az 1 m'lik duvar parçası
 }
+/* L1-A1 DUVAR TİPİ SINIFLANDIRICI — iki bölge (a,b; -9=bina dışı) arasındaki duvarın
+   tipini mevcut plandan türetir → core.js REG.duvar kalınlık tablosuna anahtar. TEK
+   KAYNAK konvansiyon: computeWallRuns'ın FIXED (çekirdek) + unit/isExt mantığıyla birebir.
+   Bir kez kur (unitOf haritası), render/export döngüsünde çok kez çağır (ucuz kalsın).
+     dis        : bir yanı bina dışı (dış cephe)
+     cekirdek   : bir yanı çekirdek (merdiven/asansör/yangın/teknik)
+     daireArasi : iki yanda farklı bağımsız bölüm ya da hol sınırı (isExt konvansiyonu)
+     icBolme    : aynı daire iç oda bölmesi (ya da hol-hol) */
+function makeWallClassifier(){
+  const p=plan, unitOf=new Map();
+  if(p&&p.unitObjs) p.unitObjs.forEach((u,k)=>u.rooms.forEach(g=>unitOf.set(g.id,k)));
+  const FIXED=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik';
+  return (a,b)=>{
+    if(a===-9||b===-9) return 'dis';
+    const ta=p.regions[a]&&p.regions[a].type, tb=p.regions[b]&&p.regions[b].type;
+    if(FIXED(ta)||FIXED(tb)) return 'cekirdek';
+    const ka=unitOf.get(a), kb=unitOf.get(b);
+    if(ka!==kb) return 'daireArasi';   // farklı daire ya da hol sınırı
+    return 'icBolme';                  // aynı daire iç bölmesi
+  };
+}
+/* duvar tipi → kalınlık (m); REG.duvar yoksa güvenli varsayılan (ör. villa prototip erken çağrı) */
+function wallThickM(type){ const D=(typeof REG!=='undefined'&&REG.duvar)||{dis:0.30,daireArasi:0.20,icBolme:0.10,cekirdek:0.25}; return D[type]||D.icBolme; }
 function regConnected(g){
   if(g.cells.length<2) return g.cells.length>0;
   const p=plan, set=new Set(g.cells), st=[g.cells[0]], seen=new Set([g.cells[0]]);

@@ -14,12 +14,50 @@ haritası, CI hepsi hazır. L1-A tam da bu ağın üstüne kurulmak için beklet
 
 | Dilim | Durum | Commit | Not |
 |---|---|---|---|
-| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | SIRADA | — | |
+| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | KOD TAMAM — KULLANICI ONAYI BEKLIYOR | `957764a` | Aşağıdaki "L1-A1 bulgular" bölümüne bak. Snapshot BİREBİR, npm test 31/31, build OK, perf render fazı değişmedi (~16ms). Kalınlık DEĞERLERİ + görünüm onayı kullanıcının. |
 | **L1-A2** brüt/net alan | BEKLIYOR | — | |
 | **L1-A3** DXF yazıcı (export) | BEKLIYOR | — | |
 | **L1-A4** roundtrip + entegrasyon | BEKLIYOR | — | L1-A3 ile aynı oturum olabilir |
 
 Her oturum sonunda bu tabloyu güncelle (durum + hash + bulgu/kalanlar). Emoji kullanma.
+
+### L1-A1 bulgular (2026-07-03, Opus 4.8)
+
+**Model:** `core.js REG.duvar` = tip-bazlı kalınlık (m): `dis:0.30, daireArasi:0.20, icBolme:0.10,
+cekirdek:0.25` (öneri; son söz kullanıcının, tek tabloda → ayar bedava). Tip mevcut plandan türetilir:
+`walls.js makeWallClassifier()` (computeWallRuns unit/FIXED/isExt konvansiyonuyla TEK KAYNAK) — dış=bir
+yanı bina dışı, çekirdek=bir yanı merdiven/asansör/yangın/teknik, daireArasi=iki yanda farklı bağımsız
+bölüm ya da hol sınırı, icBolme=aynı daire iç bölmesi. `doors.js doorWallType(dr)` kapı kind'ından oyulan
+duvar tipini verir (ext→dış, unit→daireArasi, inner→icBölme).
+
+**Uygulama (4 tüketici, additive):**
+- **2B teknik (render.js renderPlan):** duvar segmenti merkez-çizgi → `stroke-width = t*pxPerM` (±t/2 dolu
+  bant; square linecap köşeleri doldurur). Kapı boşluğu bandı (`gw`) oyulan duvar kalınlığından geniş
+  (`+1.5`) → kalınlaşan duvarı tam temizler. Dış cephe konturu (pts path) = dış kalınlık.
+- **edges/paint export (render.js drawWallEdgeMask + clean dalı):** GERÇEK kalınlık — eski "iç duvarı dış'a
+  eşitle" dilate hack'i KALDIRILDI (daireArasi 0.20 zaten belirgin ControlNet sinyali; min 3px görünürlük).
+- **3B (view3d.js):** duvar/lentö/eşik mesh derinliği sabit `0.12` → `WALL_T=REG.duvar.daireArasi` (0.20).
+  Oda-kenarı başına kurulur, paylaşılan iç duvarlar çakışır → 3B'de tek temsili değer (2B tip-bazlı).
+  Kapı boşluğu oyma + lentö + eşik aynen çalışır.
+
+**SERT SINIR korundu:** hücre modeli / bölge alanları / layoutUnit / onarım zinciri / checks.js DEĞİŞMEDİ.
+`node tests/snapshot-regression.js` 7/7 BİREBİR (kalınlık salt görsel/export). `npm test` 31 dosya 0 hata
+(ai-temiz kadraj kenar-maskesiyle BİREBİR). `npm run build` OK (prototip'e REG.duvar+sınıflandırıcı indi).
+`KPTA_PROFILE` render fazı: deep-48x27 ~14-16ms, std ~6-7ms → A5 haritasıyla AYNI, patlama YOK
+(sınıflandırıcı Map render başına bir kez kurulur, ihmal).
+
+**Görsel doğrulama (canlı kabuk, ekran görüntüleri kullanıcıya sunuldu):** 2B teknik (dış cephe kalın bant,
+çekirdek/daire-arası orta, iç bölme ince, kapı boşlukları korunmuş) + edges (gerçek kalınlık, sürekli
+duvar) + paint (renkli dolgu+EN etiket+gerçek kalınlık+kapı boşluğu) + 3B (kalın duvar, kapı oyma). Konsol
+hatasız.
+
+**KULLANICI ONAYINA SUNULAN:** (1) kalınlık değerleri (0.30/0.20/0.10/0.25) uygun mu? (2) 2B/edges/paint/3B
+görünümü onaylanıyor mu? (3) İSTEĞE BAĞLI — mesken render reçetesi girdisi değişti (paint/edges gerçek
+kalınlık): eski örnekle yan yana bir ana-plan boyama render'ı (KREDİ: onay al, 1-2 render) istenirse üretilir
+(`mesken/tests_render/check.py`). C5-R dersi: görsel işlerde son kapı KULLANICI ONAYIDIR.
+
+**Kalınlık ayarı istenirse:** yalnız `core.js REG.duvar` tek satır değiştir → `npm run build`. Kayıt formatına
+girmez (global sabit); kullanıcı-başına özel kalınlık L1-B3'e ertelendi (brief tuzak notu).
 
 ---
 

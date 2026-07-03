@@ -10,6 +10,10 @@
   const THREE_URL = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
   const WALL_H = 2.7, FLOOR_T = 0.08, DOOR_H = 2.1;   // DOOR_H = kapı boşluğu yüksekliği (lentö altı)
   const WALL_LOW = 0.5;   // varsayılan duvar oranı: YARI yükseklik (dollhouse + hacim okunur). roofOn=tam.
+  // L1-A1: duvar mesh kalınlığı REG.duvar'dan (eski sabit 0.12). 3B duvarlar oda kenarı başına
+  // kurulur, paylaşılan iç duvarlar çakışır → tek temsili değer (daireArasi). Kapı boşluğu oyma
+  // + lentö + eşik aynen çalışır (yalnız kutu derinliği değişir). REG yoksa güvenli varsayılan.
+  const WALL_T = ((typeof REG!=='undefined' && REG.duvar && REG.duvar.daireArasi) || 0.20);
   let overlay, host, status, scene, cam, renderer, controls, raf, roofOn=false, lblOn=true;
   let threeLoading=null, built=false, zoomEl=null, zoomActive=false;
   // ── kamera-koyma modu (adım 4): raycaster ile zemine tıkla → kamera; çıktı plan-px uzayında ──
@@ -442,7 +446,7 @@
       });
       gaps.sort(function(p,q){return p[0]-q[0];});
       function seg(s0,s1){ if(s1-s0<0.04) return;
-        const wm=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,WALL_H,0.12),matWall);
+        const wm=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,WALL_H,WALL_T),matWall);
         wm.position.set(a[0]+ux*(s0+s1)/2, roofOn?WALL_H/2:WALL_H*WALL_LOW/2, a[1]+uz*(s0+s1)/2);
         wm.rotation.y=ang; wm.scale.y=roofOn?1:WALL_LOW;
         wm.castShadow=true; wm.userData.isWall=true; walls.add(wm);
@@ -450,9 +454,9 @@
       let s=0; gaps.forEach(function(g){ seg(s,g[0]); s=Math.max(s,g[1]); }); seg(s,len);
       gaps.forEach(function(g){
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
-        const th=new THREE.Mesh(new THREE.BoxGeometry(gw,0.04,0.2),matDoor);          // eşik: her açıdan "kapı burada"
+        const th=new THREE.Mesh(new THREE.BoxGeometry(gw,0.04,Math.max(0.2,WALL_T)),matDoor);  // eşik: her açıdan "kapı burada" (duvar kalınlığını kapsasın)
         th.position.set(mx,0.02,mz); th.rotation.y=ang; th.receiveShadow=true; th.userData.isSill=true; walls.add(th);
-        const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,0.12),matWall); // lentö: yalnız tam-yükseklikte görünür
+        const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,WALL_T),matWall); // lentö: yalnız tam-yükseklikte görünür
         ln.position.set(mx,(DOOR_H+WALL_H)/2,mz); ln.rotation.y=ang; ln.castShadow=true; lintels.add(ln);
       });
     }
