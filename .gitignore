@@ -10,3 +10,6 @@ kat-plani-tasarim.tekdosya.html
 design-system/
 mesken/
 render-debug/
+
+# L1-A örnek DXF çıktıları (yerel CAD kontrolü, web/git dışı)
+kat-plani-ornek-*.dxf

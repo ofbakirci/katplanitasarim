@@ -269,6 +269,7 @@ function restoreState(st, opt){
   document.getElementById('genBtn').disabled=false;
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
+  document.getElementById('dxfBtn').disabled=false;
   document.getElementById('aiOutputBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: içe aktarılan sınırın alan/çevresi (eski değer asılı kalmasın) */
@@ -301,6 +302,117 @@ function exportPNG(){
     const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='kat-plani.png'; a.click(); };
   img.src=data;
 }
+/* ============================================================================
+   L1-A3 — MİNİMAL DXF YAZICI (R12 / AC1009, harici lib YOK, offline)
+   ----------------------------------------------------------------------------
+   Kaynak geometri MEVCUT fonksiyonlardan (yeniden yazılmaz):
+     · oda poligonu   : fpSmoothOutline (dış cephe pts'e snap'li — io.js polygon_px
+                        deseniyle aynı; iç sınırlar basamaklı = bilinçli L1-A eşiği)
+     · iç duvarlar    : computeWallRuns + makeWallClassifier + wallThickM (efektif kalınlık)
+     · dış cephe duvarı: bina footprint'inin fpSmoothOutline'ı (LINE segmentleri)
+     · kapılar        : computeDoors span'ı (exportWallBoundaryPNG ile birebir: orta e+0.45)
+     · alan/etiket    : computeAreaTable (net+brüt) + label anchor (g.labelX/Y)
+   Katmanlar: A-AREA-<TİP> (kapalı POLYLINE oda), A-WALL (merkez-çizgi LINE),
+   A-WALL-EDGE (±t/2 kenar LINE), A-DOOR (boşluk LINE), A-TEXT (ad + net/brüt).
+   Birim: mm (m×1000); ekran Y aşağı → CAD Y yukarı için Y negatiflenir (dik görünür).
+
+   R12 TEMSİL KARARLARI (kodda gerekçeli):
+   1) Oda alanı = klasik POLYLINE/VERTEX/SEQEND (R12'de LWPOLYLINE YOK). POLYLINE
+      başlığına 10/20 KOYULMAZ — bizim import parser'ımız başlık noktasını hayalet
+      köşe sayar (io.js parseDxf setX). Köşeler yalnız VERTEX'lerde.
+   2) Duvar kalınlığı = ±t/2 iki AYRI kenar LINE (A-WALL-EDGE) — genişlikli POLYLINE
+      DEĞİL: R12 wide-polyline dolgusu harici görüntüleyicilerde tutarsız çizilir;
+      LINE her yerde birebir çizilir (en geniş uyumluluk). Dış cephe kalınlık kenarı
+      L1-B'ye ertelendi (mitered ofset; brutWallShare dürüstlük notuyla tutarlı).
+   3) Duvarlar A-WALL/A-WALL-EDGE hep LINE — çünkü import parser'ı kapı-DIŞI her
+      POLYLINE'ı ODA sayar; LINE'ı (kapı-dışı) yok sayar → duvarlar roundtrip'i kirletmez.
+   4) TÜRKÇE KARAKTER: R12 codepage'e bağlı (UTF-8 yok) → katman adları zaten ASCII
+      (tip anahtarları ASCII), TEXT oda adları ASCII'ye translitere edilir (dxfAscii);
+      $DWGCODEPAGE ansi_1254 yerine translit seçildi = harici görüntüleyicide her zaman
+      sağlam (codepage yorumuna bağımlı değil). Tip roundtrip'i KATMAN'dan gelir (ad
+      kozmetik) → translit tip eşleşmesini bozmaz. */
+function dxfAscii(s){
+  return String(s==null?'':s)
+    .replace(/İ/g,'I').replace(/ı/g,'i').replace(/Ş/g,'S').replace(/ş/g,'s')
+    .replace(/Ç/g,'C').replace(/ç/g,'c').replace(/Ö/g,'O').replace(/ö/g,'o')
+    .replace(/Ü/g,'U').replace(/ü/g,'u').replace(/Ğ/g,'G').replace(/ğ/g,'g')
+    .replace(/[^\x20-\x7E]/g,'?');
+}
+/* plandan tam DXF metni üretir (indirme YOK → headless roundtrip testi çağırabilir). */
+function buildDXF(){
+  if(typeof plan==='undefined' || !plan || !plan.regions) return null;
+  const cols=plan.cols, mnX=plan.minX, mnY=plan.minY;
+  const classify=(typeof makeWallClassifier==='function')?makeWallClassifier():null;
+  const areas=(typeof computeAreaTable==='function')?computeAreaTable():new Map();
+  const num=v=>{ let n=+(+v).toFixed(3); if(!isFinite(n)) n=0; if(Object.is(n,-0)) n=0; return String(n); };
+  const MX=x=>num(x*1000), MY=y=>num(-y*1000);   // m→mm, Y negatif (CAD yukarı)
+  const T=[]; const w=(code,val)=>{ T.push(String(code)); T.push(String(val)); };
+  /* footprint bbox (EXTMIN/EXTMAX + dış cephe için) */
+  let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9; const allCells=[];
+  plan.regions.forEach(g=>{ if(!g.cells) return; g.cells.forEach(i=>{ allCells.push(i);
+    const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r; if(r>r1)r1=r; if(c<c0)c0=c; if(c>c1)c1=c; }); });
+  if(!allCells.length) return null;
+  const wx0=mnX+c0*M, wx1=mnX+(c1+1)*M, wy0=mnY+r0*M, wy1=mnY+(r1+1)*M;
+  /* --- HEADER (R12) --- */
+  w(0,'SECTION'); w(2,'HEADER');
+  w(9,'$ACADVER'); w(1,'AC1009');
+  w(9,'$INSUNITS'); w(70,'4');                                    // 4 = mm (import parser bunu okur)
+  w(9,'$EXTMIN'); w(10,num(wx0*1000)); w(20,num(-wy1*1000)); w(30,'0.0');
+  w(9,'$EXTMAX'); w(10,num(wx1*1000)); w(20,num(-wy0*1000)); w(30,'0.0');
+  w(0,'ENDSEC');
+  /* --- ENTITIES --- */
+  w(0,'SECTION'); w(2,'ENTITIES');
+  const polyline=(layer,ring)=>{ if(!ring||ring.length<3) return;
+    w(0,'POLYLINE'); w(8,layer); w(66,'1'); w(70,'1');            // 66=vertices-follow, 70=1 kapalı; BAŞLIKTA 10/20 YOK
+    ring.forEach(p=>{ w(0,'VERTEX'); w(8,layer); w(10,MX(p[0])); w(20,MY(p[1])); });
+    w(0,'SEQEND'); w(8,layer); };
+  const line=(layer,x1,y1,x2,y2)=>{ w(0,'LINE'); w(8,layer);
+    w(10,MX(x1)); w(20,MY(y1)); w(11,MX(x2)); w(21,MY(y2)); };
+  const text=(layer,x,y,h,str)=>{ w(0,'TEXT'); w(8,layer);
+    w(10,MX(x)); w(20,MY(y)); w(40,num(h*1000)); w(1,dxfAscii(str));
+    w(72,'1'); w(11,MX(x)); w(21,MY(y)); };                       // 72=1 ortalı (hizalama noktası 11/21)
+  /* 1) oda alanı + AD etiketi (AD'ler ÖNCE gelir → import'ta bölge adı isabetli;
+        alan etiketi 2. geçişte, komşuya taşsa bile adı EZEMEZ: parser ilk-yazan-kazanır). */
+  plan.regions.forEach(g=>{ if(!g.cells||!g.cells.length) return;
+    const layer='A-AREA-'+dxfAscii(String(g.type||'oda').toUpperCase());
+    polyline(layer, fpSmoothOutline(g.cells, cols));
+    if(typeof g.labelX==='number')
+      text('A-TEXT', g.labelX, g.labelY, 0.3, g.name||String(g.type||'ODA').toUpperCase()); });
+  /* 2) alan etiketi (net/brüt) — AD etiketlerinden SONRA (yukarıdaki not) */
+  plan.regions.forEach(g=>{ if(!g.cells||!g.cells.length||typeof g.labelX!=='number') return;
+    const a=areas.get(g.id); if(!a) return;
+    const nf=v=>(+v).toFixed(1).replace('.',',');
+    text('A-TEXT', g.labelX, g.labelY+0.45, 0.2, 'NET '+nf(a.net)+' / BRUT '+nf(a.brut)+' m2'); });
+  /* 3) dış cephe duvarı — footprint outline'ı LINE segmentleri (POLYLINE olsa import ODA sanardı) */
+  const outer=fpSmoothOutline(allCells, cols);
+  for(let i=0;i<outer.length;i++){ const A=outer[i], B=outer[(i+1)%outer.length];
+    line('A-WALL', A[0], A[1], B[0], B[1]); }
+  /* 4) iç duvarlar — computeWallRuns merkez-çizgi + ±t/2 kenar (efektif kalınlık) */
+  const runs=(plan.wallRuns&&plan.wallRuns.length)?plan.wallRuns
+            :((typeof computeWallRuns==='function')?computeWallRuns():[]);
+  runs.forEach(rn=>{
+    const t=(typeof wallThickM==='function')?wallThickM(classify?classify(rn.a,rn.b):'icBolme'):0.1;
+    if(rn.horiz){ const y=mnY+rn.pos*M, x1=mnX+rn.lo*M, x2=mnX+rn.hi*M;
+      line('A-WALL', x1,y, x2,y);
+      line('A-WALL-EDGE', x1,y-t/2, x2,y-t/2); line('A-WALL-EDGE', x1,y+t/2, x2,y+t/2);
+    } else { const x=mnX+rn.pos*M, y1=mnY+rn.lo*M, y2=mnY+rn.hi*M;
+      line('A-WALL', x,y1, x,y2);
+      line('A-WALL-EDGE', x-t/2,y1, x-t/2,y2); line('A-WALL-EDGE', x+t/2,y1, x+t/2,y2); }
+  });
+  /* 5) kapılar — computeDoors boşluğu (span exportWallBoundaryPNG ile birebir) */
+  const doors=(typeof computeDoors==='function'?computeDoors():[]).filter(d=>d&&d.status==='ok'&&d.e);
+  doors.forEach(d=>{ const e=d.e, Wd=(typeof doorWidthM==='function')?doorWidthM(d):0.9;
+    if(e.h) line('A-DOOR', e.x+0.45-Wd/2, e.y, e.x+0.45+Wd/2, e.y);
+    else    line('A-DOOR', e.x, e.y+0.45-Wd/2, e.x, e.y+0.45+Wd/2); });
+  w(0,'ENDSEC'); w(0,'EOF');
+  return T.join('\n')+'\n';
+}
+function exportDXF(){
+  const dxf=buildDXF();
+  if(!dxf){ alert('Önce bir yerleşim oluşturun.'); return; }
+  fpDownload('kat-plani.dxf', dxf, 'image/vnd.dxf');
+}
+if(typeof window!=='undefined'){ window.buildDXF=buildDXF; }
 /* AI boyama (Higgsfield / nano-banana) tabanı — TEMİZ: SADECE oda dolgu rengi + net siyah
    duvar/oda sınırı + görünür kapı boşluğu + İngilizce oda etiketi. Düğüm/tutamaç, m² değerleri,
    duvar ölçüleri, D1–D6 rozetleri, grid, parsel/bahçe, balkon ve seçim/hover göstergeleri ÇİZİLMEZ.
@@ -919,6 +1031,7 @@ function exportAIOutput(){
 }
 document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
+document.getElementById('dxfBtn').onclick=exportDXF;
 document.getElementById('aiOutputBtn').onclick=exportAIOutput;
 
 /* ================= içe aktarma =================
@@ -1146,6 +1259,7 @@ function kpBuildPlanFromCells(geom){
   document.getElementById('genBtn').disabled=false;
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
+  document.getElementById('dxfBtn').disabled=false;
   document.getElementById('aiOutputBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: çözümlenen sınırın alan/çevresi */

@@ -15,6 +15,7 @@ const strictTests = [
   'tests/ticari-kat.js',
   'tests/import.js',
   'tests/dxf-import.js',
+  'tests/dxf-roundtrip.js',
   'tests/avlu-blok.js',
   'tests/wall-drag.js',
   'tests/koridor-daralt.js',

@@ -16,8 +16,8 @@ haritası, CI hepsi hazır. L1-A tam da bu ağın üstüne kurulmak için beklet
 |---|---|---|---|
 | **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | ONAYLANDI + kullanıcı-ayarlı eklendi | `1e9763b` + `759a5bc` | Görünüm kullanıcıca onaylandı. **Kalınlıklar artık KULLANICI-AYARLI** (mevzuat min. varsayılan, yalnız artırılabilir, katlanır non-intrusive UI). Snapshot BİREBİR, npm test 31/31, build OK. Aşağıdaki "L1-A1 bulgular" + "Kullanıcı-ayarlı kalınlık" bölümleri. |
 | **L1-A2** brüt/net alan | ONAYLANDI | `9e08007` | Net = areaOfCells (DEĞİŞMEZ, snapshot 7/7 birebir). Brüt = net + çevre duvar payı (dış TAM, komşu YARISI). Tablo iki değer + daire toplamı; export additive (`area_net_m2`/`area_brut_m2`, `area_m2`=net korundu); kalınlık UI canlı brüt tazeler; save/load tutarlı. Test `tests/brut-alan.js` yeşil (npm test 32 dosya). Aşağıdaki "L1-A2 bulgular" bölümü. **KARAR (kullanıcı, 2026-07-03): oda etiketi YALNIZ NET kalsın — brüt tabloda yeterli. `showBrutInLabel` default false (yani B varyantı kapalı) yürürlükte.** |
-| **L1-A3** DXF yazıcı (export) | BEKLIYOR | — | |
-| **L1-A4** roundtrip + entegrasyon | BEKLIYOR | — | L1-A3 ile aynı oturum olabilir |
+| **L1-A3** DXF yazıcı (export) | UYGULANDI, kullanıcı CAD onayı BEKLIYOR | `<HASH>` | Minimal R12/AC1009 yazıcı (`io.js buildDXF`/`exportDXF`, harici lib YOK). Katmanlar A-AREA-<TİP>/A-WALL/A-WALL-EDGE/A-DOOR/A-TEXT; birim mm; kaynak geometri MEVCUT fonksiyonlar (fpSmoothOutline + computeWallRuns + makeWallClassifier + wallThickM + computeDoors + computeAreaTable). "DXF indir" düğmesi eklendi. Snapshot 7/7 BİREBİR (export salt-okur). Aşağıdaki "L1-A3 bulgular". |
+| **L1-A4** roundtrip + entegrasyon | UYGULANDI, kullanıcı CAD onayı BEKLIYOR | `<HASH>` | `tests/dxf-roundtrip.js` (strict suite'e eklendi): buildDXF → mevcut dxf.js importer → hücre-tipi IoU + tip eşleşmesi. 3 plan: standart/L-şekil/villa hepsi **IoU=1.0000 + typeAcc=1.0000** (dikey-ayna modulo, aşağıya bkz). npm test 33 dosya, snapshot 7/7, build OK. Örnek DXF'ler diskte (kat-plani-ornek-*.dxf) → kullanıcı harici CAD'de açıp katman/ölçek/yazı doğrular. Aşağıdaki "L1-A4 bulgular". |
 
 Her oturum sonunda bu tabloyu güncelle (durum + hash + bulgu/kalanlar). Emoji kullanma.
 
@@ -129,6 +129,84 @@ her iki durumda da net+brüt taşır.
 (kat-plani-tasarim.html) eski `doors.js`'i (doorWallType'sız) yükleyip generate patladı. Doğru doğrulama
 yolu: `kat-plani-tasarim.tekdosya.html?cb=<ts>` (tek dosya, ayrı .js cache'i yok → `npm run build` sonrası
 taze). Memory `mobilya-sistemi` bunu zaten not ediyor.
+
+### L1-A3 bulgular (2026-07-03, Opus 4.8)
+
+**Yazıcı (`io.js buildDXF`):** plandan tam DXF metni üretir (indirme YOK → headless test çağırır);
+`exportDXF` = buildDXF + fpDownload('kat-plani.dxf'). Kaynak geometri YENİDEN YAZILMADI:
+- **oda alanı** = `fpSmoothOutline(g.cells)` (dış cephe pts'e snap'li — io.js polygon_px deseniyle
+  aynı; iç sınırlar basamaklı = bilinçli L1-A eşiği) → KAPALI POLYLINE (`A-AREA-<TİP>`).
+- **iç duvar** = `computeWallRuns` merkez-çizgi (`A-WALL` LINE) + `makeWallClassifier`→`wallThickM`
+  ile ±t/2 iki kenar LINE (`A-WALL-EDGE`, EFEKTİF kalınlık = kullanıcı override dahil).
+- **dış cephe duvarı** = footprint `fpSmoothOutline`'ı LINE segmentleri (`A-WALL`).
+- **kapı** = `computeDoors` boşluğu span'ı (`A-DOOR` LINE; orta e+0.45, genişlik doorWidthM —
+  exportWallBoundaryPNG ile birebir).
+- **etiket** = `A-TEXT`: oda adı (h=0.3 m) + "NET x,x / BRUT y,y m2" (h=0.2 m) label anchor'da
+  (`g.labelX/Y` polylabel; alan değerleri `computeAreaTable`).
+
+**R12 TEMSİL KARARLARI (kodda gerekçeli):**
+1. **Oda = klasik POLYLINE/VERTEX/SEQEND** (R12'de LWPOLYLINE YOK). POLYLINE başlığına 10/20
+   KONMAZ — kendi import parser'ımız (`parseDxf setX`) başlık noktasını hayalet köşe sayar; köşeler
+   yalnız VERTEX'lerde.
+2. **Duvar kalınlığı = ±t/2 iki AYRI kenar LINE** (genişlikli POLYLINE DEĞİL): R12 wide-polyline
+   dolgusu harici görüntüleyicilerde tutarsız; LINE her yerde birebir çizilir (en geniş uyumluluk).
+   Dış cephe mitered kalınlık kenarı L1-B'ye ertelendi (brutWallShare dürüstlük notuyla tutarlı).
+3. **Duvarlar HEP LINE (A-WALL/A-WALL-EDGE)** — çünkü import parser'ı kapı-dışı her POLYLINE'ı
+   ODA sayar; kapı-dışı LINE'ı yok sayar → duvarlar roundtrip'i KİRLETMEZ. (Dış cepheyi de bu yüzden
+   POLYLINE değil LINE segmentleriyle yazdım.)
+
+**TÜRKÇE KARAKTER KARARI:** **ASCII transliterasyon** seçildi (`dxfAscii`: İ→I, ş→s, ç→c, ö→o, ü→u,
+ğ→g, ı→i...), `$DWGCODEPAGE ansi_1254` DEĞİL. Gerekçe: R12 UTF-8 taşımaz, codepage'e bağlıdır; translit
+harici görüntüleyicide her zaman sağlam (codepage yorumuna bağımlı değil). Katman adları zaten ASCII
+(tip anahtarları). Tip roundtrip'i KATMAN'dan gelir → ASCII ad kozmetik, tip eşleşmesini bozmaz.
+Kanıt: buildDXF çıktısı `[^\x20-\x7E]` içermez (tarayıcı + test doğruladı).
+
+**Y EKSENİ:** ekran Y-aşağı → DXF/CAD Y-yukarı için Y NEGATİFLENİR (`MY=y=>-y*1000`), böylece CAD'de
+plan ekrandaki gibi DİK durur (üst üstte kalır). EXTMIN/EXTMAX buna göre. (Sonuç: bizim Y-naif
+importer'ımız aynı dosyayı geri okuduğunda plan DİKEY AYNA olur — bkz. L1-A4.)
+
+**Düğme:** "DXF indir" (`#dxfBtn`) SVG/PNG'nin yanına eklendi (aynı görsel dil, EMOJİ YOK, düz metin —
+kardeş düğmeler de ikonsuz). generate/kpBuildPlanFromCells/planner erken-dal + villa/tek-daire dallarının
+DÖRDÜNÜN de buton-aktifleştirme bloğuna eklendi (TUZAK: 4 ayrı `svgBtn.disabled=false` noktası var —
+`grep -rn "svgBtn').disabled=false" *.js`; ilk taramada planner.js'teki İKİSİ atlanmıştı, düğme generate
+sonrası pasif kalıyordu, tarayıcı doğrulamasında yakalandı). app.js reset düğmeyi pasifler.
+
+**Tarayıcı doğrulama (tekdosya?cb, canlı):** buildDXF 25.533 bayt; AC1009 + $INSUNITS=4(mm) + POLYLINE/
+SEQEND (LWPOLYLINE YOK) + 12 katman (A-AREA-*/A-WALL/A-WALL-EDGE/A-DOOR/A-TEXT) + saf ASCII + EOF; düğme
+generate ÖNCESİ pasif / SONRASI aktif; tıklama `kat-plani.dxf` blob indirmesini tetikledi. Konsol hatasız.
+
+### L1-A4 bulgular (2026-07-03, Opus 4.8)
+
+**Test (`tests/dxf-roundtrip.js`, strict suite):** ÜRETİM yazıcısı `buildDXF` → MEVCUT `dxf.js`
+importer (`importDxf`, rasterize eden; DOKUNULMADI) → hücre-tipi ızgarası occupied **IoU** + **tip
+eşleşmesi**. 3 plan tipi: standart apartman (80×24), L-şekil apartman (68×40), villa (32×28).
+
+**ÖLÇÜLEN:** üçünde de **IoU=1.0000** ve **typeAcc=1.0000** (39 assert geçti). Ayrıca kanıt assert'leri:
+AC1009, $INSUNITS=4, POLYLINE/SEQEND var + LWPOLYLINE yok, beklenen katmanlar, saf ASCII, import sonrası
+runChecks hatasız.
+
+**IoU EŞİĞİ = 0.95 (test guard'ı), ölçülen 1.0000.** Gerekçe (teste yorum): importer poligonları M=0,5 m
+ızgaraya YENİDEN rasterize eder (hücre-merkezi pip); eksen-hizalı planlarda fpSmoothOutline = fpCellOutline
+(ızgara-tam) → IoU 1; eğik cephe/rasterize yuvarlaması küçük kayıp bırakabilir → %100 GARANTİ değil, eşik
+0,95 (dxf.js olduğu gibi kullanıldığı için). typeAcc eşiği 0,90 (banyo/wc aynı renk kayması payı), ölçülen 1.
+
+**DİKEY-AYNA MODULO (önemli, kodda + burada belgeli):** buildDXF Y'yi negatifler (CAD dik). `dxf.js`
+importer Y-NAİF (koordinatı olduğu gibi okur) → reimport orijinalin DİKEY AYNASI olur. Bu KASITLI ve
+BİLİNEN: **DXF dosyası harici CAD için DOĞRU yönde**; roundtrip sadakati aynaya-göre ölçülür (importer'a
+DOKUNMADAN — brief SERT SINIR). Test referans ızgarayı `mirrorV` ile aynalayıp kıyaslar → IoU/typeAcc=1.
+(Importer'ın Y-naifliği ÖNCEDEN VAR olan bir eksik; brief "importer eksiği bulursan DÜZELTME, DURUM'a not
+düş" dedi → NOT: `dxf.js importDxf` Y eksenini çevirmiyor; profesyonel Y-yukarı DXF'leri içe aktarınca da
+dikey aynalar. L1-B/ayrı iş.)
+
+**Örnek DXF'ler (kullanıcı CAD onayı için, diskte, untracked):**
+`kat-plani-ornek-standart.dxf` (40×12 apartman, 25.533 bayt, 31 bölge),
+`kat-plani-ornek-Lsekil.dxf` (L apartman, 19.432 bayt, 20 bölge),
+`kat-plani-ornek-villa.dxf` (16×14 villa, 6.176 bayt, 8 bölge). KULLANICI ADIMI: harici CAD'de aç,
+katmanlar/ölçek/yazılar doğru mu? → **KULLANICI ONAYI BEKLIYOR** (C5-R: görsel/dış-format işinde son
+kapı kullanıcıdır).
+
+**SERT SINIR korundu:** hücre modeli / layoutUnit / checks.js / mevcut export alanları (area_m2=net dahil)
+DEĞİŞMEDİ; export salt-okur. `dxf.js` importer'ına DOKUNULMADI. Snapshot 7/7 BİREBİR.
 
 ---
 
