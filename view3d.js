@@ -134,17 +134,115 @@
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
     return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:'+s+';height:'+s+';display:inline-block;flex:none;vertical-align:-2px;cursor:inherit">'+(ICONS[name]||'')+'</svg>'; }
-  // B2-1: mobilya PALET küçük-resmi — üstten görünüş (kuşbakışı) şematik. FURN_DIM w/d oranıyla
-  //   minik dikdörtgen (+ ön-yön çizgisi). box 28×28, EMOJİ YOK, saf inline SVG. Kategori rengi çerçeve.
+  // 3B-UX-C2: mobilya PALET küçük-resmi — üstten görünüş (kuşbakışı) TANINABİLİR şematik glif.
+  //   Sözleşme (KORUNUR): w/d ORANI FURN_DIM'den gelir (parametrik, gliften bağımsız), ön-yön çizgisi
+  //   (+Z/alt kenar) kalır, box 28×28, tek tema rengi (#c9a16b + turuncu ön-yön vurgusu), EMOJİ YOK,
+  //   ince stroke/yuvarlak köşe, 3-6 çizgi (ikon, illüstrasyon değil). Bilinmeyen tip → düz kutu+ön-yön (fallback, DEĞİŞMEDİ).
+  const FURN_THUMB_STROKE='#c9a16b', FURN_THUMB_FILL='rgba(201,161,107,.28)', FURN_THUMB_ACCENT='#e0843a';
+  // ortak gövde+ön-yön çizgisi (her glif bunun üstüne ince detay ekler)
+  function ftBody(x,y,bw,bd,rx){
+    return '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bd+'" rx="'+(rx==null?1.5:rx)+'" fill="'+FURN_THUMB_FILL+'" stroke="'+FURN_THUMB_STROKE+'" stroke-width="1.2"/>';
+  }
+  function ftFront(x,y,bw,bd){
+    return '<line x1="'+x+'" y1="'+(y+bd)+'" x2="'+(x+bw)+'" y2="'+(y+bd)+'" stroke="'+FURN_THUMB_ACCENT+'" stroke-width="1.6"/>';
+  }
+  function ftLine(x1,y1,x2,y2,w){
+    return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+FURN_THUMB_STROKE+'" stroke-width="'+(w||1.1)+'" stroke-linecap="round"/>';
+  }
+  function ftRect(x,y,w,h,rx,fill){
+    return '<rect x="'+x+'" y="'+y+'" width="'+Math.max(0.5,w)+'" height="'+Math.max(0.5,h)+'" rx="'+(rx==null?1:rx)+'" fill="'+(fill||'none')+'" stroke="'+FURN_THUMB_STROKE+'" stroke-width="1.1"/>';
+  }
+  function ftCircle(cx,cy,r,fill){
+    return '<circle cx="'+cx+'" cy="'+cy+'" r="'+Math.max(0.4,r)+'" fill="'+(fill||'none')+'" stroke="'+FURN_THUMB_STROKE+'" stroke-width="1.1"/>';
+  }
+  // tip-aile → glif ekstra-içerik üretir (yerel x,y,bw,bd = gövde kutusu koordinatları). Ortak gövde+ön-yön
+  // furnThumb tarafından HER ZAMAN çizilir; buradaki fonksiyonlar yalnız AYIRT EDİCİ 2-5 iç çizgi ekler.
+  const FURN_GLYPH = {
+    // ── oturma: gövde zaten çizili, sırt şeridi (üst kenar) + kol şeritleri (yan kenarlar) ──
+    _seat: function(x,y,bw,bd,arms){
+      let s=ftLine(x+1,y+bd*0.28,x+bw-1,y+bd*0.28,1.1);           // sırt çizgisi (arkaya yakın)
+      if(arms){ s+=ftLine(x+bw*0.16,y+1,x+bw*0.16,y+bd-1,1.1)+ftLine(x+bw*0.84,y+1,x+bw*0.84,y+bd-1,1.1); } // kol çizgileri
+      return s;
+    },
+    // ── yatak: şilte zaten gövde; 1-2 yastık (üst kenar) + battaniye katlama çizgisi (alt üçte-bir) ──
+    _bed: function(x,y,bw,bd,pillows){
+      let s='';
+      const pw=bw/(pillows+ (pillows-1)*0.18 +0.36), gap=pw*0.18, py=y+bd*0.10, ph=bd*0.16;
+      for(let i=0;i<pillows;i++){ const px=x+bw*0.18+i*(pw+gap); s+=ftRect(px,py,pw,ph,1.4,'rgba(201,161,107,.18)'); }
+      s+=ftLine(x+2,y+bd*0.62,x+bw-2,y+bd*0.62,1);                // battaniye katlama çizgisi
+      return s;
+    }
+  };
+  const FURN_GLYPH_MAP = {
+    // oturma grubu
+    sofa_2: function(x,y,bw,bd){ return FURN_GLYPH._seat(x,y,bw,bd,true); },
+    sofa_3: function(x,y,bw,bd){ return FURN_GLYPH._seat(x,y,bw,bd,true); },
+    sectional_l: function(x,y,bw,bd){
+      // L: ana kol + kısa kanat (sağ yarı derinlik artışı okunur bbox oranından); sırt + iki kol
+      return FURN_GLYPH._seat(x,y,bw,bd,true)+ftLine(x+bw*0.62,y+1,x+bw*0.62,y+bd-1,1.1);
+    },
+    armchair: function(x,y,bw,bd){ return FURN_GLYPH._seat(x,y,bw,bd,true); },
+    pouf: function(x,y,bw,bd){ return ftCircle(x+bw/2,y+bd/2,Math.min(bw,bd)*0.22); },
+    coffee_table: function(x,y,bw,bd){ return ftRect(x+bw*0.16,y+bd*0.16,bw*0.68,bd*0.68,1); },
+    side_table: function(x,y,bw,bd){ return ftCircle(x+bw/2,y+bd/2,Math.min(bw,bd)*0.32); },
+    tv_unit: function(x,y,bw,bd){ return ftLine(x+bw*0.34,y+1,x+bw*0.34,y+bd-1,1)+ftLine(x+bw*0.67,y+1,x+bw*0.67,y+bd-1,1); },
+    tv: function(x,y,bw,bd){ return ftRect(x+bw*0.08,y+bd*0.15,bw*0.84,bd*0.55,1)+ftLine(x+bw/2,y+bd*0.70,x+bw/2,y+bd*0.92,1.3); },
+    bookcase: function(x,y,bw,bd){ let s=''; for(let i=1;i<4;i++){ const yy=y+bd*i/4; s+=ftLine(x+1,yy,x+bw-1,yy,1); } return s; },
+    console: function(x,y,bw,bd){ return ftLine(x+bw*0.5,y+1,x+bw*0.5,y+bd-1,1); },
+    rug: function(x,y,bw,bd){ return ftRect(x+bw*0.13,y+bd*0.13,bw*0.74,bd*0.74,2)+ftRect(x+bw*0.26,y+bd*0.26,bw*0.48,bd*0.48,1.5); },
+    // yemek
+    dining_table_4: function(x,y,bw,bd){ return ftLine(x+2,y+2,x+bw-2,y+2,1)+ftLine(x+2,y+bd-2,x+bw-2,y+bd-2,1); },
+    dining_table_6: function(x,y,bw,bd){ return ftLine(x+2,y+2,x+bw-2,y+2,1)+ftLine(x+2,y+bd-2,x+bw-2,y+bd-2,1)+ftLine(x+bw/2,y+2,x+bw/2,y+bd-2,0.9); },
+    dining_chair: function(x,y,bw,bd){ return FURN_GLYPH._seat(x,y,bw,bd,false); },
+    bistro_chair: function(x,y,bw,bd){ return FURN_GLYPH._seat(x,y,bw,bd,false); },
+    bistro_table: function(x,y,bw,bd){ return ftCircle(x+bw/2,y+bd/2,Math.min(bw,bd)*0.34); },
+    sideboard: function(x,y,bw,bd){ return ftLine(x+bw*0.33,y+1,x+bw*0.33,y+bd-1,1)+ftLine(x+bw*0.66,y+1,x+bw*0.66,y+bd-1,1); },
+    // yatak odası
+    bed_single: function(x,y,bw,bd){ return FURN_GLYPH._bed(x,y,bw,bd,1); },
+    bed_double: function(x,y,bw,bd){ return FURN_GLYPH._bed(x,y,bw,bd,2); },
+    bed_queen: function(x,y,bw,bd){ return FURN_GLYPH._bed(x,y,bw,bd,2); },
+    bed_king: function(x,y,bw,bd){ return FURN_GLYPH._bed(x,y,bw,bd,2); },
+    nightstand: function(x,y,bw,bd){ return ftLine(x+1,y+bd*0.5,x+bw-1,y+bd*0.5,1); },
+    wardrobe_2: function(x,y,bw,bd){ return ftLine(x+bw*0.5,y+1,x+bw*0.5,y+bd-1,1.1); },
+    wardrobe_3: function(x,y,bw,bd){ return ftLine(x+bw/3,y+1,x+bw/3,y+bd-1,1.1)+ftLine(x+2*bw/3,y+1,x+2*bw/3,y+bd-1,1.1); },
+    wardrobe_4: function(x,y,bw,bd){ let s=''; for(let i=1;i<4;i++){ const xx=x+bw*i/4; s+=ftLine(xx,y+1,xx,y+bd-1,1.1); } return s; },
+    dresser: function(x,y,bw,bd){ let s=''; for(let i=1;i<3;i++){ const yy=y+bd*i/3; s+=ftLine(x+1,yy,x+bw-1,yy,1); } return s; },
+    vanity: function(x,y,bw,bd){ return ftCircle(x+bw*0.78,y+bd*0.5,Math.min(bw,bd)*0.22); },
+    bench: function(x,y,bw,bd){ return ftLine(x+bw*0.15,y+2,x+bw*0.15,y+bd-2,1)+ftLine(x+bw*0.85,y+2,x+bw*0.85,y+bd-2,1); },
+    // mutfak
+    counter: function(x,y,bw,bd){ return ftLine(x+2,y+bd*0.3,x+bw-2,y+bd*0.3,1); },
+    island: function(x,y,bw,bd){ return ftRect(x+bw*0.2,y+bd*0.25,bw*0.6,bd*0.5,1); },
+    fridge: function(x,y,bw,bd){ return ftLine(x+bw*0.5,y+1,x+bw*0.5,y+bd-1,1.2)+ftLine(x+bw*0.2,y+bd*0.3,x+bw*0.2,y+2,1); },
+    oven_hob: function(x,y,bw,bd){ return ftCircle(x+bw*0.32,y+bd*0.4,Math.min(bw,bd)*0.16)+ftCircle(x+bw*0.68,y+bd*0.4,Math.min(bw,bd)*0.16); },
+    dishwasher: function(x,y,bw,bd){ return ftRect(x+bw*0.22,y+bd*0.22,bw*0.56,bd*0.56,1); },
+    sink: function(x,y,bw,bd){ return ftRect(x+bw*0.22,y+bd*0.2,bw*0.56,bd*0.42,1.3)+ftLine(x+bw*0.5,y+bd*0.2,x+bw*0.5,y+2,1); },
+    washer: function(x,y,bw,bd){ return ftCircle(x+bw/2,y+bd/2,Math.min(bw,bd)*0.3); },
+    // banyo
+    toilet: function(x,y,bw,bd){ return ftRect(x+bw*0.15,y+1,bw*0.7,bd*0.22,1)+ftCircle(x+bw/2,y+bd*0.62,Math.min(bw,bd*0.7)*0.42); },
+    washbasin: function(x,y,bw,bd){ return ftCircle(x+bw/2,y+bd*0.55,Math.min(bw,bd)*0.32)+ftLine(x+bw*0.5,y+bd*0.2,x+bw*0.5,y+bd*0.28,1); },
+    bathtub: function(x,y,bw,bd){ return ftRect(x+bw*0.1,y+bd*0.14,bw*0.8,bd*0.72,3); },
+    shower_tray: function(x,y,bw,bd){ return ftLine(x+2,y+2,x+bw*0.42,y+bd*0.42,1)+ftCircle(x+bw*0.42,y+bd*0.42,1.1,FURN_THUMB_STROKE); },
+    // giriş / çalışma
+    shoe_cabinet: function(x,y,bw,bd){ let s=''; for(let i=1;i<3;i++){ const yy=y+bd*i/3; s+=ftLine(x+1,yy,x+bw-1,yy,1); } return s; },
+    coat_rack: function(x,y,bw,bd){ const r=Math.min(bw,bd)*0.4; return ftCircle(x+bw/2,y+bd/2,r*0.28,FURN_THUMB_STROKE)+ftLine(x+bw/2,y+bd/2,x+bw/2,y+2,1)+ftLine(x+bw/2,y+bd/2,x+2,y+bd*0.35,1)+ftLine(x+bw/2,y+bd/2,x+bw-2,y+bd*0.35,1); },
+    desk: function(x,y,bw,bd){ return ftRect(x+bw*0.58,y+bd*0.12,bw*0.34,bd*0.76,1); },
+    office_chair: function(x,y,bw,bd){ return ftCircle(x+bw/2,y+bd/2,Math.min(bw,bd)*0.3)+ftLine(x+bw*0.5,y+bd*0.2,x+bw*0.5,y+1,1); },
+    plant: function(x,y,bw,bd){ const cx=x+bw/2, cy=y+bd*0.62, r=Math.min(bw,bd)*0.24;
+      return ftCircle(cx,cy,r)+ftLine(cx,cy-r,cx,y+1,1)+ftLine(cx,y+bd*0.2,cx-bw*0.22,y+1,1)+ftLine(cx,y+bd*0.2,cx+bw*0.22,y+1,1); }
+  };
+  // B2-1: mobilya PALET küçük-resmi — üstten görünüş (kuşbakışı) TANINABİLİR şematik SVG. FURN_DIM
+  //   w/d oranıyla dikdörtgen çerçeve (+ön-yön çizgisi, KORUNUR) üstüne tip-özel 2-5 iç çizgi eklenir
+  //   (FURN_GLYPH_MAP). Tanınmayan tip → düz kutu+ön-yön (fallback, DEĞİŞMEDİ). box 28×28, EMOJİ YOK.
   function furnThumb(type){
     const d=(typeof FURN_DIM!=='undefined'&&FURN_DIM[type])||{w:0.6,d:0.6};
     const w=d.w||0.6, dp=d.d||0.6, mx=Math.max(w,dp)||1;
     const bw=Math.max(6,Math.round(20*w/mx)), bd=Math.max(6,Math.round(20*dp/mx));
     const x=Math.round((28-bw)/2), y=Math.round((28-bd)/2);
     // ön yön = +Z (alt kenar) → küçük çizgi item'ın "önünü" işaretler (yataklarda baş ucu okunur)
+    const glyphFn=FURN_GLYPH_MAP[type];
+    const inner=glyphFn?glyphFn(x,y,bw,bd):'';
     return '<svg viewBox="0 0 28 28" style="width:28px;height:28px;display:block;pointer-events:none">'+
-      '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bd+'" rx="1.5" fill="rgba(201,161,107,.28)" stroke="#c9a16b" stroke-width="1.3"/>'+
-      '<line x1="'+x+'" y1="'+(y+bd)+'" x2="'+(x+bw)+'" y2="'+(y+bd)+'" stroke="#e0843a" stroke-width="1.6"/>'+
+      ftBody(x,y,bw,bd,1.5)+inner+ftFront(x,y,bw,bd)+
     '</svg>';
   }
 
