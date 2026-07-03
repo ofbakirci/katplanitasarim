@@ -24,6 +24,9 @@
   let camGizmos=null, raycaster=null, pickerWired=false;
   // ── katlanabilir panel: sağ kenarda ikon-rail + açılır çekmece (mesh'i örtmez) ──
   let activeGroup=null, lockedViewRef=null, onReRenderCb=null, angleDrift=false, lastHint='';
+  // A4: KUŞBAKIŞI KİLİDİ — kamera/mobilya grubunda varsayılan ÜST açı + döndürme kapalı (pan+zoom serbest).
+  //   topLocked: kilit açık mı · freeSavedView: kilit öncesi serbest açı (gruptan çıkınca / kilit açılınca geri gelir).
+  let topLocked=false, freeSavedView=null;
   // embedded = MESKEN akışı içinde açıldı (adım 2/4) → Kapat (X) YOK (3B kapatılan modal değil, bir adım).
   // standalone KPTA toolbar "3B" → embedded=false → Kapat X kalır (2B'ye dönüş için).
   let embedded=false;
@@ -143,6 +146,7 @@
           '<button data-camact="add" class="v3db v3dact">'+ic('plus',12)+'Ekle</button>'+
           '<button data-camact="aim" class="v3db v3dact" title="Bakış noktasına tıkla">'+ic('target',12)+'Yön</button>'+
           '<button data-camact="move" class="v3db v3dact" title="Yeni konuma taşı">'+ic('move',12)+'Taşı</button>'+
+          '<button data-v3d="camfocus" class="v3db" title="Seçiliye odakla (F)">'+ic('target',12)+'</button>'+
           '<button data-v3d="camdel" class="v3db v3ddanger" title="Seçili kamerayı sil">'+ic('trash',12)+'</button></div>'+
         '<div class="v3dlbl">Yükseklik</div>'+
         '<div style="display:flex;gap:4px"><button data-camh="low" class="v3db v3dh">Alçak</button><button data-camh="eye" class="v3db v3dh">Göz</button><button data-camh="high" class="v3db v3dh">Üst</button></div>'+
@@ -177,6 +181,7 @@
           '<div style="display:flex;gap:4px">'+
             '<button data-furnrot="-90" class="v3db" title="Sola 90°">'+ic('rotccw',12)+'</button>'+
             '<button data-furnrot="90" class="v3db" title="Sağa 90°">'+ic('rotcw',12)+'</button>'+
+            '<button data-v3d="furnfocus" class="v3db" title="Seçiliye odakla (F)">'+ic('target',12)+'Odakla</button>'+
             '<button data-v3d="furndel" class="v3db v3ddanger" title="Sil (Del / Backspace)">'+ic('trash',12)+'</button></div>'+
           '<div class="v3dlbl">Tip: boşken seç → zemine tıkla = EKLE · bir mobilya seçiliyken = onun tipini DEĞİŞTİR</div>'+
           '<div id="v3dFurnTypes">'+types+'</div>'+
@@ -213,7 +218,16 @@
     }
     if(activeGroup==='furniture'){ updateFurnPanel(); applyFurnModeUI(); setFurnHint(lastFurnHint); }
   }
-  function setGroup(g){ activeGroup=(activeGroup===g?null:g); renderRail(); renderDrawer(); }
+  function setGroup(g){
+    const prev=activeGroup;
+    activeGroup=(activeGroup===g?null:g);
+    // A4: kamera/mobilya grubuna GİRİŞ → varsayılan kuşbakışı kilidi (yumuşak). ÇIKIŞ → serbest açı geri.
+    const inLockGroup=(activeGroup==='camera'||activeGroup==='furniture');
+    const wasLockGroup=(prev==='camera'||prev==='furniture');
+    if(inLockGroup && !wasLockGroup) enterTopLock(true);       // serbest görünümden kilit grubuna → kilitle (serbest açıyı sakla)
+    else if(!inLockGroup && wasLockGroup) releaseTopLockToFree(); // kilit grubundan çıkış → serbest açı geri
+    renderRail(); renderDrawer(); updateLockBtn();
+  }
   // A2: persistent zoom bar (sağ-alt). overlay kurulunca BİR KEZ bağlanır; her render'da yeniden değil.
   function wireZoom(){
     const el=overlay&&overlay.querySelector('#v3dZoom'); if(!el) return; zoomEl=el;
@@ -304,6 +318,8 @@
       else if(a==='camprompreset'){ if(activeCamIdx>=0){ camList[activeCamIdx].promptEdited=false; updateCamRender(); } }   // prompt'u otomatiğe döndür
       else if(a==='camdel'){ if(activeCamIdx>=0) removeCam(activeCamIdx); }
       else if(a==='furnedit') toggleFurnMode();
+      else if(a==='furnfocus'){ if(activeFurnIdx>=0) focusFurn(activeFurnIdx); }   // A3: seçili mobilyaya odakla
+      else if(a==='camfocus'){ if(activeCamIdx>=0) focusCam(activeCamIdx); }        // A3: seçili kameraya odakla
       else if(a==='furndel'){ if(activeFurnIdx>=0) removeFurn(activeFurnIdx); }
       else if(a==='furnclear') clearFurn();
       else if(a==='furnauto') autoFurnishAll();
@@ -367,8 +383,9 @@
       if(radiusTarget==null) radiusTarget=sph.radius; radiusTarget=clampD(radiusTarget);
       sph.radius+=(radiusTarget-sph.radius)*c.zoomDamp; sph.radius=clampD(sph.radius);  // damped zoom
       applyTargetTween();                                     // A3/A4: hedef yumuşak geçişi (aktifse target'ı çeker)
-      c.target.add(panOff); off.setFromSpherical(sph).applyQuaternion(qi);
-      o.position.copy(c.target).add(off); o.lookAt(c.target);
+      c.target.add(panOff);
+      if(vtActive){ applyViewTween(); }                       // A4: açı tween'i aktifse KAMERA konumunu o sürer (pan yine target'a uygulandı)
+      else { off.setFromSpherical(sph).applyQuaternion(qi); o.position.copy(c.target).add(off); o.lookAt(c.target); }
       if(c.enableDamping){ sphD.theta*=(1-c.dampingFactor); sphD.phi*=(1-c.dampingFactor); panOff.multiplyScalar(1-c.panDamp); }
       else { sphD.set(0,0,0); panOff.set(0,0,0); }
     };
@@ -384,6 +401,28 @@
     c.getDistance=function(){ return o.position.distanceTo(c.target); };
     c.getDistanceTarget=function(){ return radiusTarget==null?c.getDistance():radiusTarget; };
     c.setDistanceTarget=function(r){ radiusTarget=clampD(r); };
+    // A4: kamera açısını YUMUŞAK tween'le kuşbakışına (ya da kaydedilmiş açıya) taşı. Mesafe KORUNUR.
+    // phiEnd: hedef polar açı (kuşbakışı ~0.02 rad = neredeyse tepeden). thetaEnd: azimut (verilirse).
+    let vtActive=false, vtT0=0, vtMs=NAV.tweenMs, vtPhi0=0, vtPhi1=0, vtHasTheta=false, vtTheta0=0, vtTheta1=0;
+    function currentSph(){ const q2=new THREE.Quaternion().setFromUnitVectors(o.up,new THREE.Vector3(0,1,0));
+      const off=new THREE.Vector3().copy(o.position).sub(c.target).applyQuaternion(q2); const s=new THREE.Spherical().setFromVector3(off); return s; }
+    c.tweenToAngle=function(phiEnd, thetaEnd, ms){ const s=currentSph();
+      vtPhi0=s.phi; vtPhi1=Math.max(0.01,Math.min(c.maxPolarAngle,phiEnd));
+      vtHasTheta=(thetaEnd!=null); vtTheta0=s.theta; vtTheta1=(thetaEnd!=null?thetaEnd:s.theta);
+      vtMs=(ms!=null?ms:NAV.tweenMs); vtT0=(typeof performance!=='undefined'?performance.now():Date.now()); vtActive=true; sphD.set(0,0,0); };
+    c.cancelViewTween=function(){ vtActive=false; };
+    c.isViewTweening=function(){ return vtActive; };
+    function applyViewTween(){ if(!vtActive) return;
+      const now=(typeof performance!=='undefined'?performance.now():Date.now()), k=vtMs>0?Math.min(1,(now-vtT0)/vtMs):1;
+      const e=k<0.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+      const s=currentSph();                                   // mevcut radius/theta'yı koru, phi'yi (ve gerekiyorsa theta'yı) sür
+      s.phi=vtPhi0+(vtPhi1-vtPhi0)*e; if(vtHasTheta) s.theta=vtTheta0+(vtTheta1-vtTheta0)*e; s.makeSafe();
+      const q2=new THREE.Quaternion().setFromUnitVectors(o.up,new THREE.Vector3(0,1,0));
+      const qi=(q2.clone().invert?q2.clone().invert():q2.clone().inverse());
+      const off=new THREE.Vector3().setFromSpherical(s).applyQuaternion(qi);
+      o.position.copy(c.target).add(off); o.lookAt(c.target);
+      if(k>=1) vtActive=false;
+    }
     // konum dışarıdan set edildiyse (setView/fit) hedefi mevcut mesafeye sabitle + atalet sıfırla
     c.sync=function(){ radiusTarget=clampD(o.position.distanceTo(c.target)); sphD.set(0,0,0); panOff.set(0,0,0); c.cancelTween(); };
     function pan(dx,dy){ const off=new THREE.Vector3().copy(o.position).sub(c.target),
@@ -576,6 +615,61 @@
     controls.target.copy(target);
     cam.position.copy(target).addScaledVector(dir, d);
     cam.updateProjectionMatrix(); controls.sync(); controls.update();
+  }
+  // ── A3: SEÇİLİYE ODAKLAN — controls hedefini seçilen objenin dünya konumuna kısa/yumuşak tween'le kaydır.
+  //   Zoom mesafesi DEĞİŞMEZ (yalnız bakış noktası). Kilit sürerken de çalışır (pan serbest).
+  //   Mobilya: furnList[i].pos MUTLAK metre → dünya = pos-(cx,cz). Kamera: camList[i].pos zaten dünya.
+  function focusOnWorld(wx,wy,wz){ if(!controls) return; controls.tweenTarget({x:wx,y:(wy!=null?wy:0.6),z:wz}); }
+  function focusFurn(i){ if(i<0||i>=furnList.length) return; const f=furnList[i];
+    focusOnWorld(f.pos.x-(scene.__cx||0), 0.5, f.pos.z-(scene.__cz||0)); }
+  function focusCam(i){ if(i<0||i>=camList.length) return; const c=camList[i];
+    const t=c.target||c.pos; focusOnWorld(t.x, (c.pos&&c.pos.y!=null?c.pos.y:0.6), t.z); }   // kameranın BAKTIĞI noktaya odaklan (yoksa konumuna)
+  // klavye F / panel düğmesi: hangi grup aktifse onun seçilisine odakla
+  function focusSelected(){
+    if(furnMode && activeFurnIdx>=0){ focusFurn(activeFurnIdx); setFurnHint('Seçiliye odaklanıldı (F)'); return true; }
+    if(camUIEnabled && activeCamIdx>=0){ focusCam(activeCamIdx); setHint('Seçili kameraya odaklanıldı (F)'); return true; }
+    return false;
+  }
+  // ── A4: KUŞBAKIŞI KİLİDİ mekanizması ──────────────────────────────────────────────
+  // TOP_PHI: kilit polar açısı. Tam 0 (dik tepeden) yerine ~89° (0.02 rad değil, hafif 88-89°)
+  //   istendi → hafif eğik değil, "neredeyse tepeden" ama kesin dik-değil ki derinlik ipucu kalsın.
+  const TOP_PHI=0.055;   // ~3.15° eğim (neredeyse tepeden; kullanıcı "üst açıya kitlense" + "89°")
+  function lockBtnEl(){ return overlay&&overlay.querySelector('#v3dLockBtn'); }
+  // kilit düğmesi yalnız kamera/mobilya grubunda görünür; ikon/başlık kilit durumuna göre.
+  function updateLockBtn(){
+    const b=lockBtnEl(); if(!b) return;
+    const inGroup=(activeGroup==='camera'||activeGroup==='furniture');
+    b.style.display=inGroup?'flex':'none';
+    if(!inGroup) return;
+    b.innerHTML=ic(topLocked?'lock':'lockopen',18);
+    b.title=topLocked?'Kuşbakışı kilitli — aç (serbest döndür)':'Serbest — kuşbakışına kilitle';
+    b.style.background=topLocked?'#c9a16b':'rgba(34,34,40,.94)';
+    b.style.color=topLocked?'#1a1a1f':'#c9b79a';
+  }
+  // kuşbakışına kilitle: mevcut serbest açıyı sakla → üst açıya yumuşak tween + döndürme kapat (pan+zoom serbest).
+  function enterTopLock(saveFree){
+    if(!controls||!cam) return;
+    if(saveFree && !topLocked) freeSavedView=getView();     // kilit ÖNCESİ serbest açı (yalnız serbestten girişte sakla)
+    topLocked=true; controls.noRotate=true;
+    cam.up.set(0,1,0);                                       // top-lock'ta dünya-yukarı sabit (setView('top') -Z up kullanır; orbit ile karışmasın)
+    controls.tweenToAngle(TOP_PHI, undefined, NAV.tweenMs);  // mevcut mesafe/azimut korunur, yalnız tepeye eğ
+    updateLockBtn();
+  }
+  // kilidi aç: döndürme serbest; KALDIĞIN açıdan devam (snap YOK — tween'i durdur, mevcut poz kalsın).
+  function exitTopLock(){
+    if(!controls) return; topLocked=false; controls.noRotate=false;
+    if(controls.cancelViewTween) controls.cancelViewTween();
+    if(controls.sync) controls.sync();                      // mevcut pozu hedef-mesafeye sabitle (atalet sıfır)
+    updateLockBtn();
+  }
+  // düğme: kilitliyse aç · değilse kuşbakışına dön + kilitle (kullanıcı kararı: gruba her girişte varsayılan kilitli)
+  function toggleTopLock(){ if(topLocked) exitTopLock(); else enterTopLock(true); }
+  // gruptan çıkınca (view/izleme): kilit KALKAR, önceki serbest açı geri gelir.
+  function releaseTopLockToFree(){
+    if(!topLocked && !freeSavedView) { updateLockBtn(); return; }
+    topLocked=false; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); }
+    if(freeSavedView){ restoreView(freeSavedView); if(controls) fitView(); freeSavedView=null; }   // serbest açıyı geri yükle, kadrajı koru
+    updateLockBtn();
   }
   function applyRoof(){ if(!scene||!scene.__walls) return;
     scene.__walls.children.forEach(function(w){ if(w.userData.isWall){ w.scale.y=roofOn?1:WALL_LOW;
@@ -1002,6 +1096,13 @@
     el.addEventListener('wheel',function(e){ if(furnMode && activeFurnIdx>=0){ const f=furnList[activeFurnIdx], st=e.shiftKey?1:5;
       f.rot_deg=((((f.rot_deg||0)+(e.deltaY<0?st:-st))%360)+360)%360; f.source='manual'; f.locked=true; renderFurniture(); schedulePersist(); } }, {passive:true});
     window.addEventListener('keydown', onFurnKey);
+    // A3: F = seçiliye odakla (mobilya ya da kamera grubu). Form alanı odaktayken yut; 3B kapalıyken karışma.
+    window.addEventListener('keydown', function(e){
+      if(e.key!=='f'&&e.key!=='F') return; if(e.ctrlKey||e.metaKey||e.altKey) return;
+      if(overlay&&overlay.style.display==='none') return;
+      const t=e.target, tag=t&&t.tagName; if(t&&(t.isContentEditable||tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')) return;
+      if(focusSelected()) e.preventDefault();
+    });
   }
   function logRoom(c){                                     // DOĞRULAMA: oda ortasına koyunca room_id o oda mı?
     const map=scene&&scene.__map; if(!map||typeof window.cameraViewInfo!=='function') return;
@@ -1095,10 +1196,15 @@
   // ── kamera-modu UI yardımcıları (overlay paneli; standalone test). Prototip adım 4 setPlaceMode/exportCameras ile sürer ──
   // camUIEnabled: bölümü AÇ/KAPAT — adım 2 (salt 3B) hiç göstermez, adım 4 gösterir (#1)
   function setCamUI(on){
+    const wasLockGroup=(activeGroup==='camera'||activeGroup==='furniture');
     camUIEnabled=!!on;
     if(camUIEnabled) activeGroup='camera';                                   // adım 4 → kamera çekmecesi açık başlar
     else { if(activeGroup===null||activeGroup==='camera') activeGroup='view'; setPlaceMode(false); }
-    renderRail(); renderDrawer(); renderCamGizmos();
+    // A4: kamera grubuna giriş → varsayılan kuşbakışı kilidi (setGroup dışı yol; setCamUI doğrudan activeGroup set eder)
+    const inLockGroup=(activeGroup==='camera'||activeGroup==='furniture');
+    if(inLockGroup && !wasLockGroup) enterTopLock(true);
+    else if(!inLockGroup && wasLockGroup) releaseTopLockToFree();
+    renderRail(); renderDrawer(); renderCamGizmos(); updateLockBtn();
   }
   function applyPlaceModeUI(){
     if(!overlay) return;
@@ -1137,7 +1243,8 @@
     if(placeMode && placeAction==='add') placeAction='aim';   // seçince düzenlemeye geç
     const c=camList[i]; camHeight=c.height||'eye'; camLens=c.lens||24;
     renderCamGizmos(); applyPlaceModeUI();
-    setHint('Kamera '+(i+1)+' seçili · Yön / Taşı ya da zemine tıkla');
+    focusCam(i);                                            // A3: seçince hedefi kameranın baktığı noktaya kaydır (mesafe sabit)
+    setHint('Kamera '+(i+1)+' seçili · Yön / Taşı ya da zemine tıkla · F odakla');
   }
   // çip × → seçimi bırak (kamerayı SİLMEZ; silme rail'deki çöp kutusu = data-v3d="camdel")
   function deselectCam(){
@@ -1396,7 +1503,8 @@
     if(furnMode && furnAction==='add') furnAction='move';   // seçince düzenlemeye geç
     const f=furnList[i];
     renderFurniture(); applyFurnModeUI();
-    setFurnHint((FURN_TR[f.type]||f.type)+' seçili · Taşı / döndür / tip / sil');
+    focusFurn(i);                                            // A3: seçince hedefi mobilyaya kısa tween'le kaydır (mesafe sabit)
+    setFurnHint((FURN_TR[f.type]||f.type)+' seçili · Taşı / döndür / tip / sil · F odakla');
   }
   function removeFurn(i){
     if(i<0||i>=furnList.length) return; furnSnapshot();
@@ -2118,7 +2226,8 @@
     if(onReRenderCb){ try{ onReRenderCb(getView()); }catch(e){} }
     lockedViewRef=getView(); angleDrift=false; updateAngleWarn();   // yeni açı = yeni kilit
   }
-  function close(){ if(overlay) overlay.style.display='none'; setPlaceMode(false); }
+  function close(){ if(overlay) overlay.style.display='none'; setPlaceMode(false);
+    topLocked=false; freeSavedView=null; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); } }   // A4: kilit durumunu temizle
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();} }
   function loop(){ raf=requestAnimationFrame(loop);
