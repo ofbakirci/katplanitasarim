@@ -15,7 +15,7 @@ haritası, CI hepsi hazır. L1-A tam da bu ağın üstüne kurulmak için beklet
 | Dilim | Durum | Commit | Not |
 |---|---|---|---|
 | **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | ONAYLANDI + kullanıcı-ayarlı eklendi | `1e9763b` + `759a5bc` | Görünüm kullanıcıca onaylandı. **Kalınlıklar artık KULLANICI-AYARLI** (mevzuat min. varsayılan, yalnız artırılabilir, katlanır non-intrusive UI). Snapshot BİREBİR, npm test 31/31, build OK. Aşağıdaki "L1-A1 bulgular" + "Kullanıcı-ayarlı kalınlık" bölümleri. |
-| **L1-A2** brüt/net alan | BEKLIYOR | — | |
+| **L1-A2** brüt/net alan | UYGULANDI — ETİKET GÖSTERİMİ KULLANICI ONAYI BEKLIYOR | (commit hash bu satır işlenince) | Net = areaOfCells (DEĞİŞMEZ, snapshot 7/7 birebir). Brüt = net + çevre duvar payı (dış TAM, komşu YARISI). Tablo iki değer + daire toplamı; export additive (`area_net_m2`/`area_brut_m2`, `area_m2`=net korundu); kalınlık UI canlı brüt tazeler; save/load tutarlı. Test `tests/brut-alan.js` yeşil (npm test 32 dosya). Aşağıdaki "L1-A2 bulgular" bölümü. **Bekleyen: oda ETİKETİNE brüt yazılsın mı** (`showBrutInLabel`, iki varyant ekran görüntüsü sunuldu). |
 | **L1-A3** DXF yazıcı (export) | BEKLIYOR | — | |
 | **L1-A4** roundtrip + entegrasyon | BEKLIYOR | — | L1-A3 ile aynı oturum olabilir |
 
@@ -86,6 +86,48 @@ ayrı; bu yalnız küçük bir alan.
 **ControlNet/paint render:** kullanıcı "deprecated, kullanmıyoruz, elleme hiç" dedi → önerdiğim paralı
 paint-render kıyası İPTAL. Önceki commit'in edges/paint export kalınlık değişikliği (test yeşil, kullanılmayan
 yol) yerinde; o pipeline'a bundan sonra dokunulmaz.
+
+### L1-A2 bulgular (2026-07-03, Opus 4.8)
+
+**Model (walls.js):** iki yeni yardımcı — `brutWallShare(g, classify)` bir odanın çevre-duvar payını
+(m²) döndürür; `computeAreaTable()` tüm canlı bölgeler için `id→{net,brut}` haritası kurar. KONVANSİYON
+(kodda belgeli): dış cephe duvarı odaya TAM (t), komşu duvar (daireArasi/cekirdek/icBolme) YARISI (t/2)
+→ daire toplamında dış tam, ortak yarı; aynı-daire iç bölmesi iki odaya t/2+t/2 = tam (çift değil).
+Kalınlık = `wallThickM(tip)` EFEKTİF değer (kullanıcı override DAHİL; REG.duvar doğrudan okunmaz).
+Duvar tipi `makeWallClassifier()`'dan (L1-A1 ile aynı tek kaynak). YAKLAŞIK-DOĞRU (ortogonal): köşe
+t×t karesi ihmal (perimetre×kalınlık); tam-sadık ofset L1-B'de — kodda not düşüldü.
+
+**Tüketiciler (additive):**
+- **Tablo (render.js buildUnitTable):** oda satırında net esas + `brüt X` küçük/soluk alt-değer;
+  daire başlığında net toplam + `brüt Y m²`. `styles.css .brut`. `computeAreaTable()` tablo başına bir
+  kez.
+- **Export (io.js fpRegionGeom):** `area_m2` = NET olarak AYNEN KALIR (mevcut sözleşme/testler bunu
+  okur); `area_net_m2` + `area_brut_m2` eklendi. `buildFloorplanMap` sınıflandırıcıyı bir kez kurup
+  oda + ortak alanlara geçirir.
+- **Kalınlık UI (app.js #wtSec handler):** değişince artık `buildUnitTable()` DE çağırır (önce yalnız
+  render vardı) → dış duvarı kalınlaştırınca brüt CANLI büyür, NET sabit kalır. generate YOK (ucuz).
+- **Oda etiketi (render.js):** VARSAYILAN net-only (değişmedi). `showBrutInLabel` (io.js global, default
+  false) açılırsa etikete `net X / brüt Y m²` yazılır — AYRI deneme; render başına bir kez `computeAreaTable`.
+
+**MEVZUAT/SERT SINIR:** checks.js, hücre modeli, layoutUnit, onarım zinciri DEĞİŞMEDİ. Mevzuat NET
+üzerinden (PAİY piyes ölçüleri). Brüt yalnız bilgi/rapor/export.
+
+**Doğrulama:** `tests/snapshot-regression.js` 7/7 BİREBİR (net değişmedi). `tests/brut-alan.js` YENİ
+(strict suite'e eklendi): area_m2===area_net_m2 her odada; brüt>net her odada; dış cepheli oda farkı iç
+odadan büyük; dış override 0.30→0.60 brüt artar / net birebir sabit. `npm test` 32 dosya 0 hata.
+`npm run build` OK (prototip'e indi). Tarayıcı (tekdosya, canlı): tablo iki değer; wtDis 0.30→0.55 brüt
+152,75→159 (net 138,75 sabit); save/load `{icBolme:0.25}` roundtrip tablo birebir; export area_m2=net +
+area_brut_m2 eklendi. Konsol hatasız.
+
+**KULLANICI ONAYINA SUNULAN:** oda ETİKETİNDE brüt gösterimi (iki ekran görüntüsü): (A) VARSAYILAN =
+etikette yalnız net (temiz); (B) `showBrutInLabel` = `net/brüt` — büyük odada okunur AMA küçük odada
+(çekirdek/antre/EB banyo) metin çakışıyor (brief'in öngördüğü sığma sorunu). Tablo + export her iki
+varyantta da net+brüt taşır. Seçim kullanıcının (C5-R dersi: görselde son söz kullanıcı).
+
+**Tarayıcı notu (tuzak):** `python http.server` .js dosyalarını tarayıcı agresif cache'liyor → kabuk
+(kat-plani-tasarim.html) eski `doors.js`'i (doorWallType'sız) yükleyip generate patladı. Doğru doğrulama
+yolu: `kat-plani-tasarim.tekdosya.html?cb=<ts>` (tek dosya, ayrı .js cache'i yok → `npm run build` sonrası
+taze). Memory `mobilya-sistemi` bunu zaten not ediyor.
 
 ---
 

@@ -34,17 +34,21 @@ function buildUnitTable(){
   if(!plan||!plan.unitObjs.length){ t.style.display='none'; return; }
   t.style.display='flex';
   body.innerHTML='';
+  // L1-A2: net (piyes/mevzuat esas) + brüt (çevre duvar payı dahil, bilgi). Bir kez hesapla.
+  const AT=(typeof computeAreaTable==='function')?computeAreaTable():new Map();
+  const aOf=g=>AT.get(g.id)||{net:g.area,brut:g.area};
   plan.unitObjs.forEach((u,k)=>{
     if(!u.rooms.some(g=>g.cells.length)) return;   // silinmiş (komşuya katılmış) daire
-    const tot=u.rooms.reduce((s,g)=>s+g.area,0);
+    const live=u.rooms.filter(g=>g.cells.length);
+    const totNet=live.reduce((s,g)=>s+aOf(g).net,0), totBrut=live.reduce((s,g)=>s+aOf(g).brut,0);
     const d=document.createElement('div'); d.className='utUnit';
-    let rows=u.rooms.filter(g=>g.cells.length).map(g=>
-      `<tr data-reg="${g.id}"><td>${escapeHtml(g.name)}</td><td class="num">${fmt(g.bw)} × ${fmt(g.bh)}</td><td class="num">${fmt(g.area)} m²</td></tr>`).join('');
+    let rows=live.map(g=>{ const a=aOf(g);
+      return `<tr data-reg="${g.id}"><td>${escapeHtml(g.name)}</td><td class="num">${fmt(g.bw)} × ${fmt(g.bh)}</td><td class="num">${fmt(a.net)} m²<span class="brut">brüt ${fmt(a.brut)}</span></td></tr>`; }).join('');
     const myBalks=balconies.filter(b=>balkUnit(b)===k);
     let balkTot=0;
     myBalks.forEach(b=>{ balkTot+=balkArea(b);
       rows+=`<tr><td>BALKON (açık)</td><td class="num">${fmt(b.t1-b.t0)} × ${fmt(b.depth)}</td><td class="num">${fmt(balkArea(b))} m²</td></tr>`; });
-    d.innerHTML=`<h3 data-unit="${k}">D${k+1} · ${escapeHtml(unitTag(u.spec))} · ${fmt(tot)} m²${balkTot?` + ${fmt(balkTot)} m² balkon`:''}</h3><table class="utT">${rows}</table>`;
+    d.innerHTML=`<h3 data-unit="${k}">D${k+1} · ${escapeHtml(unitTag(u.spec))} · ${fmt(totNet)} m²<span class="brut">brüt ${fmt(totBrut)} m²</span>${balkTot?` + ${fmt(balkTot)} m² balkon`:''}</h3><table class="utT">${rows}</table>`;
     body.appendChild(d);
   });
   body.querySelectorAll('tr[data-reg]').forEach(tr=>tr.onclick=()=>focusRegion(+tr.dataset.reg));
@@ -623,6 +627,8 @@ function renderPlan(){
     });
   }
   /* etiketler */
+  // L1-A2: brüt etikette gösterilecekse alan haritasını render başına BİR kez hesapla (canlı; wallThick değişince tazelenir).
+  const _brutAT=(typeof showBrutInLabel!=='undefined' && showBrutInLabel && typeof computeAreaTable==='function' && !clean)?computeAreaTable():null;
   p.regions.forEach(reg=>{
     if(!reg.cells.length||reg.area<2.0) return; // kırıntı bölgelere etiket yazma
     const lbl=(typeof aiPaintMode!=='undefined' && aiPaintMode)?regLabelEN(reg):reg.name;
@@ -656,7 +662,10 @@ function renderPlan(){
     g.appendChild(t);
     if(reg.area>=2 && !clean){ /* m² değeri AI temiz modda yok; oda EN etiketi kalır */
       const t2=el('text',{x:W2Sx(lx),y:W2Sy(ly)+fs*0.95,'text-anchor':'middle','font-size':fs*0.9,fill:'#6b5e4d'});
-      t2.textContent=fmt(reg.area)+' m²'; g.appendChild(t2); }
+      // L1-A2: net esas. showBrutInLabel açıksa brüt de yazılır (AYRI deneme; küçük odada sığma riski → kullanıcı onayı).
+      let m2txt=fmt(reg.area)+' m²';
+      if(_brutAT){ const at=_brutAT.get(reg.id); if(at) m2txt='net '+fmt(at.net)+' / brüt '+fmt(at.brut)+' m²'; }
+      t2.textContent=m2txt; g.appendChild(t2); }
   });
   /* vurgulanan bölge (seçim göstergesi) — AI temiz modda yok */
   if(highlightId!=null && !clean && p.regions[highlightId] && p.regions[highlightId].cells.length){

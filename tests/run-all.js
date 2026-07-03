@@ -31,6 +31,7 @@ const strictTests = [
   'tests/editor.js',
   'tests/export.js',
   'tests/ai-temiz.js',
+  'tests/brut-alan.js',
   'tests/test27.js',
   'tests/antre-test.js',
   'tests/camera-prompt.js'

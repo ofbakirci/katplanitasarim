@@ -4,6 +4,7 @@ const EXPORT_FONT="'Helvetica Neue',Helvetica,Arial,sans-serif"; // sayfa CSS'i 
 let aiPaintMode=false; // AI boyama export modu: EN etiket, daire tablosu yok (balkon KORUNUR, m² KALIR)
 let edgeMaskMode=false; // ControlNet/Flux-Canny duvar-kenar export modu: beyaz zemin + saf siyah SÜREKLİ duvarlar; etiket/renk/m²/mobilya/grid/balkon/ölçü YOK
 let aiCleanMode=false;  // AI boyama TEMİZ modu: SADECE oda dolgusu + duvar + kapı boşluğu + EN oda etiketi. Düğüm/m²/ölçü/D-rozet/grid/parsel/balkon/seçim YOK. Kadraj kenar-maskesiyle birebir (bd=0 → iki PNG üst üste biner).
+let showBrutInLabel=false; // L1-A2: oda ETİKETİNE brüt alanı da yaz (AYRI deneme; VARSAYILAN kapalı = yalnız net). Küçük odalarda sığma sorunu → son söz kullanıcı onayı.
 let wallBoundaryMode=false; // Şeffaf duvar/oda/daire SINIRI + KAPI BOŞLUKLARI export modu (kat-plani-duvarsinirlari.png): edge-mask ile aynı kadraj AMA zemin şeffaf + computeDoors() kapı boşlukları canvas'ta gerçekten oyulur (boyamadaki kapılarla birebir).
 /* RENDER HEDEF ORANI: dollhouse render (nano-banana-pro, 4K 16:9) = 5504×3072.
    AI Output kadrajı (PNG + harita) bu ORANA letterbox'lanır → render modeline GİREN plan PNG'si
@@ -489,8 +490,9 @@ function fpSmoothOutline(cells, cols){
     if(Math.hypot(a[0]-b[0],a[1]-b[1])>0.05) o2.push(a); }  // bitişik cepheler arası mikro-segmenti birleştir
   return o2.length>=3? o2 : W;
 }
-/* bir bölgenin px geometrisi (bbox/polygon/centroid/alan) — verilen kadrajda */
-function fpRegionGeom(g, fr){
+/* bir bölgenin px geometrisi (bbox/polygon/centroid/alan) — verilen kadrajda.
+   classify (makeWallClassifier) verilirse brüt alan payı da hesaplanır (L1-A2). */
+function fpRegionGeom(g, fr, classify){
   const cols=plan.cols, mnX=plan.minX, mnY=plan.minY, n=g.cells.length||1;
   let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9,sr=0,sc=0;
   g.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;sr+=r;sc+=c;});
@@ -502,6 +504,9 @@ function fpRegionGeom(g, fr){
   // L/U/girintili odalarda centroid komşu odaya düşebilir; bu nokta hep kendi poligonu İÇİNDE.
   const label_anchor_px=(typeof g.labelX==='number')?fr.px(g.labelX, g.labelY):centroid_px;
   const nb0=fr.norm([bbox_px[0],bbox_px[1]]), nb1=fr.norm([bbox_px[2],bbox_px[3]]);
+  // L1-A2: area_m2 = NET (mevcut sözleşme, kırılmaz). area_net_m2/area_brut_m2 additive.
+  const net=areaOfCells(g.cells);
+  const brut=(typeof classify==='function' && typeof brutWallShare==='function')?(net+brutWallShare(g,classify)):net;
   return {
     type:fpRoomEnum(g), type_tr:g.type, name:g.name,
     name_en:(typeof regLabelEN==='function')?regLabelEN(g):g.name,
@@ -510,7 +515,9 @@ function fpRegionGeom(g, fr){
     polygon_norm:polygon_px.map(p=>fr.norm(p)),
     centroid_norm:fr.norm(centroid_px),
     label_anchor_norm:fr.norm(label_anchor_px),
-    area_m2:+areaOfCells(g.cells).toFixed(2),
+    area_m2:+net.toFixed(2),                         // = NET (değişmez; mevcut tüketiciler/testler bunu okur)
+    area_net_m2:+net.toFixed(2),                     // net = hücre alanı (piyes/mevzuat esas)
+    area_brut_m2:+brut.toFixed(2),                   // brüt = net + çevre duvar payı (bilgi/rapor/DXF)
     furniture:[]                                    // §Faz5 şema: mobilya alanı (buildFloorplanMap store'dan doldurur)
   };
 }
@@ -528,13 +535,14 @@ function buildFloorplanMap(opt){
   if(!plan||!plan.unitObjs) return null;
   const fr=fpFraming(), cols=plan.cols, mnX=plan.minX, mnY=plan.minY;
   const mpp=Math.round(1/(fr.S*fr.SC)*1e6)/1e6;            // metre / px
+  const classify=(typeof makeWallClassifier==='function')?makeWallClassifier():null;   // L1-A2: brüt alan payı için
   const units=plan.unitObjs.map((u,k)=>{
     const id='D'+(k+1);
     const live=u.rooms.filter(g=>g.cells.length);
     const cnt={}; live.forEach(g=>{const e=fpRoomEnum(g); cnt[e]=(cnt[e]||0)+1;});
     const seen={};
     const rooms=live.map(g=>{
-      const o=fpRegionGeom(g,fr); const e=o.type;
+      const o=fpRegionGeom(g,fr,classify); const e=o.type;
       seen[e]=(seen[e]||0)+1;
       o.id=id+'-'+e+(cnt[e]>1?('-'+seen[e]):'');
       return o;
@@ -555,7 +563,7 @@ function buildFloorplanMap(opt){
     };
   });
   const common=plan.regions.filter(g=>g.cells.length && g.unit<0).map(g=>{
-    const o=fpRegionGeom(g,fr); o.id='C-'+g.id; return o;
+    const o=fpRegionGeom(g,fr,classify); o.id='C-'+g.id; return o;
   });
   // mobilya (kalıcılık): runtime store'dan (view3d yazar) room_id ile eşle → 3B kapat-aç + JSON export korunur.
   const FS=(typeof window!=='undefined' && window.__kptaFurniture) || {};

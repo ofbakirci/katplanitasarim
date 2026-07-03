@@ -129,6 +129,45 @@ function wallThickM(type){
   const ov=(typeof wallThick!=='undefined'&&wallThick)?+wallThick[type]:NaN;
   return (isFinite(ov)&&ov>min)?ov:min;
 }
+/* L1-A2 BRÜT ALAN PAYI (m²) — bir odanın NET alanına eklenecek çevre-duvar payı.
+   KONVANSİYON (TR uygulaması, kodda belgeli): bağımsız bölüm brüt'ünde
+     - DIŞ cephe duvarı odaya TAM (t) sayılır (dış cepheye kadar ölçülür),
+     - komşu duvar (daire-arası / çekirdek / iç bölme) YARISI (t/2) sayılır (merkez-çizgi sınır).
+   Böylece daire toplamında: dış duvar tam, ortak duvar yarı; aynı-daire iç bölmesi iki odaya
+   t/2 + t/2 = tam düşer (bölme tam sayılır, çift değil). Kalınlık = wallThickM(tip) EFEKTİF
+   değer (kullanıcı override DAHİL; REG.duvar doğrudan okunmaz). Duvar tipi makeWallClassifier'dan.
+   YAKLAŞIK-DOĞRU (ortogonal): köşelerde iki dik bandın t×t karesi tam sadık ofset gerektirir —
+   bu perimetre×kalınlık modeli onu ihmal eder; tam-sadık poligon ofseti L1-B'ye ertelendi
+   (roadmap dürüstlük notu). MEVZUAT NET üzerinden kalır → bu değer yalnız bilgi/rapor/export.
+   classify = makeWallClassifier() (bir kez kur, döngüde çağır). */
+function brutWallShare(g, classify){
+  const p=plan; if(!p||!g||!g.cells||!g.cells.length) return 0;
+  const cols=p.cols, rows=p.rows;
+  const regAt=(r,c)=>{ if(r<0||c<0||r>=rows||c>=cols) return -9; const j=r*cols+c; return (p.inside[j]&&p.cm[j]>=0)?p.cm[j]:-9; };
+  let share=0;
+  for(const i of g.cells){ const r=(i/cols)|0, c=i%cols;
+    const nb=[[r-1,c],[r+1,c],[r,c-1],[r,c+1]];
+    for(let k=0;k<4;k++){ const nid=regAt(nb[k][0],nb[k][1]);
+      if(nid===g.id) continue;                    // aynı oda içi kenar → duvar yok
+      const t=wallThickM(classify(g.id,nid));
+      share += (nid===-9? t : t/2)*M;             // dış cephe TAM, komşu duvar YARISI; kenar boyu = M
+    }
+  }
+  return share;
+}
+/* Tüm CANLI bölgeler için net+brüt alan haritası (id → {net, brut}). Görsel/tablo/export
+   katmanı — generate/onarım zincirinde ÇAĞRILMAZ (checks/mevzuat NET üzerinden; brut bilgi
+   değeri). Ucuz: bir sınıflandırıcı + bölge başına perimetre yürüyüşü (toplam ~tek ızgara-geçişi;
+   render bandı zaten cheap). */
+function computeAreaTable(){
+  const m=new Map(), p=plan; if(!p||!p.regions) return m;
+  const classify=makeWallClassifier();
+  p.regions.forEach(g=>{ if(!g.cells||!g.cells.length) return;
+    const net=areaOfCells(g.cells);
+    m.set(g.id,{net,brut:net+brutWallShare(g,classify)});
+  });
+  return m;
+}
 function regConnected(g){
   if(g.cells.length<2) return g.cells.length>0;
   const p=plan, set=new Set(g.cells), st=[g.cells[0]], seen=new Set([g.cells[0]]);

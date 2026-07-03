@@ -155,6 +155,8 @@ WT_UI.forEach(([id,t])=>{ const el=document.getElementById(id); if(!el) return;
   el.addEventListener('change',()=>{ const D=(typeof REG!=='undefined'&&REG.duvar)||{}, min=D[t]; let v=parseFloat(el.value);
     if(!isFinite(v)||v<=min){ delete wallThick[t]; el.value=min.toFixed(2); }   // min ya da altı → override kaldır (minimuma dön)
     else { v=Math.min(v,0.6); wallThick[t]=v; el.value=v.toFixed(2); }
+    // görsel-only: render (duvar bandı) + buildUnitTable (brüt canlı büyür/küçülür); generate YOK, net sabit.
+    if(typeof buildUnitTable==='function') buildUnitTable();
     if(typeof render==='function') render(); });
 });
 syncWallThickUI();
