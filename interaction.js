@@ -848,7 +848,24 @@ document.getElementById('tbToggle').onclick=()=>{
   const tb=document.getElementById('toolbar');
   const off=tb.classList.toggle('collapsed');
   document.getElementById('tbToggle').textContent=off?'»':'«';
+  syncToolbarOverflow();
 };
+/* Araç çubuğu taşma göstergesi — KISA viewport'ta (ör. Mesken embed) ray boyu aşınca kullanıcı
+   kaydırabileceğini + alt butonların (Örnek sınır/3B) varlığını GÖRSÜN: .tb-overflow → alt-solma maskesi
+   (footer-benzeri dolu kenar hissini kırar), en alta gelince .tb-atbottom maskeyi kapatır (son ikon net). */
+function syncToolbarOverflow(){
+  const tb=document.getElementById('toolbar'); if(!tb) return;
+  const over=tb.scrollHeight - tb.clientHeight > 2;
+  tb.classList.toggle('tb-overflow', over);
+  tb.classList.toggle('tb-atbottom', over && (tb.scrollTop >= tb.scrollHeight - tb.clientHeight - 2));
+}
+{ const tb=document.getElementById('toolbar');
+  if(tb) tb.addEventListener('scroll', syncToolbarOverflow, {passive:true});
+  window.addEventListener('resize', syncToolbarOverflow);
+  syncToolbarOverflow();
+  // ilk ölçüm layout'tan önce olabilir → bir tur sonra tekrar dene
+  if(typeof requestAnimationFrame==='function') requestAnimationFrame(syncToolbarOverflow);
+}
 /* onboarding ("Nasıl kullanılır?") kutusu kaldırıldı (kullanıcı isteği). */
 document.getElementById('tDraw').onclick=()=>setMode('draw');
 document.getElementById('tParcel').onclick=()=>setMode('parcel');

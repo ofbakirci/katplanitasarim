@@ -188,9 +188,21 @@
   #toolbar{position:absolute; top:10px; left:10px; z-index:8; display:flex; flex-direction:column; align-items:center; gap:4px;
     background:var(--panel); padding:6px; border-radius:12px; border:1px solid var(--line); box-shadow:0 4px 14px rgba(0,0,0,.08);
     /* alt paydan 62px: durum çubuğu (#status, bottom:10 + ~34px) + nefes — toolbar İmleç/Alan okumasını örtmesin */
-    max-height:calc(100% - 62px); overflow-y:auto; overflow-x:hidden; scrollbar-width:thin;}
-  #toolbar::-webkit-scrollbar{width:6px;}
-  #toolbar::-webkit-scrollbar-thumb{background:var(--line); border-radius:6px;}
+    max-height:calc(100% - 62px); overflow-y:auto; overflow-x:hidden;
+    /* Firefox: her zaman görünür ince scrollbar (ray taşarsa kullanıcı kaydırabileceğini GÖRSÜN) */
+    scrollbar-width:thin; scrollbar-color:var(--muted) transparent;}
+  /* WebKit/Blink (Chrome/Safari): macOS overlay-scrollbar'ı thumb'ı at-rest gizler → embed'de kısa
+     viewport'ta kullanıcı "scroll edilebilir" olduğunu göremiyor + alt butonlar (Örnek sınır/3B) gizli
+     kalıyordu. Track'e görünür kanal + kalıcı thumb ver: overflow varken ray hep "kaydırılabilir" okur. */
+  #toolbar::-webkit-scrollbar{width:8px;}
+  #toolbar::-webkit-scrollbar-track{background:transparent; margin:6px 0;}
+  #toolbar::-webkit-scrollbar-thumb{background:var(--line); border-radius:8px; border:2px solid var(--panel); min-height:28px;}
+  #toolbar:hover::-webkit-scrollbar-thumb{background:var(--muted);}
+  /* Taşma göstergesi: rayın en altında yumuşak solma → "daha fazla ikon aşağıda" ipucu (footer-benzeri
+     dolu kenar hissini kırar). Kaydırma alanının içinde DEĞİL, kutuya sabit — içerikle kaymaz. */
+  #toolbar.tb-overflow{-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent 100%);
+    mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent 100%);}
+  #toolbar.tb-overflow.tb-atbottom{-webkit-mask-image:none; mask-image:none;}
   #toolbar .tbgrp{display:flex; flex-direction:column; align-items:center; gap:4px;}
   #toolbar .tbsep{width:26px; height:1px; background:var(--line); margin:3px 0;}
   #toolbar button{position:relative; width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
