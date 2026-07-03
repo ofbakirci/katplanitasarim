@@ -934,6 +934,13 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
 
   /* ---------- boot ---------- */
   initEngine();
+  /* DEV kisayolu: ?adim=4 (ya da #adim4) → render yakmadan o adima atla (adim kapisini acar).
+     Konsol kancasi: window.__msk.goStep(n) / .advance(n) / .state — gelistirme/demo icindir. */
+  try{
+    var _q=/[?#&]adim=?(\d)/.exec(location.search+location.hash);
+    if(_q){ var _n=Math.max(1,Math.min(5,+_q[1])); state.maxStep=Math.max(state.maxStep,_n); state.step=_n; }
+    window.__msk={ goStep:goStep, advance:advance, state:state };
+  }catch(e){}
   showStep();
 })();
 </script>
