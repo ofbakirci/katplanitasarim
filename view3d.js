@@ -105,6 +105,9 @@
     target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
     move:'<path d="M5 9 2 12l3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
     plus:'<path d="M12 5v14M5 12h14"/>',
+    minus:'<path d="M5 12h14"/>',
+    lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',           // kilitli (kuşbakışı)
+    lockopen:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',        // kilit açık (serbest orbit)
     trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
     bolt:'<path d="M13 2 3 14h7l-1 8 10-12h-7z"/>',
     rotccw:'<path d="M3 2v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L3 8"/>',          // saat yönü TERSİ döndür
@@ -123,9 +126,7 @@
         '<button data-v3d="top" class="v3db">Üstten</button>'+
         '<button data-v3d="persp" class="v3db">Perspektif</button>'+
         '<button data-v3d="fit" class="v3db v3dgreen">'+ic('fit',13)+'Sığdır</button>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px;margin-top:12px">'+ic('zoom',15)+
-        '<input type="range" id="v3dZoom" min="0" max="1000" value="600" style="flex:1;accent-color:#c9a16b;cursor:pointer"></div>';
+      '</div>';   // A2: zoom slider çekmeceden ÇIKARILDI → sağ-altta HEP görünen dikey overlay (#v3dZoomBar)
     if(g==='layers') return '<div class="v3dgh">Katman</div>'+
       '<label class="v3dchk"><input type="checkbox" data-v3d="roof"'+(roofOn?' checked':'')+'> Duvarlar tam yükseklik</label>'+
       '<label class="v3dchk"><input type="checkbox" data-v3d="lbl"'+(lblOn?' checked':'')+'> Oda etiketleri</label>';
@@ -201,10 +202,8 @@
   }
   function renderDrawer(){
     const d=overlay&&overlay.querySelector('#v3dDrawer'); if(!d) return;
-    zoomEl=null;
     if(!activeGroup){ d.style.display='none'; return; }
     d.style.display='block'; d.innerHTML=groupHTML(activeGroup);
-    if(activeGroup==='view') wireZoom();
     if(activeGroup==='camera'){ updateCamPanel(); applyPlaceModeUI(); setHint(lastHint);
       const ta=d.querySelector('#v3dCamPrompt');
       if(ta) ta.oninput=function(){ if(activeCamIdx>=0){ camList[activeCamIdx].prompt=ta.value; camList[activeCamIdx].promptEdited=true; } };   // elle düzenlenmiş → otomatik ezmesin
@@ -215,11 +214,19 @@
     if(activeGroup==='furniture'){ updateFurnPanel(); applyFurnModeUI(); setFurnHint(lastFurnHint); }
   }
   function setGroup(g){ activeGroup=(activeGroup===g?null:g); renderRail(); renderDrawer(); }
+  // A2: persistent zoom bar (sağ-alt). overlay kurulunca BİR KEZ bağlanır; her render'da yeniden değil.
   function wireZoom(){
     const el=overlay&&overlay.querySelector('#v3dZoom'); if(!el) return; zoomEl=el;
     el.value=distToSlider(controls?controls.getDistance():22);
     el.addEventListener('input',function(){ zoomActive=true; if(controls) controls.setDistanceTarget(sliderToDist(+el.value)); });
     el.addEventListener('pointerdown',function(){ zoomActive=true; });
+    // ＋ / − düğmeleri: tekerlekle aynı adım (0.9 / 1.111) — kilitliyken de çalışır (pan+zoom serbest)
+    const step=function(inn){ if(!controls) return; zoomActive=true;
+      const base=controls.getDistanceTarget?controls.getDistanceTarget():controls.getDistance();
+      controls.setDistanceTarget(base*(inn?0.83:1.205));
+      setTimeout(function(){ zoomActive=false; },80); };
+    overlay.querySelectorAll('#v3dZoomBar [data-zoom]').forEach(function(b){
+      b.addEventListener('click',function(){ step(b.getAttribute('data-zoom')==='in'); }); });
   }
 
   function ensureOverlay(){
@@ -233,7 +240,17 @@
         '<div id="v3dDrawer" style="background:rgba(34,34,40,.94);color:#e8e6e0;font:13px/1.45 system-ui,sans-serif;padding:13px 15px;border-radius:12px;width:250px;max-height:calc(100vh - 24px);overflow:auto;backdrop-filter:blur(7px);display:none"></div>'+
         '<div id="v3dRail" style="background:rgba(34,34,40,.94);border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:5px;backdrop-filter:blur(7px)"></div>'+
       '</div>'+
-      '<div id="v3dStatus" style="position:absolute;left:12px;bottom:12px;color:#e8e6e0;opacity:.6;font:10.5px system-ui;background:rgba(34,34,40,.6);padding:4px 9px;border-radius:7px"></div>';
+      '<div id="v3dStatus" style="position:absolute;left:12px;bottom:12px;color:#e8e6e0;opacity:.6;font:10.5px system-ui;background:rgba(34,34,40,.6);padding:4px 9px;border-radius:7px"></div>'+
+      // A2: HER görünümde görünen dikey zoom overlay (2B editör sağ-alt kontrolünün 3B ikizi). ＋ / dikey slider / −
+      // A4: üstünde kuşbakışı KİLİT düğmesi (kamera/mobilya grubunda görünür). EMOJİ YOK — inline SVG.
+      '<div id="v3dViewCtl" style="position:absolute;right:14px;bottom:14px;z-index:4;display:flex;flex-direction:column;align-items:center;gap:8px">'+
+        '<button id="v3dLockBtn" title="Kuşbakışı kilidi" style="display:none;width:38px;height:38px;border:0;border-radius:10px;background:rgba(34,34,40,.94);color:#c9b79a;cursor:pointer;align-items:center;justify-content:center;backdrop-filter:blur(7px)"></button>'+
+        '<div id="v3dZoomBar" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(34,34,40,.94);padding:8px 6px;border-radius:12px;backdrop-filter:blur(7px)">'+
+          '<button data-zoom="in" title="Yakınlaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('plus',15)+'</button>'+
+          '<input type="range" id="v3dZoom" min="0" max="1000" value="600" title="Yakınlaştırma" style="writing-mode:vertical-lr;direction:rtl;-webkit-appearance:slider-vertical;width:22px;height:130px;accent-color:#c9a16b;cursor:pointer">'+
+          '<button data-zoom="out" title="Uzaklaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('minus',15)+'</button>'+
+        '</div>'+
+      '</div>';
     document.body.appendChild(overlay);
     // buton stilleri
     const st=document.createElement('style');
@@ -295,8 +312,10 @@
       else if(a==='roof'){ roofOn=t.checked; applyRoof(); }
       else if(a==='lbl'){ lblOn=t.checked; if(scene&&scene.__labels) scene.__labels.visible=lblOn; }
     });
-    // zoom slider (sağ=yakın) listener'ı çekmece her render'da wireZoom ile bağlanır
+    // A2: persistent zoom bar bir kez bağlanır (çekmeceden bağımsız, HER görünümde açık)
     window.addEventListener('pointerup',function(){ zoomActive=false; });
+    wireZoom();
+    const lb=overlay.querySelector('#v3dLockBtn'); if(lb) lb.addEventListener('click',toggleTopLock);
     renderRail(); renderDrawer();
   }
 
@@ -363,6 +382,7 @@
       c.target.lerpVectors(twFrom,twTo,e);
       if(k>=1){ twFrom=twTo=null; } }
     c.getDistance=function(){ return o.position.distanceTo(c.target); };
+    c.getDistanceTarget=function(){ return radiusTarget==null?c.getDistance():radiusTarget; };
     c.setDistanceTarget=function(r){ radiusTarget=clampD(r); };
     // konum dışarıdan set edildiyse (setView/fit) hedefi mevcut mesafeye sabitle + atalet sıfırla
     c.sync=function(){ radiusTarget=clampD(o.position.distanceTo(c.target)); sphD.set(0,0,0); panOff.set(0,0,0); c.cancelTween(); };
