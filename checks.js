@@ -119,11 +119,11 @@ const FIX_HINT={
   banyo:'Komşu duvarı sürükleyerek banyoyu büyütün.',
   wc:'Komşu duvarı sürükleyerek WC\'yi büyütün.'
 };
-function collectChecks(){
-  const out=[], add=(s,t,reg,unit,action)=>out.push({s,t,reg:reg==null?null:reg,unit:unit==null?null:unit,action:action||null});
-  const p=plan;
+function ruleImportRepair(add,p){
   if(typeof planAutoRepaired!=='undefined' && planAutoRepaired)
     add('info','İçe aktarılan düzen bozuktu (apartman holü bağımsız bölüm alanını yutmuştu, odalar hücresiz kalmıştı) → spec ve ayırıcılardan otomatik yeniden üretildi. Elle yapılmış oda düzenlemeleri korunamadı.');
+}
+function ruleUnitRooms(add,p){
   /* piyes ölçüleri — Planlı Alanlar İmar Yönetmeliği md.30 */
   p.unitObjs.forEach((u,k)=>{
     if(!u.rooms.some(g=>g.cells.length)) return;   // silinmiş (komşuya katılmış) daire
@@ -207,6 +207,8 @@ function collectChecks(){
       });
     }
   });
+}
+function ruleDoors(add,p){
   /* kapı denetimi: silinen veya yerleştirilemeyen kapılar */
   computeDoors().forEach(d=>{
     if(d.status==='ok'||d.status==='stale') return;
@@ -220,6 +222,8 @@ function collectChecks(){
         ? `${tag} — ${d.reg.name} kapısı silindi; odaya erişim yok. ("Geri al" ile geri getirin.)`
         : `${tag} — ${d.reg.name} için uygun kapı yeri yok: duvar teması 1 m'den kısa. Duvarı sürükleyin.`, d.reg.id);
   });
+}
+function ruleFloor(add,p){
   if(p.katKullanim && p.katKullanim!=='konut'){
     collectUsageChecks(add, p);
   } else if(!p.villa){
@@ -392,9 +396,13 @@ function collectChecks(){
       }
     }
   }
+}
+function ruleCore(add,p){
   /* çekirdek ölçü + yükseklik-sınıfı denetimi (yangin-merdiven-kurallari.json → FIRE) */
   collectCoreDimChecks(add, p);
   collectCoreHeightChecks(add, p);
+}
+function ruleParsel(add,p){
   /* parsel / bahçe */
   if(parcelClosed && parcelPts.length>=3 && closed){
     const site=(typeof siteOn==='function')&&siteOn();
@@ -429,6 +437,8 @@ function collectChecks(){
       add(minD>=REG.yanBahce?'ok':'info',`En küçük çekme mesafesi ≈ ${fmt(minD)} m (yan bahçe min ${fmt(REG.yanBahce)} m, ön bahçe imar durumuna bağlı).`);
     }
   }
+}
+function ruleAvlu(add,p){
   /* iç avlular */
   if(typeof courtyards!=='undefined' && courtyards && courtyards.length && closed){
     const tot=courtyards.reduce((s,av)=>s+shoelace(av.poly),0);
@@ -445,6 +455,8 @@ function collectChecks(){
         add('ok',`Avlu ${i+1}: kısa kenar ${fmt(kisa)} m yeterli (≥ önerilen ${fmt(oneri)} m).`);
     });
   }
+}
+function ruleSite(add,p){
   /* site: bloklar arası mesafe / çakışma (yangın + imar şematik) */
   if((typeof siteOn==='function')&&siteOn() && typeof siteBlocksData==='function'){
     const polys=siteBlocksData().filter(d=>d.pts&&d.pts.length>=3);
@@ -463,6 +475,8 @@ function collectChecks(){
       else add('ok',`Bloklar arası en küçük mesafe ≈ ${fmt(minD)} m (≥ ${fmt(REG.bloklarArasiMin)} m).`);
     }
   }
+}
+function ruleBalkon(add,p){
   /* balkonlar */
   if(balconies.length){
     const tot=balconies.reduce((s,b)=>s+balkArea(b),0);
@@ -474,6 +488,34 @@ function collectChecks(){
         add('bad',`Balkon ${i+1} parsel dışına taşıyor!`);
     });
   }
+}
+/* ── KURAL TABLOSU (A7 konsolidasyon, 2026-07-03) ───────────────────────────────
+   Denetimler kayıtlı, KARARLI ASCII id'li kurallara ayrıldı. Üç tüketici hedeflenir:
+   (1) mevcut denetim paneli (renderChecks), (2) ileride DXF/rapor katmanı, (3) Paket D
+   ML ranker'ın mevzuat filtresi. Her kural run(add,p) alır ve SIFIR veya ÇOK satır
+   üretebilir — karmaşık toplayıcılar (UNIT_ROOMS/FLOOR/CORE/PARSEL/SITE) bilinçli olarak
+   tek kural = çok satırdır (aşırı soyutlama yok). Registry SIRASI = append sırası; her
+   satır kuralının id'siyle damgalanır (collectChecks.mkAdd). DAVRANIŞ (metin/severity/
+   sıra/reg/unit/action) DEĞİŞMEZ → tests/checks-metin.js birebir korur. Dışarı açıktır
+   (global) → D/DXF tüketicileri kuralları sayabilir/gezebilir. */
+const CHECK_RULES = [
+  { id:'IMPORT_REPAIR', run:ruleImportRepair },  // içe-aktarım otomatik onarım bilgisi
+  { id:'UNIT_ROOMS',    run:ruleUnitRooms },      // daire piyes ölçüleri + doğal ışık + biçim + erişim (PAİY md.30)
+  { id:'DOORS',         run:ruleDoors },          // silinen/yerleşemeyen kapılar
+  { id:'FLOOR',         run:ruleFloor },          // kat geneli: konut-dışı / apartman çekirdek-kaçış / villa-kat tutarlılığı
+  { id:'CORE',          run:ruleCore },           // çekirdek ölçü + yükseklik-sınıfı (FIRE eşikleri)
+  { id:'PARSEL',        run:ruleParsel },         // parsel/bahçe/TAKS/KAKS/çekme
+  { id:'AVLU',          run:ruleAvlu },           // iç avlu hava/ışık
+  { id:'SITE',          run:ruleSite },           // bloklar arası mesafe/çakışma
+  { id:'BALKON',        run:ruleBalkon }          // balkon derinlik/parsel taşması
+];
+function collectChecks(){
+  const out=[];
+  const p=plan;
+  /* mkAdd(id): kuralın id'siyle damgalayan add üreticisi. İmza eskiyle birebir
+     (s,t,reg,unit,action) + opsiyonel 6. arg idOv (kural içi ince id override'ı). */
+  const mkAdd=id=>(s,t,reg,unit,action,idOv)=>out.push({id:idOv||id, s, t, reg:reg==null?null:reg, unit:unit==null?null:unit, action:action||null});
+  for(const rule of CHECK_RULES) rule.run(mkAdd(rule.id), p);
   /* sorunlar en üstte */
   const ORD={bad:0, ok:1, info:2};
   out.sort((a,b)=>ORD[a.s]-ORD[b.s]);
