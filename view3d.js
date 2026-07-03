@@ -783,7 +783,32 @@
   // ── A3: SEÇİLİYE ODAKLAN — controls hedefini seçilen objenin dünya konumuna kısa/yumuşak tween'le kaydır.
   //   Zoom mesafesi DEĞİŞMEZ (yalnız bakış noktası). Kilit sürerken de çalışır (pan serbest).
   //   Mobilya: furnList[i].pos MUTLAK metre → dünya = pos-(cx,cz). Kamera: camList[i].pos zaten dünya.
-  function focusOnWorld(wx,wy,wz){ if(!controls) return; controls.tweenTarget({x:wx,y:(wy!=null?wy:0.6),z:wz}); }
+  // C1-2: odak hedefi alt DOCK'un ARKASINA gelmesin — odaklanan obje görünür bölgenin (viewport − dock)
+  // ortasına otursun. Ekranda objeyi Δpx YUKARI itmek için controls.target'ı kameranın ekran-yukarı
+  // ekseninde dünya-uzayında AŞAĞI kaydırırız (target aşağı → sahne yukarı). export/snapshot yolu
+  // DOKUNULMAZ (bu yalnız interaktif controls.target tween'i; snapCameraDataURL kendi kamerasını kurar).
+  function activeDockPx(){
+    if(!overlay) return 0;
+    const ids=['v3dCamDock','v3dFurnDock']; let h=0;
+    for(const id of ids){ const el=overlay.querySelector('#'+id);
+      if(el && el.style.display!=='none' && el.offsetHeight>0){ h=Math.max(h, el.offsetHeight+18); } }  // +bottom:14 + nefes
+    return h;
+  }
+  function focusOnWorld(wx,wy,wz){ if(!controls||!cam) return;
+    const tgt={x:wx,y:(wy!=null?wy:0.6),z:wz};
+    const dockH=activeDockPx();
+    if(dockH>0 && renderer){
+      // görünür bölge (üstten dock'a kadar) merkezini viewport merkezine getir → shiftPx = dock/2
+      const ch=(renderer.domElement.clientHeight||overlay.clientHeight||1);
+      const dist=cam.position.distanceTo(new THREE.Vector3(tgt.x,tgt.y,tgt.z));
+      const worldPerPx=2*dist*Math.tan((cam.fov/2)*Math.PI/180)/ch;   // hedef düzleminde px→dünya
+      const shiftPx=dockH/2;                                          // objeyi bu kadar YUKARI it
+      const upW=new THREE.Vector3().setFromMatrixColumn(cam.matrix,1).normalize();  // kameranın ekran-yukarı ekseni
+      const d=shiftPx*worldPerPx;
+      tgt.x-=upW.x*d; tgt.y-=upW.y*d; tgt.z-=upW.z*d;                 // target aşağı → obje ekranda yukarı
+    }
+    controls.tweenTarget(tgt);
+  }
   function focusFurn(i){ if(i<0||i>=furnList.length) return; const f=furnList[i];
     focusOnWorld(f.pos.x-(scene.__cx||0), 0.5, f.pos.z-(scene.__cz||0)); }
   function focusCam(i){ if(i<0||i>=camList.length) return; const c=camList[i];
@@ -1361,9 +1386,12 @@
     const sx=rect.left+(v.x*0.5+0.5)*rect.width, sy=rect.top+(-v.y*0.5+0.5)*rect.height;
     bar.style.display=(v.z<1)?'flex':'none'; if(v.z>=1) return;   // kamera arkasında → gizle
     const bw=bar.offsetWidth||180, bh=bar.offsetHeight||42;
+    // C1-2: alt DOCK bölgesine girme — mevcut aktif dock yüksekliği kadar alttan pay bırak.
+    const dockH=activeDockPx();
+    const botLimit=window.innerHeight-bh-8-dockH;
     let left=sx-bw/2, top=sy-bh-14;
     left=Math.max(8, Math.min(window.innerWidth-bw-8, left));     // ekran kenarında taşmaz
-    top=Math.max(8, Math.min(window.innerHeight-bh-8, top));
+    top=Math.max(8, Math.min(botLimit, top));                     // dock'un ÜSTÜNDE kal (obje dock arkasındaysa çubuk yukarı iter)
     bar.style.left=left.toFixed(0)+'px'; bar.style.top=top.toFixed(0)+'px';
   }
   function onFurnKey(e){ if(!furnMode) return;
