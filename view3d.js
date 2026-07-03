@@ -2043,6 +2043,40 @@
       for(const yy of [baseY+h*0.06, baseY+h*0.94]){ const hl=fbox(dw*0.78,0.016,0.014,lineMat); hl.position.set(cxp,yy,fz); g.add(hl); }
       const hd=fbox(0.024,Math.min(0.22,h*0.16),0.03,FMAT.metal); hd.position.set(cxp+dw*0.34,baseY+h/2,fz+0.006); g.add(hd); }   // dikey kulp
   }
+  // C3-5b: KİTAPLIK — AÇIK ÖNLÜ KARKAS (kapı/kulp YOK). İki yan panel + üst + alt + ince arka panel;
+  //   raflar GÖVDENİN İÇİNDE (girintili, ön yüzden dışarı taşmaz — eski hata: raflar "askılık çıkıntısı"
+  //   gibi ön yüzeyden fırlıyordu). İsteğe bağlı 3-5 kitap iması (farklı yükseklik/kalınlık ince kutular,
+  //   birkaç sönük renk) → nano'ya "kitaplık" sinyali netleşir.
+  function bookcaseMesh(g,w,d,h,mat,shelfCount){
+    mat=mat||FMAT.cabinet; shelfCount=shelfCount||3;
+    const pt=0.03;                                    // yan/üst/alt panel kalınlığı
+    const backT=0.012;                                // ince arka panel
+    [-1,1].forEach(function(s){ const side=fbox(pt,h,d,mat); side.position.set(s*(w/2-pt/2),h/2,0); g.add(side); });
+    const top=fbox(w,pt,d,mat); top.position.set(0,h-pt/2,0); g.add(top);
+    const bot=fbox(w,pt,d,mat); bot.position.set(0,pt/2,0); g.add(bot);
+    const back=fbox(w-2*pt,h-2*pt,backT,mat); back.position.set(0,h/2,-d/2+backT/2); g.add(back);
+    const innerW=w-2*pt, shelfD=d-pt-0.02;             // raf, arka panelden hafif önde durur (girintili, dışarı taşmaz)
+    for(let i=1;i<shelfCount;i++){
+      const sy=pt+(h-2*pt)*i/shelfCount;
+      const sh=fbox(innerW,0.025,shelfD,mat); sh.position.set(0,sy,-pt/2); g.add(sh);
+    }
+    // isteğe bağlı: raf başına 2-3 kitap iması (ince, farklı yükseklik/kalınlık, sönük renk çeşidi)
+    const bookMats=[FMAT.woodDark,FMAT.cushion,FMAT.leather,FMAT.fabric2];
+    for(let i=0;i<shelfCount;i++){
+      const shY=(i===0)?pt:pt+(h-2*pt)*i/shelfCount;         // alt raf tabanı, sonrakiler raf üstü
+      const nextY=(i<shelfCount-1)?pt+(h-2*pt)*(i+1)/shelfCount:h-pt;
+      const avail=nextY-shY-0.03; if(avail<0.14) continue;    // çok dar aralık → kitap ima etme
+      const bh=Math.min(avail*0.62,0.24), n=2+(i%3);           // 2-4 kitap, rafa göre değişir (tekdüze değil)
+      let cx=-innerW/2+0.03;
+      for(let k=0;k<n && cx<innerW/2-0.03;k++){
+        const bw=0.025+((i*3+k)%3)*0.008;                      // ince, kalınlık çeşitlemesi
+        if(cx+bw>innerW/2-0.02) break;
+        const bk=fbox(bw,bh,shelfD*0.72,bookMats[(i+k)%bookMats.length]);
+        bk.position.set(cx+bw/2,shY+bh/2+0.014,-pt/2); g.add(bk);
+        cx+=bw+0.018;
+      }
+    }
+  }
   function bedMesh(g,w,d){ const base=fbox(w,0.28,d,FMAT.panel); base.position.y=0.14; g.add(base);
     const mat=fbox(w-0.06,0.16,d-0.06,FMAT.fabric2); mat.position.y=0.34; g.add(mat);
     const hb=fbox(w,0.95,0.09,FMAT.woodDark); hb.position.set(0,0.48,-d/2+0.045); g.add(hb);
@@ -2069,7 +2103,7 @@
       case 'side_table': { const t2=fcyl(W/2,0.04,FMAT.wood,16); t2.position.y=0.53; g.add(t2); const lg=fcyl(0.03,0.51,FMAT.woodDark,8); lg.position.y=0.255; g.add(lg); break; }
       case 'tv_unit': { const box=fbox(W,0.48,Dp,FMAT.woodDark); box.position.y=0.24; g.add(box); for(let i=1;i<3;i++){ const gv=fbox(0.012,0.44,0.012,FMAT.dark); gv.position.set(-W/2+W/3*i,0.24,Dp/2+0.005); g.add(gv);} break; }
       case 'tv': { const scr=fbox(W,0.80,0.05,FMAT.dark); scr.position.y=1.10; g.add(scr); const st=fbox(0.4,0.04,0.18,FMAT.dark); st.position.y=0.70; g.add(st); break; }
-      case 'bookcase': { cabinetMesh(g,W,Dp,D.h,FMAT.cabinet,1); const shelves=4; for(let i=1;i<shelves;i++){ const sh=fbox(W-0.06,0.03,Dp-0.04,FMAT.cabinetLine); sh.position.set(0,D.h*i/shelves,Dp/2-0.02); g.add(sh);} break; }   // C3-5: raf çizgileri ön yüze yakın (okunur)
+      case 'bookcase': bookcaseMesh(g,W,Dp,D.h,FMAT.cabinet,3); break;   // C3-5b: açık önlü karkas, raflar içeride, kulp yok
       case 'console': { const box=fbox(W,0.18,Dp,FMAT.wood); box.position.y=0.70; g.add(box); legsAt(g,W,Dp,0.70-0.09,0.61,FMAT.woodDark); break; }
       case 'sideboard': cabinetMesh(g,W,Dp,D.h,FMAT.wood); break;
       case 'rug': { const rg=fbox(W,0.02,Dp,FMAT.rug); rg.position.y=0.012; g.add(rg); const bd=fbox(W-0.2,0.022,Dp-0.2,FMAT.rugDark); bd.position.y=0.013; g.add(bd); break; }
