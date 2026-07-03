@@ -15,7 +15,7 @@ haritası, CI hepsi hazır. L1-A tam da bu ağın üstüne kurulmak için beklet
 | Dilim | Durum | Commit | Not |
 |---|---|---|---|
 | **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | ONAYLANDI + kullanıcı-ayarlı eklendi | `1e9763b` + `759a5bc` | Görünüm kullanıcıca onaylandı. **Kalınlıklar artık KULLANICI-AYARLI** (mevzuat min. varsayılan, yalnız artırılabilir, katlanır non-intrusive UI). Snapshot BİREBİR, npm test 31/31, build OK. Aşağıdaki "L1-A1 bulgular" + "Kullanıcı-ayarlı kalınlık" bölümleri. |
-| **L1-A2** brüt/net alan | UYGULANDI — ETİKET GÖSTERİMİ KULLANICI ONAYI BEKLIYOR | `9e08007` | Net = areaOfCells (DEĞİŞMEZ, snapshot 7/7 birebir). Brüt = net + çevre duvar payı (dış TAM, komşu YARISI). Tablo iki değer + daire toplamı; export additive (`area_net_m2`/`area_brut_m2`, `area_m2`=net korundu); kalınlık UI canlı brüt tazeler; save/load tutarlı. Test `tests/brut-alan.js` yeşil (npm test 32 dosya). Aşağıdaki "L1-A2 bulgular" bölümü. **Bekleyen: oda ETİKETİNE brüt yazılsın mı** (`showBrutInLabel`, iki varyant ekran görüntüsü sunuldu). |
+| **L1-A2** brüt/net alan | ONAYLANDI | `9e08007` | Net = areaOfCells (DEĞİŞMEZ, snapshot 7/7 birebir). Brüt = net + çevre duvar payı (dış TAM, komşu YARISI). Tablo iki değer + daire toplamı; export additive (`area_net_m2`/`area_brut_m2`, `area_m2`=net korundu); kalınlık UI canlı brüt tazeler; save/load tutarlı. Test `tests/brut-alan.js` yeşil (npm test 32 dosya). Aşağıdaki "L1-A2 bulgular" bölümü. **KARAR (kullanıcı, 2026-07-03): oda etiketi YALNIZ NET kalsın — brüt tabloda yeterli. `showBrutInLabel` default false (yani B varyantı kapalı) yürürlükte.** |
 | **L1-A3** DXF yazıcı (export) | BEKLIYOR | — | |
 | **L1-A4** roundtrip + entegrasyon | BEKLIYOR | — | L1-A3 ile aynı oturum olabilir |
 
@@ -119,10 +119,11 @@ odadan büyük; dış override 0.30→0.60 brüt artar / net birebir sabit. `npm
 152,75→159 (net 138,75 sabit); save/load `{icBolme:0.25}` roundtrip tablo birebir; export area_m2=net +
 area_brut_m2 eklendi. Konsol hatasız.
 
-**KULLANICI ONAYINA SUNULAN:** oda ETİKETİNDE brüt gösterimi (iki ekran görüntüsü): (A) VARSAYILAN =
-etikette yalnız net (temiz); (B) `showBrutInLabel` = `net/brüt` — büyük odada okunur AMA küçük odada
-(çekirdek/antre/EB banyo) metin çakışıyor (brief'in öngördüğü sığma sorunu). Tablo + export her iki
-varyantta da net+brüt taşır. Seçim kullanıcının (C5-R dersi: görselde son söz kullanıcı).
+**ETİKET GÖSTERİMİ — KARAR VERİLDİ (kullanıcı, 2026-07-03):** oda etiketi **YALNIZ NET** kalsın;
+"tabloda görünür brüt yeterli". Yani (A) varyantı = `showBrutInLabel` default **false** yürürlükte —
+kod değişikliği gerekmedi (zaten varsayılan). (B) `net/brüt` etiketi küçük odada çakışıyordu (brief'in
+öngördüğü sığma sorunu); bayrak kaldı (ileride istenirse açılır) ama VARSAYILAN kapalı. Tablo + export
+her iki durumda da net+brüt taşır.
 
 **Tarayıcı notu (tuzak):** `python http.server` .js dosyalarını tarayıcı agresif cache'liyor → kabuk
 (kat-plani-tasarim.html) eski `doors.js`'i (doorWallType'sız) yükleyip generate patladı. Doğru doğrulama
