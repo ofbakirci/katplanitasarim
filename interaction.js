@@ -136,6 +136,24 @@ function avluChanged(){
     catch(err){ console.error('avlu yeniden üretim:', err); } }
   else render();
 }
+/* AV-3 GUARD: avlu yerleştirme/taşıma/boyutlandırma commit'i. courtyards ZATEN yeni hâle
+   getirilmiş, prev = eski snapshot. Koridoru fiziken ikiye bölen avlu REDDEDİLİR:
+   üret → koridor parça sayısı (DELTA) arttıysa prev'e dön + yeniden üret + uyar.
+   Post-hoc revert (moveWallStep ruhu). true=commit tutuldu, false=reddedildi. */
+function avluCommitGuard(prev){
+  if(!(plan && closed)){ render(); return true; }
+  const before=corridorComponentTotal();     // avlu-öncesi plan koridor parçaları
+  try{ resetCuts(); generate(); }catch(err){ console.error('avlu üretim:', err); }
+  if(corridorComponentTotal() > before){      // avlu koridoru EK parçaya böldü (2→2 meşru geçer)
+    courtyards=(prev||[]).map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))}));
+    try{ resetCuts(); generate(); }catch(err){ console.error(err); }
+    setStatusHint('Avlu koridoru bölemez (dolaşım kopar)','#b35a2e');
+    if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
+    return false;
+  }
+  if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
+  return true;
+}
 svg.addEventListener('mousemove',e=>{
   const r=svg.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
   document.getElementById('stPos').textContent = fmt(S2Wx(sx))+' , '+fmt(S2Wy(sy))+' m';
@@ -512,16 +530,17 @@ function finishDrag(){
     }
     if(courtyards[d.i]) courtyards[d.i]={poly:gh.poly};
     if(JSON.stringify(courtyardsSnapshot())!==JSON.stringify(d.prev)){
-      pushEdit({type:'avlu', prev:d.prev}); avluChanged(); return;   // değişti → geçmişe yaz + yeniden üret
+      if(avluCommitGuard(d.prev)) pushEdit({type:'avlu', prev:d.prev});   // koridor bölünmediyse geçmişe yaz (guard üretti)
+      return;
     }
     render(); return;   // konum değişmedi
   } else if(dragging.type==='avlu'){
     const gh=avluGhost; avluGhost=null; const prev=dragging.prev; dragging=null;
     if(gh && gh.poly){ const bb=bboxOf(gh.poly);
       if((bb.maxX-bb.minX)>=1 && (bb.maxY-bb.minY)>=1){   // anlamlı avlu: en az 1×1 m
-        pushEdit({type:'avlu', prev});
         courtyards.push({poly:gh.poly});
-        avluChanged(); return;
+        if(avluCommitGuard(prev)) pushEdit({type:'avlu', prev});   // koridor bölünmediyse geçmişe yaz
+        return;
       }
     }
     render(); return;

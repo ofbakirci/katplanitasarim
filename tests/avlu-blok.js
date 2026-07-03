@@ -108,14 +108,14 @@ ok(t0.pts[0].x===0 && t0.cuts!==null, 'taşıma: orijinal snapshot mutasyona uğ
 const sh=p=>{let a=0;for(let i=0;i<p.length;i++){const q=p[(i+1)%p.length];a+=p[i].x*q.y-q.x*p[i].y;}return Math.abs(a)/2;};
 ok(Math.abs(sh(t1.pts)-sh(t0.pts))<1e-9, 'taşıma: alan korunur');
 
-/* ===== E) Avlu asgari ölçü denetimi ===== */
+/* ===== E) Avlu asgari ölçü denetimi (kısa-kenar; AV-3 koridor-bölme denetimi ayrı → regex boyut mesajına daraltıldı) ===== */
 getEl('siteMod').checked=false; blocks=null;                 // site kapat (tek bina avlu denetimi)
 courtyards=[{poly:[{x:18,y:4},{x:19,y:4},{x:19,y:8},{x:18,y:8}]}]; // 1×4 m → kısa kenar 1 m < 1,5
 generate();
-ok(runChecks().some(x=>x.s==='bad' && /Avlu/.test(x.t)), 'dar avlu (kısa kenar 1 m) bad denetim üretir');
+ok(runChecks().some(x=>x.s==='bad' && /kısa kenar/.test(x.t)), 'dar avlu (kısa kenar 1 m) bad denetim üretir');
 courtyards=[{poly:[{x:14,y:3},{x:24,y:3},{x:24,y:9},{x:14,y:9}]}]; // 10×6 m → kısa kenar 6 m ≥ önerilen
 generate();
-ok(!runChecks().some(x=>x.s==='bad' && /Avlu/.test(x.t)), 'geniş avlu (kısa kenar 6 m) avlu bad üretmez');
+ok(!runChecks().some(x=>x.s==='bad' && /kısa kenar/.test(x.t)), 'geniş avlu (kısa kenar 6 m) boyut bad üretmez');
 
 /* ===== F) Bloklar arası mesafe / çakışma denetimi ===== */
 pts=[{x:0,y:0},{x:20,y:0},{x:20,y:10},{x:0,y:10}]; closed=true; courtyards=[]; generate();

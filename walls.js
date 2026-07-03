@@ -193,6 +193,44 @@ function regComponentCount(g){
   }
   return comps;
 }
+/* AV-3 GUARD: tüm koridor bölgelerinin toplam bağlı-parça sayısı. Avlu commit'inde
+   ÖNCE/SONRA kıyaslanır (DELTA): avlu bir koridoru EK parçaya böldüyse toplam artar
+   → işlem reddedilir. Çekirdeğin meşru böldüğü koridor sabit kalır (2→2 geçer). */
+function corridorComponentTotal(){
+  if(!plan||!plan.regions) return 0;
+  let t=0; plan.regions.forEach(g=>{ if(g.type==='koridor'&&g.cells.length) t+=regComponentCount(g); });
+  return t;
+}
+/* AV-3 KIRMIZI DENETİM (içe aktarılan planlar için emniyet kemeri — guard delta'sı yok):
+   bir AVLU koridorun 2+ ayrı parçasına komşuysa avlu koridoru fiziken bölmüştür.
+   Çekirdek-bölünmüş meşru koridorda avlu (varsa) parçalardan yalnız birine komşu → yanlış
+   pozitif vermez. Bölünmüş koridor bölgesini döndürür (odak için), yoksa null. */
+function avluSplitsCorridor(){
+  if(!plan||!plan.regions||typeof courtyards==='undefined'||!courtyards||!courtyards.length) return null;
+  const p=plan;
+  for(const g of p.regions){
+    if(g.type!=='koridor'||g.cells.length<2||regComponentCount(g)<2) continue;
+    const set=new Set(g.cells), comp=new Map(); let cid=0;
+    for(const start of g.cells){ if(comp.has(start)) continue; const st=[start]; comp.set(start,cid);
+      while(st.length){ const i=st.pop(), r=(i/p.cols)|0, c=i%p.cols;
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+          const j=rr*p.cols+cc; if(set.has(j)&&!comp.has(j)){ comp.set(j,cid); st.push(j); } }); }
+      cid++; }
+    for(const av of courtyards){
+      const bb=bboxOf(av.poly), seen=new Set();
+      const c0=Math.max(0,Math.floor((bb.minX-p.minX)/M)), c1=Math.min(p.cols-1,Math.ceil((bb.maxX-p.minX)/M));
+      const r0=Math.max(0,Math.floor((bb.minY-p.minY)/M)), r1=Math.min(p.rows-1,Math.ceil((bb.maxY-p.minY)/M));
+      for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){
+        const cx=p.minX+(c+0.5)*M, cy=p.minY+(r+0.5)*M;
+        if(!pip(cx,cy,av.poly)) continue;                 // avlu (oyulmuş) hücresi
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=p.rows||cc>=p.cols) return;
+          const j=rr*p.cols+cc; if(comp.has(j)) seen.add(comp.get(j)); });
+      }
+      if(seen.size>=2) return g;   // bu avlu koridorun 2+ parçasına komşu → koridoru bölmüş
+    }
+  }
+  return null;
+}
 /* ===== KOPUK BÖLGE ONARIMI (relayout / cut-drag / swap / yükleme sonrası) =====
    relayoutFootprint (daire takası, sınır relayout'u) tüketilmeyen "leftover" hücreleri
    tek "en büyük odaya" döküyor; çekirdek (merdiven/asansör) bina içine girinti yapınca

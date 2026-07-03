@@ -101,6 +101,35 @@ ok(avluGhost.invalid, 'AV-2 geçersiz: sınır-dışı aday invalid işaretlendi
 finishDrag();
 ok(JSON.stringify(courtyards[0].poly)===keepPoly, 'AV-2 geçersiz: avlu eski konumda kaldı (geri alındı)');
 ok(editHistory.length===ehLen, 'AV-2 geçersiz: geçmişe kayıt yazılmadı');
+
+/* ===== AV-3) Koridor-bölme guard + kırmızı denetim ===== */
+/* standart apartman planında koridor yatay bant (x6.5..38, y5..6.5, tek parça) */
+courtyards=[]; editHistory=[]; redoHistory=[]; generate();
+const kor0=corridorComponentTotal();
+ok(kor0>=1, 'AV-3 kurulum: koridor mevcut ('+kor0+' parça)');
+
+/* GUARD: koridoru dik kesen avlu (x20..22, y4..8 tüm koridor enini kapatır) reddedilir */
+const prevSnap=courtyardsSnapshot();
+courtyards.push({poly:[{x:20,y:4},{x:22,y:4},{x:22,y:8},{x:20,y:8}]});
+const guardOk=avluCommitGuard(prevSnap);
+ok(guardOk===false, 'AV-3 guard: koridoru bölen avlu REDDEDİLDİ');
+ok(courtyards.length===0, 'AV-3 guard: courtyards eski hâline döndü');
+ok(corridorComponentTotal()===kor0, 'AV-3 guard: koridor parça sayısı korundu');
+
+/* KIRMIZI DENETİM: guard'ı atlayan (içe aktarılmış) split-koridor planında AVLU bad satırı */
+courtyards=[{poly:[{x:20,y:4},{x:22,y:4},{x:22,y:8},{x:20,y:8}]}];
+resetCuts(); generate();
+ok(corridorComponentTotal()>=2, 'AV-3: zorlanmış avlu koridoru 2+ parçaya böldü');
+const kor=avluSplitsCorridor();
+ok(kor!=null, 'AV-3: avluSplitsCorridor bölünmeyi tespit etti');
+const bads=runChecks().filter(x=>x.s==='bad' && /koridoru bölmüş/i.test(x.t));
+ok(bads.length===1, 'AV-3: AVLU kırmızı denetim satırı üretildi');
+ok(bads.length && bads[0].id==='AVLU', 'AV-3: satır id kararlı AVLU');
+ok(bads.length && bads[0].reg!=null && !!bads[0].action, 'AV-3: satır reg (odak) + action taşır');
+
+/* avlu koridora değmezse (guard'lı yol) bad üretmez — köşede küçük avlu */
+courtyards=[{poly:[{x:2,y:1},{x:4,y:1},{x:4,y:3},{x:2,y:3}]}]; resetCuts(); generate();
+ok(!runChecks().some(x=>x.s==='bad' && /koridoru bölmüş/i.test(x.t)), 'AV-3: koridora değmeyen avlu bad üretmez');
 `);
 
 console.log((fail? '  '+fail+' BAŞARISIZ, ':'✓ ')+'tüm avlu düzenleme testleri '+(fail?'':'geçti ')+'('+pass+')');

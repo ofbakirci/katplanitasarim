@@ -457,6 +457,13 @@ function ruleAvlu(add,p){
       else
         add('ok',`Avlu ${i+1}: kısa kenar ${fmt(kisa)} m yeterli (≥ önerilen ${fmt(oneri)} m).`);
     });
+    /* AV-3: içe aktarılan planlar için emniyet kemeri — avlu koridoru fiziken böldüyse (guard
+       kaçmışsa) erişim/kaçış kopuk. Canlı yerleştirme avluCommitGuard ile zaten reddedilir. */
+    if(typeof avluSplitsCorridor==='function'){
+      const kor=avluSplitsCorridor();
+      if(kor) add('bad','Avlu koridoru bölmüş: dolaşım kopuk (avluyu daraltın ya da koridordan uzağa taşıyın).',
+        kor.id, null, {hint:'Avlu modunda avluyu daraltın ya da koridora değmeyecek şekilde taşıyın.'});
+    }
   }
 }
 function ruleSite(add,p){
