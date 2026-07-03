@@ -206,12 +206,12 @@
     padding:6px 8px; border-radius:6px; box-shadow:0 3px 10px rgba(0,0,0,.22); opacity:0; pointer-events:none; transition:opacity .12s; z-index:20;}
   #toolbar button[data-tip]:hover::after{opacity:1;}
   /* villa kat sekmeleri (katları ayrı planla) — dikey rayın SAĞINDA, "KAT" grip'inden sürüklenir */
-  #floorTabs{position:absolute; top:10px; left:64px; display:none; gap:4px; align-items:center; background:var(--panel); padding:4px 6px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); z-index:5; flex-wrap:wrap; max-width:calc(100% - 74px);}
+  #floorTabs{position:absolute; top:10px; left:83px; display:none; gap:4px; align-items:center; background:var(--panel); padding:4px 6px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); z-index:5; flex-wrap:wrap; max-width:calc(100% - 93px);}
   #floorTabs button{border:1px solid transparent; border-radius:6px; background:transparent; padding:5px 10px; cursor:pointer; font:inherit; font-size:12px; color:var(--ink); white-space:nowrap;}
   #floorTabs button.active{background:var(--ink); color:#fff;}
   #floorTabs button.empty{color:var(--muted); font-style:italic;}
   /* site blok sekmeleri (çoklu blok) — "BLOK" grip'inden sürüklenir, mavi aksan */
-  #blockTabs{position:absolute; top:10px; left:64px; display:none; gap:4px; align-items:center; background:var(--panel); padding:4px 6px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); z-index:6; flex-wrap:wrap; max-width:calc(100% - 74px);}
+  #blockTabs{position:absolute; top:10px; left:83px; display:none; gap:4px; align-items:center; background:var(--panel); padding:4px 6px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); z-index:6; flex-wrap:wrap; max-width:calc(100% - 93px);}
   #blockTabs .bl,#floorTabs .bl{font-weight:700; color:var(--muted); font-size:11px; padding:2px 5px 2px 3px; letter-spacing:.04em; cursor:move; user-select:none;}
   #blockTabs .bl:hover,#floorTabs .bl:hover{color:var(--acc);}
   #blockTabs button{border:1px solid transparent; border-radius:6px; background:transparent; padding:5px 10px; cursor:pointer; font:inherit; font-size:12px; color:var(--ink); white-space:nowrap;}
@@ -220,7 +220,7 @@
   #blockTabs button.add{border:1px dashed var(--line); color:var(--muted);}
   #blockTabs button .x{margin-left:5px; opacity:.55; font-weight:700;}
   #blockTabs button .x:hover{opacity:1;}
-  #parkBar{position:absolute; top:10px; left:64px; display:none; align-items:center; gap:5px; background:var(--panel); padding:5px 8px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); z-index:5; flex-wrap:wrap; max-width:calc(100% - 74px); font-size:12px;}
+  #parkBar{position:absolute; top:10px; left:83px; display:none; align-items:center; gap:5px; background:var(--panel); padding:5px 8px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); z-index:5; flex-wrap:wrap; max-width:calc(100% - 93px); font-size:12px;}
   #parkBar .pl{font-weight:600; color:var(--ink);}
   #parkBar .ph{color:var(--muted);}
   #parkBar button{border:1px solid var(--line); border-radius:6px; background:transparent; padding:4px 9px; cursor:pointer; font:inherit; font-size:12px; color:var(--ink);}
@@ -231,8 +231,8 @@
   #status b{color:var(--ink);}
   #status #stHint{color:var(--acc); font-weight:600;}
   /* aktif mod rozeti (canvas üstü, toolbar hizası) — varsayılan draw/pan modunda gizli */
-  #modeBadge{position:absolute; top:10px; left:64px; z-index:7; display:flex; align-items:center; gap:8px;
-    max-width:calc(100% - 74px); background:var(--panel); padding:6px 11px; border-radius:9px;
+  #modeBadge{position:absolute; top:10px; left:83px; z-index:7; display:flex; align-items:center; gap:8px;
+    max-width:calc(100% - 93px); background:var(--panel); padding:6px 11px; border-radius:9px;
     border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.08); font-size:12px; pointer-events:none;}
   #modeBadge .mbName{display:flex; align-items:center; gap:5px; font-weight:700; color:var(--ink); white-space:nowrap;}
   #modeBadge .mbName svg{width:14px; height:14px; flex:0 0 auto;}
