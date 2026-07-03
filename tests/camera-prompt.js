@@ -13,6 +13,10 @@ const { scriptSources, ROOT } = require('./support/app-js');
 const { installDom } = require('./support/dom-stub');
 
 const input = path.join(ROOT, 'mesken', 'inputs', 'master1.svg');
+if (!fs.existsSync(input)) { // gitignored fixture — CI'da yok; test master1'e özgü → zarif atla
+  console.log('  (mesken/inputs/master1.svg yok — camera-prompt atlandı)');
+  process.exit(0);
+}
 const txt = fs.readFileSync(input, 'utf8');
 
 const dom = installDom();
