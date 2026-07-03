@@ -969,13 +969,16 @@
     pipEl.style.display='block';
     updatePipTitle();
     const c=camList[activeCamIdx];
-    // DOM body dikdörtgeni → canvas iç device-piksel koordinatı (WebGL viewport origin = SOL-ALT → Y ters)
+    // DOM body dikdörtgeni → renderer viewport/scissor koordinatı. TUZAK (C1-5): three.js
+    //   setViewport/setScissor LOJİK (CSS) piksel alır ve pixelRatio ile İÇERİDE çarpar; ana döngü de
+    //   setSize(clientW,clientH) = CSS piksel veriyor (getViewport→1280×664). Burada *pr ile device-piksele
+    //   çevirmek İKİNCİ kez çarpılmaya yol açıyordu → PiP 2× büyük + kayık (üst şeritte + kutudan taşıyor).
+    //   Çözüm: CSS piksel ver (pr YOK). WebGL viewport origin SOL-ALT → Y alttan ölçülür (flip korunur).
     const canvas=renderer.domElement;
     const cr=canvas.getBoundingClientRect(), br=body.getBoundingClientRect();
-    const pr=renderer.getPixelRatio();
-    const w=Math.max(2,Math.round(br.width*pr)), h=Math.max(2,Math.round(br.height*pr));
-    const x=Math.round((br.left-cr.left)*pr);
-    const y=Math.round((cr.bottom-br.bottom)*pr);            // alttan ölç (Y flip)
+    const w=Math.max(2,Math.round(br.width)), h=Math.max(2,Math.round(br.height));
+    const x=Math.round(br.left-cr.left);
+    const y=Math.round(cr.bottom-br.bottom);                 // alttan ölç (Y flip), CSS piksel
     if(w<2||h<2) return;
     if(!pipCam) pipCam=new THREE.PerspectiveCamera(50,16/9,0.1,600);
     const savGiz=camGizmos?camGizmos.visible:true;
