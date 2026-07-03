@@ -1,0 +1,1773 @@
+{
+  "std-32x16": [
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Salon: 58,5 m² / dar kenar 7 m (min 12 m², 3 m)",
+      "reg": 6,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 18,5 m² / 4,5 m",
+      "reg": 9,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Eb. banyo: 4 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 10,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Mutfak: 9 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 7,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Banyo: 19,5 m² / 3,5 m (min 3 m², 1,5 m)",
+      "reg": 4,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Salon: 48 m² / dar kenar 7 m (min 12 m², 3 m)",
+      "reg": 13,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 27,5 m² / 5 m",
+      "reg": 16,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Eb. banyo: 4 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 17,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Mutfak: 9 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 14,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Banyo: 12 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 11,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (1+1 (açık mutfak)) — Salon+Mutfak: 53 m² / dar kenar 4,5 m (min 15,3 m², 3 m)",
+      "reg": 21,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (1+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 31 m² / 7 m",
+      "reg": 20,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (1+1 (açık mutfak)) — Banyo: 10,5 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 18,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1 (açık mutfak)) — Salon+Mutfak: 66,25 m² / dar kenar 7 m (min 15,3 m², 3 m)",
+      "reg": 24,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 22,25 m² / 3,5 m",
+      "reg": 25,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1 (açık mutfak)) — Banyo: 7,5 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 22,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Apartman holü en dar yeri 1,5 m ≥ 1,2 m.",
+      "reg": 0,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ 1,2 m (konut).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Kat adedi 5 ≥ 4 → asansör zorunlu. Planda: 1.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Yapı yüksekliği 14,5 m ≤ 21,5 m → tek korunumlu merdiven yeterli (BYKHY M.48/5a); çekirdek küçük tutuldu, azami oturum alanı. Dilersen Yapı katmanından 2. kaçış merdiveni ekleyebilirsin.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "En uzak daire kapısı → merdiven kaçış mesafesi ≈ 16 m (max 30 m).",
+      "reg": 12,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Daire 138,75 m² (2+1 (ebeveyn banyolu) için makul ~86 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 6,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Daire 123 m² (2+1 (ebeveyn banyolu) için makul ~86 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 13,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 3 (1+1 (açık mutfak)) — Daire 102,5 m² (1+1 (açık mutfak) için makul ~58 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 21,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 4 (1+1 (açık mutfak)) — Daire 100,5 m² (1+1 (açık mutfak) için makul ~58 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 24,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Apartman holü bina dış sınırına değmiyor → zemin katta apartman/bina giriş kapısı yerleştirilemez (tek tip kat zemini de temsil eder). Zemini ayrı planlıyorsanız \"Katları ayrı planla\" ile zemin katında holü'yü dış cepheye uzatın.",
+      "reg": 0,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Toplam 20 bağımsız bölüm > 8 → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı (bir katın kullanımını “Sığınak” yapın).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    }
+  ],
+  "apt-21x18": [
+    {
+      "s": "bad",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 5,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — 3 yatak odasından 1 tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).",
+      "reg": null,
+      "unit": 1,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — 3 yatak odasından 1 tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).",
+      "reg": null,
+      "unit": 2,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 29,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 5 (2+1) — 2 yatak odasından 1 tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).",
+      "reg": null,
+      "unit": 4,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 1 — Giriş kapısı için uygun duvar yok (antre koridora komşu değil).",
+      "reg": null,
+      "unit": 0,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 4 — Giriş kapısı için uygun duvar yok (antre koridora komşu değil).",
+      "reg": null,
+      "unit": 3,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 1 — YATAK ODASI için uygun kapı yeri yok: duvar teması 1 m'den kısa. Duvarı sürükleyin.",
+      "reg": 4,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Salon: 15 m² / dar kenar 4 m (min 12 m², 3 m)",
+      "reg": 10,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 12,5 m² / 2,5 m",
+      "reg": 4,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Eb. banyo: 4 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 44,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Mutfak: 10 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 6,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Banyo: 3 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 43,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Salon: 17 m² / dar kenar 4 m (min 12 m², 3 m)",
+      "reg": 18,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 11 m² / 3 m",
+      "reg": 19,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Eb. banyo: 4 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 45,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Mutfak: 8,5 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 12,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Banyo: 5,25 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 13,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Salon: 17 m² / dar kenar 4 m (min 12 m², 3 m)",
+      "reg": 26,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 11 m² / 3 m",
+      "reg": 27,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Eb. banyo: 4 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 46,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Mutfak: 7 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 20,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Banyo: 5,25 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 21,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Salon: 24,25 m² / dar kenar 4,5 m (min 12 m², 3 m)",
+      "reg": 34,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 19,25 m² / 5 m",
+      "reg": 35,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Eb. banyo: 4 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 36,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Mutfak: 5,25 m² / 1,5 m (min 3,3 m², 1,5 m)",
+      "reg": 30,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Banyo: 5,25 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 31,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1) — Salon: 27,25 m² / dar kenar 5 m (min 12 m², 3 m)",
+      "reg": 41,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 12,25 m² / 3,5 m",
+      "reg": 42,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1) — Mutfak: 7 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 37,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1) — Banyo: 10,5 m² / 3 m (min 3 m², 1,5 m)",
+      "reg": 38,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Apartman holü en dar yeri 1,5 m ≥ 1,2 m.",
+      "reg": 0,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ 1,2 m (konut).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Kat adedi 5 ≥ 4 → asansör zorunlu. Planda: 1.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Yapı yüksekliği 14,5 m ≤ 21,5 m → tek korunumlu merdiven yeterli (BYKHY M.48/5a); çekirdek küçük tutuldu, azami oturum alanı. Dilersen Yapı katmanından 2. kaçış merdiveni ekleyebilirsin.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "En uzak daire kapısı → merdiven kaçış mesafesi ≈ 11,5 m (max 30 m).",
+      "reg": 22,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 6,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 12,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 20,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 30,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 5 (2+1) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 37,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Toplam 25 bağımsız bölüm > 8 → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı (bir katın kullanımını “Sığınak” yapın).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    }
+  ],
+  "L-shape": [
+    {
+      "s": "bad",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).",
+      "reg": null,
+      "unit": 0,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).",
+      "reg": null,
+      "unit": 1,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 15,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 3 (2+1 (ebeveyn banyolu)) — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).",
+      "reg": null,
+      "unit": 2,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 3 (2+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 21,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 7 — Giriş kapısı için uygun duvar yok (antre koridora komşu değil).",
+      "reg": null,
+      "unit": 6,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Salon: 17 m² / dar kenar 4 m (min 12 m², 3 m)",
+      "reg": 10,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 9 m² / 3 m",
+      "reg": 11,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Mutfak: 5 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 7,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Banyo: 5 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 8,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Salon: 14,5 m² / dar kenar 4 m (min 12 m², 3 m)",
+      "reg": 16,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 12 m² / 3 m",
+      "reg": 17,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Mutfak: 5 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 12,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Banyo: 3,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 13,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (2+1 (ebeveyn banyolu)) — Salon: 14,5 m² / dar kenar 4 m (min 12 m², 3 m)",
+      "reg": 22,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (2+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 12 m² / 3 m",
+      "reg": 23,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (2+1 (ebeveyn banyolu)) — Mutfak: 5 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 18,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (2+1 (ebeveyn banyolu)) — Banyo: 3,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 19,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1 (açık mutfak)) — Salon+Mutfak: 17,5 m² / dar kenar 4 m (min 15,3 m², 3 m)",
+      "reg": 26,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 10 m² / 2,5 m",
+      "reg": 27,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1 (açık mutfak)) — Banyo: 4,5 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 24,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (1+1 (açık mutfak)) — Salon+Mutfak: 17 m² / dar kenar 3,5 m (min 15,3 m², 3 m)",
+      "reg": 30,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (1+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 12 m² / 2,5 m",
+      "reg": 31,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (1+1 (açık mutfak)) — Banyo: 3,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 28,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 6 (1+1 (açık mutfak)) — Salon+Mutfak: 22 m² / dar kenar 4 m (min 15,3 m², 3 m)",
+      "reg": 34,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 6 (1+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 15 m² / 2,5 m",
+      "reg": 35,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 6 (1+1 (açık mutfak)) — Banyo: 3,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 32,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 7 (1+1 (açık mutfak)) — Salon+Mutfak: 22,75 m² / dar kenar 4,5 m (min 15,3 m², 3 m)",
+      "reg": 38,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 7 (1+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 11 m² / 2,5 m",
+      "reg": 39,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 7 (1+1 (açık mutfak)) — Banyo: 6,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 36,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Apartman holü en dar yeri 1,5 m ≥ 1,2 m.",
+      "reg": 0,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ 1,2 m (konut).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Kat adedi 8 ≥ 4 → asansör zorunlu. Planda: 1.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Yapı yüksekliği 23,2 m > 21,5 m → 2. kaçış (yangın) merdiveni zorunlu (BYKHY M.48). Planda eklendi.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "En uzak daire kapısı → merdiven kaçış mesafesi ≈ 24 m (max 30 m).",
+      "reg": 29,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Katta 7 daire ≥ 6 → teknik/tesisat şaftı çekirdeğe eklendi.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 7,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 2 (2+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 12,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 3 (2+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 18,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Toplam 56 bağımsız bölüm > 8 → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı (bir katın kullanımını “Sığınak” yapın).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    }
+  ],
+  "deep-48x27": [
+    {
+      "s": "bad",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — 3 yatak odasından 2 tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).",
+      "reg": null,
+      "unit": 1,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 22,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — EB. BANYO ebeveyn yatak odasına komşu değil; kapı verilemez. Duvarı geri sürükleyin.",
+      "reg": 23,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — 3 yatak odasından 2 tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).",
+      "reg": null,
+      "unit": 2,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 31,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — EB. BANYO ebeveyn yatak odasına komşu değil; kapı verilemez. Duvarı geri sürükleyin.",
+      "reg": 32,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — SALON dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 37,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 38,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 39,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 5 (2+1 (açık mutfak, ebeveyn banyolu)) — SALON + MUTFAK dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 45,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "bad",
+      "t": "Daire 5 (2+1 (açık mutfak, ebeveyn banyolu)) — YATAK ODASI dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.",
+      "reg": 46,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Salon: 45,25 m² / dar kenar 5,5 m (min 12 m², 3 m)",
+      "reg": 10,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 25,5 m² / 4 m",
+      "reg": 13,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Eb. banyo: 6,25 m² / 2,5 m (min 3 m², 1,5 m)",
+      "reg": 14,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Mutfak: 17,5 m² / 3,5 m (min 3,3 m², 1,5 m)",
+      "reg": 6,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Banyo: 10,5 m² / 3 m (min 3 m², 1,5 m)",
+      "reg": 7,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Salon: 51 m² / dar kenar 6 m (min 12 m², 3 m)",
+      "reg": 19,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 17,5 m² / 3 m",
+      "reg": 20,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Eb. banyo: 17,5 m² / 3,5 m (min 3 m², 1,5 m)",
+      "reg": 23,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Mutfak: 75 m² / 5 m (min 3,3 m², 1,5 m)",
+      "reg": 15,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Banyo: 27 m² / 4,5 m (min 3 m², 1,5 m)",
+      "reg": 16,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Salon: 48 m² / dar kenar 6 m (min 12 m², 3 m)",
+      "reg": 28,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 16 m² / 3 m",
+      "reg": 29,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Eb. banyo: 15,75 m² / 3,5 m (min 3 m², 1,5 m)",
+      "reg": 32,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Mutfak: 20 m² / 4 m (min 3,3 m², 1,5 m)",
+      "reg": 24,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Banyo: 24 m² / 4 m (min 3 m², 1,5 m)",
+      "reg": 25,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Salon: 44 m² / dar kenar 5,5 m (min 12 m², 3 m)",
+      "reg": 37,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 26 m² / 4,5 m",
+      "reg": 40,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Eb. banyo: 6 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 41,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Mutfak: 24,5 m² / 3,5 m (min 3,3 m², 1,5 m)",
+      "reg": 33,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Banyo: 8,75 m² / 2,5 m (min 3 m², 1,5 m)",
+      "reg": 34,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1 (açık mutfak, ebeveyn banyolu)) — Salon+Mutfak: 68 m² / dar kenar 8 m (min 15,3 m², 3 m)",
+      "reg": 45,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1 (açık mutfak, ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 25,5 m² / 3 m",
+      "reg": 46,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1 (açık mutfak, ebeveyn banyolu)) — Eb. banyo: 6 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 48,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (2+1 (açık mutfak, ebeveyn banyolu)) — Banyo: 12 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 42,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 6 (2+1 (açık mutfak, ebeveyn banyolu)) — Salon+Mutfak: 57 m² / dar kenar 8 m (min 15,3 m², 3 m)",
+      "reg": 51,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 6 (2+1 (açık mutfak, ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 35,5 m² / 3 m",
+      "reg": 53,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 6 (2+1 (açık mutfak, ebeveyn banyolu)) — Eb. banyo: 4 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 54,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 6 (2+1 (açık mutfak, ebeveyn banyolu)) — Banyo: 9,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 49,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Apartman holü en dar yeri 1,5 m ≥ 1,2 m.",
+      "reg": 0,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ 1,2 m (konut).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Kat adedi 6 ≥ 4 → asansör zorunlu. Planda: 1.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Yapı yüksekliği 17,4 m ≤ 21,5 m → tek korunumlu merdiven yeterli (BYKHY M.48/5a); çekirdek küçük tutuldu, azami oturum alanı. İsteğe bağlı 2. merdiven eklenmiş.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "En uzak daire kapısı → merdiven kaçış mesafesi ≈ 21,5 m (max 30 m).",
+      "reg": 8,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Katta 6 daire ≥ 6 → teknik/tesisat şaftı çekirdeğe eklendi.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 6,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 1 (3+1 (ebeveyn banyolu)) — Daire 164,75 m² (3+1 (ebeveyn banyolu) için makul ~109 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 10,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 15,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 2 (3+1 (ebeveyn banyolu)) — Daire 212,75 m² (3+1 (ebeveyn banyolu) için makul ~109 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 19,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 3 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 24,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)",
+      "reg": 33,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 4 (3+1 (ebeveyn banyolu)) — Daire 166,25 m² (3+1 (ebeveyn banyolu) için makul ~109 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 37,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 5 (2+1 (açık mutfak, ebeveyn banyolu)) — Daire 144 m² (2+1 (açık mutfak, ebeveyn banyolu) için makul ~86 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 45,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 6 (2+1 (açık mutfak, ebeveyn banyolu)) — Daire 142,75 m² (2+1 (açık mutfak, ebeveyn banyolu) için makul ~86 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 51,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Toplam 36 bağımsız bölüm > 8 → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı (bir katın kullanımını “Sığınak” yapın).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Ortalama daire 163,17 m² — bu programın hedefinin ~1,62 katı. Bu tabana kat başına ~10 daire daha uygun olur.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    }
+  ],
+  "villa-5+1": [
+    {
+      "s": "ok",
+      "t": "Villa — Salon: 25 m² / dar kenar 5 m (min 12 m², 3 m)",
+      "reg": 1,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Villa — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 19,25 m² / 3,5 m",
+      "reg": 8,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Villa — Eb. banyo: 6,25 m² / 2,5 m (min 3 m², 1,5 m)",
+      "reg": 10,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Villa — Mutfak: 9 m² / 2 m (min 3,3 m², 1,5 m)",
+      "reg": 2,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Villa — Banyo: 7,5 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 6,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Çok katlı villa → iç merdiven yerleştirildi.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Tek bağımsız bölümlü konut → asansör zorunluluğundan muaf (PAİY md.34).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    }
+  ],
+  "single-unit": [
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Salon: 65 m² / dar kenar 5,5 m (min 12 m², 3 m)",
+      "reg": 6,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 30,75 m² / 4,5 m",
+      "reg": 9,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Eb. banyo: 6,25 m² / 2,5 m (min 3 m², 1,5 m)",
+      "reg": 10,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Mutfak: 19,5 m² / 3 m (min 3,3 m², 1,5 m)",
+      "reg": 7,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Banyo: 12 m² / 2 m (min 3 m², 1,5 m)",
+      "reg": 3,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Apartman holü en dar yeri 1,5 m ≥ 1,2 m.",
+      "reg": 2,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ 1,2 m (konut).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Kat adedi 5 ≥ 4 → asansör zorunlu. Planda: 1.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Yapı yüksekliği 14,5 m ≤ 21,5 m → tek korunumlu merdiven yeterli (BYKHY M.48/5a); çekirdek küçük tutuldu, azami oturum alanı. Dilersen Yapı katmanından 2. kaçış merdiveni ekleyebilirsin.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "En uzak daire kapısı → merdiven kaçış mesafesi ≈ 6,5 m (max 30 m).",
+      "reg": 4,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 1 (2+1 (ebeveyn banyolu)) — Daire 160,5 m² (2+1 (ebeveyn banyolu) için makul ~86 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 6,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Ortalama daire 160,5 m² — bu programın hedefinin ~1,76 katı. Bu tabana kat başına ~2 daire daha uygun olur.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    }
+  ],
+  "comb-40x12": [
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (açık mutfak)) — Salon+Mutfak: 45 m² / dar kenar 7 m (min 15,3 m², 3 m)",
+      "reg": 6,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 12 m² / 3 m",
+      "reg": 7,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 1 (2+1 (açık mutfak)) — Banyo: 9,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 4,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (açık mutfak)) — Salon+Mutfak: 36 m² / dar kenar 5,5 m (min 15,3 m², 3 m)",
+      "reg": 11,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 12 m² / 3 m",
+      "reg": 12,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 2 (2+1 (açık mutfak)) — Banyo: 9,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 9,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (2+1 (açık mutfak)) — Salon+Mutfak: 36,75 m² / dar kenar 5,5 m (min 15,3 m², 3 m)",
+      "reg": 16,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (2+1 (açık mutfak)) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 15 m² / 3 m",
+      "reg": 18,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 3 (2+1 (açık mutfak)) — Banyo: 6,75 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 14,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1) — Salon: 51 m² / dar kenar 6,5 m (min 12 m², 3 m)",
+      "reg": 20,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 17,5 m² / 3,5 m",
+      "reg": 22,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1) — Mutfak: 10,5 m² / 3 m (min 3,3 m², 1,5 m)",
+      "reg": 21,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 4 (1+1) — Banyo: 4,5 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 23,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (1+1) — Salon: 42,75 m² / dar kenar 5 m (min 12 m², 3 m)",
+      "reg": 25,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek salonu büyütün; ya da daire sayısını azaltın."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (1+1) — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü 15,75 m² / 3,5 m",
+      "reg": 27,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek yatak odasını büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (1+1) — Mutfak: 12,25 m² / 3,5 m (min 3,3 m², 1,5 m)",
+      "reg": 26,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek mutfağı büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Daire 5 (1+1) — Banyo: 7,5 m² / 1,5 m (min 3 m², 1,5 m)",
+      "reg": 28,
+      "unit": null,
+      "action": {
+        "hint": "Komşu duvarı sürükleyerek banyoyu büyütün."
+      }
+    },
+    {
+      "s": "ok",
+      "t": "Apartman holü en dar yeri 1,5 m ≥ 1,2 m.",
+      "reg": 0,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Ortak merdiven 3,0 × 5,0 m çekirdek; kol genişliği ≥ 1,2 m (konut).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Kat adedi 5 ≥ 4 → asansör zorunlu. Planda: 1.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "Yapı yüksekliği 14,5 m ≤ 21,5 m → tek korunumlu merdiven yeterli (BYKHY M.48/5a); çekirdek küçük tutuldu, azami oturum alanı. Dilersen Yapı katmanından 2. kaçış merdiveni ekleyebilirsin.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "ok",
+      "t": "En uzak daire kapısı → merdiven kaçış mesafesi ≈ 20,5 m (max 30 m).",
+      "reg": 15,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 4 (1+1) — Daire 94,75 m² (1+1 için makul ~58 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 20,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Daire 5 (1+1) — Daire 89,5 m² (1+1 için makul ~58 m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.",
+      "reg": 25,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Apartman holü bina dış sınırına değmiyor → zemin katta apartman/bina giriş kapısı yerleştirilemez (tek tip kat zemini de temsil eder). Zemini ayrı planlıyorsanız \"Katları ayrı planla\" ile zemin katında holü'yü dış cepheye uzatın.",
+      "reg": 0,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "Toplam 25 bağımsız bölüm > 8 → Sığınak Yönetmeliği gereği bodrumda sığınak planlanmalı (bir katın kullanımını “Sığınak” yapın).",
+      "reg": null,
+      "unit": null,
+      "action": null
+    },
+    {
+      "s": "info",
+      "t": "İç konumda kalan (dış cepheye açılmayan) banyo/WC için mekanik havalandırma veya ışıklık gerekir.",
+      "reg": null,
+      "unit": null,
+      "action": null
+    }
+  ]
+}

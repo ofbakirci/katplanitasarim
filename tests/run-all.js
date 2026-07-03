@@ -5,6 +5,7 @@ const { ROOT, WORKSPACE_APP_JS, prepareAppScript } = require('./support/app-js')
 const strictTests = [
   'tests/bootstrap.js',
   'tests/snapshot-regression.js',
+  'tests/checks-metin.js',
   'tests/antre-slim.js',
   'tests/etiket.js',
   'tests/room-edit.js',
