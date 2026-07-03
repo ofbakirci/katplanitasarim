@@ -14,7 +14,7 @@ haritası, CI hepsi hazır. L1-A tam da bu ağın üstüne kurulmak için beklet
 
 | Dilim | Durum | Commit | Not |
 |---|---|---|---|
-| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | KOD TAMAM — KULLANICI ONAYI BEKLIYOR | `957764a` | Aşağıdaki "L1-A1 bulgular" bölümüne bak. Snapshot BİREBİR, npm test 31/31, build OK, perf render fazı değişmedi (~16ms). Kalınlık DEĞERLERİ + görünüm onayı kullanıcının. |
+| **L1-A1** duvar kalınlığı (ortogonal, görsel katman) | KOD TAMAM — KULLANICI ONAYI BEKLIYOR | `1e9763b` | Aşağıdaki "L1-A1 bulgular" bölümüne bak. Snapshot BİREBİR, npm test 31/31, build OK, perf render fazı değişmedi (~16ms). Kalınlık DEĞERLERİ + görünüm onayı kullanıcının. |
 | **L1-A2** brüt/net alan | BEKLIYOR | — | |
 | **L1-A3** DXF yazıcı (export) | BEKLIYOR | — | |
 | **L1-A4** roundtrip + entegrasyon | BEKLIYOR | — | L1-A3 ile aynı oturum olabilir |
