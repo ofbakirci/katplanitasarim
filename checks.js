@@ -124,7 +124,10 @@ function ruleImportRepair(add,p){
     add('info','İçe aktarılan düzen bozuktu (apartman holü bağımsız bölüm alanını yutmuştu, odalar hücresiz kalmıştı) → spec ve ayırıcılardan otomatik yeniden üretildi. Elle yapılmış oda düzenlemeleri korunamadı.');
 }
 function ruleUnitRooms(add,p){
-  /* piyes ölçüleri — Planlı Alanlar İmar Yönetmeliği md.30 */
+  /* piyes ölçüleri — Planlı Alanlar İmar Yönetmeliği md.30.
+     add'in 6. argümanı = ince kural id'si (SALON_MIN, YATAK_MIN, ...) — mevzuat filtresi/
+     DXF tüketicisi piyes başına tanısın diye; UNIT_ROOMS registry entry'sinin subIds'inde
+     ilan edilir. Metin/severity/reg/unit/action DEĞİŞMEZ (checks-metin id'yi yakalamaz). */
   p.unitObjs.forEach((u,k)=>{
     if(!u.rooms.some(g=>g.cells.length)) return;   // silinmiş (komşuya katılmış) daire
     const tag=(p.villa?(floorsOn()?'Villa '+floorName(activeFloor).toLowerCase():'Villa'):'Daire '+(k+1)+' ('+unitTag(u.spec)+')');
@@ -133,36 +136,36 @@ function ruleUnitRooms(add,p){
     if(salon){ const comb=!u.rooms.some(g=>g.type==='mutfak'); // ayrı mutfak yoksa salon+mutfak ölçütü
       const req=comb?REG.salonMutfak:REG.salon;
       add(salon.area>=req.area&&salon.minSide>=req.side?'ok':'bad',
-        `${tag} — ${comb?'Salon+Mutfak':'Salon'}: ${fmt(salon.area)} m² / dar kenar ${fmt(salon.minSide)} m (min ${fmt(req.area)} m², ${fmt(req.side)} m)`, salon.id, null, {hint:FIX_HINT.salon}); }
+        `${tag} — ${comb?'Salon+Mutfak':'Salon'}: ${fmt(salon.area)} m² / dar kenar ${fmt(salon.minSide)} m (min ${fmt(req.area)} m², ${fmt(req.side)} m)`, salon.id, null, {hint:FIX_HINT.salon}, 'SALON_MIN'); }
     const beds=find('yatak');
     if(beds.length){ const best=beds.reduce((a,b)=>b.area>a.area?b:a);
       add(best.area>=REG.yatak.area&&best.minSide>=REG.yatak.side?'ok':'bad',
-        `${tag} — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü ${fmt(best.area)} m² / ${fmt(best.minSide)} m`, best.id, null, {hint:FIX_HINT.yatak}); }
+        `${tag} — En az bir yatak odası ≥9 m² & ≥2,5 m: en büyüğü ${fmt(best.area)} m² / ${fmt(best.minSide)} m`, best.id, null, {hint:FIX_HINT.yatak}, 'YATAK_MIN'); }
     /* istenen oda programı tam yerleşti mi? (villa + katları ayrı: salon=0 stüdyo değil, yatak eksilmez) */
     const wantBeds=(u.spec.salon===0&&!(p.villa&&floorsOn()))? Math.max(0,u.spec.oda-1) : u.spec.oda;
-    if(beds.length<wantBeds) add('bad', `${tag} — ${wantBeds} yatak odasından ${beds.length} tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).`, null, k);
+    if(beds.length<wantBeds) add('bad', `${tag} — ${wantBeds} yatak odasından ${beds.length} tanesi yerleştirilebildi (alan/biçim yetersiz; ayırıcıyı sürükleyin veya daire sayısını azaltın).`, null, k, null, 'YATAK_SAYI');
     /* ensuite sözü: spec ebeveyn banyolu ise EB. BANYO var mı + ölçüleri (sessiz kayıp v20'de 4 daireden 3'ünü vurmuştu) */
     if(u.spec.ensuite && wantBeds>0){
       const ebb=u.rooms.find(g=>g.name==='EB. BANYO'&&g.cells.length);
-      if(!ebb) add('bad', `${tag} — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).`, null, k);
+      if(!ebb) add('bad', `${tag} — Ebeveyn banyosu istendi ama yerleştirilemedi (eb. yatak odası çok küçük; ayırıcıyı sürükleyin).`, null, k, null, 'EBEVEYN_BANYO');
       else add(ebb.area>=REG.banyo.area&&ebb.minSide>=REG.banyo.side?'ok':'bad',
-        `${tag} — Eb. banyo: ${fmt(ebb.area)} m² / ${fmt(ebb.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ebb.id, null, {hint:FIX_HINT.banyo});
+        `${tag} — Eb. banyo: ${fmt(ebb.area)} m² / ${fmt(ebb.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ebb.id, null, {hint:FIX_HINT.banyo}, 'EBEVEYN_BANYO');
     }
     const banAll=u.rooms.find(g=>g.type==='banyo');
-    if(!banAll) add('bad', `${tag} — Banyo yerleştirilemedi!`, null, k);
+    if(!banAll) add('bad', `${tag} — Banyo yerleştirilemedi!`, null, k, null, 'BANYO_YOK');
     const mut=u.rooms.find(g=>g.type==='mutfak');
-    if(!u.spec.acik && u.spec.salon>0 && !mut) add('bad', `${tag} — Ayrı mutfak istendi ama yerleştirilemedi (salonla birleşik sayıldı).`, null, k);
+    if(!u.spec.acik && u.spec.salon>0 && !mut) add('bad', `${tag} — Ayrı mutfak istendi ama yerleştirilemedi (salonla birleşik sayıldı).`, null, k, null, 'MUTFAK_YOK');
     if(!salon && !(p.villa&&floorsOn()&&u.spec.salon===0)) // katları ayrı planlanan villada salonsuz kat serbest (ev geneli ayrıca denetlenir)
-      add('bad', `${tag} — Salon/oturma odası yerleştirilemedi (yasal zorunlu piyes)!`, null, k);
+      add('bad', `${tag} — Salon/oturma odası yerleştirilemedi (yasal zorunlu piyes)!`, null, k, null, 'SALON_YOK');
     // ince-uzun mutfak uyarısı kaldırıldı (tasarım tercihi, mevzuat sorunu değil)
     if(mut) add(mut.area>=REG.mutfak.area&&mut.minSide>=REG.mutfak.side?'ok':'bad',
-      `${tag} — Mutfak: ${fmt(mut.area)} m² / ${fmt(mut.minSide)} m (min ${fmt(REG.mutfak.area)} m², ${fmt(REG.mutfak.side)} m)`, mut.id, null, {hint:FIX_HINT.mutfak});
+      `${tag} — Mutfak: ${fmt(mut.area)} m² / ${fmt(mut.minSide)} m (min ${fmt(REG.mutfak.area)} m², ${fmt(REG.mutfak.side)} m)`, mut.id, null, {hint:FIX_HINT.mutfak}, 'MUTFAK_MIN');
     const ban=u.rooms.find(g=>g.type==='banyo'&&!g.name.startsWith('EB'));
     if(ban) add(ban.area>=REG.banyo.area&&ban.minSide>=REG.banyo.side?'ok':'bad',
-      `${tag} — Banyo: ${fmt(ban.area)} m² / ${fmt(ban.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ban.id, null, {hint:FIX_HINT.banyo});
+      `${tag} — Banyo: ${fmt(ban.area)} m² / ${fmt(ban.minSide)} m (min ${fmt(REG.banyo.area)} m², ${fmt(REG.banyo.side)} m)`, ban.id, null, {hint:FIX_HINT.banyo}, 'BANYO_MIN');
     const wc=u.rooms.find(g=>g.type==='wc');
     if(wc) add(wc.area>=REG.wc.area&&wc.minSide>=REG.wc.side?'ok':'bad',
-      `${tag} — WC: ${fmt(wc.area)} m² / ${fmt(wc.minSide)} m (min ${fmt(REG.wc.area)} m², ${fmt(REG.wc.side)} m)`, wc.id, null, {hint:FIX_HINT.wc});
+      `${tag} — WC: ${fmt(wc.area)} m² / ${fmt(wc.minSide)} m (min ${fmt(REG.wc.area)} m², ${fmt(REG.wc.side)} m)`, wc.id, null, {hint:FIX_HINT.wc}, 'WC_MIN');
     /* doğal ışık: yaşama mekânları (salon, yatak odası) dış cepheye dokunmalı —
        PAİY md.30: piyeslerde pencere alanı ≥ taban alanının 1/8'i */
     u.rooms.forEach(g=>{ if(!g.cells.length||(g.type!=='salon'&&g.type!=='yatak'&&g.type!=='mutfak')) return;
@@ -170,8 +173,8 @@ function ruleUnitRooms(add,p){
         return r===0||r===p.rows-1||c===0||c===p.cols-1
           ||!p.inside[i-p.cols]||!p.inside[i+p.cols]||!p.inside[i-1]||!p.inside[i+1]; });
       if(!ext){
-        if(g.type==='mutfak') add('info', `${tag} — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)`, g.id);
-        else add('bad', `${tag} — ${g.name} dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.`, g.id);
+        if(g.type==='mutfak') add('info', `${tag} — Mutfak dış cepheye açılmıyor: penceresiz mutfağa DOĞALGAZ bağlanamaz. Mutfağı duvar sürükleyerek ya da takasla cepheye alın. (Alternatifler — elektrikli ocak / havalandırma boşluğu — Türkiye'de tercih edilmez.)`, g.id, null, null, 'DOGAL_ISIK');
+        else add('bad', `${tag} — ${g.name} dış cepheye açılmıyor: pencere/doğal ışık alamaz (PAİY md.30). Taban derinliğini azaltın veya daire sayısını artırın.`, g.id, null, null, 'DOGAL_ISIK');
       }
     });
     /* TİP-BİLİNÇLİ boyut denetimi (FAZ 2 / #42): artık alan salona/odalara akar. Daire,
@@ -183,14 +186,14 @@ function ruleUnitRooms(add,p){
       const totU=u.rooms.reduce((s,g)=>s+g.area,0);
       const C=REG.checks, sp=u.spec, tM2=C.sismeTaban+C.sismeSalon*(sp.salon||0)+C.sismeOda*(sp.oda||0)+(sp.ensuite?C.sismeEnsuite:0);
       if(totU>tM2*C.sismeFactor)
-        add('info', `${tag} — Daire ${fmt(totU)} m² (${unitTag(sp)} için makul ~${fmt(tM2)} m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.`, salon.id);
+        add('info', `${tag} — Daire ${fmt(totU)} m² (${unitTag(sp)} için makul ~${fmt(tM2)} m²): artık taban alanı odalara aktı (şişme). Daire sayısını artırın veya derinliği azaltın.`, salon.id, null, null, 'DAIRE_SISME');
       else if(salon.area>Math.max(C.salonPayTaban, totU*C.salonPayOran))
-        add('info', `${tag} — Salon ${fmt(salon.area)} m² (dairenin %${Math.round(100*salon.area/totU)}'i): artık taban alanı salona aktı. Daire sayısını artırın veya derinliği azaltın.`, salon.id);
+        add('info', `${tag} — Salon ${fmt(salon.area)} m² (dairenin %${Math.round(100*salon.area/totU)}'i): artık taban alanı salona aktı. Daire sayısını artırın veya derinliği azaltın.`, salon.id, null, null, 'DAIRE_SISME');
     }
     /* biçim denetimi: oda, kapsayan dikdörtgeninin en az %55'ini doldurmalı */
     u.rooms.forEach(g=>{ if(!g.cells.length||g.type==='antre'||g.bw*g.bh<=0) return;
       const fill=g.area/(g.bw*g.bh);
-      if(fill<REG.checks.bicimDoluluk) add('bad', `${tag} — ${g.name} biçimsiz (dikdörtgen doluluk %${Math.round(fill*100)}). Ayırıcıyı sürükleyerek veya daire sayısını azaltarak düzeltin.`, g.id); });
+      if(fill<REG.checks.bicimDoluluk) add('bad', `${tag} — ${g.name} biçimsiz (dikdörtgen doluluk %${Math.round(fill*100)}). Ayırıcıyı sürükleyerek veya daire sayısını azaltarak düzeltin.`, g.id, null, null, 'BICIM'); });
     /* erişim denetimi: her oda antreye (EB. BANYO eb. yatak odasına) komşu olmalı — duvar sürüklenince canlı izlenir */
     if(u.antre&&u.antre.cells.length){
       u.rooms.forEach(g=>{
@@ -203,7 +206,7 @@ function ruleUnitRooms(add,p){
         const ok=g.cells.some(i=>{ const r=(i/p.cols)|0, c=i%p.cols;
           return (r>0&&p.cm[i-p.cols]===tid)||(r<p.rows-1&&p.cm[i+p.cols]===tid)
                ||(c>0&&p.cm[i-1]===tid)||(c<p.cols-1&&p.cm[i+1]===tid); });
-        if(!ok) add('bad', `${tag} — ${g.name} ${g.name==='EB. BANYO'?'ebeveyn yatak odasına':'antreye'} komşu değil; kapı verilemez. Duvarı geri sürükleyin.`, g.id);
+        if(!ok) add('bad', `${tag} — ${g.name} ${g.name==='EB. BANYO'?'ebeveyn yatak odasına':'antreye'} komşu değil; kapı verilemez. Duvarı geri sürükleyin.`, g.id, null, null, 'ERISIM');
       });
     }
   });
@@ -500,7 +503,10 @@ function ruleBalkon(add,p){
    (global) → D/DXF tüketicileri kuralları sayabilir/gezebilir. */
 const CHECK_RULES = [
   { id:'IMPORT_REPAIR', run:ruleImportRepair },  // içe-aktarım otomatik onarım bilgisi
-  { id:'UNIT_ROOMS',    run:ruleUnitRooms },      // daire piyes ölçüleri + doğal ışık + biçim + erişim (PAİY md.30)
+  // UNIT_ROOMS satırları piyes başına ince id ile damgalanır (subIds) — mevzuat filtresi/DXF için:
+  { id:'UNIT_ROOMS',    run:ruleUnitRooms,        // daire piyes ölçüleri + doğal ışık + biçim + erişim (PAİY md.30)
+    subIds:['SALON_MIN','YATAK_MIN','YATAK_SAYI','EBEVEYN_BANYO','BANYO_YOK','MUTFAK_YOK',
+            'SALON_YOK','MUTFAK_MIN','BANYO_MIN','WC_MIN','DOGAL_ISIK','DAIRE_SISME','BICIM','ERISIM'] },
   { id:'DOORS',         run:ruleDoors },          // silinen/yerleşemeyen kapılar
   { id:'FLOOR',         run:ruleFloor },          // kat geneli: konut-dışı / apartman çekirdek-kaçış / villa-kat tutarlılığı
   { id:'CORE',          run:ruleCore },           // çekirdek ölçü + yükseklik-sınıfı (FIRE eşikleri)
@@ -546,3 +552,8 @@ function runChecks(){
   renderChecks(out);
   return out; // slimUnitAntre vb. ihlal sayısını kabul kapısı olarak kullanır
 }
+/* ── Makine-okunur yüzey (A7): kural registry'sini D/DXF/ML tüketicilerine aç.
+   checkRuleIds() = tüm KARARLI id'lerin düz listesi (rule id + UNIT_ROOMS subIds);
+   collectChecks() döndürdüğü her satırın `id` alanı bu kümenin bir üyesidir. */
+function checkRuleIds(){ const s=[]; CHECK_RULES.forEach(r=>{ s.push(r.id); (r.subIds||[]).forEach(x=>s.push(x)); }); return s; }
+if(typeof window!=='undefined'){ window.CHECK_RULES=CHECK_RULES; window.checkRuleIds=checkRuleIds; }

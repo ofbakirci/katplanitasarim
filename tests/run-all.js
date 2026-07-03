@@ -6,6 +6,7 @@ const strictTests = [
   'tests/bootstrap.js',
   'tests/snapshot-regression.js',
   'tests/checks-metin.js',
+  'tests/checks-registry.js',
   'tests/antre-slim.js',
   'tests/etiket.js',
   'tests/room-edit.js',
