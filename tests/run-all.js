@@ -19,6 +19,7 @@ const strictTests = [
   'tests/dxf-import.js',
   'tests/dxf-roundtrip.js',
   'tests/avlu-blok.js',
+  'tests/avlu-edit.js',
   'tests/wall-drag.js',
   'tests/koridor-daralt.js',
   'tests/koridor-genislik.js',
