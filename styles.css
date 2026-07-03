@@ -182,8 +182,14 @@
   svg{display:block; width:100%; height:100%; cursor:crosshair;}
   svg.panning{cursor:grab;}
   /* Araç çubuğu — sol dikey ikon-rayı (gruplu · hover'da tooltip · sadece ikon) */
+  /* max-height+overflow-y:auto — KISA viewport'ta (ör. Mesken iframe embed'i, ~<560px) grup
+     sayısı arttıkça ray boy taşırıp alt butonları (Örnek sınır/3B) erişilemez kılıyordu
+     (kabuk body{overflow:hidden} kırpıyordu); artık ray kendi içinde kayar, hiçbir buton kaybolmaz. */
   #toolbar{position:absolute; top:10px; left:10px; z-index:8; display:flex; flex-direction:column; align-items:center; gap:4px;
-    background:var(--panel); padding:6px; border-radius:12px; border:1px solid var(--line); box-shadow:0 4px 14px rgba(0,0,0,.08);}
+    background:var(--panel); padding:6px; border-radius:12px; border:1px solid var(--line); box-shadow:0 4px 14px rgba(0,0,0,.08);
+    max-height:calc(100vh - 20px); overflow-y:auto; overflow-x:hidden; scrollbar-width:thin;}
+  #toolbar::-webkit-scrollbar{width:6px;}
+  #toolbar::-webkit-scrollbar-thumb{background:var(--line); border-radius:6px;}
   #toolbar .tbgrp{display:flex; flex-direction:column; align-items:center; gap:4px;}
   #toolbar .tbsep{width:26px; height:1px; background:var(--line); margin:3px 0;}
   #toolbar button{position:relative; width:38px; height:38px; padding:0; display:flex; align-items:center; justify-content:center;
@@ -268,9 +274,11 @@
   /* devre dışı araç butonu (ör. ileri-al boşken) */
   #toolbar button:disabled, #toolbar button:disabled:hover{opacity:.45; cursor:not-allowed; color:var(--muted); border-color:var(--line);}
   /* yüzen değişiklik geçmişi paneli */
-  /* left:64px — dikey toolbar sütununun (left:10 + ~54px) SAĞI; left:10'da kısa pencerede
-     yukarı büyüyen panel toolbar'ın (z:8) altında kalıyordu (panel z:7, bilinçli: menüleri örtmesin) */
-  #histPanel{position:absolute; left:64px; bottom:48px; width:240px; max-height:calc(100% - 180px);
+  /* left:83px — dikey toolbar sütununun (left:10 + gerçek genişlik 63px [border+padding dahil] + 10px boşluk)
+     SAĞI; left:10'da kısa pencerede yukarı büyüyen panel toolbar'ın (z:8) altında kalıyordu (panel z:7,
+     bilinçli: menüleri örtmesin). DÜZELTME (LAYOUT ajanı): eski left:64px hâlâ 9px çakışıyordu — toolbar
+     gerçek genişliği ~54px değil 63px (6+6 padding + 1+1 border + 38 buton); ölçülüp doğrulandı. */
+  #histPanel{position:absolute; left:83px; bottom:48px; width:240px; max-height:calc(100% - 180px);
     background:var(--panel); border:1px solid var(--line); border-radius:10px;
     box-shadow:0 3px 12px rgba(0,0,0,.10); display:none; flex-direction:column; overflow:hidden; z-index:7;}
   #hpHead{display:flex; justify-content:space-between; align-items:center; padding:8px 11px;
