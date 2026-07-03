@@ -301,6 +301,9 @@
     const wasLockGroup=(prev==='camera'||prev==='furniture');
     if(inLockGroup && !wasLockGroup) enterTopLock(true);       // serbest görünümden kilit grubuna → kilitle (serbest açıyı sakla)
     else if(!inLockGroup && wasLockGroup) releaseTopLockToFree(); // kilit grubundan çıkış → serbest açı geri
+    // C3-6: KAMERA grubuna (yeniden) giriş → PiP kullanıcı-X bayrağını sıfırla (seçili kamera varsa canlı önizleme geri gelsin).
+    //   Deterministik kural: PiP görünür ⇔ kamera grubu + seçili kamera + kullanıcı X ile kapatmadı; grup girişi X'i temizler.
+    if(activeGroup==='camera' && prev!=='camera'){ pipClosed=false; applyPipSize(); }
     // B2-4: MOBİLYA grubundan BAŞKA gruba geçiş → düzenleme + seçim + yarım hayalet otomatik temizlenir
     if(prev==='camera' && activeGroup!=='camera' && placeMode) setPlaceMode(false);   // kamera grubundan çıkış → yerleştirme açık kalmasın
     syncFurnModeToGroup();                                                            // grup 'furniture' değilse furnMode kapanır (ghost+seçim temizler)
@@ -359,7 +362,7 @@
   // hazır görüş chip'i: kısa tween'le o açıya. Kilitliyken İzo/yön seçmek kilidi AÇAR.
   function orbPreset(k){
     if(!controls) return;
-    if(k==='top'){ if(!topLocked) enterTopLock(true); else controls.tweenToAngle(TOP_PHI, undefined, NAV.tweenMs); updateOrb(); return; }
+    if(k==='top'){ if(!topLocked) enterTopLock(true); else controls.tweenToAngle(TOP_PHI, topAzimuth(), NAV.tweenMs); updateOrb(); return; }   // C3-3: preset azimut (en uzun kenar alta paralel)
     // İzo/yön → serbest açı gerekir: kilitliyse önce aç (snap yok, tween ile), sonra açıya git
     if(topLocked) exitTopLock();
     const ISO_PHI=Math.PI*0.30;                       // ~54° eğim = izometrik his
@@ -765,16 +768,21 @@
     // mobilya grubu — zemin/duvar gibi -cx,-cz ofsetli (pos MUTLAK metre). __floorGroup'a KOYMA:
     // o grup kamera-yerleştirme raycast'i; mobilya oraya girerse kullanıcı "kanepenin üstüne kamera" koyar.
     const furn=new THREE.Group(); furn.position.set(-cx,0,-cz); scene.add(furn); scene.__furnitureGroup=furn;
+    // C3-4: TAVAN grubu — oda poligonlarını duvar üstü yüksekliğinde örten mat açık düzlem. VARSAYILAN GİZLİ;
+    //   yalnız kamera bakış pass'lerinde (snapCameraDataURL + PiP) açılır → iso/ana dollhouse AÇIK ÇATI kalır.
+    const ceil=new THREE.Group(); ceil.position.set(-cx,0,-cz); ceil.visible=false; scene.add(ceil); scene.__ceiling=ceil;
 
     // paylaşılan malzemeler (her duvar için yeni material üretme)
     const matWall=new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92});
     const matDoor=new THREE.MeshStandardMaterial({color:0x8a6a48,roughness:0.7,metalness:0.05}); // kapı eşiği = ahşap kahve
-    // C1-3: KAPALI kanat malzemeleri — duvardan (krem) ayrışan ahşap ton; abartısız.
-    //   iç kapı = açık ahşap, çerçeve = koyu ahşap, kol = mat metal, bina girişi (kind=ext) = daha koyu/vurgulu.
-    const matLeaf=new THREE.MeshStandardMaterial({color:0xb08a5c,roughness:0.62,metalness:0.06});   // iç kanat: sıcak açık ahşap
-    const matLeafExt=new THREE.MeshStandardMaterial({color:0x6d4a30,roughness:0.55,metalness:0.10}); // bina girişi: koyu ahşap
-    const matJamb=new THREE.MeshStandardMaterial({color:0x7a5636,roughness:0.7,metalness:0.05});      // çerçeve/kasa
-    const matHandle=new THREE.MeshStandardMaterial({color:0x9a9a9a,roughness:0.4,metalness:0.6});     // kol
+    // C1-3 / C3-5: KAPALI kanat malzemeleri — KAPILAR mobilya dolaplarından BARİZ ayrışsın diye KOYU tonda +
+    //   belirgin (koyu, kalın) kasa çerçevesi. Dolaplar açık ahşap (FMAT.wood/panel) → kapı koyu = render'da
+    //   nano girdisinde ikisi net farklı okunur. iç kapı = koyu ceviz, bina girişi (ext) = daha da koyu.
+    const matLeaf=new THREE.MeshStandardMaterial({color:0x5a3d26,roughness:0.55,metalness:0.06});   // iç kanat: koyu ceviz (C3-5)
+    const matLeafExt=new THREE.MeshStandardMaterial({color:0x3d2817,roughness:0.5,metalness:0.10});  // bina girişi: en koyu
+    const matJamb=new THREE.MeshStandardMaterial({color:0x2e2016,roughness:0.6,metalness:0.05});      // çerçeve/kasa: KOYU vurgu (C3-5)
+    const matHandle=new THREE.MeshStandardMaterial({color:0xc8c8cc,roughness:0.3,metalness:0.7});     // kol: parlak metal (kontrast)
+    const matCeil=new THREE.MeshStandardMaterial({color:0xf3efe6,roughness:0.96,metalness:0,side:THREE.DoubleSide}); // C3-4: tavan = mat açık ton
 
     // kapı boşlukları (metre uzayı): map.doors px → px2m. Oda kenarlarıyla AYNI doğrultudadır.
     // kind: 'ext'=bina girişi, 'unit'=daire girişi, 'inner'/'extra'=iç kapı (kanat tonu için taşınır).
@@ -790,16 +798,25 @@
       const grp=new THREE.Group(); grp.position.set(mx,0,mz); grp.rotation.y=ang;
       const isExt=(kind==='ext');
       const leafMat=isExt?matLeafExt:matLeaf;
-      const jw=0.06;                                       // kasa (jamb) genişliği
+      const jw=0.08;                                       // C3-5: kasa (jamb) genişliği — daha belirgin çerçeve
       const lw=Math.max(0.2,gw-2*jw);                      // kanat net genişliği (kasa payı düşülür)
       const lt=0.045;                                      // kanat kalınlığı (ince panel)
+      const jt=Math.max(0.24,WALL_T+0.04);                 // kasa derinliği — duvarı sarar
       const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,DOOR_H*0.98,lt),leafMat);
       leaf.position.set(0,DOOR_H*0.98/2,0); leaf.castShadow=true; grp.add(leaf);
-      // iki dikey kasa (kapı çerçevesi) — duvar kalınlığını kapsar, kanattan hafif kalın
+      // C3-5: kapı panelinde iki yatay kayıt (lambri) çizgisi — kanat "kapı" okunur (dolap raflarından farklı yön)
+      for(const fy of [DOOR_H*0.34, DOOR_H*0.66]){
+        const rail=new THREE.Mesh(new THREE.BoxGeometry(lw*0.9,0.04,lt+0.012),matJamb);
+        rail.position.set(0,fy,0); grp.add(rail);
+      }
+      // iki dikey kasa (kapı çerçevesi) — duvar kalınlığını kapsar, kanattan belirgin kalın/koyu
       for(const sgn of [-1,1]){
-        const jm=new THREE.Mesh(new THREE.BoxGeometry(jw,DOOR_H,Math.max(0.22,WALL_T)),matJamb);
+        const jm=new THREE.Mesh(new THREE.BoxGeometry(jw,DOOR_H,jt),matJamb);
         jm.position.set(sgn*(lw/2+jw/2),DOOR_H/2,0); jm.castShadow=true; grp.add(jm);
       }
+      // C3-5: üst kasa (lento çerçevesi) — kapı tam bir dikdörtgen çerçeve olarak okunur
+      const head=new THREE.Mesh(new THREE.BoxGeometry(gw,jw,jt),matJamb);
+      head.position.set(0,DOOR_H+jw/2-0.01,0); head.castShadow=true; grp.add(head);
       // kol imasi — kanadın bir yüzünde küçük çıkıntı (menteşe karşı-kenarına yakın), göz hizasında
       const hnd=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.12,0.05),matHandle);
       hnd.position.set(lw*0.36,1.05,lt/2+0.025); hnd.castShadow=true; grp.add(hnd);
@@ -847,6 +864,10 @@
       g.rotateX(Math.PI/2);
       const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:col,roughness:0.78,metalness:0.03}));
       m.receiveShadow=true; m.castShadow=true; m.userData.isFloor=true; m.userData.roomRef=o; G.add(m);
+      // C3-4: aynı poligondan TAVAN dilimi (duvar üstü yüksekliğinde, mat açık ton) → __ceiling grubuna (gizli).
+      const cg=new THREE.ExtrudeGeometry(shapeFrom(o.polygon_px,map),{depth:FLOOR_T,bevelEnabled:false});
+      cg.rotateX(Math.PI/2);
+      const cm=new THREE.Mesh(cg,matCeil); cm.position.y=WALL_H; cm.receiveShadow=true; cm.userData.isCeiling=true; ceil.add(cm);
       // duvarlar = oda kenarları (kapı boşlukları oyulmuş)
       const P=o.polygon_px;
       for(let i=0;i<P.length;i++) wallEdge(px2m(map,P[i][0],P[i][1]), px2m(map,P[(i+1)%P.length][0],P[(i+1)%P.length][1]));
@@ -883,7 +904,12 @@
   function setView(v){
     if(!cam||!controls) return;
     const d=22; controls.target.set(0,0,0);
-    if(v==='top'){ cam.up.set(0,0,-1); cam.position.set(0,d*4.2,0); cam.fov=16; }
+    if(v==='top'){
+      // C3-3: en uzun kenar ekran altına paralel — dominant eksen X ise up=-Z (X yatay kalır), Z ise up=+X (Z yatay olur)
+      const upZ=(scene && scene.__hz!=null && scene.__hx!=null && scene.__hx<scene.__hz);
+      if(upZ) cam.up.set(1,0,0); else cam.up.set(0,0,-1);
+      cam.position.set(0,d*4.2,0); cam.fov=16;
+    }
     else { cam.up.set(0,1,0); cam.fov=42;
       if(v==='iso') cam.position.set(d,d*0.95,d); else cam.position.set(d*1.3,d*0.5,d*1.3); }
     cam.updateProjectionMatrix(); controls.sync(); controls.update();
@@ -958,6 +984,15 @@
   // TOP_PHI: kilit polar açısı. Tam 0 (dik tepeden) yerine ~89° (0.02 rad değil, hafif 88-89°)
   //   istendi → hafif eğik değil, "neredeyse tepeden" ama kesin dik-değil ki derinlik ipucu kalsın.
   const TOP_PHI=0.055;   // ~3.15° eğim (neredeyse tepeden; kullanıcı "üst açıya kitlense" + "89°")
+  // C3-3: kuşbakışı azimut — bina EN UZUN kenarı ekranın ALT kenarına paralel olsun (randımanlı çerçeve).
+  // Plan bbox eksen-hizalı (dünya XZ) → baskın eksen: X mi Z mi daha uzun. Ekran-yukarı ground yönü = (-sinθ,-cosθ);
+  // en uzun kenar ekran-yatay olması için o kenar ⟂ ekran-yukarı → θ=atan2(-dz,dx). Dominant X=(1,0)→θ=0; Z=(0,1)→θ=-π/2.
+  // YALNIZ preset/kilit girişinde uygulanır (kullanıcı sonra elle döndürürse karışmaz — top-lock zaten noRotate).
+  function topAzimuth(){
+    if(!scene || scene.__hx==null || scene.__hz==null) return undefined;
+    const dx = (scene.__hx>=scene.__hz) ? 1 : 0, dz = (scene.__hx>=scene.__hz) ? 0 : 1;
+    return Math.atan2(-dz, dx);
+  }
   function lockBtnEl(){ return overlay&&overlay.querySelector('#v3dLockBtn'); }
   // kilit düğmesi yalnız kamera/mobilya grubunda görünür; ikon/başlık kilit durumuna göre.
   function updateLockBtn(){
@@ -976,7 +1011,7 @@
     if(saveFree && !topLocked) freeSavedView=getView();     // kilit ÖNCESİ serbest açı (yalnız serbestten girişte sakla)
     topLocked=true; controls.noRotate=true;
     cam.up.set(0,1,0);                                       // top-lock'ta dünya-yukarı sabit (setView('top') -Z up kullanır; orbit ile karışmasın)
-    controls.tweenToAngle(TOP_PHI, undefined, NAV.tweenMs);  // mevcut mesafe/azimut korunur, yalnız tepeye eğ
+    controls.tweenToAngle(TOP_PHI, topAzimuth(), NAV.tweenMs);  // C3-3: tepeye eğ + azimut en uzun kenar alta paralel (giriş anında)
     updateLockBtn();
   }
   // kilidi aç: döndürme serbest; KALDIĞIN açıdan devam (snap YOK — tween'i durdur, mevcut poz kalsın).
@@ -1058,12 +1093,14 @@
     const savAspect=cam.aspect, savPR=renderer.getPixelRatio();// aspect+pixelRatio getView kapsamaz → ayrı sakla
     const savRoof=roofOn, savGiz=camGizmos?camGizmos.visible:true;
     const labels=scene.__labels, savLbl=labels?labels.visible:true;
+    const ceilG=scene.__ceiling, savCeil=ceilG?ceilG.visible:false;    // C3-4
     let url=null;
     _snapBusy=true;                                            // R2: bu sırada loop PiP scissor pass'i ATLA
     try{
       if(camGizmos) camGizmos.visible=false;                   // kamera modelleri/koni kadrajda olmasın
       if(labels) labels.visible=false;                         // 3B etiketler görünmesin
       if(!roofOn){ roofOn=true; applyRoof(); }                 // iç mekan: duvarlar tam-yükseklik → oda kapanır
+      if(ceilG) ceilG.visible=true;                            // C3-4: iç mekan bakışı → tavan görünür
       renderer.setPixelRatio(1); renderer.setSize(1440,810,false);  // sabit 16:9; updateStyle=false ŞART (canvas CSS bozulmasın)
       cam.up.set(0,1,0);
       cam.position.set(c.pos.x,c.pos.y,c.pos.z);
@@ -1076,6 +1113,7 @@
       cam.aspect=savAspect;
       if(labels) labels.visible=savLbl;
       if(camGizmos) camGizmos.visible=savGiz;
+      if(ceilG) ceilG.visible=savCeil;                         // C3-4: tavan görünürlüğü BİREBİR geri
       if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }      // çatı durumunu geri al
       if(savedView) restoreView(savedView);                    // orbit açısı + fov geri (updateProjectionMatrix içeride)
       else cam.updateProjectionMatrix();                       // savedView yoksa aspect restore'unu yansıt
@@ -1120,6 +1158,7 @@
     const savGiz=camGizmos?camGizmos.visible:true;
     const labels=scene.__labels, savLbl=labels?labels.visible:true;
     const savRoof=roofOn;
+    const ceilG=scene.__ceiling, savCeil=ceilG?ceilG.visible:false;    // C3-4
     const savVp=renderer.getViewport(new THREE.Vector4());
     const savSc=renderer.getScissor(new THREE.Vector4());
     const savScTest=renderer.getScissorTest();
@@ -1127,6 +1166,7 @@
       if(camGizmos) camGizmos.visible=false;                 // koni/kamera modeli PiP'te görünmesin
       if(labels) labels.visible=false;                       // 3B etiketler PiP'te görünmesin
       if(!roofOn){ roofOn=true; applyRoof(); }               // iç mekan: duvarlar tam-yükseklik
+      if(ceilG) ceilG.visible=true;                          // C3-4: PiP iç mekan → tavan görünür
       pipCam.up.set(0,1,0);
       pipCam.position.set(c.pos.x,c.pos.y,c.pos.z);
       pipCam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
@@ -1140,6 +1180,7 @@
       renderer.setScissor(savSc.x,savSc.y,savSc.z,savSc.w);
       if(labels) labels.visible=savLbl;
       if(camGizmos) camGizmos.visible=savGiz;
+      if(ceilG) ceilG.visible=savCeil;                        // C3-4: tavan görünürlüğü BİREBİR geri
       if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }
     }
   }
@@ -1492,7 +1533,7 @@
     const snap=ev.shiftKey?null:furnWallSnap(f,x,z,ra); if(snap){ x=snap.x; z=snap.z; rot=snap.rot; }
     furnGhost.pos={x:x,z:z}; furnGhost.rot=rot;
     furnGhost.valid=furnDragValid({type:furnGhost.type,__w:null,__d:null}, x, z, rot, snap?null:ra);
-    const m=furnGhost.mesh; if(m){ m.visible=true; m.position.set(x-(scene.__cx||0),0,z-(scene.__cz||0)); m.rotation.y=rot*Math.PI/180; tintFurnMesh(m, !furnGhost.valid); }
+    const m=furnGhost.mesh; if(m){ m.visible=true; m.position.set(x,0,z); m.rotation.y=rot*Math.PI/180; tintFurnMesh(m, !furnGhost.valid); }   // C3-1: mesh __furnitureGroup çocuğu (grup zaten -cx,-cz ofsetli) → renderFurniture gibi MUTLAK metre; eski x-cx çift-ofset (hayalet sol-üste kayıyordu)
   }
   function dropFurnGhost(){
     if(!furnGhost||!furnGhost.pos) return false;
@@ -1710,6 +1751,7 @@
   }
   function selectCam(i){
     if(i<0||i>=camList.length) return;
+    pipClosed=false;                                        // C3-6: HER seçim eylemi (çip/sahne/aynı kamera) X bayrağını temizler → PiP geri gelir
     activeCamIdx=i; pendingPos=null;
     if(placeMode && placeAction==='add') placeAction='aim';   // seçince düzenlemeye geç
     const c=camList[i]; camHeight=c.height||'eye'; camLens=c.lens||24;
@@ -1815,6 +1857,8 @@
   }
   // dock'u BAŞTAN kur (kamera seç/ekle/sil/setCamUI'da). Highlight/slider tazeleme updateCamDock'ta (yeniden kurMAZ).
   // B1-R: KOMPAKT — kapalıyken tek yatay bar; özet çipe tıkla → detay katmanı (yükseklik/bakış açısı/objektif/gün saati/render).
+  // C3-2: yerleştir düğmesi etiketi — placeMode açık=Bitir; seçili kamera var=Düzenle (mevcut Taşı/Yön akışına girer); yok=Yerleştir (yeni kamera akışı).
+  function placeBtnLabel(){ return placeMode ? 'Bitir' : ((activeCamIdx>=0 && activeCamIdx<camList.length) ? 'Düzenle' : 'Yerleştir'); }
   function renderCamDock(){
     const dk=overlay&&overlay.querySelector('#v3dCamDock'); if(!dk) return;
     if(!camUIEnabled){ dk.style.display='none'; dk.innerHTML=''; return; }
@@ -1828,7 +1872,7 @@
       '<div class="strip" id="v3dCamStrip">'+camStripHTML()+'</div>'+
       '<div class="sep"></div>'+
       '<div class="row seg">'+
-        '<button data-v3d="place" id="v3dPlaceBtn" class="green'+(placeMode?' on':'')+'">'+ic('camera',12)+(placeMode?'Bitir':'Yerleştir')+'</button>'+
+        '<button data-v3d="place" id="v3dPlaceBtn" class="green'+(placeMode?' on':'')+'">'+ic('camera',12)+placeBtnLabel()+'</button>'+
         '<button data-camact="add" class="v3dact"'+(placeMode&&placeAction==='add'?' data-on="1"':'')+'>'+ic('plus',12)+'Ekle</button>'+
       '</div>'+
       // seçili kamera bağlamında ikon eylemleri (Yön/Taşı/Odakla/Sil)
@@ -1914,7 +1958,7 @@
   function updateCamDock(){
     const dk=overlay&&overlay.querySelector('#v3dCamDock'); if(!dk||dk.style.display==='none') return;
     const has=(activeCamIdx>=0 && activeCamIdx<camList.length), c=has?camList[activeCamIdx]:null;
-    const pb=dk.querySelector('#v3dPlaceBtn'); if(pb){ pb.classList.toggle('on',placeMode); pb.innerHTML=ic('camera',12)+(placeMode?'Bitir':'Yerleştir'); }
+    const pb=dk.querySelector('#v3dPlaceBtn'); if(pb){ pb.classList.toggle('on',placeMode); pb.innerHTML=ic('camera',12)+placeBtnLabel(); }
     // B1-R: özet çip metni + seçili-kamera eylem ikonlarının etkinliği
     const sumT=dk.querySelector('#v3dCamSumT'); if(sumT) sumT.textContent=has?camSummaryText(c,activeCamIdx):'Kamera seç';
     const acts=dk.querySelector('#v3dCamActs'); if(acts){ acts.style.opacity=has?'1':'.4'; acts.style.pointerEvents=has?'':'none'; }
@@ -1967,6 +2011,7 @@
     if(FMAT) return;
     const M=function(c,r,m){ return new THREE.MeshStandardMaterial({color:c, roughness:(r==null?0.8:r), metalness:(m||0)}); };
     FMAT={ wood:M(0x9c7a52,0.82), woodDark:M(0x6e5234,0.78), panel:M(0xe4ddcf,0.7),
+           cabinet:M(0xcdb089,0.72), cabinetLine:M(0x8a6f4c,0.75),   // C3-5: dolap = açık ahşap + ayrım çizgisi (kapı koyu tonundan bariz ayrışır)
            fabric:M(0x8593a8,0.95), fabric2:M(0xb7a98c,0.95), cushion:M(0x9aa7bb,0.96), leather:M(0x7c5a44,0.5),
            white:M(0xf1f1f3,0.55), porcelain:M(0xf5f5f7,0.35), steel:M(0xc2c4c8,0.4,0.5), metal:M(0x9a9aa0,0.45,0.6),
            dark:M(0x303036,0.6,0.3), glass:M(0xbcd6e6,0.2,0.2), green:M(0x5f8f5f,0.9), leaf:M(0x4f8453,0.85),
@@ -1987,9 +2032,17 @@
   function tableMesh(g,w,d,topY,mat){ const t=fbox(w,0.05,d,mat||FMAT.wood); t.position.y=topY; g.add(t); legsAt(g,w,d,topY-0.025,topY-0.025,FMAT.woodDark); }
   function chairMesh(g,w,d){ const se=0.46; const s=fbox(w,0.06,d,FMAT.wood); s.position.y=se; g.add(s);
     const b=fbox(w,0.42,0.05,FMAT.wood); b.position.set(0,se+0.22,-d/2+0.04); g.add(b); legsAt(g,w,d,se-0.03,se-0.03,FMAT.woodDark,0.05); }
-  function cabinetMesh(g,w,d,h,mat,doors,baseY){ baseY=baseY||0; mat=mat||FMAT.panel; const box=fbox(w,h,d,mat); box.position.y=baseY+h/2; g.add(box);
-    doors=doors||Math.max(1,Math.round(w/0.5)); for(let i=1;i<doors;i++){ const gv=fbox(0.012,h*0.94,0.012,FMAT.woodDark); gv.position.set(-w/2+w/doors*i,baseY+h/2,d/2+0.006); g.add(gv); }
-    for(let i=0;i<doors;i++){ const hd=fbox(0.02,0.12,0.02,FMAT.metal); hd.position.set(-w/2+w/doors*(i+0.5)+w/doors*0.32,baseY+h/2,d/2+0.01); g.add(hd); } }
+  // C3-5: gövde = açık ahşap (FMAT.cabinet) + ön yüzde BELİRGİN kapak-ayrım çizgileri + her kapağa ince çerçeve imi
+  //   + dikey kulplar → nano girdisinde "dolap" olarak okunur, koyu KAPI kanadıyla karışmaz.
+  function cabinetMesh(g,w,d,h,mat,doors,baseY){ baseY=baseY||0; mat=mat||FMAT.cabinet; const box=fbox(w,h,d,mat); box.position.y=baseY+h/2; g.add(box);
+    doors=doors||Math.max(1,Math.round(w/0.5)); const fz=d/2+0.006, lineMat=FMAT.cabinetLine;
+    for(let i=1;i<doors;i++){ const gv=fbox(0.022,h*0.96,0.02,lineMat); gv.position.set(-w/2+w/doors*i,baseY+h/2,fz); g.add(gv); }   // kapak ayrım çizgisi (kalın)
+    const dw=w/doors;
+    for(let i=0;i<doors;i++){ const cxp=-w/2+dw*(i+0.5);
+      // her kapak yüzüne ince dikdörtgen çerçeve imi (üst+alt yatay çizgi) → panel okunur
+      for(const yy of [baseY+h*0.06, baseY+h*0.94]){ const hl=fbox(dw*0.78,0.016,0.014,lineMat); hl.position.set(cxp,yy,fz); g.add(hl); }
+      const hd=fbox(0.024,Math.min(0.22,h*0.16),0.03,FMAT.metal); hd.position.set(cxp+dw*0.34,baseY+h/2,fz+0.006); g.add(hd); }   // dikey kulp
+  }
   function bedMesh(g,w,d){ const base=fbox(w,0.28,d,FMAT.panel); base.position.y=0.14; g.add(base);
     const mat=fbox(w-0.06,0.16,d-0.06,FMAT.fabric2); mat.position.y=0.34; g.add(mat);
     const hb=fbox(w,0.95,0.09,FMAT.woodDark); hb.position.set(0,0.48,-d/2+0.045); g.add(hb);
@@ -2016,7 +2069,7 @@
       case 'side_table': { const t2=fcyl(W/2,0.04,FMAT.wood,16); t2.position.y=0.53; g.add(t2); const lg=fcyl(0.03,0.51,FMAT.woodDark,8); lg.position.y=0.255; g.add(lg); break; }
       case 'tv_unit': { const box=fbox(W,0.48,Dp,FMAT.woodDark); box.position.y=0.24; g.add(box); for(let i=1;i<3;i++){ const gv=fbox(0.012,0.44,0.012,FMAT.dark); gv.position.set(-W/2+W/3*i,0.24,Dp/2+0.005); g.add(gv);} break; }
       case 'tv': { const scr=fbox(W,0.80,0.05,FMAT.dark); scr.position.y=1.10; g.add(scr); const st=fbox(0.4,0.04,0.18,FMAT.dark); st.position.y=0.70; g.add(st); break; }
-      case 'bookcase': { cabinetMesh(g,W,Dp,D.h,FMAT.wood,1); const shelves=4; for(let i=1;i<shelves;i++){ const sh=fbox(W-0.06,0.03,Dp-0.04,FMAT.woodDark); sh.position.set(0,D.h*i/shelves,0); g.add(sh);} break; }
+      case 'bookcase': { cabinetMesh(g,W,Dp,D.h,FMAT.cabinet,1); const shelves=4; for(let i=1;i<shelves;i++){ const sh=fbox(W-0.06,0.03,Dp-0.04,FMAT.cabinetLine); sh.position.set(0,D.h*i/shelves,Dp/2-0.02); g.add(sh);} break; }   // C3-5: raf çizgileri ön yüze yakın (okunur)
       case 'console': { const box=fbox(W,0.18,Dp,FMAT.wood); box.position.y=0.70; g.add(box); legsAt(g,W,Dp,0.70-0.09,0.61,FMAT.woodDark); break; }
       case 'sideboard': cabinetMesh(g,W,Dp,D.h,FMAT.wood); break;
       case 'rug': { const rg=fbox(W,0.02,Dp,FMAT.rug); rg.position.y=0.012; g.add(rg); const bd=fbox(W-0.2,0.022,Dp-0.2,FMAT.rugDark); bd.position.y=0.013; g.add(bd); break; }
@@ -2025,7 +2078,7 @@
       case 'bistro_table': { const t2=fcyl(W/2,0.04,FMAT.metal,16); t2.position.y=0.71; g.add(t2); const lg=fcyl(0.04,0.69,FMAT.metal,8); lg.position.y=0.345; g.add(lg); break; }
       case 'bed_single': case 'bed_double': case 'bed_queen': case 'bed_king': bedMesh(g,W,Dp); break;
       case 'nightstand': { cabinetMesh(g,W,Dp,0.50,FMAT.wood,1); break; }
-      case 'wardrobe_2': case 'wardrobe_3': case 'wardrobe_4': cabinetMesh(g,W,Dp,D.h,FMAT.panel); break;
+      case 'wardrobe_2': case 'wardrobe_3': case 'wardrobe_4': cabinetMesh(g,W,Dp,D.h,FMAT.cabinet); break;   // C3-5: açık ahşap dolap (koyu kapıdan ayrışır)
       case 'dresser': cabinetMesh(g,W,Dp,D.h,FMAT.wood, Math.max(2,Math.round(W/0.5))); break;
       case 'vanity': { const tb=fbox(W,0.04,Dp,FMAT.wood); tb.position.y=0.76; g.add(tb); legsAt(g,W,Dp,0.735,0.735,FMAT.woodDark); const mir=fbox(W*0.6,0.5,0.03,FMAT.glass); mir.position.set(0,1.15,-Dp/2+0.03); g.add(mir); break; }
       case 'bench': { const s=fbox(W,0.12,Dp,FMAT.fabric2); s.position.y=0.40; g.add(s); legsAt(g,W,Dp,0.34,0.34,FMAT.woodDark); break; }
@@ -2049,7 +2102,7 @@
         [-1,1].forEach(function(sx){ const sp=fbox(gt,gh,d2,FMAT.glass); sp.position.set(sx*w2/2,gh/2,dc); g.add(sp); });    // iki YAN cam
         const dw=w2*0.5, fr=fbox(dw,gh,gt,FMAT.glass); fr.position.set(-(w2-dw)/2,gh/2,dFront); g.add(fr);      // ÖN yarım cam kapı; kalan açıklık = TEK GİRİŞ
         break; }
-      case 'shoe_cabinet': cabinetMesh(g,W,Dp,D.h,FMAT.wood,Math.max(1,Math.round(W/0.5))); break;
+      case 'shoe_cabinet': cabinetMesh(g,W,Dp,D.h,FMAT.cabinet,Math.max(1,Math.round(W/0.5))); break;   // C3-5: açık ahşap dolap
       case 'coat_rack': { const post=fbox(0.06,D.h,0.06,FMAT.woodDark); post.position.y=D.h/2; g.add(post); const base=fbox(W,0.04,Dp,FMAT.woodDark); base.position.y=0.02; g.add(base);
         [0.3,-0.3].forEach(function(s){ const arm=fbox(0.04,0.04,0.22,FMAT.metal); arm.position.set(0,D.h-0.1,s); g.add(arm);}); break; }
       case 'desk': { const tp=fbox(W,0.05,Dp,FMAT.wood); tp.position.y=0.74; g.add(tp); const ped=fbox(0.42,0.68,Dp-0.06,FMAT.panel); ped.position.set(W/2-0.23,0.36,0); g.add(ped); legsAt(g,W,Dp,0.715,0.715,FMAT.woodDark,0.05); break; }
