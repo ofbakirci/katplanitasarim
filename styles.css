@@ -187,7 +187,8 @@
      (kabuk body{overflow:hidden} kırpıyordu); artık ray kendi içinde kayar, hiçbir buton kaybolmaz. */
   #toolbar{position:absolute; top:10px; left:10px; z-index:8; display:flex; flex-direction:column; align-items:center; gap:4px;
     background:var(--panel); padding:6px; border-radius:12px; border:1px solid var(--line); box-shadow:0 4px 14px rgba(0,0,0,.08);
-    max-height:calc(100vh - 20px); overflow-y:auto; overflow-x:hidden; scrollbar-width:thin;}
+    /* alt paydan 62px: durum çubuğu (#status, bottom:10 + ~34px) + nefes — toolbar İmleç/Alan okumasını örtmesin */
+    max-height:calc(100% - 62px); overflow-y:auto; overflow-x:hidden; scrollbar-width:thin;}
   #toolbar::-webkit-scrollbar{width:6px;}
   #toolbar::-webkit-scrollbar-thumb{background:var(--line); border-radius:6px;}
   #toolbar .tbgrp{display:flex; flex-direction:column; align-items:center; gap:4px;}
