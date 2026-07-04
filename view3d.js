@@ -49,6 +49,12 @@
   let walkRay=null;                                          // gezinti çarpışması için ayrılmış Raycaster (picker'dan bağımsız)
   let walkLamp=null, walkAmbient=null;                        // W3: gezinti-özel iç aydınlatma (kafa lambası + fill); kapalı iç mekan karanlık kalmasın
   const WALK_EYE=1.6, WALK_SPEED=2.5, WALK_RUN=4.0, WALK_BUFFER=0.25, WALK_PITCH_MAX=85*Math.PI/180;
+  // J1: ZIPLAMA — göz-hizası (WALK_EYE) taban, üstüne balistik dikey ofset. Basit yerçekimi: v0/g öyle seçilir ki
+  //   tepe ~0.5m (h=v0²/2g ⇒ v0=√(2·g·0.5)). İniş TABAN'a (floorY=WALK_EYE) ya da üstüne çıkılabilecek ALÇAK
+  //   mobilya tepesine. walkY = göz konumu (dünya y). walkVelY = dikey hız. walkGrounded = yerde/mobilya üstünde.
+  const WALK_GRAV=14.0, WALK_JUMP_H=0.5, WALK_JUMP_V0=Math.sqrt(2*WALK_GRAV*WALK_JUMP_H);
+  const WALK_STAND_MAX=0.55;                                 // J1: üstüne çıkılabilir "alçak mobilya" tavanı (m) — sehpa/puf/koltuk oturağı; yüksek dolap/masa değil
+  let walkY=WALK_EYE, walkVelY=0, walkGrounded=true;         // J1: dikey durum
   // U2: GEZİNTİ AYDINLATMA — tek ayar nesnesi (NAV deseni). Kafa feneri "patlak ışık" (blown-out) idi:
   //   önceki lampInt 0.35 + range 16 + fillInt 0.85 birlikte yüzeyleri yakıyordu. Değerler kısıldı +
   //   fener menzili daraltılıp decay artırıldı (yakın mesafe okunur, uzak yumuşak düşer). Sahne ambient
@@ -866,7 +872,11 @@
     }
 
     // paylaşılan malzemeler (her duvar için yeni material üretme)
-    const matWall=new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92});
+    // J4: TÜM duvar yüzeyleri aynı polygonOffset ile bir tık ÖNE — birbirleriyle DÖVÜŞMEZ (hepsi aynı ofset) ama
+    //   duvara EŞ-DÜZLEM yabancı yüzeyleri (TV/mobilya arka paneli, boyalı-yarım vs nötr matWall sınırı, zemin-eki)
+    //   derinlik testinde deterministik geride bırakır → "TV arkası desenli duvarda yamalı z-fight" biter (W6 EPS
+    //   opak bindirmesi komşu-çifti çözer ama duvar-yüzü ile mobilya/zemin eş-düzleminde yamalı fight kalıyordu).
+    const matWall=new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92, polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-1});
     const matDoor=new THREE.MeshStandardMaterial({color:0x8a6a48,roughness:0.7,metalness:0.05}); // kapı eşiği = ahşap kahve
     // C1-3 / C3-5: KAPALI kanat malzemeleri — KAPILAR mobilya dolaplarından BARİZ ayrışsın diye KOYU tonda +
     //   belirgin (koyu, kalın) kasa çerçevesi. Dolaplar açık ahşap (FMAT.wood/panel) → kapı koyu = render'da
@@ -911,9 +921,15 @@
         var gl=new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.05,cellW),Math.max(0.1,gh-2*fr),0.03),matGlass);
         gl.position.set(gx,sill+gh/2,0); grp.add(gl);
       }
-      // dış çerçeve: alt+üst+iki yan (beyaz PVC)
-      [[0,sill,gw,fr],[0,top,gw,fr]].forEach(function(s){ var m=new THREE.Mesh(new THREE.BoxGeometry(s[2],s[3],ft),matFrame); m.position.set(s[0],s[1],0); grp.add(m); });
-      [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2),sill+gh/2,0); grp.add(m); });
+      // J3: KASA OYUĞU TAM DOLDURSUN — kasa profilleri artık oyuğun İÇİNE oturur (merkez sill/top DEĞİL) + epsilon
+      //   bindirmeyle parapet/lento duvarlarıyla buluşur. Eskiden alt/üst kayıt sill/top'a MERKEZLİYDİ → yarısı
+      //   (fr/2=0.03m) oyuk dışında kalıyor, cam ise sill+fr'den başlıyordu → aradaki fr/2 bant NE cam NE kasa NE
+      //   duvar = SİYAH BOŞLUK. Fix: alt kayıt tabanı sill'e (üst kayıt tepesi top'a) hizalı, we kadar duvara taşar.
+      //   Hepsi AYNI sill/top/gw kaynağından türer (oyukla birebir): parapet 0..sill, lento top..WALL_H, cam sill+fr..top-fr.
+      var we=0.02;                                        // epsilon bindirme (kasa ↔ parapet/lento buluşma payı)
+      var botRail=new THREE.Mesh(new THREE.BoxGeometry(gw,fr+we,ft),matFrame); botRail.position.set(0,sill+fr/2-we/2,0); grp.add(botRail);   // alt kayıt: taban sill'e (we kadar parapete gömülü)
+      var topRail=new THREE.Mesh(new THREE.BoxGeometry(gw,fr+we,ft),matFrame); topRail.position.set(0,top-fr/2+we/2,0); grp.add(topRail);   // üst kayıt: tepe top'a (we kadar lentoya gömülü)
+      [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2),sill+gh/2,0); grp.add(m); });   // iki yan kasa (oyuk boyunca)
       // orta dikme(ler): dikey ince profil(ler) — çift/üçlü kanat görünümü (tam-boyda da devam)
       for(var mi=1;mi<=mull;mi++){ var mxp=-gw/2+mi*(gw/(mull+1));
         var dm=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); dm.position.set(mxp,sill+gh/2,0); grp.add(dm); }
@@ -1551,7 +1567,7 @@
      Giriş: Pointer Lock + WASD yürü + fare bak (yaw/pitch). Çarpışma: RAYCAST (duvar+pencere-cam bloklar,
      kapı kanadı GEÇİLİR) + mobilya ayak-izi bloğu. Tavan AÇIK, etiket/gizmo/dock gizli (C3-4 deseni). */
   function walkHintHTML(){
-    return 'WASD yürü · Fare bak · Shift koş · <b style="color:#e0843a">C: bu açıda kamera</b> · Esc çık';   // R9: C ipucu
+    return 'WASD yürü · Fare bak · Shift koş · Space: zıpla · <b style="color:#e0843a">C: bu açıda kamera</b> · Esc çık';   // R9: C ipucu · J1: Space
   }
   function ensureWalkHint(){
     if(!overlay) return null;
@@ -1666,6 +1682,7 @@
       walkLamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z);
     }
     walkOn=true;
+    walkY=WALK_EYE; walkVelY=0; walkGrounded=true;           // J1: dikey durumu sıfırla (girişte yerde)
     Object.keys(walkKeys).forEach(function(k){ walkKeys[k]=false; });
     walkClock=(typeof performance!=='undefined'?performance.now():Date.now());
     cam.fov=72; cam.up.set(0,1,0); applyWalkLook();           // geniş-açı iç mekan hissi
@@ -1720,6 +1737,7 @@
     else if(k==='d'||k==='arrowright'){ walkKeys.d=true; e.preventDefault(); }
     else if(e.key==='Shift'){ walkKeys.shift=true; }
     else if(k==='c'){ addWalkCamera(); e.preventDefault(); }   // R9: bu açıda kamera yerleştir (pointer-lock aktifken KLAVYE birincil yol)
+    else if(k===' '||k==='spacebar'){ if(walkGrounded){ walkVelY=WALK_JUMP_V0; walkGrounded=false; } e.preventDefault(); }   // J1: zıpla (yalnız yerdeyken → çift-zıplama yok)
     // Esc: tarayıcı pointer-lock'u KENDİ bırakır → walkLockChange çıkışı yapar (ayrıca burada yakala)
     else if(e.key==='Escape'){ exitWalk(); }
   }
@@ -1820,6 +1838,24 @@
     }
     return false;
   }
+  // J1: (x,z) altındaki GÖZ-hizası zemin yüksekliği. Taban = WALK_EYE. Ayak noktası ALÇAK bir mobilyanın (tepe
+  //   ≤ WALK_STAND_MAX) ayak-izi içindeyse üstüne çıkılabilir → WALK_EYE + tepe. Yüksek/geçilmez mobilya (dolap,
+  //   masa) üstüne çıkılmaz (taban döner → o mobilyayı zaten yatay çarpışma engeller). Koordinat: (x,z) DÜNYA;
+  //   footprint MUTLAK metre → worldToPx ile aynı (+cx,+cz) dönüşümü.
+  function walkFloorAt(x,z){
+    let floor=WALK_EYE;
+    const cxo=(scene&&scene.__cx)||0, czo=(scene&&scene.__cz)||0;
+    const mx=x+cxo, mz=z+czo;
+    for(let i=0;i<furnList.length;i++){
+      const f=furnList[i]; if(!f||!f.pos) continue;
+      const h=furnHeightOf(f.type); if(h==null||h>WALK_STAND_MAX) continue;   // yalnız alçak mobilya üstü basılabilir
+      let fp=f.__fp;
+      if(!fp){ const dm=FURN_DIM[f.type]||{w:0.5,d:0.5}, fw=(f.__w!=null?f.__w:dm.w), fd=(f.__d!=null?f.__d:dm.d);
+        fp=furnFootprintM(f.pos.x,f.pos.z,f.rot_deg||0,fw,fd); }
+      if(pointInPolyM(mx,mz,fp)){ const top=WALK_EYE+h; if(top>floor) floor=top; }
+    }
+    return floor;
+  }
   // her karede (loop) çağrılır: dt hesapla, WASD yönünü kur, eksen-ayrık çarpışma (duvar boyunca kayar), uygula.
   function walkStep(){
     if(!walkOn||!cam) return;
@@ -1829,23 +1865,31 @@
     let mf=0, ms=0;                                          // ileri / yan giriş
     if(walkKeys.w) mf+=1; if(walkKeys.s) mf-=1;
     if(walkKeys.d) ms+=1; if(walkKeys.a) ms-=1;
-    if(mf===0&&ms===0){ cam.position.y=WALK_EYE; applyWalkLook(); walkSyncLamp(); return; }
-    // yatay düzlemde ileri/yan yön (pitch'ten bağımsız → merdiven yok, düz yürü)
-    const fx=Math.sin(walkYaw), fz=-Math.cos(walkYaw);       // ileri (yatay)
-    const rx=Math.cos(walkYaw), rz=Math.sin(walkYaw);        // sağ (yatay)
-    let vx=fx*mf+rx*ms, vz=fz*mf+rz*ms;
-    const vl=Math.hypot(vx,vz)||1; vx/=vl; vz/=vl;
-    const speed=(walkKeys.shift?WALK_RUN:WALK_SPEED)*dt;
-    const px=cam.position.x, pz=cam.position.z;
-    // eksen-ayrık: X ve Z ayrı test → bir duvara çarpınca diğer eksende kayar
-    if(vx!==0 && walkAxisClear(px,pz, vx,0, Math.abs(vx*speed)+WALK_BUFFER)) cam.position.x=px+vx*speed;
-    if(vz!==0 && walkAxisClear(cam.position.x,pz, 0,vz, Math.abs(vz*speed)+WALK_BUFFER)) cam.position.z=pz+vz*speed;
-    // güvenlik ağı: bina dış bbox'ı DIŞINA çıkma (cephedeki kapı boşluğundan boşluğa yürüyüp kadraj-dışı
-    //   siyaha düşmeyi önler; iç kapı geçişleri bbox İÇİNDE olduğundan etkilenmez). hx/hz merkez-hizalı yarı-en.
-    const hx=(scene&&scene.__hx)||1e9, hz=(scene&&scene.__hz)||1e9, mrg=WALK_BUFFER;
-    cam.position.x=Math.max(-hx+mrg, Math.min(hx-mrg, cam.position.x));
-    cam.position.z=Math.max(-hz+mrg, Math.min(hz-mrg, cam.position.z));
-    cam.position.y=WALK_EYE;                                 // göz hizası sabit (head-bob YOK)
+    if(mf!==0||ms!==0){
+      // yatay düzlemde ileri/yan yön (pitch'ten bağımsız → merdiven yok, düz yürü)
+      const fx=Math.sin(walkYaw), fz=-Math.cos(walkYaw);       // ileri (yatay)
+      const rx=Math.cos(walkYaw), rz=Math.sin(walkYaw);        // sağ (yatay)
+      let vx=fx*mf+rx*ms, vz=fz*mf+rz*ms;
+      const vl=Math.hypot(vx,vz)||1; vx/=vl; vz/=vl;
+      const speed=(walkKeys.shift?WALK_RUN:WALK_SPEED)*dt;
+      const px=cam.position.x, pz=cam.position.z;
+      // eksen-ayrık: X ve Z ayrı test → bir duvara çarpınca diğer eksende kayar (J1: havadayken de AYNI yatay çarpışma)
+      if(vx!==0 && walkAxisClear(px,pz, vx,0, Math.abs(vx*speed)+WALK_BUFFER)) cam.position.x=px+vx*speed;
+      if(vz!==0 && walkAxisClear(cam.position.x,pz, 0,vz, Math.abs(vz*speed)+WALK_BUFFER)) cam.position.z=pz+vz*speed;
+      // güvenlik ağı: bina dış bbox'ı DIŞINA çıkma (cephedeki kapı boşluğundan boşluğa yürüyüp kadraj-dışı
+      //   siyaha düşmeyi önler; iç kapı geçişleri bbox İÇİNDE olduğundan etkilenmez). hx/hz merkez-hizalı yarı-en.
+      const hx=(scene&&scene.__hx)||1e9, hz=(scene&&scene.__hz)||1e9, mrg=WALK_BUFFER;
+      cam.position.x=Math.max(-hx+mrg, Math.min(hx-mrg, cam.position.x));
+      cam.position.z=Math.max(-hz+mrg, Math.min(hz-mrg, cam.position.z));
+    }
+    // J1: DİKEY BALİSTİK — her karede yerçekimi entegre et, zemine (taban ya da alçak mobilya tepesi) in.
+    const floorY=walkFloorAt(cam.position.x, cam.position.z);
+    if(!walkGrounded || walkY>floorY+1e-4){
+      walkVelY-=WALK_GRAV*dt; walkY+=walkVelY*dt;
+      if(walkY<=floorY){ walkY=floorY; walkVelY=0; walkGrounded=true; }   // iniş
+      else walkGrounded=false;
+    } else { walkY=floorY; walkVelY=0; walkGrounded=true; }               // yerde kalırken zemine yapış (mobilya üstü/taban)
+    cam.position.y=walkY;                                     // göz hizası = taban/mobilya-üstü + zıplama ofseti
     applyWalkLook(); walkSyncLamp();
   }
   function walkSyncLamp(){ if(walkLamp&&cam) walkLamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z); }
@@ -2694,6 +2738,9 @@
     if(THREE.SRGBColorSpace) tex.colorSpace=THREE.SRGBColorSpace; else if(THREE.sRGBEncoding) tex.encoding=THREE.sRGBEncoding;
     const rough=(p.cls==='seramik')?0.35:(p.cls==='boya'?0.9:0.7);
     const m=new THREE.MeshStandardMaterial({ map:tex, roughness:rough, metalness:(p.cls==='seramik'?0.06:0.02) });
+    // J4: DUVAR boyası da matWall ile AYNI polygonOffset alsın (boyalı oda ↔ nötr matWall komşusu ya da mobilya
+    //   arka paneli eş-düzleminde tutarlı öne). Yalnız duvar grubu (zemin parke/seramik dokunulmaz).
+    if(p.group==='wall'){ m.polygonOffset=true; m.polygonOffsetFactor=-1; m.polygonOffsetUnits=-1; }
     _matTexCache[key]=m; return m;
   }
   // oda için seçili malzeme (floor|wall) preset key'i — override YOKSA null (→ renk-kodlu varsayılan).
@@ -3338,12 +3385,12 @@
     return room.__an;
   }
   const COLLISION_EXEMPT={ rug:1, tv:1 };   // halı (mobilya altında) + TV (ünite üstünde) → çakışma engellemez/engellenmez
-  const DOOR_CLR=0.35;                       // kapı açıklığının YANLARINDA boş kalacak pay (m) — geçiş için span'ı iki uçta genişletir
-  const DOOR_PASS_DEPTH=0.90;                // W2: kapı önü GEÇİŞ koridoru derinliği (m) — bu derinliğe kadar mobilya YASAK
-  // ayak izi bir kapı geçişini engelliyor mu. W2: her kapı span'ının İKİ tarafında (odaya doğru) geçiş koridoru
-  //   MUTLAK yasak: span genişliği (±DOOR_CLR) × ~0.9m derinlik. Eskiden derinlik 0.45m'ydi → span önünde
-  //   0.5-0.9m'de duran mobilya "kapı önü boş" değildi ama geçmiyordu (kullanıcı: yürüyüp geçemiyor). Kapı
-  //   iç kapı olduğundan her iki odada da o duvar kenarı analiz edilir → koridor iki tarafta oluşur.
+  const DOOR_CLR=0.35;                       // kapı açıklığının YANLARINDA boş kalacak yanal pay (m) — geçiş için span'ı iki uçta genişletir (J2 istenen ≥0.30 karşılanır)
+  const DOOR_PASS_DEPTH=1.20;                // J2: kapı önü GEÇİŞ koridoru derinliği (m) — W2'de 0.90'dı, yaklaşım yolu hâlâ kesilebiliyordu → 1.20'ye çıkarıldı (mobilya bu derinliğe kadar YASAK)
+  // ayak izi bir kapı geçişini engelliyor mu. W2/J2: her kapı span'ının İKİ tarafında (odaya doğru) geçiş koridoru
+  //   MUTLAK yasak: span genişliği (±DOOR_CLR=0.35 yanal) × 1.20m derinlik. Derinlik 0.45→0.90→1.20 kademe kademe
+  //   büyütüldü çünkü kapının tam önünde değil ama YAKLAŞIM yolunda duran mobilya hâlâ geçişi kesiyordu (kullanıcı).
+  //   Kapı iç kapı olduğundan her iki odada da o duvar kenarı analiz edilir → koridor iki tarafta oluşur.
   function furnDoorBlocked(fp, an){
     for(let i=0;i<an.edges.length;i++){ const e=an.edges[i]; if(!e.doorSpans.length) continue;
       let tMin=1e9,tMax=-1e9,perpMin=1e9;

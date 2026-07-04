@@ -55,8 +55,8 @@ run(`
   };
 `);
 
-// W2: kapı geçiş koridoru derinliği (furnDoorBlocked ile aynı eşikler)
-const DOOR_PASS_DEPTH = 0.90, DOOR_CLR = 0.35;
+// W2/J2: kapı geçiş koridoru derinliği (furnDoorBlocked ile aynı eşikler; J2'de 0.90→1.20)
+const DOOR_PASS_DEPTH = 1.20, DOOR_CLR = 0.35;
 // W3: yüksek mobilya eşiği + pencere-önü derinliği (furnWindowBlocked ile aynı)
 const WIN_TALL_H = 1.10, WIN_PERP = 0.45;
 
