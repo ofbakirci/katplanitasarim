@@ -1070,9 +1070,40 @@
       const need=along+Math.max(x/tanH, y/tanV);       // bu köşeyi içerecek min mesafe
       if(need>d) d=need;
     }
+    // U6: SOFT-BORDER — mesh alt dock + sağ rail ARKASINA girmesin. Çalışma alanı = viewport − UI inset'leri
+    //   (aktif dock yüksekliği + rail genişliği). (a) Kullanılabilir görüş oranı kadar mesafeyi büyüt (model
+    //   daha küçük görünsün ki daralan kutuya sığsın), (b) hedefi kaydır ki model GÖRÜNÜR bölgenin ortasına otursun.
+    //   SERT değil: kullanıcı sonra elle zoom/pan ile taşabilir. Export/snapshot yolu kendi kamerasını kurar → DOKUNULMAZ.
+    const ins=uiInsetPx(), vw=(renderer&&renderer.domElement.clientWidth)||overlay&&overlay.clientWidth||1440,
+          vh=(renderer&&renderer.domElement.clientHeight)||overlay&&overlay.clientHeight||810;
+    const visW=Math.max(60, vw-ins.right), visH=Math.max(60, vh-ins.bottom);
+    d *= Math.max(vw/visW, vh/visH);                    // daralan görünür kutuya sığacak kadar geri çek
     controls.target.copy(target);
     cam.position.copy(target).addScaledVector(dir, d);
+    // hedef kaydırma: görünür bölge merkezi viewport merkezinden (sağ rail → sola, alt dock → yukarı) ötelenir.
+    //   ekranda modeli o kadar kaydırmak için target'ı ters yönde (dünya) öteler.
+    if((ins.right>0||ins.bottom>0)){
+      const worldPerPxV=2*d*Math.tan((cam.fov/2)*Math.PI/180)/vh;   // dikey px→dünya (hedef düzleminde)
+      const shiftUpPx=ins.bottom/2, shiftRightPx=ins.right/2;       // görünür merkez bu kadar yukarı+sola
+      const upW=new THREE.Vector3().crossVectors(dir,right).normalize();   // ekran-yukarı ekseni (dünya)
+      const rgW=right.clone().normalize();                                  // ekran-sağ ekseni (dünya)
+      // model ekranda YUKARI+SOLA → target AŞAĞI+SAĞA (ters)
+      const du=shiftUpPx*worldPerPxV, dr=shiftRightPx*worldPerPxV;
+      controls.target.addScaledVector(upW,-du).addScaledVector(rgW, dr);
+      cam.position.addScaledVector(upW,-du).addScaledVector(rgW, dr);
+    }
     cam.updateProjectionMatrix(); controls.sync(); controls.update();
+  }
+  // U6: aktif UI inset'leri (px) — alt dock yüksekliği + sağ rail genişliği. fit/odak temiz bölgeye otursun diye.
+  function uiInsetPx(){
+    if(!overlay) return {right:0,bottom:0};
+    let bottom=0; ['v3dCamDock','v3dFurnDock','v3dMatDock'].forEach(function(id){ const el=overlay.querySelector('#'+id);
+      if(el && el.style.display!=='none' && el.offsetHeight>0) bottom=Math.max(bottom, el.offsetHeight+18); });
+    let right=0; const dock=overlay.querySelector('#v3dDock');   // sağ-üst rail (+ açıksa çekmece)
+    if(dock && dock.offsetWidth>0) right=dock.offsetWidth+18;
+    const ctl=overlay.querySelector('#v3dViewCtl');              // sağ-alt zoom/küre kolonu da sağ kenarda
+    if(ctl && ctl.offsetWidth>0) right=Math.max(right, ctl.offsetWidth+18);
+    return {right:right, bottom:bottom};
   }
   // ── A3: SEÇİLİYE ODAKLAN — controls hedefini seçilen objenin dünya konumuna kısa/yumuşak tween'le kaydır.
   //   Zoom mesafesi DEĞİŞMEZ (yalnız bakış noktası). Kilit sürerken de çalışır (pan serbest).
@@ -3694,7 +3725,22 @@
     const fb=overlay&&overlay.querySelector('#v3dFurnBar'); if(fb) fb.style.display='none';
     topLocked=false; freeSavedView=null; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); } }   // A4: kilit durumunu temizle
   function resize(){ if(!renderer||overlay.style.display==='none') return;
-    const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();} }
+    const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();}
+    positionViewCtl(); }
+  // U7: ORBIT KÜRE / zoom kolonu sağ-üst RAİL üstüne binmesin (SS kanıtlı). #v3dViewCtl (küre+kilit+zoom)
+  //   sağ-altta bottom:14 çapalı, YUKARI büyür. Kısa viewport'ta üstteki rail'e girer. Kolon üst sınırını
+  //   rail'in altına indir: max-height = viewport − rail alt kenarı − nefes. Böylece kolon rail'e değmez;
+  //   aşırı kısalırsa kendi içinde kaydırır. Zoom bar ile küre ilişkisi (dikey dizilim) korunur.
+  function positionViewCtl(){
+    const ctl=overlay&&overlay.querySelector('#v3dViewCtl'); if(!ctl) return;
+    const dock=overlay.querySelector('#v3dDock');
+    const vh=(host&&host.clientHeight)||overlay.clientHeight||810;
+    let railBottom=0;
+    if(dock){ const r=dock.getBoundingClientRect(), o=overlay.getBoundingClientRect(); railBottom=(r.bottom-o.top); }
+    const gap=14, avail=Math.max(160, vh - railBottom - gap - 14);   // rail altı → kolon tavanı (alt 14 + üst nefes)
+    ctl.style.maxHeight=avail+'px';
+    ctl.style.overflowY='auto'; ctl.style.overflowX='visible';
+  }
   function loop(){ raf=requestAnimationFrame(loop);
     if(overlay.style.display!=='none'&&controls){
       if(walkOn){ walkStep(); renderer.render(scene,cam); return; }   // W1: gezinti kendi kamera durumunu sürer (orbit/PiP/koni pass ATLA)
