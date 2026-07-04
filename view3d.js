@@ -3740,19 +3740,23 @@
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();}
     positionViewCtl(); }
-  // U7: ORBIT KÜRE / zoom kolonu sağ-üst RAİL üstüne binmesin (SS kanıtlı). #v3dViewCtl (küre+kilit+zoom)
-  //   sağ-altta bottom:14 çapalı, YUKARI büyür. Kısa viewport'ta üstteki rail'e girer. Kolon üst sınırını
-  //   rail'in altına indir: max-height = viewport − rail alt kenarı − nefes. Böylece kolon rail'e değmez;
-  //   aşırı kısalırsa kendi içinde kaydırır. Zoom bar ile küre ilişkisi (dikey dizilim) korunur.
+  // U7+R6: ORBIT KÜRE / zoom kolonu sağ-üst RAİL üstüne binmesin (SS kanıtlı). #v3dViewCtl (küre+kilit+zoom)
+  //   sağ-altta bottom:14 çapalı, YUKARI büyür. R6 (kök neden): U7 kolona overflowY:auto+maxHeight koymuştu →
+  //   viewport biraz kısalınca kolonun (küre+zoom) TAMAMINA dikey KAYDIRMA ÇUBUĞU biniyordu (kullanıcı bunu
+  //   'zoom slider'a scroll geldi' diye görür). FIX: scroll TAMAMEN KALDIRILDI (overflow:visible, maxHeight
+  //   temizlendi). Rail'e binmemesi için kolonu scroll'la değil, gerekirse alt çapayı yukarı iterek (bottom
+  //   artır) rail altında tut → çubuk asla çıkmaz, küre+zoom dikey dizilimi bütün kalır.
   function positionViewCtl(){
     const ctl=overlay&&overlay.querySelector('#v3dViewCtl'); if(!ctl) return;
+    ctl.style.overflowY='visible'; ctl.style.overflowX='visible'; ctl.style.maxHeight='';   // R6: scroll YOK
     const dock=overlay.querySelector('#v3dDock');
     const vh=(host&&host.clientHeight)||overlay.clientHeight||810;
     let railBottom=0;
     if(dock){ const r=dock.getBoundingClientRect(), o=overlay.getBoundingClientRect(); railBottom=(r.bottom-o.top); }
-    const gap=14, avail=Math.max(160, vh - railBottom - gap - 14);   // rail altı → kolon tavanı (alt 14 + üst nefes)
-    ctl.style.maxHeight=avail+'px';
-    ctl.style.overflowY='auto'; ctl.style.overflowX='visible';
+    const gap=14, colH=ctl.offsetHeight||0;
+    // istenen: kolon tepesi ≥ railBottom+gap  ⇔  bottom ≤ vh − colH − (railBottom+gap). Default 14; sığmazsa clamp.
+    const maxBottom=vh - colH - (railBottom + gap);
+    ctl.style.bottom=(maxBottom>=14 ? 14 : Math.max(14, maxBottom))+'px';
   }
   function loop(){ raf=requestAnimationFrame(loop);
     if(overlay.style.display!=='none'&&controls){
