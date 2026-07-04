@@ -853,6 +853,17 @@
     // C3-4: TAVAN grubu — oda poligonlarını duvar üstü yüksekliğinde örten mat açık düzlem. VARSAYILAN GİZLİ;
     //   yalnız kamera bakış pass'lerinde (snapCameraDataURL + PiP) açılır → iso/ana dollhouse AÇIK ÇATI kalır.
     const ceil=new THREE.Group(); ceil.position.set(-cx,0,-cz); ceil.visible=false; scene.add(ceil); scene.__ceiling=ceil;
+    // W5: GÖRÜNMEZ ÇARPIŞMA seti — WASD gezinti ray'i GÖRSELDEN AYRI bu tam-kalınlık kutulara atar.
+    //   U1 duvar boyaması duvarları oda-başına yarım-kalınlık görsel kutulara böldü → ray yarımlar
+    //   arasından/boştan kaçabiliyordu ("duvarların içinden geçebiliyoruz"). Bu set duvar koşusu başına
+    //   tam-WALL_T kutu (kapı boşlukları oyuk, pencere parapetli); render'a girmez (visible=false).
+    const collide=new THREE.Group(); collide.position.set(-cx,0,-cz); collide.visible=false; scene.add(collide); scene.__colliders=collide;
+    const matCollide=new THREE.MeshBasicMaterial({visible:false});   // W5: hiç çizilmez, yalnız raycast hedefi
+    function addCollider(mx,mz,segLen,thick,ang){
+      if(segLen<0.04) return;
+      const cm=new THREE.Mesh(new THREE.BoxGeometry(segLen,WALL_H,thick),matCollide);
+      cm.position.set(mx,WALL_H/2,mz); cm.rotation.y=ang; cm.userData.isCollider=true; collide.add(cm);
+    }
 
     // paylaşılan malzemeler (her duvar için yeni material üretme)
     const matWall=new THREE.MeshStandardMaterial({color:0xe9e3d6,roughness:0.92});
@@ -879,19 +890,42 @@
       return {ax:a[0],az:a[1],bx:b[0],bz:b[1],height:d.height_m||1.4,sill:d.full?0:(d.sill_m!=null?d.sill_m:0.9),full:!!d.full};
     });
     const matGlass=new THREE.MeshStandardMaterial({color:0xbcd6e8,roughness:0.08,metalness:0.15,transparent:true,opacity:0.34,side:THREE.DoubleSide});
-    const matFrame=new THREE.MeshStandardMaterial({color:0xe8e4da,roughness:0.7,metalness:0.05}); // pencere kasası (açık, ince)
-    // pencere boşluğuna cam paneli + ince kasa kur (mx,mz=boşluk ortası, gw=genişlik, ang=duvar açısı)
-    function addWindowGlass(mx,mz,gw,ang,sill,wh,parent){
+    // W4: klasik TR PVC pencere = BEYAZ çerçeve + orta dikme(ler) + ince kanat profilleri + dışa denizlik.
+    const matFrame=new THREE.MeshStandardMaterial({color:0xf4f4f2,roughness:0.55,metalness:0.02}); // beyaz PVC çerçeve/kanat
+    const matSill =new THREE.MeshStandardMaterial({color:0xe0ded7,roughness:0.75,metalness:0.03}); // denizlik (dış eşik, hafif gri)
+    // pencere boşluğuna cam paneli + BEYAZ PVC kasa/kanat + orta dikme + (tam-boy değilse) dış denizlik kur.
+    //   mx,mz=boşluk ortası, gw=genişlik, ang=duvar açısı, nInLocal=odanın iç normali (denizlik DIŞ tarafa) — GÖRSEL-YALNIZ.
+    function addWindowGlass(mx,mz,gw,ang,sill,wh,parent,nInLocal){
       if(gw<0.2) return;
       var top=Math.min(WALL_H, sill+wh);                 // cam üst kotu (duvarı aşmasın)
-      var gh=Math.max(0.1, top-sill), fr=0.05;           // cam yüksekliği + kasa payı
+      var gh=Math.max(0.1, top-sill), full=(sill<0.04);
+      var fr=0.06;                                        // ince PVC profil kalınlığı (kanat/kasa)
+      var ft=Math.max(0.14,WALL_T+0.02);                 // profil derinliği (WALL_T'yi sarar → her açıdan okunur)
       var grp=new THREE.Group(); grp.position.set(mx,0,mz); grp.rotation.y=ang;
-      var gl=new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.1,gw-2*fr),Math.max(0.1,gh-2*fr),0.03),matGlass);
-      gl.position.set(0,sill+gh/2,0); grp.add(gl);
-      // ince kasa: alt+üst+iki yan çerçeve (WALL_T'yi sarar → her açıdan pencere okunur)
-      var ft=Math.max(0.14,WALL_T+0.02);
+      // orta dikme sayısı: genişse çift dikme (3 kanat), normalde tek dikme (çift kanat) — TR PVC klasiği
+      var mull=(gw>=2.4?2:(gw>=0.9?1:0));
+      var glassW=Math.max(0.1,gw-2*fr), glassCells=mull+1;
+      var cellW=(glassW-mull*fr)/glassCells;
+      for(var ci=0;ci<glassCells;ci++){                  // her kanat için ayrı cam paneli (dikmeler arası)
+        var gx=-glassW/2+fr/2+ci*(cellW+fr)+cellW/2;     // hücre merkezi (yan profil içinden)
+        var gl=new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.05,cellW),Math.max(0.1,gh-2*fr),0.03),matGlass);
+        gl.position.set(gx,sill+gh/2,0); grp.add(gl);
+      }
+      // dış çerçeve: alt+üst+iki yan (beyaz PVC)
       [[0,sill,gw,fr],[0,top,gw,fr]].forEach(function(s){ var m=new THREE.Mesh(new THREE.BoxGeometry(s[2],s[3],ft),matFrame); m.position.set(s[0],s[1],0); grp.add(m); });
       [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2),sill+gh/2,0); grp.add(m); });
+      // orta dikme(ler): dikey ince profil(ler) — çift/üçlü kanat görünümü (tam-boyda da devam)
+      for(var mi=1;mi<=mull;mi++){ var mxp=-gw/2+mi*(gw/(mull+1));
+        var dm=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); dm.position.set(mxp,sill+gh/2,0); grp.add(dm); }
+      // dış denizlik (çıkıntı) — yalnız normal pencerede (tam-boy camda yok); DIŞ tarafa (nIn tersi) taşar.
+      //   grup local +Z dünya karşılığı = (sin(ang),cos(ang)); dış normal = -nIn. İşaret = dot ile bulunur.
+      if(!full && nInLocal){
+        var lzx=Math.sin(ang), lzz=Math.cos(ang);                 // local +Z → dünya
+        var exX=-nInLocal[0], exZ=-nInLocal[1];                   // dış cephe yönü (dünya)
+        var outLocalZ=(lzx*exX+lzz*exZ)>=0?1:-1;                  // dış hangi local-Z tarafında
+        var sd=new THREE.Mesh(new THREE.BoxGeometry(gw+0.10,0.04,ft+0.14),matSill);
+        sd.position.set(0,sill-0.02,outLocalZ*(ft/2+0.03)); grp.add(sd);
+      }
       grp.userData.isWin=true; grp.scale.y=roofOn?1:WALL_LOW; parent.add(grp);
     }
     // C1-3: kapı boşluğuna KAPALI kanat kur (mesh grubu). mx,mz=boşluk ortası, gw=genişlik, ang=duvar açısı,
@@ -940,8 +974,14 @@
       const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz); if(len<0.05) return;
       const ux=dx/len,uz=dz/len, ang=-Math.atan2(dz,dx);
       // U1: boyalı kutular için kalınlık + iç-yön ofseti. nIn yoksa eski (tam WALL_T, ofsetsiz).
-      const halfT=nIn?WALL_T/2:WALL_T;                  // her oda kendi yarısını doldurur (nIn varsa)
-      const ofx=nIn?nIn[0]*WALL_T/4:0, ofz=nIn?nIn[1]*WALL_T/4:0;   // merkezi iç tarafa WALL_T/4 kaydır
+      // W6: iki komşu odanın yarım-duvarı merkez hatta SIRT SIRTA oturunca arka yüzler EŞ-DÜZLEM → z-fight/clipping
+      //   ("arka duvarla clipping devam ediyor"). ÇÖZÜM: her yarıyı EPS kadar kalınlaştır + merkezi öyle kaydır ki
+      //   İÇ yüz aynı kalsın (WALL_T/2) ama arka yüz merkez hattı EPS AŞSIN → iki yarı bir tık iç içe geçer
+      //   (opak, aynı-derinlik değil → z-fight biter). nIn'siz eski yol tam WALL_T, ofsetsiz (sözleşme korunur).
+      const WALL_EPS=0.012;
+      const halfT=nIn?(WALL_T/2+WALL_EPS):WALL_T;      // her oda kendi yarısını doldurur (nIn varsa) + EPS bindirme
+      const ctrOff=nIn?(WALL_T/4-WALL_EPS/2):0;        // iç yüz WALL_T/2'de sabit; arka yüz merkezi EPS aşar
+      const ofx=nIn?nIn[0]*ctrOff:0, ofz=nIn?nIn[1]*ctrOff:0;   // merkezi iç tarafa kaydır (bindirmeli)
       const gaps=[], winGaps=[];
       doorSegs.forEach(function(d){
         const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
@@ -964,6 +1004,7 @@
         wm.position.set(a[0]+ux*(s0+s1)/2+ofx, (roofOn?WALL_H/2:WALL_H*WALL_LOW/2)-0.02, a[1]+uz*(s0+s1)/2+ofz);
         wm.rotation.y=ang; wm.scale.y=roofOn?1:WALL_LOW;
         wm.castShadow=true; wm.userData.isWall=true; walls.add(wm);
+        addCollider(a[0]+ux*(s0+s1)/2, a[1]+uz*(s0+s1)/2, s1-s0, WALL_T, ang);   // W5: tam-kalınlık görünmez çarpışma kutusu (merkez hatta)
       }
       let s=0; gaps.forEach(function(g){ seg(s,g[0]); s=Math.max(s,g[1]); }); seg(s,len);
       // pencere boşlukları: parapet altı (0..sill) + lento üstü (top..WALL_H) duvar + boşlukta cam
@@ -974,7 +1015,8 @@
           pw.position.set(mx+ofx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz+ofz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
         if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,halfT),wallMat); // lento üstü — U1: kendi yarısı
           lw.position.set(mx+ofx,top+lh/2,mz+ofz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
-        addWindowGlass(mx,mz,gw,ang,sill,wh,walls);
+        addWindowGlass(mx,mz,gw,ang,sill,wh,walls,nIn);   // W4: nIn → denizlik DIŞ tarafa taşar
+        addCollider(mx,mz,gw,WALL_T,ang);                 // W5: pencerelerden yürüyerek geçilemez → tam-yükseklik çarpışma kutusu
       });
       gaps.forEach(function(g){
         if(g[2]==null) return;   // pencere boşluğu → kapı kanadı/eşiği/lentosu ÇİZME (winGaps hallediyor)
@@ -1711,17 +1753,21 @@
   //   kapı kanadı (isLeaf)/eşik(isSill)/tavan(isCeiling) çarpışma DIŞI → kapı boşluğundan geçilir.
   //   +mobilya ayak-izi bloğu (ucuz nokta-poligon, buffer'lı). dist = adım + tampon.
   function walkAxisClear(px,pz, dirx,dirz, dist){
-    if(!scene||!scene.__walls) return true;
+    // W5: ÇARPIŞMA GÖRSELDEN AYRIŞTI → ray, görünmez tam-kalınlık collider setine atılır (duvar koşusu başına
+    //   bir kutu; kapı boşlukları oyuk, pencereler dolu). Görsel yarım-duvarlar arasından/boştan kaçış biter.
+    const cg=(scene&&scene.__colliders);
+    if(!cg){ if(!scene||!scene.__walls) return true; } // geriye-uyum: collider yoksa eski davranışa düşme
     if(!walkRay) walkRay=new THREE.Raycaster();
-    const wg=scene.__walls;
-    // duvar grubu ofsetli (-cx,-cz) → ray origin DÜNYA uzayında (cam.position da dünya). intersect dünya-uzayı sonuç verir.
+    // grup ofsetli (-cx,-cz) → ray origin DÜNYA uzayında (cam.position da dünya). intersect dünya-uzayı sonuç verir.
     walkRay.set(new THREE.Vector3(px, WALK_EYE, pz), new THREE.Vector3(dirx,0,dirz).normalize());
     walkRay.far=dist;
-    const hits=walkRay.intersectObjects(wg.children, false);
+    const target=cg?cg.children:scene.__walls.children;
+    const hits=walkRay.intersectObjects(target, false);
     for(let i=0;i<hits.length;i++){
       const u=hits[i].object.userData||{};
-      if(u.isLeaf||u.isSill||u.isCeiling) continue;           // kapı kanadı/eşik → geçilir
-      if(u.isWall||u.isWin) return false;                     // duvar + parapet + cam panel → engel
+      if(u.isCollider) return false;                         // W5: görünmez tam-kalınlık duvar/pencere kutusu → engel
+      if(u.isLeaf||u.isSill||u.isCeiling) continue;          // (eski yol) kapı kanadı/eşik → geçilir
+      if(u.isWall||u.isWin) return false;                    // (eski yol) duvar + parapet + cam panel → engel
     }
     // mobilya: hedef nokta bir ayak-izi (buffer'la şişmiş) içine giriyorsa engel
     // U3 FIX (koordinat uzayı): cam.position (px,pz) DÜNYA uzayında (walkSpawnPoint = m-cx,-cz).
@@ -1740,6 +1786,28 @@
       if(pointNearPoly(tx,tz,fp,WALK_BUFFER)) return false;
     }
     return true;
+  }
+  // W5 TEST/DIAGNOSTIK: her GÖRSEL duvar segmentinin (isWall) ortasından her iki dik yöne göz-hizası ray at →
+  //   çarpışma seti onu ENGEL sayıyor mu. Engel saymayan segment = "delik" (içinden geçilir). 0 hedeflenir.
+  //   Read-only: sahneyi değiştirmez. Kapı/pencere boşlukları görsel duvar segmenti DEĞİL → sayıma girmez.
+  function collisionHoleScan(){
+    if(!scene||!scene.__walls||!scene.__colliders) return { segs:0, holes:0, holeList:[] };
+    const cxo=(scene.__cx)||0, czo=(scene.__cz)||0;   // grup ofseti (mesh local → dünya için -cx,-cz uygulanır)
+    let segs=0, holes=0; const holeList=[];
+    scene.__colliders.updateMatrixWorld(true); scene.__walls.updateMatrixWorld(true);   // raycast dünya matrisleri taze olsun
+    scene.__walls.children.forEach(function(w){
+      if(!w.userData||!w.userData.isWall) return; segs++;
+      // segment dünya konumu + yönü: mesh local X ekseni duvar boyu; dik = local Z. mesh pozisyonu grup-local.
+      const wx=w.position.x-cxo, wz=w.position.z-czo;   // dünya XZ (grup -cx,-cz ofsetli)
+      const ang=w.rotation.y;                            // ang=-atan2(dz,dx); local +Z dünya=(sin,cos)
+      const nx=Math.sin(ang), nz=Math.cos(ang);         // duvar dik yönü (dünya)
+      // her iki taraftan içeri doğru kısa ray → collider yakalamalı
+      const D=Math.max(0.6, WALL_T*3);
+      const a=walkAxisClear(wx-nx*D*0.5, wz-nz*D*0.5,  nx, nz, D);   // -taraftan +yöne
+      const b=walkAxisClear(wx+nx*D*0.5, wz+nz*D*0.5, -nx,-nz, D);   // +taraftan -yöne
+      if(a && b){ holes++; holeList.push({x:+wx.toFixed(2), z:+wz.toFixed(2)}); }   // iki yönden de engel yok → delik
+    });
+    return { segs:segs, holes:holes, colliders:scene.__colliders.children.length, holeList:holeList.slice(0,10) };
   }
   // nokta poligona buffer kadar yakın mı (içinde ya da herhangi bir kenara < buffer)
   function pointNearPoly(x,z,poly,buf){
@@ -2008,7 +2076,8 @@
     const dim=FURN_DIM[f.type]||{w:0.6,d:0.6}, w=(f.__w!=null?f.__w:dim.w), d=(f.__d!=null?f.__d:dim.d);
     const fp=furnFootprintM(x,z,rot,w,d); if(!furnRectInPoly(fp, an.poly)) return false;
     if(COLLISION_EXEMPT[f.type]) return true;
-    if(furnDoorBlocked(fp, an)) return false;                          // A1: kapı açıklığını kapatma
+    if(furnDoorBlocked(fp, an)) return false;                          // A1/W2: kapı geçiş koridorunu kapatma
+    if(furnWindowBlocked(fp, an, furnHeightOf(f.type))) return false;  // W3: yüksek mobilya pencere önüne konamaz (drag kırmızı)
     for(let i=0;i<furnList.length;i++){ const o=furnList[i]; if(o===f||o.room_id!==ra.rid||COLLISION_EXEMPT[o.type]) continue;
       const od=FURN_DIM[o.type]||{w:0.6,d:0.6}, ow=(o.__w!=null?o.__w:od.w), odd=(o.__d!=null?o.__d:od.d);
       if(furnRectsOverlap(fp, furnFootprintM(o.pos.x,o.pos.z,o.rot_deg,ow,odd))) return false; }
@@ -3233,6 +3302,8 @@
     const poly=furnRoomPolyM(room,map); if(!poly) return null;
     const allRooms=furnAllRooms(map);
     const doorsM=(map.doors||[]).map(function(d){ return { a:px2m(map,d.p0_px[0],d.p0_px[1]), b:px2m(map,d.p1_px[0],d.p1_px[1]) }; });
+    // W3: pencere segmentleri (metre) — cephe pencere span'ları yüksek mobilya için yasak bölge kaynağı.
+    const winsM=(map.windows||[]).map(function(d){ return { a:px2m(map,d.p0_px[0],d.p0_px[1]), b:px2m(map,d.p1_px[0],d.p1_px[1]), full:!!d.full }; });
     let minX=1e9,minZ=1e9,maxX=-1e9,maxZ=-1e9;
     poly.forEach(function(p){ if(p[0]<minX)minX=p[0]; if(p[0]>maxX)maxX=p[0]; if(p[1]<minZ)minZ=p[1]; if(p[1]>maxZ)maxZ=p[1]; });
     const edges=[];
@@ -3252,7 +3323,14 @@
         const t1=(dr.b[0]-a[0])*ux+(dr.b[1]-a[1])*uz, e1=Math.abs((dr.b[0]-a[0])*(-uz)+(dr.b[1]-a[1])*ux);
         if(e0<0.3 && e1<0.3){ const s0=Math.max(0,Math.min(t0,t1)), s1=Math.min(len,Math.max(t0,t1)); if(s1-s0>0.25) doorSpans.push([s0,s1]); }
       });
-      edges.push({ a:a, b:b, len:len, dir:[ux,uz], nIn:[nx,nz], mid:[mx,mz], exterior:exterior, doorSpans:doorSpans });
+      // W3: bu kenar üzerindeki pencere span'ları ([s0,s1,full]) — kenar doğrultusuna denk gelenler.
+      const winSpans=[];
+      winsM.forEach(function(wn){
+        const t0=(wn.a[0]-a[0])*ux+(wn.a[1]-a[1])*uz, e0=Math.abs((wn.a[0]-a[0])*(-uz)+(wn.a[1]-a[1])*ux);
+        const t1=(wn.b[0]-a[0])*ux+(wn.b[1]-a[1])*uz, e1=Math.abs((wn.b[0]-a[0])*(-uz)+(wn.b[1]-a[1])*ux);
+        if(e0<0.3 && e1<0.3){ const s0=Math.max(0,Math.min(t0,t1)), s1=Math.min(len,Math.max(t0,t1)); if(s1-s0>0.25) winSpans.push([s0,s1,wn.full]); }
+      });
+      edges.push({ a:a, b:b, len:len, dir:[ux,uz], nIn:[nx,nz], mid:[mx,mz], exterior:exterior, doorSpans:doorSpans, winSpans:winSpans });
     }
     edges.sort(function(p,q){ return q.len-p.len; });                     // uzun duvar önce (çapa mobilyası için)
     room.__an = { room:room, poly:poly, area:Math.abs(polyAreaSignedM(poly)),
@@ -3260,27 +3338,52 @@
     return room.__an;
   }
   const COLLISION_EXEMPT={ rug:1, tv:1 };   // halı (mobilya altında) + TV (ünite üstünde) → çakışma engellemez/engellenmez
-  const DOOR_CLR=0.35;                       // kapı açıklığı önünde boş kalacak pay (m)
-  // ayak izi bir kapı açıklığını (± clearance) kapatıyor mu — YALNIZ item duvara yakınken (orta-oda item'ı kapıyı umursamaz)
+  const DOOR_CLR=0.35;                       // kapı açıklığının YANLARINDA boş kalacak pay (m) — geçiş için span'ı iki uçta genişletir
+  const DOOR_PASS_DEPTH=0.90;                // W2: kapı önü GEÇİŞ koridoru derinliği (m) — bu derinliğe kadar mobilya YASAK
+  // ayak izi bir kapı geçişini engelliyor mu. W2: her kapı span'ının İKİ tarafında (odaya doğru) geçiş koridoru
+  //   MUTLAK yasak: span genişliği (±DOOR_CLR) × ~0.9m derinlik. Eskiden derinlik 0.45m'ydi → span önünde
+  //   0.5-0.9m'de duran mobilya "kapı önü boş" değildi ama geçmiyordu (kullanıcı: yürüyüp geçemiyor). Kapı
+  //   iç kapı olduğundan her iki odada da o duvar kenarı analiz edilir → koridor iki tarafta oluşur.
   function furnDoorBlocked(fp, an){
     for(let i=0;i<an.edges.length;i++){ const e=an.edges[i]; if(!e.doorSpans.length) continue;
       let tMin=1e9,tMax=-1e9,perpMin=1e9;
       for(let k=0;k<fp.length;k++){ const dx=fp[k][0]-e.a[0], dz=fp[k][1]-e.a[1];
         const t=dx*e.dir[0]+dz*e.dir[1], perp=Math.abs(dx*(-e.dir[1])+dz*e.dir[0]);
         if(t<tMin)tMin=t; if(t>tMax)tMax=t; if(perp<perpMin)perpMin=perp; }
-      if(perpMin>0.45) continue;             // item bu duvardan uzak → kapısını engellemez
+      if(perpMin>DOOR_PASS_DEPTH) continue;  // W2: item kapı geçiş-koridoru derinliğinden UZAK → engellemez
       for(let j=0;j<e.doorSpans.length;j++){ const ds=e.doorSpans[j]; if(tMax>ds[0]-DOOR_CLR && tMin<ds[1]+DOOR_CLR) return true; }
     }
     return false;
   }
-  // bir yerleşim odaya sığıyor mu: poligon-içi + kapı açmıyor + yerleşmişlerle çakışmıyor (muaf olanlar hariç)
-  function furnFits(x,z,rot,w,d, an, placed, skipOverlap){
+  const WIN_TALL_H=1.10;                      // W3: bu yükseklikten UZUN mobilya (gardırop/kitaplık/buzdolabı) pencere önüne KONMAZ
+  // ayak izi bir pencere span'ının önünü kapatıyor mu. W3: YÜKSEK mobilya (h>1.10m) hiçbir pencere span'ı önüne
+  //   yerleşemez (ışığı/manzarayı keser). ALÇAK mobilya (komodin/sehpa/koltuk) normal pencere önünde SERBEST,
+  //   ama TAM-BOY cam (full) önünde alçak da yasak (zemine kadar camı kapatır). Yalnız item duvara yakınken
+  //   denetlenir (orta-oda item'ı pencereyi umursamaz). Kapı-önü mantığının (furnDoorBlocked) ikizi.
+  function furnWindowBlocked(fp, an, itemH){
+    const tall=(itemH!=null && itemH>WIN_TALL_H);
+    for(let i=0;i<an.edges.length;i++){ const e=an.edges[i]; if(!e.winSpans||!e.winSpans.length) continue;
+      let tMin=1e9,tMax=-1e9,perpMin=1e9;
+      for(let k=0;k<fp.length;k++){ const dx=fp[k][0]-e.a[0], dz=fp[k][1]-e.a[1];
+        const t=dx*e.dir[0]+dz*e.dir[1], perp=Math.abs(dx*(-e.dir[1])+dz*e.dir[0]);
+        if(t<tMin)tMin=t; if(t>tMax)tMax=t; if(perp<perpMin)perpMin=perp; }
+      if(perpMin>0.45) continue;              // item bu cephe duvarından uzak → pencere önünü kapatmaz
+      for(let j=0;j<e.winSpans.length;j++){ const ws=e.winSpans[j];
+        if(!tall && !ws[2]) continue;         // alçak mobilya + normal pencere → serbest (yalnız uzun VEYA tam-boy yasak)
+        if(tMax>ws[0] && tMin<ws[1]) return true; }
+    }
+    return false;
+  }
+  // bir yerleşim odaya sığıyor mu: poligon-içi + kapı açmıyor + pencere önü (yükseklik-farkında) + çakışmıyor (muaf hariç)
+  function furnFits(x,z,rot,w,d, an, placed, skipOverlap, itemH){
     const fp=furnFootprintM(x,z,rot,w,d);
     if(!furnRectInPoly(fp, an.poly)) return false;
+    if(furnWindowBlocked(fp, an, itemH)) return false;   // W3: pencere-önü kuralı çakışma-atlamadan BAĞIMSIZ (skipOverlap'lı yerleşimlerde de geçerli)
     if(!skipOverlap){ if(furnDoorBlocked(fp, an)) return false;
       for(let i=0;i<placed.length;i++){ const p=placed[i]; if(p.__exempt) continue; if(p.__fp && furnRectsOverlap(fp, p.__fp)) return false; } }
     return true;
   }
+  function furnHeightOf(type){ const d=FURN_DIM[type]; return d?d.h:null; }
   // duvara yaslı item bakış açısı = iç normal yönü (local +Z → nIn). w duvar boyunca, d odaya doğru.
   function wallRotDeg(edge){ return (Math.atan2(edge.nIn[0], edge.nIn[1])*180/Math.PI+360)%360; }
   // kenar üzerinde kapı (+ clearance) ve uç payları düşülmüş serbest aralıklar
@@ -3317,7 +3420,7 @@
     for(let ci=0;ci<cand.length;ci++){ const t=cand[ci];
       const px=edge.a[0]+edge.dir[0]*t + edge.nIn[0]*inset;
       const pz=edge.a[1]+edge.dir[1]*t + edge.nIn[1]*inset;
-      if(furnFits(px,pz,rot,w,d, an, placed, opt.exempt)) return { type:type, pos:{x:px,z:pz}, rot_deg:rot, __fp:furnFootprintM(px,pz,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
+      if(furnFits(px,pz,rot,w,d, an, placed, opt.exempt, furnHeightOf(type))) return { type:type, pos:{x:px,z:pz}, rot_deg:rot, __fp:furnFootprintM(px,pz,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
     }
     return null;
   }
@@ -3326,7 +3429,7 @@
     opt=opt||{}; const dim=FURN_DIM[type]||{w:0.6,d:0.6};
     const w=(opt.w!=null?opt.w:dim.w), d=(opt.d!=null?opt.d:dim.d);
     for(let i=0;i<candidates.length;i++){ const c=candidates[i], rot=(c.rot!=null?c.rot:0);
-      if(furnFits(c.x,c.z,rot,w,d, an, placed, opt.exempt)) return { type:type, pos:{x:c.x,z:c.z}, rot_deg:rot, __fp:furnFootprintM(c.x,c.z,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
+      if(furnFits(c.x,c.z,rot,w,d, an, placed, opt.exempt, furnHeightOf(type))) return { type:type, pos:{x:c.x,z:c.z}, rot_deg:rot, __fp:furnFootprintM(c.x,c.z,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
     }
     return null;
   }
@@ -3388,17 +3491,17 @@
   function placeFront(an, anchor, type, placed, gap){ if(!anchor) return null; const fn=frontDir(anchor.rot_deg);
     const ad=(anchor.__d!=null?anchor.__d:(FURN_DIM[anchor.type]||{d:0.5}).d), dim=FURN_DIM[type]||{w:0.6,d:0.5};
     const dist=ad/2+(gap==null?CLR.sofaCoffee:gap)+dim.d/2, x=anchor.pos.x+fn[0]*dist, z=anchor.pos.z+fn[1]*dist, ex=!!COLLISION_EXEMPT[type];
-    if(furnFits(x,z,anchor.rot_deg,dim.w,dim.d, an, placed, ex)){ const p={type:type,pos:{x:x,z:z},rot_deg:anchor.rot_deg,__fp:furnFootprintM(x,z,anchor.rot_deg,dim.w,dim.d),__exempt:ex}; placed.push(p); return p; } return null; }
+    if(furnFits(x,z,anchor.rot_deg,dim.w,dim.d, an, placed, ex, furnHeightOf(type))){ const p={type:type,pos:{x:x,z:z},rot_deg:anchor.rot_deg,__fp:furnFootprintM(x,z,anchor.rot_deg,dim.w,dim.d),__exempt:ex}; placed.push(p); return p; } return null; }
   // serbest noktaya yerleştir (bitki/masa)
   function place2(an, placed, type, x, z, rot){ const dim=FURN_DIM[type]||{w:0.4,d:0.4}, ex=!!COLLISION_EXEMPT[type]; rot=rot||0;
-    if(furnFits(x,z,rot,dim.w,dim.d,an,placed,ex)){ const p={type:type,pos:{x:x,z:z},rot_deg:rot,__fp:furnFootprintM(x,z,rot,dim.w,dim.d),__exempt:ex}; placed.push(p); return p; } return null; }
+    if(furnFits(x,z,rot,dim.w,dim.d,an,placed,ex, furnHeightOf(type))){ const p={type:type,pos:{x:x,z:z},rot_deg:rot,__fp:furnFootprintM(x,z,rot,dim.w,dim.d),__exempt:ex}; placed.push(p); return p; } return null; }
   // oda bbox'unda ızgara tarayıp clearance'lı sığan ilk yer (yemek masası gibi serbest mobilya)
   // near verilirse: sığan hücreler arasında near'a EN YAKIN olanı seç (yemek masası mutfağa yakın dursun, oturma grubuna değil); yoksa ilk fit
   function scanPlace(an, placed, type, clear, rots, near){ const dim=FURN_DIM[type]||{w:0.6,d:0.6}, b=an.bbox; rots=rots||[0,90];
     const W=dim.w+2*clear, Dp=dim.d+2*clear; let best=null, bestScore=1e18;
     for(let ri=0;ri<rots.length;ri++){ const rot=rots[ri];
       for(let z=b.minZ+0.3; z<=b.maxZ-0.3; z+=0.3) for(let x=b.minX+0.3; x<=b.maxX-0.3; x+=0.3){
-        if(!furnFits(x,z,rot,W,Dp,an,placed)) continue;
+        if(!furnFits(x,z,rot,W,Dp,an,placed,false,furnHeightOf(type))) continue;
         if(!near){ const p={type:type,pos:{x:x,z:z},rot_deg:rot,__fp:furnFootprintM(x,z,rot,dim.w,dim.d)}; placed.push(p); return p; }
         const sc=(x-near.x)*(x-near.x)+(z-near.z)*(z-near.z); if(sc<bestScore){ bestScore=sc; best={x:x,z:z,rot:rot}; } } }
     if(best){ const p={type:type,pos:{x:best.x,z:best.z},rot_deg:best.rot,__fp:furnFootprintM(best.x,best.z,best.rot,dim.w,dim.d)}; placed.push(p); return p; }
@@ -3505,7 +3608,7 @@
       if(t+w > span[1]+1e-6) break;
       const tc=t+w/2, d=FURN_DIM[type].d, inset=d/2+WALL_CLR;   // MESH-K/Q1: mutfak tezgah dizisi de duvar iç yüzünü geçer
       const px=edge.a[0]+edge.dir[0]*tc+edge.nIn[0]*inset, pz=edge.a[1]+edge.dir[1]*tc+edge.nIn[1]*inset;
-      if(furnFits(px,pz,rot,w,d,an,placed)){ placed.push({type:type,pos:{x:px,z:pz},rot_deg:rot,__w:(type==='counter'?w:undefined),__fp:furnFootprintM(px,pz,rot,w,d)}); cx+=px;cz+=pz;n++; }
+      if(furnFits(px,pz,rot,w,d,an,placed,false,furnHeightOf(type))){ placed.push({type:type,pos:{x:px,z:pz},rot_deg:rot,__w:(type==='counter'?w:undefined),__fp:furnFootprintM(px,pz,rot,w,d)}); cx+=px;cz+=pz;n++; }   // W3: fridge (uzun) pencere önüne düşerse atlanır; tezgah/ocak (alçak) serbest
       t += w + gap;
     }
     return n? {x:cx/n,z:cz/n} : null;
@@ -3593,8 +3696,14 @@
     if(!bed){ furnishDressing(ctx); return; }                                                    // hiç yatak erişimle sığmadı → giyinme odası
     const hb=bedHbEdge(an, bed);
     placeNightstandsFlanking(an, hb, bed, placed, master?2:1);
+    // W1: YATAK GARANTİSİ önce (yukarıda kesinleşti). Gardırop üst-sınırı ALAN-ORANTILI: geniş yatak
+    //   odasında birden fazla gardırop olabilir. Yerel sabit tablo (yorumlu) — <12 m²→1, 12-18→2, >18→3.
+    //   Yatak zaten kondu; gardıroplar sığdıkça eklenir, sığmazsa sessizce feda edilir (mevcut "sığmıyorsa yok").
+    const wardrobeCap = A>18 ? 3 : (A>=12 ? 2 : 1);
     const wo = master?['wardrobe_4','wardrobe_3','wardrobe_2']:['wardrobe_3','wardrobe_2'];
-    placeChain(an, wo, placed, {}, allEdges(an,{exclude:[hb],minLen:0.95}));
+    for(let wc=0; wc<wardrobeCap; wc++){
+      if(!placeChain(an, wo, placed, {}, allEdges(an,{exclude:[hb],minLen:0.95}))) break;         // sığan kalmadı → dur
+    }
     if(A>=12) placeAny(an, master?'vanity':'dresser', placed, {}, allEdges(an,{exclude:[hb],minLen:0.9}));
   }
 
@@ -3890,6 +3999,16 @@
     // mobilya: map'ten furnList'i tazele + çiz (test + Faz 3). getMap = canlı harita erişimi.
     refreshFurniture:function(){ collectFurnList(); renderFurniture(); }, getMap:function(){ return scene&&scene.__map; },
     setFurnUI:setFurnUI, setFurnMode:setFurnMode, clearFurn:clearFurn, autoFurnishAll:function(){ autoFurnishAll(); },
+    // W2/W3 TEST: THREE'siz (headless) oto-döşe — verilen map'in her odasını furnPlaceRoom ile döşer, salt-veri
+    //   yerleşim döndürür (kapı/pencere clearance assert'i için). Read-only: scene/DOM'a dokunmaz, kalıcılık YOK.
+    furnishMapForTest:function(map){ const out=[];
+      (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ r.__an=null;
+        out.push({ room_id:r.id, room:r, furniture:furnPlaceRoom(r, map, []) }); }); });
+      (map.common_areas||[]).forEach(function(r){ r.__an=null; out.push({ room_id:r.id, room:r, furniture:furnPlaceRoom(r, map, []) }); });
+      return out; },
+    analyzeRoomForTest:function(room, map){ room.__an=null; return furnAnalyzeRoom(room, map); },
+    furnDimForTest:function(type){ return FURN_DIM[type]||null; },
+    collisionHoleScan:function(){ return collisionHoleScan(); },   // W5: görsel duvar segmentlerinde çarpışma-deliği taraması
     exportFurniture:exportFurniture, sceneDescription:sceneDescription,
     // MALZEME (M-serisi): preset kataloğu + oda-başına seç/uygula/sıfırla + kalıcılık (test + prototip).
     setMatUI:setMatUI, materialPresets:function(){ return MAT_PRESETS.map(function(p){ return {key:p.key,group:p.group,cls:p.cls,name:p.name}; }); },

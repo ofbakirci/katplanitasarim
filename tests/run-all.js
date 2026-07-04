@@ -22,6 +22,7 @@ const strictTests = [
   'tests/avlu-edit.js',
   'tests/pencere.js',
   'tests/malzeme.js',
+  'tests/furn-clearance.js',
   'tests/train-log.js',
   'tests/wall-drag.js',
   'tests/koridor-daralt.js',
