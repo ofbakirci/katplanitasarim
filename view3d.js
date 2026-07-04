@@ -3386,12 +3386,6 @@
     ensureKitchenItem(an, placed, 'fridge', {align:'end'}, 0.7);
     ensureKitchenItem(an, placed, 'sink', {}, 0.6);
     ensureKitchenItem(an, placed, 'oven_hob', {}, 0.6);
-    // U5: MUTFAK ADASI — bağımsız mutfakta ≥11 m², açık mutfakta (salon içi) ancak oda çok büyükse (≥24 m²)
-    //   tezgah dizisinin ORTASINA serbest ada. scanPlace clearance'la (~1m geçiş) sığarsa koyar; sığmazsa
-    //   hiç (tıka basa değil, ölçülü). Ada mutfak zonuna yakın merkeze oturur → gerçek mutfak akışı.
-    const islandOK = compact ? (an.area>=24) : (an.area>=11);
-    if(islandOK){ const near=zoneC||(anchor?{x:2*an.bbox.cx-anchor.x,z:2*an.bbox.cz-anchor.z}:{x:an.bbox.cx,z:an.bbox.cz});
-      scanPlace(an, placed, 'island', 1.0, [0,90], near); }
     return anchor;
   }
   function furnishKitchen(ctx){ placeKitchenRun(ctx, false, null); }
@@ -3466,11 +3460,6 @@
     const wo = master?['wardrobe_4','wardrobe_3','wardrobe_2']:['wardrobe_3','wardrobe_2'];
     placeChain(an, wo, placed, {}, allEdges(an,{exclude:[hb],minLen:0.95}));
     if(A>=12) placeAny(an, master?'vanity':'dresser', placed, {}, allEdges(an,{exclude:[hb],minLen:0.9}));
-    // U5: EBEVEYN yatak odasında yatağın AYAK ucuna bank (geniş odada, ölçülü). frontDir(bed) = başlık yönü →
-    //   ayak ucu = ters yön; ayak-anchor'ı yataktan türetip placeFront ile bench koy (sığmazsa hiç).
-    if(master && A>=15){ const bd=FURN_DIM[bed.type]||{d:2.0}, bdd=(bed.__d!=null?bed.__d:bd.d);
-      const footAnchor={ pos:{x:bed.pos.x, z:bed.pos.z}, rot_deg:(bed.rot_deg+180)%360, __d:bdd };   // ayak-ucu yönü = başlığın tersi
-      placeFront(an, footAnchor, 'bench', placed, 0.12); }
   }
 
   // ----- BANYO / WC (boyut-farkındalık: küvet→duş→yok) -----
