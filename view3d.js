@@ -1592,11 +1592,19 @@
       if(u.isWall||u.isWin) return false;                     // duvar + parapet + cam panel → engel
     }
     // mobilya: hedef nokta bir ayak-izi (buffer'la şişmiş) içine giriyorsa engel
-    const tx=px+dirx*dist, tz=pz+dirz*dist;
+    // U3 FIX (koordinat uzayı): cam.position (px,pz) DÜNYA uzayında (walkSpawnPoint = m-cx,-cz).
+    //   f.__fp / f.pos ise MUTLAK metre (model uzayı, ofsetsiz). Eski kod dünya tx/tz'yi doğrudan
+    //   model footprint'e sokuyordu → cx/cz kadar kayık, çakışma HİÇ tutmuyordu (mobilyadan geçiliyordu).
+    //   worldToPx ile aynı dönüşüm: model = dünya + (cx,cz).
+    const cxo=(scene&&scene.__cx)||0, czo=(scene&&scene.__cz)||0;
+    const tx=px+dirx*dist+cxo, tz=pz+dirz*dist+czo;
     for(let i=0;i<furnList.length;i++){
       const f=furnList[i]; if(!f||!f.pos) continue;
       if(COLLISION_EXEMPT[f.type]) continue;                  // halı/kilim gibi geçilebilir mobilya
-      const fp=f.__fp; if(!fp) continue;
+      // U3: kalıcı store'dan gelen mobilyada __fp olmayabilir (yalnız pos/rot/__w/__d taşınır) → taze hesapla.
+      let fp=f.__fp;
+      if(!fp){ const dm=FURN_DIM[f.type]||{w:0.5,d:0.5}, fw=(f.__w!=null?f.__w:dm.w), fd=(f.__d!=null?f.__d:dm.d);
+        fp=furnFootprintM(f.pos.x,f.pos.z,f.rot_deg||0,fw,fd); }
       if(pointNearPoly(tx,tz,fp,WALK_BUFFER)) return false;
     }
     return true;
