@@ -26,6 +26,12 @@
   // camUIEnabled: kamera bölümü YALNIZ adım 4'te (openCompare) görünür — adım 2 (salt 3B izleme) ASLA göstermez.
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
   let placeMode=false, camUIEnabled=false, placeAction='aim', camList=[], activeCamIdx=-1, pendingPos=null, camHeight='eye', camLens=24, camPlanSig=null;
+  // ── KAMERA-S: mobilya-kalitesi akıcılık (hayalet ekle + canlı PiP · doğrudan sürükle · koni-ucu nişan) ──
+  //   camGhost: EKLE hayalet-akışı durum makinesi — faz 'pos' (konum imleci izler, tık=konum düşer) →
+  //     'aim' (koni imleci CANLI izler + PiP hayalet kamerayı akıtır, tık=yön sabit, kamera eklenir). Esc/sağ-tık iptal.
+  //   camDrag: kamera gizmosu üstünde sol-drag ile DOĞRUDAN taşıma (mobilya furnPickIdx deseni; hedef GÖRELİ korunur).
+  //   camAimDrag: koni-ucu tutamacını sürükleyerek DOĞRUDAN nişan (aimTargetFrom kuralları).
+  let camGhost=null, camDrag=null, camAimDrag=null;
   let camRenderMethod='snapshot';   // C7 (2026-07-03): B (kendi-açı/snapshot, sadık) VARSAYILAN — 1× maliyet. 'prompt' (A) ve 'both' (A/B, 2×) istek-üzerine seçilir. exportCameras'a girer.
   // B1-4: GÜN SAATİ — global varsayılan (tüm iso/kamera render'larına ışık/atmosfer talimatı). Kamera-başına override camList[i].timeOfDay.
   //   Değerler render-server'daki TIME_OF_DAY anahtarlarıyla birebir: sunrise/midday/golden/night. midday = mevcut davranış (soft daylight).
@@ -509,6 +515,13 @@
         '<button data-v3d="furnfocus" class="v3dfb" title="Odakla (F)">'+ic('target',15)+'</button>'+
         '<button data-v3d="furndel" class="v3dfb v3dfbdanger" title="Sil (Del)">'+ic('trash',15)+'</button>'+
       '</div>'+
+      // KAMERA-S S4: seçili kameranın yanında YÜZEN mini araç çubuğu (mobilya #v3dFurnBar ikizi). loop'ta konumlanır.
+      '<div id="v3dCamBar" style="position:absolute;z-index:6;display:none;gap:4px;background:rgba(28,28,34,.96);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:5px;box-shadow:0 8px 26px rgba(0,0,0,.5);backdrop-filter:blur(8px)">'+
+        '<button data-v3d="cambaraim" class="v3dfb" title="Yön — koni ucunu sürükle ya da zemine tıkla">'+ic('target',15)+'</button>'+
+        '<button data-v3d="camfocus" class="v3dfb" title="Odakla (F)">'+ic('fit',15)+'</button>'+
+        '<button data-v3d="cambarpip" class="v3dfb" title="Önizlemeyi aç/kapa">'+ic('camera',15)+'</button>'+
+        '<button data-v3d="camdel" class="v3dfb v3dfbdanger" title="Sil (Del)">'+ic('trash',15)+'</button>'+
+      '</div>'+
       // B1-R (R2): CANLI PiP KAMERA ÖNİZLEMESİ — kamera SEÇİLİYKEN köşede 16:9 pencere.
       //   İçindeki görüntü loop()'ta scissor'lı İKİNCİ render pass ile çizilir (DOM canvas değil — aynı renderer).
       //   Başlıkta "Kx görüşü" + büyüt/kapat. Bu görüntü = B/img2img yolunda render'a giden referansın TA KENDİSİ.
@@ -645,7 +658,7 @@
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
       const cm=t.getAttribute&&t.getAttribute('data-cammethod'); if(cm){ setCamRenderMethod(cm); return; }
       const ctm=t.getAttribute&&t.getAttribute('data-camtime'); if(ctm){ setTimeOfDay(ctm, activeCamIdx>=0); return; }   // B1-4: kamera seçiliyse override, değilse global
-      const ca=t.getAttribute&&t.getAttribute('data-camact'); if(ca){ setPlaceAction(ca); return; }
+      const ca=t.getAttribute&&t.getAttribute('data-camact'); if(ca){ if(ca==='add'){ startCamGhost(); return; } setPlaceAction(ca); return; }   // KAMERA-S S1: Ekle → hayalet akışı (canlı PiP nişan); aim/move eski zemine-tıkla yolu
       const cs=t.getAttribute&&t.getAttribute('data-camsel'); if(cs!=null&&cs!==''){ selectCam(+cs); return; }
       const cdz=t.getAttribute&&t.getAttribute('data-camdesel'); if(cdz){ deselectCam(); return; }   // çip × = seçimi bırak (silmez)
       const fca=t.getAttribute&&t.getAttribute('data-furncat'); if(fca!=null&&fca!==''){ furnDockCat=+fca; renderFurnDock(); return; }   // B2-1: kategori sekmesi
@@ -657,7 +670,9 @@
       else if(a==='iso'||a==='top'||a==='persp') setView(a);
       else if(a==='fit') fitView();
       else if(a==='png') snap();
-      else if(a==='place') togglePlaceMode();
+      else if(a==='place'){ if(camGhost){ cancelCamGhost(); setHint('Kamera ekleme iptal'); }   // KAMERA-S: Bitir hayaleti de kapatır
+        else if(!placeMode && activeCamIdx<0){ startCamGhost(); }   // "Yerleştir" (seçili kamera yok) → hayalet akışı (S1)
+        else togglePlaceMode(); }                                   // "Düzenle" (seçili var) → eski zemine-tıkla yönlendirme / "Bitir"
       else if(a==='camclear') clearCams();
       else if(a==='camprompreset'){ if(activeCamIdx>=0){ camList[activeCamIdx].promptEdited=false; updateCamRender(); } }   // prompt'u otomatiğe döndür
       else if(a==='camdel'){ if(activeCamIdx>=0) removeCam(activeCamIdx); }
@@ -674,6 +689,8 @@
       else if(a==='rerender') doReRender();
       else if(a==='pipbig') togglePipBig();                  // B1-R (R2): PiP büyüt/küçült
       else if(a==='pipclose') closePip();                    // B1-R (R2): PiP kapat (yeni kamera seçince geri gelir)
+      else if(a==='cambaraim'){ if(activeCamIdx>=0) setPlaceAction('aim'); }   // KAMERA-S S4: çubuk Yön = zemine-tıkla nişan moduna geç (koni ucu sürüklemenin alternatifi)
+      else if(a==='cambarpip'){ if(pipClosed) openPipForSelection(); else closePip(); }   // KAMERA-S S4: PiP aç-kapa
       else if(a==='roof'){ roofOn=t.checked; applyRoof(); }
       else if(a==='lbl'){ lblOn=t.checked; if(scene&&scene.__labels) scene.__labels.visible=lblOn; }
     });
@@ -797,6 +814,7 @@
     function up(){ window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); state=-1; d.style.cursor=spacePan?'grab':''; }
     function wheel(e){ e.preventDefault(); if(!c.enabled) return;   // kilitliyken tekerlek-zoom da kapalı (panel zoom slider'ı açık kalır)
       if(furnMode && activeFurnIdx>=0) return;                      // mobilya seçili → tekerlek onu döndürür (attachPicker), zoom yapma
+      if(camUIEnabled && activeGroup==='camera' && activeCamIdx>=0 && !camGhost && !camDrag && !camAimDrag) return;   // KAMERA-S S3: kamera seçili → tekerlek yaw döndürür (attachPicker), zoom yapma
       const base=(radiusTarget==null?c.getDistance():radiusTarget);
       c.setDistanceTarget(base*(e.deltaY<0?0.9:1.111)); }         // zoom mesafesi ayrı — hedef-tween'e dokunmaz (target sabit kalır)
     // Space basılı tut → sol-sürükle KAYDIRIR (2B editör konvansiyonu); bırakınca döndürmeye döner
@@ -1365,10 +1383,16 @@
   //   gizmo/etiket gizle + çatıyı kapat (iç mekan) — GEÇİCİ, pass sonunda GERİ. Sonunda scissorTest=false +
   //   viewport TAM canvas'a geri (ana pass'i etkilemesin). Ayrı pipCam kullanır → ana cam DOKUNULMAZ.
   //   TUZAK: snapCameraDataURL kendi setSize(1440×810)/restore'unu yapar → _snapBusy iken PiP ATLA (loop guard).
+  // KAMERA-S: PiP kaynağı — EKLE hayalet-akışının 'aim' fazında CANLI hayalet kamerayı akıt (kullanıcı ne
+  //   göreceğini görerek nişan alır); değilse seçili gerçek kamera. Ghost 'aim'de pos+target hazır (izlenen yön).
+  function pipSourceCam(){
+    if(camGhost && camGhost.phase==='aim' && camGhost.pos && camGhost.target)
+      return { pos:camGhost.pos, target:camGhost.target, lens:camGhost.lens };
+    if(activeCamIdx>=0 && activeCamIdx<camList.length){ const c=camList[activeCamIdx]; if(c&&c.pos&&c.target) return c; }
+    return null;
+  }
   function shouldShowPip(){
-    return camUIEnabled && activeGroup==='camera' && !pipClosed
-        && activeCamIdx>=0 && activeCamIdx<camList.length
-        && !!(camList[activeCamIdx]&&camList[activeCamIdx].pos&&camList[activeCamIdx].target);
+    return camUIEnabled && activeGroup==='camera' && !pipClosed && !!pipSourceCam();
   }
   function renderPip(){
     if(_snapBusy || !renderer || !scene || !cam) return;
@@ -1378,7 +1402,7 @@
     if(!shouldShowPip()){ if(pipEl.style.display!=='none') pipEl.style.display='none'; return; }
     pipEl.style.display='block';
     updatePipTitle();
-    const c=camList[activeCamIdx];
+    const c=pipSourceCam(); if(!c) return;   // KAMERA-S: hayalet 'aim' fazında CANLI hayalet görüşü, değilse seçili kamera
     // DOM body dikdörtgeni → renderer viewport/scissor koordinatı. TUZAK (C1-5): three.js
     //   setViewport/setScissor LOJİK (CSS) piksel alır ve pixelRatio ile İÇERİDE çarpar; ana döngü de
     //   setSize(clientW,clientH) = CSS piksel veriyor (getViewport→1280×664). Burada *pr ile device-piksele
@@ -1421,7 +1445,9 @@
     }
   }
   function updatePipTitle(){ const t=overlay&&overlay.querySelector('#v3dPipTitle');
-    if(t) t.textContent=(activeCamIdx>=0?('K'+(activeCamIdx+1)+' görüşü'):'Kamera görüşü'); }
+    if(!t) return;
+    if(camGhost && camGhost.phase==='aim'){ t.textContent='Yeni kamera görüşü · nişan al'; return; }   // KAMERA-S: canlı hayalet
+    t.textContent=(activeCamIdx>=0?('K'+(activeCamIdx+1)+' görüşü'):'Kamera görüşü'); }
 
   // R8: WASD MİNİMAP — gezinti sırasında sol-alt kuşbakışı. PiP scissor-pass DESENİNİ yeniden kullanır:
   //   ortho TEPE kamera (plan tamamını sabit çerçeveye sığdırır), scissor'lı ikinci render pass minimap
@@ -2003,12 +2029,49 @@
       if(active) g.add(makeActiveMarker(c));                        // seçili işaretçi ÖNCE → kamera mesh'i üstte kalsın
       g.add(makeViewCone(c,active));
       g.add(makeCameraMesh(c,active,i));
+      if(active) g.add(makeAimHandle(c));                           // S3: koni-ucu NİŞAN tutamacı (sürükle = yeniden nişan)
     });
     if(pendingPos){                                                 // 'add' 1. tık: yer işareti
       const s=new THREE.Mesh(new THREE.SphereGeometry(0.16,14,14),
         new THREE.MeshStandardMaterial({color:0x7bbf8a,emissive:0x2a4a30}));
       s.position.set(pendingPos.x,CAM_Y[camHeight],pendingPos.z); g.add(s);
     }
+    // KAMERA-S (S1): EKLE hayalet — konum işareti + (aim fazında) canlı koni + kamera modeli, YARI-SAYDAM
+    if(camGhost){
+      if(camGhost.pos){
+        const s=new THREE.Mesh(new THREE.SphereGeometry(0.16,14,14),
+          new THREE.MeshBasicMaterial({color:0x7bbf8a,transparent:true,opacity:0.85}));
+        s.position.set(camGhost.pos.x,camGhost.pos.y,camGhost.pos.z); g.add(s);
+        // konum halkası (mobilya hayalet hissi)
+        const ring=new THREE.Mesh(new THREE.RingGeometry(0.34,0.5,36),
+          new THREE.MeshBasicMaterial({color:0x7bbf8a,transparent:true,opacity:0.55,side:THREE.DoubleSide,depthWrite:false}));
+        ring.rotation.x=-Math.PI/2; ring.position.set(camGhost.pos.x,0.03,camGhost.pos.z); g.add(ring);
+      }
+      if(camGhost.phase==='aim' && camGhost.pos && camGhost.target){
+        const gc={ pos:camGhost.pos, target:camGhost.target, lens:camGhost.lens };
+        g.add(makeViewCone(gc,true));
+        const cm=makeCameraMesh(gc,true,-1);
+        cm.traverse(function(n){ if(n.isMesh && n.material){ n.material=n.material.clone(); n.material.transparent=true; n.material.opacity=0.6; } });
+        g.add(cm);
+      }
+    }
+  }
+  // S3: koni-ucu NİŞAN tutamacı — bakış yönünde ~koni ucu civarında küçük parlak küre; sürükle = yeniden nişan.
+  function makeAimHandle(c){
+    const dir=new THREE.Vector3(c.target.x-c.pos.x,(c.target.y||0.5)-c.pos.y,c.target.z-c.pos.z);
+    let L=dir.length(); if(!(L>1e-4)){ L=2.4; dir.set(0,0,1); }
+    L=Math.max(1.6,Math.min(L*0.95,9)); dir.normalize();
+    const p={ x:c.pos.x+dir.x*L, y:c.pos.y+dir.y*L, z:c.pos.z+dir.z*L };
+    const grp=new THREE.Group();
+    const knob=new THREE.Mesh(new THREE.SphereGeometry(0.16,16,16),
+      new THREE.MeshBasicMaterial({color:0xffd27a,transparent:true,opacity:0.95,depthTest:false}));
+    knob.position.set(p.x,p.y,p.z); knob.renderOrder=999;
+    const halo=new THREE.Mesh(new THREE.SphereGeometry(0.24,16,16),
+      new THREE.MeshBasicMaterial({color:0xffa53a,transparent:true,opacity:0.28,depthTest:false}));
+    halo.position.set(p.x,p.y,p.z); halo.renderOrder=998;
+    grp.add(knob,halo);
+    grp.traverse(function(o){ o.userData.aimHandle=true; });   // picker ayırıcı (kamera seçiminden ÖNCE test edilir)
+    return grp;
   }
 
   // tıklanan nesneden (ya da atasından) kamera indexini bul
@@ -2081,6 +2144,155 @@
       }
     }
   }
+
+  /* ═══ KAMERA-S: MOBİLYA-KALİTESİ AKICILIK ═══════════════════════════════════════════════
+     Mobilya his'ini kameraya birebir taşır. Mevcut iki-tık mantığı (scenePick add/aim/move) KORUNUR;
+     bunlar üstüne CANLI görsel geri bildirim ekler. cameraViewInfo/exportCameras şemaları DEĞİŞMEZ. */
+  let camGroundPlane=null;
+  // pointer → zemin düzlemi (y=0) → DÜNYA nokta {x,z} (kamera koordinatları zaten dünya — mobilyadaki +cx/cz YOK)
+  function camGroundHit(ev){
+    if(!scene||!scene.__floorGroup) return null;
+    const rect=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
+    if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
+    const hits=raycaster.intersectObjects(scene.__floorGroup.children,false);   // zemin mesh'i (kadraj içi)
+    if(hits.length) return { x:hits[0].point.x, z:hits[0].point.z };
+    if(!camGroundPlane) camGroundPlane=new THREE.Plane(new THREE.Vector3(0,1,0), 0);   // zemin dışı → y=0 düzlemi
+    const p=new THREE.Vector3(); if(!raycaster.ray.intersectPlane(camGroundPlane, p)) return null;
+    return { x:p.x, z:p.z };
+  }
+  function camPickIdx(ev){ if(!camGizmos) return -1;
+    const rect=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
+    if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
+    const gh=raycaster.intersectObjects(camGizmos.children,true);
+    for(let i=0;i<gh.length;i++){ const idx=camIdxFromObj(gh[i].object); if(idx>=0) return idx; } return -1; }
+  // S3: koni-ucu NİŞAN tutamacı (seçili kamerada). userData.aimHandle taşır → picker ayırır.
+  function camAimHandleHit(ev){ if(!camGizmos||activeCamIdx<0) return false;
+    const rect=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
+    if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
+    const gh=raycaster.intersectObjects(camGizmos.children,true);
+    for(let i=0;i<gh.length;i++){ let o=gh[i].object; while(o){ if(o.userData&&o.userData.aimHandle) return true; o=o.parent; } } return false; }
+
+  // ── S1: EKLE = HAYALET AKIŞI ──────────────────────────────────────────────
+  //   dock 'Ekle' → hayalet başlar (faz 'pos'): koni imleci zeminde konum izler (kuşbakışı kilidi mevcut).
+  //   tık = konum düşer → faz 'aim': koni imleci CANLI yön izler + PiP hayalet kamerayı akıtır. tık = yön sabit,
+  //   kamera camList'e eklenir (mevcut 'add' 2-tık ile aynı sonuç). Esc/sağ-tık iptal.
+  function startCamGhost(){
+    if(!camUIEnabled) return;
+    cancelCamGhost();
+    if(placeMode) setPlaceMode(false);                     // eski zemine-tıklama akışını kapat (hayalet devralır)
+    if(activeCamIdx>=0){ activeCamIdx=-1; }                 // yeni kamera hayaleti → seçim bırak (PiP hayaleti gösterir)
+    camGhost={ phase:'pos', pos:null, target:null, lens:camLens, height:camHeight };
+    pipClosed=false; applyPipSize();
+    if(renderer) renderer.domElement.style.cursor='copy';
+    renderCamGizmos(); applyPlaceModeUI();
+    setHint('Yeni kamera — KONUMA tıkla · Esc / sağ-tık vazgeç');
+  }
+  function moveCamGhost(ev){
+    if(!camGhost) return; const hit=camGroundHit(ev); if(!hit) return;
+    if(camGhost.phase==='pos'){
+      camGhost.pos={ x:hit.x, y:CAM_Y[camGhost.height||'eye'], z:hit.z };
+    } else {                                                // 'aim': konum sabit, yön CANLI izlenir
+      camGhost.target=aimTargetFrom(camGhost.pos, {x:hit.x, z:hit.z, y:0});
+    }
+    renderCamGizmos();                                      // hayalet koni/işaret tazele (PiP loop'ta hayaleti çeker)
+  }
+  function clickCamGhost(ev){
+    if(!camGhost) return; const hit=camGroundHit(ev); if(!hit) return;
+    if(camGhost.phase==='pos'){
+      camGhost.pos={ x:hit.x, y:CAM_Y[camGhost.height||'eye'], z:hit.z };
+      camGhost.target=aimTargetFrom(camGhost.pos, {x:hit.x, z:hit.z, y:0});   // başlangıç yönü (imleç izleyene dek)
+      camGhost.phase='aim';
+      renderCamGizmos(); applyPipSize();
+      setHint('Şimdi BAKIŞ yönüne tıkla — önizleme canlı · Esc vazgeç');
+    } else {                                                // 'aim' tık = yön sabit → kamerayı ekle
+      const c={ pos:camGhost.pos, target:aimTargetFrom(camGhost.pos,{x:hit.x,z:hit.z,y:0}), lens:camGhost.lens, height:camGhost.height };
+      camGhost=null; if(renderer) renderer.domElement.style.cursor='';
+      camList.push(c); activeCamIdx=camList.length-1; pendingPos=null; placeAction='aim';
+      renderCamGizmos(); syncCamBtns(); logRoom(c); openPipForSelection();
+      setHint('Kamera '+camList.length+' eklendi · sürükle taşı · koni ucundan / tekerlekle çevir');
+    }
+  }
+  function cancelCamGhost(){
+    if(!camGhost) return; camGhost=null;
+    if(renderer) renderer.domElement.style.cursor='';
+    renderCamGizmos(); applyPlaceModeUI();
+  }
+
+  // ── S2: TAŞI = DOĞRUDAN SÜRÜKLE (mobilya beginFurnDrag deseni) ──────────────
+  //   kamera gizmosu üstünde sol-drag başlarsa taşı; boş zemin = pan (orbit) kuralı aynen. Hedef GÖRELİ korunur
+  //   (pos→target vektörü sabit → nişan bozulmaz). PiP canlı (seçili kamera akar).
+  function beginCamDrag(ev, idx){
+    selectCam(idx); const c=camList[idx]; const hit=camGroundHit(ev); if(!hit) return;
+    const rel={ x:c.target.x-c.pos.x, y:c.target.y-c.pos.y, z:c.target.z-c.pos.z };   // pos→target GÖRELİ
+    camDrag={ idx:idx, c:c, off:{x:c.pos.x-hit.x, z:c.pos.z-hit.z}, rel:rel, start:{px:c.pos.x,pz:c.pos.z}, moved:false };
+    if(controls) controls.enabled=false; if(renderer) renderer.domElement.style.cursor='grabbing';
+  }
+  function moveCamDrag(ev){
+    if(!camDrag) return; const hit=camGroundHit(ev); if(!hit) return; const c=camDrag.c;
+    const x=hit.x+camDrag.off.x, z=hit.z+camDrag.off.z;
+    camDrag.moved=camDrag.moved || (Math.abs(x-camDrag.start.px)+Math.abs(z-camDrag.start.pz))>0.02;
+    c.pos.x=x; c.pos.z=z;                                   // yükseklik/pitch korunur (pos.y dokunulmaz)
+    c.target={ x:x+camDrag.rel.x, y:c.pos.y+camDrag.rel.y, z:z+camDrag.rel.z };   // hedef göreli taşınır → nişan sabit
+    renderCamGizmos();
+  }
+  function endCamDrag(){
+    if(!camDrag) return; const c=camDrag.c, moved=camDrag.moved; camDrag=null;
+    if(controls) controls.enabled=!placeMode; if(renderer) renderer.domElement.style.cursor='';
+    if(!moved){ return; }                                   // sadece tık = seçim (beginCamDrag zaten selectCam etti)
+    syncCamBtns(); logRoom(c); setHint('Kamera taşındı · sürükle yine taşı · koni ucundan çevir');
+  }
+
+  // ── S3: YÖN = DOĞRUDAN MANİPÜLASYON (koni-ucu tutamacı sürükle) ────────────
+  //   aimTargetFrom kuralları (zemine bakış serbest, degenerate guard). Tekerlek yaw döndürme attachOrbit'te.
+  function beginCamAimDrag(){
+    if(activeCamIdx<0) return; camAimDrag={ idx:activeCamIdx, c:camList[activeCamIdx], moved:false };
+    if(controls) controls.enabled=false; if(renderer) renderer.domElement.style.cursor='crosshair';
+    setHint('Koni ucunu sürükle = yeniden nişan · bırak = sabit');
+  }
+  function moveCamAimDrag(ev){
+    if(!camAimDrag) return; const hit=camGroundHit(ev); if(!hit) return; const c=camAimDrag.c;
+    camAimDrag.moved=true; c.target=aimTargetFrom(c.pos, {x:hit.x, z:hit.z, y:0});
+    renderCamGizmos();
+  }
+  function endCamAimDrag(){
+    if(!camAimDrag) return; const c=camAimDrag.c; camAimDrag=null;
+    if(controls) controls.enabled=!placeMode; if(renderer) renderer.domElement.style.cursor='';
+    renderCamGizmos(); updateCamPanel(); updateCamRender(); logRoom(c);
+    setHint('Yön güncellendi · koni ucundan tekrar çevir · tekerlek de döndürür');
+  }
+  // S3: seçili kamerayı yaw (yatay) döndür — tekerlek (mobilya tekerlek-döndürme ikizi). pos etrafında target'ı çevir.
+  function yawCam(deltaDeg){
+    if(activeCamIdx<0) return; const c=camList[activeCamIdx];
+    const dx=c.target.x-c.pos.x, dz=c.target.z-c.pos.z, dy=c.target.y-c.pos.y;
+    const a=deltaDeg*Math.PI/180, cs=Math.cos(a), sn=Math.sin(a);
+    c.target={ x:c.pos.x+dx*cs-dz*sn, y:c.pos.y+dy, z:c.pos.z+dx*sn+dz*cs };   // yükseklik/pitch korunur (dy sabit)
+    renderCamGizmos(); syncCamBtns(); logRoom(c);
+  }
+
+  // ── S4: YÜZEN MİNİ ÇUBUK — seçili kamera gizmosu yanında (mobilya updateFurnBar ikizi) ──
+  //   Yön / Odakla / PiP aç-kapa / Sil. Dock eylemleri kalır (çubuk = hızlı yol).
+  function updateCamBar(){
+    const bar=overlay&&overlay.querySelector('#v3dCamBar'); if(!bar) return;
+    const show=(camUIEnabled && activeGroup==='camera' && !camGhost && !camDrag && !camAimDrag
+                && activeCamIdx>=0 && activeCamIdx<camList.length && scene && cam && renderer);
+    if(!show){ if(bar.style.display!=='none') bar.style.display='none'; return; }
+    const c=camList[activeCamIdx];
+    const v=new THREE.Vector3(c.pos.x, (c.pos.y||1.6)+0.35, c.pos.z).project(cam);
+    const rect=renderer.domElement.getBoundingClientRect();
+    const sx=rect.left+(v.x*0.5+0.5)*rect.width, sy=rect.top+(-v.y*0.5+0.5)*rect.height;
+    bar.style.display=(v.z<1)?'flex':'none'; if(v.z>=1) return;   // kamera arkasında → gizle
+    const bw=bar.offsetWidth||156, bh=bar.offsetHeight||40;
+    const dockH=activeDockPx();
+    const botLimit=window.innerHeight-bh-8-dockH;
+    let left=sx-bw/2, top=sy-bh-16;
+    left=Math.max(8, Math.min(window.innerWidth-bw-8, left));
+    top=Math.max(8, Math.min(botLimit, top));
+    bar.style.left=left.toFixed(0)+'px'; bar.style.top=top.toFixed(0)+'px';
+  }
+
   /* ── MOBİLYA modsuz sürükle-bırak (spec UX P0-P2): mobilyaya bas-sürükle-bırak; geçersizde kırmızı+geri al;
      tekerlek/R döndür (15° snap); duvara snap; Del sil; Ctrl+D çoğalt. Kamera yalnız sürükle sırasında kilitlenir. */
   let furnDrag=null, furnGroundPlane=null, furnPersistT=null, furnUndo=[];
@@ -2248,25 +2460,52 @@
   function attachPicker(){
     if(pickerWired||!renderer) return; pickerWired=true;
     const el=renderer.domElement; let sx=0,sy=0,moved=false;
-    // B2-1: HAYALET aktifken sağ-tık = vazgeç (menü açma). contextmenu'yu da yut.
-    el.addEventListener('contextmenu',function(e){ if(furnGhost){ e.preventDefault(); cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); } });
+    // B2-1: HAYALET aktifken sağ-tık = vazgeç (menü açma). contextmenu'yu da yut. KAMERA-S: camGhost da iptal.
+    el.addEventListener('contextmenu',function(e){ if(furnGhost){ e.preventDefault(); cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); }
+      else if(camGhost){ e.preventDefault(); cancelCamGhost(); setHint('Kamera ekleme iptal'); } });
     el.addEventListener('pointerdown',function(e){ sx=e.clientX; sy=e.clientY; moved=false;
       if(furnGhost){ if(e.button===2){ cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); } return; }   // hayalet: sürükleme başlatma (tık=bırak, pointerup'ta)
+      if(camGhost){ if(e.button===2){ cancelCamGhost(); setHint('Kamera ekleme iptal'); } return; }        // KAMERA-S S1: hayalet tık=bırak (pointerup)
       // B2-2: SÜRÜKLE-vs-PAN — sol-drag MOBİLYANIN ÜSTÜNDE başlarsa taşı; BOŞ zeminde başlarsa PAN (orbit).
       //   Mobilya seçili olsa bile boş alan pan'dir. Hit-test önceliği: mobilya > zemin-pan.
-      if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0) beginFurnDrag(e, idx); } });
+      if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0){ beginFurnDrag(e, idx); return; } }
+      // KAMERA-S S2/S3: kamera modunda sol-drag — koni-ucu tutamacı > kamera gizmosu > boş zemin (pan).
+      if(camUIEnabled && activeGroup==='camera' && e.button===0 && !spacePan){
+        if(camAimHandleHit(e)){ beginCamAimDrag(); return; }                     // S3: koni ucu = doğrudan nişan
+        const ci=camPickIdx(e); if(ci>=0){ beginCamDrag(e, ci); return; }        // S2: kamera üstü = doğrudan taşı
+      } });
     el.addEventListener('pointermove',function(e){ if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>5) moved=true;
       if(furnGhost){ moveFurnGhost(e); return; }
       if(furnDrag){ moveFurnDrag(e); return; }
+      if(camGhost){ moveCamGhost(e); return; }              // KAMERA-S S1: hayalet imleci izler (pos ya da aim fazı)
+      if(camAimDrag){ moveCamAimDrag(e); return; }          // S3
+      if(camDrag){ moveCamDrag(e); return; }                // S2
       if(!spacePan && furnMode && e.buttons===0) el.style.cursor=(furnPickIdx(e)>=0?'grab':'');   // boş zemin = pan imleci (mobilya üstü = grab)
+      else if(!spacePan && camUIEnabled && activeGroup==='camera' && e.buttons===0)               // S2/S3: kamera/koni-ucu üstü = grab imleci
+        el.style.cursor=(camAimHandleHit(e)?'crosshair':(camPickIdx(e)>=0?'grab':''));
     });
     el.addEventListener('pointerup',function(e){ if(furnDrag){ endFurnDrag(); return; }
       if(furnGhost){ if(!moved && e.button===0){ moveFurnGhost(e); dropFurnGhost(); } return; }   // hayalet: yerinde tık = bırak (sürükleyip orbit ettiyse bırakmaz)
+      if(camGhost){ if(!moved && e.button===0){ moveCamGhost(e); clickCamGhost(e); } return; }    // KAMERA-S S1: yerinde tık = konum/yön düşür (sürükleyip orbit ettiyse yut)
+      if(camAimDrag){ endCamAimDrag(); return; }             // S3
+      if(camDrag){ endCamDrag(); return; }                   // S2
       if(!spacePan && (camUIEnabled||furnMode||(activeGroup==='material'&&matUIEnabled))&&!moved&&e.button===0) scenePick(e); });   // Space'te tıklama seçmesin/koymasın (kaydırma kipi); malzeme modu = oda seç
     // tekerlek = seçili mobilyayı döndür (5° hassas, Shift=1° ince ayar); orbit zoom'u furnMode+seçili iken atlanır (attachOrbit)
     el.addEventListener('wheel',function(e){ if(furnMode && activeFurnIdx>=0){ const f=furnList[activeFurnIdx], st=e.shiftKey?1:5;
-      f.rot_deg=((((f.rot_deg||0)+(e.deltaY<0?st:-st))%360)+360)%360; f.source='manual'; f.locked=true; renderFurniture(); schedulePersist(); } }, {passive:true});
+      f.rot_deg=((((f.rot_deg||0)+(e.deltaY<0?st:-st))%360)+360)%360; f.source='manual'; f.locked=true; renderFurniture(); schedulePersist(); return; }
+      // KAMERA-S S3: kamera modunda seçili kamerada tekerlek = yaw döndür (mobilya ikizi; 5°/Shift 1°). orbit zoom attachOrbit'te atlanır.
+      if(camUIEnabled && activeGroup==='camera' && activeCamIdx>=0 && !camGhost && !camDrag && !camAimDrag){
+        const st=e.shiftKey?1:5; yawCam(e.deltaY<0?st:-st); } }, {passive:true});
     window.addEventListener('keydown', onFurnKey);
+    // KAMERA-S: kamera modunda Esc = hayalet ekleme iptal (öncelik) ya da seçimi bırak. Form alanı odaktayken yut.
+    window.addEventListener('keydown', function(e){
+      if(e.key!=='Escape') return;
+      if(overlay&&overlay.style.display==='none') return;
+      if(!(camUIEnabled && activeGroup==='camera')) return;
+      const t=e.target, tag=t&&t.tagName; if(t&&(t.isContentEditable||tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')) return;
+      if(camGhost){ e.preventDefault(); cancelCamGhost(); setHint('Kamera ekleme iptal'); }
+      else if(activeCamIdx>=0){ e.preventDefault(); deselectCam(); }
+    });
     // A3: F = seçiliye odakla (mobilya ya da kamera grubu). Form alanı odaktayken yut; 3B kapalıyken karışma.
     window.addEventListener('keydown', function(e){
       if(e.key!=='f'&&e.key!=='F') return; if(e.ctrlKey||e.metaKey||e.altKey) return;
@@ -2516,7 +2755,7 @@
   // dock'u BAŞTAN kur (kamera seç/ekle/sil/setCamUI'da). Highlight/slider tazeleme updateCamDock'ta (yeniden kurMAZ).
   // B1-R: KOMPAKT — kapalıyken tek yatay bar; özet çipe tıkla → detay katmanı (yükseklik/bakış açısı/objektif/gün saati/render).
   // C3-2: yerleştir düğmesi etiketi — placeMode açık=Bitir; seçili kamera var=Düzenle (mevcut Taşı/Yön akışına girer); yok=Yerleştir (yeni kamera akışı).
-  function placeBtnLabel(){ return placeMode ? 'Bitir' : ((activeCamIdx>=0 && activeCamIdx<camList.length) ? 'Düzenle' : 'Yerleştir'); }
+  function placeBtnLabel(){ return (placeMode||camGhost) ? 'Bitir' : ((activeCamIdx>=0 && activeCamIdx<camList.length) ? 'Düzenle' : 'Yerleştir'); }   // KAMERA-S: hayalet akışı da "Bitir"
   function renderCamDock(){
     const dk=overlay&&overlay.querySelector('#v3dCamDock'); if(!dk) return;
     if(!camUIEnabled){ dk.style.display='none'; dk.innerHTML=''; return; }
@@ -2616,7 +2855,8 @@
   function updateCamDock(){
     const dk=overlay&&overlay.querySelector('#v3dCamDock'); if(!dk||dk.style.display==='none') return;
     const has=(activeCamIdx>=0 && activeCamIdx<camList.length), c=has?camList[activeCamIdx]:null;
-    const pb=dk.querySelector('#v3dPlaceBtn'); if(pb){ pb.classList.toggle('on',placeMode); pb.innerHTML=ic('camera',12)+placeBtnLabel(); }
+    const pb=dk.querySelector('#v3dPlaceBtn'); if(pb){ pb.classList.toggle('on',placeMode||!!camGhost); pb.innerHTML=ic('camera',12)+placeBtnLabel(); }   // KAMERA-S: hayalet de aktif-vurgu
+    dk.querySelectorAll('[data-camact="add"]').forEach(function(b){ b.setAttribute('data-on', camGhost?'1':''); if(!camGhost) b.removeAttribute('data-on'); });   // Ekle çipi hayalette vurgulanır
     // B1-R: özet çip metni + seçili-kamera eylem ikonlarının etkinliği
     const sumT=dk.querySelector('#v3dCamSumT'); if(sumT) sumT.textContent=has?camSummaryText(c,activeCamIdx):'Kamera seç';
     const acts=dk.querySelector('#v3dCamActs'); if(acts){ acts.style.opacity=has?'1':'.4'; acts.style.pointerEvents=has?'':'none'; }
@@ -4034,6 +4274,7 @@
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
       updateOrb();                                           // B1-1: yön küresi iğnesini mevcut azimuta döndür (hafif DOM yazımı)
       if(furnMode && activeFurnIdx>=0 && !furnGhost) updateFurnBar();   // B2-3: yüzen mini araç çubuğunu seçili mobilyanın üstünde tut
+      if(camUIEnabled && activeGroup==='camera' && activeCamIdx>=0) updateCamBar();   // KAMERA-S S4: seçili kameranın yüzen mini çubuğu (mobilya ikizi)
       if(zoomEl&&!zoomActive) zoomEl.value=distToSlider(controls.getDistance()); } }
 
   // dışa aç + buton bağla
