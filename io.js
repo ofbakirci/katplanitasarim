@@ -270,7 +270,6 @@ function restoreState(st, opt){
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
   document.getElementById('dxfBtn').disabled=false;
-  document.getElementById('aiOutputBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: içe aktarılan sınırın alan/çevresi (eski değer asılı kalmasın) */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
@@ -1040,7 +1039,9 @@ function exportAIOutput(){
 document.getElementById('svgBtn').onclick=exportSVG;
 document.getElementById('pngBtn').onclick=exportPNG;
 document.getElementById('dxfBtn').onclick=exportDXF;
-document.getElementById('aiOutputBtn').onclick=exportAIOutput;
+/* AI Output düğmesi UI'dan kaldırıldı (ControlNet/paint hattı deprecated); export fonksiyonları
+   (exportAIOutput/exportAIPaintPNG/exportEdgeMaskPNG/exportWallBoundaryPNG/buildFloorplanMap)
+   motor sözleşmesi + view3d kapı-span parity + testler için AYNEN korunur. */
 /* ── Eğitim günlüğü UI (self-training veri musluğu) — kayıt sayısı + JSONL indir + temizle ── */
 function updateTrainLogUI(){
   const c=document.getElementById('trainCount'); if(!c||typeof trainLog==='undefined') return;
@@ -1282,7 +1283,6 @@ function kpBuildPlanFromCells(geom){
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
   document.getElementById('dxfBtn').disabled=false;
-  document.getElementById('aiOutputBtn').disabled=false;
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: çözümlenen sınırın alan/çevresi */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';

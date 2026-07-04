@@ -233,6 +233,13 @@ svg.addEventListener('mousemove',e=>{
   }
   if(spacePan){ syncPanCursor(); return; }   // space basılı: imleç grab kalsın, hover/işaretçi mantığı çalışmasın
   if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)||(mode==='roomdraw'&&plan)){ hoverP=snapPoint(sx,sy); render(); }
+  else if(mode==='draw'&&closed&&!plan){   // P3: yerleşim öncesi kapalı bina → köşe/kenar tutamacı hover geri bildirimi
+    const bh=hitBoundaryHandle(sx,sy);
+    const nh=bh?{kind:'bvert',idx:bh.idx}:null;
+    svg.style.cursor = bh? (bh.kind==='edge'?'copy':'move') : '';
+    if(bh) setStatusHint('Köşeyi taşı · kenar ortasına tıkla = köşe ekle','#b35a2e'); else setStatusHint('Sınır köşelerini sürükleyerek binayı düzenleyin','#6b5e4d');
+    if(JSON.stringify(nh)!==JSON.stringify(hoverStructH)){ hoverStructH=nh; render(); }
+  }
   else if(mode==='parcel'&&parcelClosed){ setStatusHint('Parsel kapalı — yol cephesi seçmek için bir kenara tıklayın','#4a7c4a'); svg.style.cursor='pointer'; }  // B6: kalıcı ipucu
   else if(mode==='balkon'){
     const wx=S2Wx(sx), wy=S2Wy(sy);
@@ -422,6 +429,19 @@ svg.addEventListener('mousedown',e=>{
     if(wr){ dragging={type:'wall', run:wr, snap:snapshotRegions(), groupMove:e.shiftKey};
       hoverWall=wr; e.preventDefault(); return; }
   }
+  /* P3: kapalı bina + henüz yerleşim yok → köşe tutamacını sürükle (add-anchor kenar ortası dâhil) */
+  if(mode==='draw' && closed && !plan && e.button===0){
+    const bh=hitBoundaryHandle(sx,sy);
+    if(bh){
+      const prevPts=pts.map(p=>({...p}));
+      let idx=bh.idx;
+      if(bh.kind==='edge'){ const a=pts[bh.idx], b=pts[(bh.idx+1)%pts.length];
+        pts.splice(bh.idx+1,0,{x:snapG((a.x+b.x)/2), y:snapG((a.y+b.y)/2)}); idx=bh.idx+1; }
+      dragging={type:'bvert', idx, prevPts, prevCore:lockedCore?lockedCore.map(o=>({...o})):null};
+      e.preventDefault(); render(); return;
+    }
+    return;   // kapalı: yeni nokta ekleme
+  }
   if(mode!=='draw' || closed || e.button!==0) return;
   const p=snapPoint(sx,sy);
   if(p.closing){ finishPoly(); return; }
@@ -490,6 +510,12 @@ function finishDrag(){
     pushEdit({type:'bound', prevPts:dragging.prevPts, prevCore:dragging.prevCore});
     try{ generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
     catch(err){ console.error('sınır düzenleme:', err); }
+    document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+    document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+  } else if(dragging.type==='bvert'){
+    /* P3: yerleşim ÖNCESİ (plan yok) sınır köşe düzenlemesi → yalnız pts geri-al (generate YOK) */
+    if(JSON.stringify(dragging.prevPts)!==JSON.stringify(pts))
+      pushEdit({type:'bounddraw', prevPts:dragging.prevPts});
     document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
     document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   } else if(dragging.type==='door' && dragging.undo){
@@ -660,6 +686,12 @@ function undoEdit(){
     document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
     document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
     updateStructResetBtn();
+  } else if(e.type==='bounddraw'){
+    /* P3: yerleşim öncesi sınır köşe düzenlemesinin geri-alımı (generate YOK) */
+    pts=e.prevPts.map(p=>({...p}));
+    document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+    document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+    render();
   } else if(e.type==='unitswap'){
     if(e.state){ // daire takası: tam durum anlık görüntüsü ile birebir geri dön
       const keep=editHistory;
@@ -894,7 +926,7 @@ document.getElementById('tClear').onclick=()=>{ pts=[];roomPts=[];closed=false;p
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
   updateStructResetBtn();
-  document.getElementById('genBtn').disabled=true; document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true; document.getElementById('aiOutputBtn').disabled=true;
+  document.getElementById('genBtn').disabled=true; document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true;
   document.getElementById('unitTable').style.display='none';
   document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–'; render(); };
 document.getElementById('tFit').onclick=fitView;

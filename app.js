@@ -56,7 +56,7 @@ let exportView = null;        // io.js dışa aktarımı sırasında render() i�
 const EDIT_LABELS = {
   wallsnap:'Duvar taşındı', cut:'Daire sınırı', door:'Kapı', balk:'Balkon', avlu:'Avlu',
   park:'Otopark', retype:'Oda tipi', swap:'Oda yeri', unitswap:'Daire taşındı',
-  corelock:'Çekirdek', bound:'Sınır taşındı', structedit:'Yapı elemanı',
+  corelock:'Çekirdek', bound:'Sınır taşındı', bounddraw:'Sınır köşesi', structedit:'Yapı elemanı',
   ulayout:'Daire düzeni', sitemove:'Blok taşındı', roomdraw:'Oda çizildi', __snap:'Adım'
 };
 function labelFor(e){
@@ -797,7 +797,7 @@ function clearCanvasForNewBlock(){
   villaFloors=null; activeFloor=0; lockedCore=null;
   const ka=document.getElementById('katAyri'); if(ka) ka.checked=false;
   document.getElementById('genBtn').disabled=true;
-  document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true; document.getElementById('dxfBtn').disabled=true; document.getElementById('aiOutputBtn').disabled=true;
+  document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true; document.getElementById('dxfBtn').disabled=true;
   document.getElementById('unitTable').style.display='none';
   document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–';
   updateKatAyriUI(); updateStructResetBtn(); render();

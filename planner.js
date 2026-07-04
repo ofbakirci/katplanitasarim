@@ -456,7 +456,6 @@ function generate(keepCuts){
     document.getElementById('svgBtn').disabled=false;
     document.getElementById('pngBtn').disabled=false;
     document.getElementById('dxfBtn').disabled=false;
-    document.getElementById('aiOutputBtn').disabled=false;
     render();
     return;
   }
@@ -2378,7 +2377,6 @@ function generate(keepCuts){
   document.getElementById('svgBtn').disabled=false;
   document.getElementById('pngBtn').disabled=false;
   document.getElementById('dxfBtn').disabled=false;
-  document.getElementById('aiOutputBtn').disabled=false;
   PROF.wrap('render', render);
   PROF.report(`${cols*M}x${rows*M}m kat=${kat}`);
 }

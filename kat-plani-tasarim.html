@@ -70,7 +70,8 @@
           <div class="ps-field"><label for="psCekmeArka">Arka</label><input type="number" id="psCekmeArka" min="0" max="50" step="0.5" value="3"></div>
         </div>
         <div id="psYolSec" class="ps-yol-sec">Yol cephesi: <b id="psYolDurum">seçilmedi (tümü yan)</b> · <span class="ps-dim">parsel kenarına tıkla</span></div>
-        <button type="button" id="psDrawBld" class="ps-draw-btn">⤿ Parsele yapı sınırı çiz <small>(çekme + TAKS)</small></button>
+        <button type="button" id="psDrawBld" class="ps-draw-btn">Parsele yapı sınırı çiz <small>(çekme sınırı)</small></button>
+        <button type="button" id="psFitTaks" class="ps-draw-btn pro-only" style="margin-top:6px">TAKS'a sığdır <small>(taban alanını sınıra küçült)</small></button>
         <div class="ps-rot-wrap">
           <label>Döndür <small>(eksene hizala)</small></label>
           <div class="ps-rot">
@@ -122,13 +123,10 @@
         <button class="small" id="dxfBtn" style="flex:1" disabled>DXF indir</button>
       </div>
       <div style="display:flex; gap:6px; margin-top:6px;">
-        <button class="small" id="aiOutputBtn" style="flex:1" disabled>AI Output</button>
+        <button class="small" id="impBtn" style="flex:1">İçe aktar</button>
+        <input type="file" id="impFile" accept=".svg,image/svg+xml,.json,.dxf" style="display:none">
       </div>
-      <div style="display:flex; gap:6px; margin-top:6px;">
-        <button class="small" id="impBtn" style="flex:1">SVG içe aktar</button>
-        <input type="file" id="impFile" accept=".svg,image/svg+xml,.json" style="display:none">
-      </div>
-      <div style="margin-top:4px; font-size:11px; color:#9c8e76; line-height:1.35">Bu araçtan indirilen SVG'ler plan durumunu içinde taşır: içe aktarınca elle düzenlemeler dâhil aynen geri gelir. Eski (durumsuz) SVG'ler geometriden çözümlenir.</div>
+      <div style="margin-top:4px; font-size:11px; color:#9c8e76; line-height:1.35">SVG (plan durumu gömülü ya da eski) · JSON · DXF</div>
       <details id="trainSec" class="wt-sec pro-only">
         <summary>Eğitim günlüğü <small id="trainCount">(0 kayıt)</small></summary>
         <div class="wt-hint">İndirilen/render'a gönderilen planlar yerelde tercih verisi olarak birikir (ağ yok). İleride yerleşim sıralayıcının eğitimi için.</div>

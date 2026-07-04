@@ -499,11 +499,11 @@ function psLiveUpdate(){
   live.innerHTML=html;
 }
 
-/* Parsel + çekme (+ varsa imar TAKS'ı) → parsel içine önerilen YAPI SINIRINI bina olarak çiz.
-   Taban = çekme (yapı yaklaşma) zarfı; TAKS biliniyorsa ve zarf alanı TAKS sınırını aşıyorsa
-   merkez etrafında TAKS alanına küçültülür. Sonuç 'Yerleşimi Oluştur'a hazır kapalı bina. */
-function psDrawBuilding(){
-  if(!(parcelPts.length>=3 && parcelClosed)) return;
+/* çekme (yapı yaklaşma) zarfını hesapla → bina taban poligonu.
+   TAKS UYGULAMAZ — kesikli önizleme (parcelSetback) ile BİREBİR aynı sınır.
+   Zarf hesaplanamazsa (çok ince/karmaşık parsel) merkez-ölçekli yaklaşık inset. */
+function psSetbackPoly(){
+  if(!(parcelPts.length>=3 && parcelClosed)) return null;
   psComputeSetback();
   const d=psSetbackVals().yan||0;                       // biçimsiz-parsel fallback ölçeği için temsilî çekme
   let poly = (parcelSetback.length>=3) ? parcelSetback.map(p=>({x:p.x,y:p.y})) : null;
@@ -514,23 +514,45 @@ function psDrawBuilding(){
     const c=centroidOf(parcelPts);
     poly = parcelPts.map(p=>({x:c.x+(p.x-c.x)*k, y:c.y+(p.y-c.y)*k}));
   }
-  const im = (typeof parcelImar!=='undefined') ? parcelImar : null;
-  const taks = (im && im.maksTaks>0) ? im.maksTaks : 0;
-  if(taks>0){
-    const pa=shoelace(parcelPts), cap=pa*taks, cur=shoelace(poly);
-    if(cur>cap && cap>0){                                   // taban TAKS'ı aşıyor → merkez etrafında TAKS alanına küçült
-      const k=Math.sqrt(cap/cur), c=centroidOf(poly);
-      poly = poly.map(p=>({x:c.x+(p.x-c.x)*k, y:c.y+(p.y-c.y)*k}));
-    }
-  }
+  return poly.map(p=>({x:Math.round(p.x*1000)/1000, y:Math.round(p.y*1000)/1000}));
+}
+/* çizilen bina poligonunu editöre yerleştir: elle çizim bitişiyle AYNI durum
+   (mode='draw', closed, plan=null → köşe tutamaçları hemen sürüklenebilir). */
+function psPlaceBuilding(poly){
   pts = poly.map(p=>({x:Math.round(p.x*1000)/1000, y:Math.round(p.y*1000)/1000}));
-  closed=true; plan=null; balconies=[]; editHistory=[];
+  closed=true; plan=null; balconies=[]; editHistory=[]; if(typeof redoHistory!=='undefined') redoHistory=[];
   if(typeof resetCuts==='function') resetCuts();
+  if(typeof setMode==='function') setMode('draw');       // P3: elle-çizim bitişiyle aynı durum → köşe düzenlenebilir
+  else mode='draw';
   const gb=document.getElementById('genBtn'); if(gb) gb.disabled=false;
   const ut=document.getElementById('unitTable'); if(ut) ut.style.display='none';
   const sa=document.getElementById('stArea'); if(sa) sa.textContent=fmt(shoelace(pts))+' m²';
   const sp=document.getElementById('stPerim'); if(sp) sp.textContent=fmt(perim(pts))+' m';
   render();
+}
+/* P1: Parsele yapı sınırı çiz → çekme (yapı yaklaşma) zarfını BİREBİR çizer.
+   TAKS uygulanmaz (TAKS aşımı checks.js kırmızısı olarak uyarılır; motor kısıtlamaz).
+   Kesikli önizleme (parcelSetback) ile çizilen sonuç aynıdır. */
+function psDrawBuilding(){
+  const poly = psSetbackPoly();
+  if(!poly) return;
+  psPlaceBuilding(poly);
+}
+/* P2 (pro-only): çizili/önerilen bina sınırını TAKS tavanına sığdır (merkez etrafında küçült).
+   İmar TAKS'ı biliniyorsa ve taban alanı sınırı aşıyorsa oransal küçültür; undo'lu. */
+function psFitToTaks(){
+  const im = (typeof parcelImar!=='undefined') ? parcelImar : null;
+  const taks = (im && im.maksTaks>0) ? im.maksTaks : 0;
+  if(!(taks>0)){ setStatusHint('İmar TAKS değeri yok — önce parseli sorgula','#a05a2e'); return; }
+  // mevcut bina yoksa çekme zarfını taban al
+  let poly = (typeof pts!=='undefined' && pts.length>=3 && closed) ? pts.map(p=>({x:p.x,y:p.y})) : psSetbackPoly();
+  if(!poly || poly.length<3) return;
+  const pa=shoelace(parcelPts), cap=pa*taks, cur=shoelace(poly);
+  if(!(cur>cap && cap>0)){ setStatusHint('Bina zaten TAKS sınırında (≈%'+Math.round(taks*100)+')','#4a7c4a'); return; }
+  const k=Math.sqrt(cap/cur), c=centroidOf(poly);
+  poly = poly.map(p=>({x:c.x+(p.x-c.x)*k, y:c.y+(p.y-c.y)*k}));
+  psPlaceBuilding(poly);
+  setStatusHint('TAKS\'a sığdırıldı: '+fmt(shoelace(pts))+' m² (≈%'+Math.round(taks*100)+')','#4a7c4a');
 }
 
 /* ============================================================
@@ -1359,6 +1381,8 @@ function initParselSorgu(){
   });
   var dbld=document.getElementById('psDrawBld');
   if(dbld) dbld.addEventListener('click', psDrawBuilding);
+  var ftk=document.getElementById('psFitTaks');
+  if(ftk) ftk.addEventListener('click', psFitToTaks);
   var sat=document.getElementById('psSat');
   if(sat) sat.addEventListener('change', function(){ psSatOn=sat.checked; psUpdateSatellite(); render(); });
   // ---- döndürme (eksene hizalama) ----

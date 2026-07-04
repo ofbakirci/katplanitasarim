@@ -294,7 +294,24 @@ function render(){
     if(closed) d+='Z';
     // L1-A1: bina dış cephe konturu = dış duvar kalınlığı bandı (pts merkez-çizgi, ±t/2; eğik cephede hücre basamağına değil pts'e hizalı kalır)
     g.appendChild(el('path',{d,fill:closed&&!plan?'rgba(179,90,46,.07)':'none',stroke:'#2b2620','stroke-width':plan?Math.max(3,wallThickM('dis')*pxPerM):2.5,'stroke-linejoin':'miter'}));
-    if(!plan||!closed) pts.forEach(p=>g.appendChild(el('circle',{cx:W2Sx(p.x),cy:W2Sy(p.y),r:4,fill:'#fff',stroke:'#b35a2e','stroke-width':2})));
+    if(!plan||!closed){
+      // P3: kapalı bina + henüz yerleşim yok + draw modu → köşe tutamaçları SÜRÜKLENEBİLİR
+      //     (data-bvert; yapı modundaki turuncu köşe ailesinin ikizi). Diğer durumda düz nokta.
+      const edit = (closed && !plan && mode==='draw');
+      const bHov=(i)=> edit && hoverStructH && hoverStructH.kind==='bvert' && hoverStructH.idx===i;
+      if(edit && pts.length>=3){   // kenar ortası "+" = köşe ekle (yapı modu ailesinin ikizi)
+        for(let i=0;i<pts.length;i++){ const a=pts[i], b=pts[(i+1)%pts.length];
+          const mx=W2Sx((a.x+b.x)/2), my=W2Sy((a.y+b.y)/2), er=Math.max(4,pxPerM*0.22);
+          const e=el('circle',{cx:mx,cy:my,r:er,fill:'#fff',stroke:'#b35a2e','stroke-width':1.5,'stroke-dasharray':'2 2',cursor:'copy','data-hx':mx,'data-hy':my});
+          e.dataset.bedge=i; g.appendChild(e);
+          const t=el('text',{x:mx,y:my+er*0.55,'text-anchor':'middle','font-size':er*1.4,fill:'#b35a2e','font-weight':'700','pointer-events':'none'}); t.textContent='+'; g.appendChild(t); }
+      }
+      pts.forEach((p,i)=>{ const cx=W2Sx(p.x), cy=W2Sy(p.y), on=bHov(i), r=(edit?Math.max(5,pxPerM*0.3):4)*(on?1.35:1);
+        if(on) g.appendChild(el('circle',{cx,cy,r:r+4,fill:'#b35a2e',opacity:0.16,'pointer-events':'none'}));
+        const c=el('circle',{cx,cy,r,fill:'#fff',stroke:'#b35a2e','stroke-width':2});
+        if(edit){ c.setAttribute('cursor','move'); c.dataset.bvert=i; c.dataset.hx=cx; c.dataset.hy=cy; }
+        g.appendChild(c); });
+    }
     if(!clean) polyDims(g, pts, closed, '#6b5e4d'); // dış kenar ölçüleri ("32 m"/"16 m") AI temiz modda yok
     /* --- FAZ 3: pencereler — bina sınırının yaşam odasına (salon/yatak/mutfak) komşu
        kenar parçalarına açıklık. Sınır poligonu kenarları boyunca yürünür; her kenara
