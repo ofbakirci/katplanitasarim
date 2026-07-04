@@ -472,15 +472,19 @@
       '<div id="v3dStatus" style="position:absolute;left:12px;bottom:12px;color:#e8e6e0;opacity:.6;font:10.5px system-ui;background:rgba(34,34,40,.6);padding:4px 9px;border-radius:7px"></div>'+
       // A2: HER görünümde görünen dikey zoom overlay (2B editör sağ-alt kontrolünün 3B ikizi). ＋ / dikey slider / −
       // A4: üstünde kuşbakışı KİLİT düğmesi (kamera/mobilya grubunda görünür). EMOJİ YOK — inline SVG.
-      '<div id="v3dViewCtl" style="position:absolute;right:14px;bottom:14px;z-index:4;display:flex;flex-direction:column;align-items:center;gap:8px">'+
+      // R7: ORBIT KÜRESİ zoom slider'ın HEMEN SOLUNA, bitişik, aynı küme. Kolon yerine YATAY satır:
+      //   sol = küre widget'ı (sphere+Üst/İzo), sağ = zoom kümesi (kilit + zoom bar). İkisi alt hizalı.
+      '<div id="v3dViewCtl" style="position:absolute;right:14px;bottom:14px;z-index:4;display:flex;flex-direction:row;align-items:flex-end;gap:8px">'+
         // B1-1: YÖN KÜRESİ (viewcube) — üstünde sürükle=orbit (NAV hassasiyeti), hazır görüş noktaları (Üst/İzo/K-G-D-B).
         //   Kilitliyken İzo/yön seçmek kilidi açar ("dikine kaldım" çözümü). DOM/SVG — three.js sahne-içi küp DEĞİL.
         orbWidgetHTML()+
-        '<button id="v3dLockBtn" title="Kuşbakışı kilidi" style="display:none;width:38px;height:38px;border:0;border-radius:10px;background:rgba(34,34,40,.94);color:#c9b79a;cursor:pointer;align-items:center;justify-content:center;backdrop-filter:blur(7px)"></button>'+
-        '<div id="v3dZoomBar" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(34,34,40,.94);padding:8px 6px;border-radius:12px;backdrop-filter:blur(7px)">'+
-          '<button data-zoom="in" title="Yakınlaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('plus',15)+'</button>'+
-          '<input type="range" id="v3dZoom" min="0" max="1000" value="600" title="Yakınlaştırma" style="writing-mode:vertical-lr;direction:rtl;-webkit-appearance:slider-vertical;width:22px;height:130px;accent-color:#c9a16b;cursor:pointer">'+
-          '<button data-zoom="out" title="Uzaklaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('minus',15)+'</button>'+
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:8px">'+
+          '<button id="v3dLockBtn" title="Kuşbakışı kilidi" style="display:none;width:38px;height:38px;border:0;border-radius:10px;background:rgba(34,34,40,.94);color:#c9b79a;cursor:pointer;align-items:center;justify-content:center;backdrop-filter:blur(7px)"></button>'+
+          '<div id="v3dZoomBar" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(34,34,40,.94);padding:8px 6px;border-radius:12px;backdrop-filter:blur(7px)">'+
+            '<button data-zoom="in" title="Yakınlaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('plus',15)+'</button>'+
+            '<input type="range" id="v3dZoom" min="0" max="1000" value="600" title="Yakınlaştırma" style="writing-mode:vertical-lr;direction:rtl;-webkit-appearance:slider-vertical;width:22px;height:130px;accent-color:#c9a16b;cursor:pointer">'+
+            '<button data-zoom="out" title="Uzaklaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('minus',15)+'</button>'+
+          '</div>'+
         '</div>'+
       '</div>'+
       // B1-2: KAMERA DOCK — kamera moduna girince alt kenara yaslanır (setCamUI gösterir/gizler). İçeriği renderCamDock kurar.
