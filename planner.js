@@ -1590,6 +1590,62 @@ function generate(keepCuts){
       });
     }
   }
+  /* --- K2: unit'i OLMAYAN tipli oda → en uzun ortak duvarlı komşu daireye katılır ---
+     Küçük-kat/egzotik taban artığı olarak splitZone şeridi daire alamadan layoutUnit'ten
+     geçmiş TİPLİ oda (salon/yatak/mutfak/banyo/wc/oda) unitObjs'e bağlanmamış olabilir
+     (g.unit<0, unitOfRoom yok). Bu, programa EK bir hayalet piyestir (kullanıcı talebi değil)
+     → en çok sınır paylaşan KOMŞU daireye katılır (purgeSlivers/removeRoom birleştirme deseni;
+     oda tipi anlamlıysa o dairenin spec KOPYASINA yansıtılmaz — hayalet, talebi büyütmemeli).
+     Komşu daire yoksa/hiç bağlanamıyorsa ERİR (herhangi struct-dışı komşuya dağıtılır).
+     ORTAK DEPO / çekirdek / koridor / sığınak-otopark artığı MEŞRU ortak alandır → DOKUNULMAZ
+     (isStructReg + 'teknik'/'koridor'/'otopark'/'siginak' dışlanır). Sağlıklı planda oda zaten
+     unit'li → NO-OP. */
+  function assignOrphanRooms(){
+    const ROOMT={salon:1,yatak:1,mutfak:1,banyo:1,wc:1,oda:1,antre:1}; // gerçek konut piyesi tipleri
+    const inAnyUnit=id=>unitObjs.some(u=>u.rooms.some(g=>g.id===id));
+    regions.slice().forEach(g=>{
+      if(!g.cells.length) return;
+      if(!ROOMT[g.type]) return;                         // koridor/teknik/struct/siginak/otopark: meşru ortak
+      if(g.name==='ORTAK DEPO' || isStructReg(g)) return; // güvenlik ağı
+      if(g.unit>=0 || inAnyUnit(g.id)) return;           // zaten bir daireye ait → NO-OP
+      /* en çok sınır paylaşan KOMŞU DAİRE (o dairenin herhangi bir odası) */
+      const unitBorder=new Map(); // uIdx -> paylaşılan hücre sayısı
+      const regToUnit=v=>{ for(let k=0;k<unitObjs.length;k++) if(unitObjs[k].rooms.some(o=>o.id===v)) return k; return -1; };
+      g.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+        [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+          if(rr<0||cc<0||rr>=rows||cc>=cols) return; const j=rr*cols+cc;
+          if(!inside[j]||cm[j]<0||cm[j]===g.id) return;
+          const uk=regToUnit(cm[j]); if(uk>=0) unitBorder.set(uk,(unitBorder.get(uk)||0)+1); }); });
+      let tgtU=-1,bn=0; unitBorder.forEach((n,uk)=>{ if(n>bn){bn=n;tgtU=uk;} });
+      if(tgtU>=0){
+        /* hedef daire içinde en uzun ortak duvarlı odaya kat (purgeSlivers deseni) */
+        const u=unitObjs[tgtU]; const cnt=new Map();
+        g.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols;
+          [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+            if(rr<0||cc<0||rr>=rows||cc>=cols) return; const j=rr*cols+cc;
+            if(inside[j]&&cm[j]>=0&&cm[j]!==g.id&&u.rooms.includes(regions[cm[j]]))
+              cnt.set(cm[j],(cnt.get(cm[j])||0)+1); }); });
+        let best=-1,b2=0; cnt.forEach((n,id2)=>{ if(n>b2){b2=n;best=id2;} });
+        if(best>=0){ const tgt=regions[best];
+          g.cells.forEach(i=>{ cm[i]=best; tgt.cells.push(i); }); g.cells=[]; return; }
+      }
+      /* komşu daire yok / birleşme yolu yok → ERİT: struct-dışı herhangi komşuya dağıt */
+      let guard=0;
+      while(g.cells.length && guard++<20000){ let moved=false; const todo=[];
+        g.cells.forEach(i=>{ const r=(i/cols)|0,c=i%cols; const cnt=new Map();
+          [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{
+            if(rr<0||cc<0||rr>=rows||cc>=cols) return; const j=rr*cols+cc;
+            if(!inside[j]||cm[j]<0||cm[j]===g.id) return;
+            if(isStructReg(regions[cm[j]])) return;      // çekirdeğe dökme
+            cnt.set(cm[j],(cnt.get(cm[j])||0)+1); });
+          if(cnt.size){ let bv=-1,bb=0; cnt.forEach((n,v)=>{ if(n>bb){bb=n;bv=v;} }); todo.push([i,bv]); } });
+        const gset=new Set(g.cells);
+        todo.forEach(([i,v])=>{ if(!gset.has(i))return; cm[i]=v; regions[v].cells.push(i); gset.delete(i); moved=true; });
+        g.cells=[...gset];
+        if(!moved) break;
+      }
+    });
+  }
   /* --- mevzuata takılan odayı bol komşusundan genişlet --- */
   function repairUnits(){
     const floorOf=g=>{
@@ -2217,6 +2273,7 @@ function generate(keepCuts){
   }
   if(KPTA_PROFILE) PROF.add('yerlesim', PROF.now()-_pp); // koridor+zon+layoutUnit toplamı (layoutUnit alt-kalem ayrı)
   PROF.wrap('fixOrphans', fixOrphans);
+  PROF.wrap('assignOrphanRooms', assignOrphanRooms); // K2: unit'siz tipli oda → komşu daireye kat / erit
   PROF.wrap('repairUnits', repairUnits);
   PROF.wrap('purgeSlivers', purgeSlivers);
   PROF.wrap('meltNoAccess', meltNoAccess);
