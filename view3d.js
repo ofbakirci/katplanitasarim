@@ -581,7 +581,9 @@
       '#v3dFurnDock .pit.on{border-color:#7bbf8a;background:#33403a}'+
       '#v3dFurnDock .pit svg{width:22px;height:22px}'+
       '#v3dFurnDock .pit .pn{font-size:8px;line-height:1.1;color:#d8d2c6;text-align:center;max-width:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
-      '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer}'+
+      // R5: KONTRAST FIX — global label{background:#fbfaf7} sızıntısı 'Render\'a mobilya ekle' metnini görünmez yapıyordu
+      //   (bg ~beyaz + color ~beyaz). Dock arka planında açık metin + saydam arka planı zorla.
+      '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:#e8e6e0;border:0;padding:0;box-shadow:none}'+
       '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:#7bbf8a;cursor:pointer}'+
       // R3: MALZEME DOCK — kamera dock kadar mütevazı: TEK yatay satır, SABİT yükseklik, sarma YOK (görünümü kapatmaz).
       '#v3dMatDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:7px 10px;display:flex;gap:10px;align-items:center;flex-wrap:nowrap;max-width:min(94vw,880px);font:12px/1.4 system-ui,sans-serif}'+
