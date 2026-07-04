@@ -2325,5 +2325,151 @@
     "doors": 25,
     "bad": 0,
     "info": 5
+  },
+  "kat52-kucuk": {
+    "grid": {
+      "rows": 16,
+      "cols": 36
+    },
+    "regionCount": 13,
+    "regions": [
+      {
+        "name": "MERDİVEN",
+        "type": "merdiven",
+        "unit": -1,
+        "area": 15,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 60
+      },
+      {
+        "name": "ASANSÖR",
+        "type": "asansor",
+        "unit": -1,
+        "area": 6,
+        "w": 2,
+        "h": 3,
+        "minSide": 2,
+        "cells": 24
+      },
+      {
+        "name": "APARTMAN HOLÜ",
+        "type": "koridor",
+        "unit": -1,
+        "area": 19.75,
+        "w": 12.5,
+        "h": 2,
+        "minSide": 2,
+        "cells": 79
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 0,
+        "area": 3.75,
+        "w": 2.5,
+        "h": 1.5,
+        "minSide": 1.5,
+        "cells": 15
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 0,
+        "area": 6.25,
+        "w": 5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 25
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 0,
+        "area": 12.5,
+        "w": 4.5,
+        "h": 3,
+        "minSide": 3,
+        "cells": 50
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 0,
+        "area": 4,
+        "w": 2,
+        "h": 2,
+        "minSide": 2,
+        "cells": 16
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 0,
+        "area": 10,
+        "w": 5,
+        "h": 4,
+        "minSide": 4,
+        "cells": 40
+      },
+      {
+        "name": "BANYO",
+        "type": "banyo",
+        "unit": 1,
+        "area": 7,
+        "w": 3.5,
+        "h": 2,
+        "minSide": 2,
+        "cells": 28
+      },
+      {
+        "name": "ANTRE",
+        "type": "antre",
+        "unit": 1,
+        "area": 11,
+        "w": 7,
+        "h": 3,
+        "minSide": 3,
+        "cells": 44
+      },
+      {
+        "name": "SALON",
+        "type": "salon",
+        "unit": 1,
+        "area": 26.5,
+        "w": 9,
+        "h": 3.5,
+        "minSide": 3.5,
+        "cells": 106
+      },
+      {
+        "name": "MUTFAK",
+        "type": "mutfak",
+        "unit": 1,
+        "area": 7,
+        "w": 3.5,
+        "h": 2,
+        "minSide": 2,
+        "cells": 28
+      },
+      {
+        "name": "YATAK ODASI",
+        "type": "yatak",
+        "unit": 1,
+        "area": 11.25,
+        "w": 8,
+        "h": 4,
+        "minSide": 4,
+        "cells": 45
+      }
+    ],
+    "units": [
+      36.5,
+      62.75
+    ],
+    "doors": 10,
+    "bad": 3,
+    "info": 2
   }
 }

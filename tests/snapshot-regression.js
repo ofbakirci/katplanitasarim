@@ -53,6 +53,11 @@ const SCENARIOS = [
   { id:'comb-40x12', binaTipi:'apartman', katSayisi:5, katYuk:2.9,
     pts:[[0,0],[40,0],[40,12],[0,12]],
     specs:[{oda:2,salon:1,ensuite:false,acik:true,adet:3},{oda:1,salon:1,ensuite:false,acik:false,adet:2}] },
+  // kat-52 küçük kat (K1/K2/K3) — ~140 m² EĞİK 4-köşe, 1+1 ×2. Küçük-kat kompakt çekirdek
+  // + çift-yüklü koridor yolunu (trySmallFloorCore) donmuş tutar; band koridor İSRAF vakası.
+  { id:'kat52-kucuk', binaTipi:'apartman', katSayisi:5, katYuk:2.9,
+    pts:[[-8.048,4],[9.449,4],[9.049,-4],[-8.448,-4]],
+    specs:[{oda:1,salon:1,ensuite:false,acik:false,adet:2}] },
 ];
 
 function runScenario(sc){

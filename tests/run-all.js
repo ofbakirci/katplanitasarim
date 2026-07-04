@@ -25,6 +25,7 @@ const strictTests = [
   'tests/koridor-daralt.js',
   'tests/koridor-genislik.js',
   'tests/koridor-uc.js',
+  'tests/kucuk-kat.js',
   'tests/cut-preserve.js',
   'tests/heal-disconnect.js',
   'tests/repair-import.js',
