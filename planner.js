@@ -449,7 +449,7 @@ function generate(keepCuts){
           fireStairNeeded, teknikNeeded, zoneUI, katKullanim};
     plan.parking=parkingForPlan(plan); // gerçek park yerleri + sürüş yolları (çizim + sayım)
     hoverWall=null; hoverRoomId=null; hoverDoor=null;
-    doorOverrides={}; extraDoors=[]; doorHidden={};
+    doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={};
     editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'||e.type==='avlu'||e.type==='__snap');
     plan.wallRuns=computeWallRuns();
     runChecks(); buildUnitTable(); renderFloorTabs(); updateStructResetBtn();
@@ -2360,7 +2360,7 @@ function generate(keepCuts){
     return nu;
   };
   hoverWall=null; hoverRoomId=null; hoverDoor=null;
-  doorOverrides={}; extraDoors=[]; doorHidden={}; // bölge kimlikleri yeniden doğdu: elle kapı ayarları bayat
+  doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={}; // bölge kimlikleri yeniden doğdu: elle kapı/pencere ayarları bayat
   editHistory=editHistory.filter(e=>e.type==='cut'||e.type==='ulayout'||e.type==='corelock'||e.type==='bound'||e.type==='avlu'||e.type==='__snap'); // bölge kimlikleri yeniden doğdu: duvar/oda girdileri bayat (cut/ulayout/corelock/bound/avlu tam durum ya da dünya-koordinatlı prev taşır → hayatta kalır)
   plan.wallRuns=computeWallRuns();
   PROF.wrap('slimAntres', slimAntres); // antre fazlalığı (kör uç kol, odaya sokulan çıkıntı, şişkin yuva) odalara geri verilir

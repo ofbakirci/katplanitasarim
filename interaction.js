@@ -217,6 +217,17 @@ svg.addEventListener('mousemove',e=>{
         if(best){ doorOverrides[dragging.door.key]={h:best.h,x:best.x,y:best.y}; render(); }
       }
     }
+    if(dragging.type==='window'){
+      const near=winEdgeNear(S2Wx(sx),S2Wy(sy));
+      if(near){ const w=dragging.win;
+        if(w.kind==='window' && w.i!=null && extraWindows[w.i]){         // ekstra pencere
+          extraWindows[w.i].ei=near.ei; extraWindows[w.i].t=near.t;
+        } else {                                                         // otomatik pencere → override (ei+t taşı)
+          const ov=windowOverrides[w.key]||{}; ov.ei=near.ei; ov.t=near.t; windowOverrides[w.key]=ov;
+        }
+        dragging.moved=true; render();
+      }
+    }
     if(dragging.type==='balkD'){
       const b=dragging.b, {A,n}=balkBase(b.ei);
       const d=(S2Wx(sx)-A.x)*n.x+(S2Wy(sy)-A.y)*n.y;
@@ -253,6 +264,13 @@ svg.addEventListener('mousemove',e=>{
     const h=hitDoor(sx,sy);
     svg.style.cursor = h? 'move' : '';
     if((h?h.key:null)!==(hoverDoor?hoverDoor.key:null)){ hoverDoor=h; render(); }
+  }
+  else if(mode==='window'){
+    if(!plan) return;
+    const h=hitWindow(sx,sy);
+    const near=h?null:winEdgeNear(S2Wx(sx),S2Wy(sy));
+    svg.style.cursor = h? 'move' : (near?'copy':'');
+    if((h?h.key:null)!==(hoverWindow?hoverWindow.key:null)){ hoverWindow=h; render(); }
   }
   else if(mode==='struct'){
     if(!plan) return;
@@ -347,6 +365,12 @@ svg.addEventListener('mousedown',e=>{
     if(e.button!==0 || !plan) return;
     const h=hitDoor(sx,sy);
     if(h){ dragging={type:'door', door:h, undo:doorSnapshot()}; e.preventDefault(); }
+    return;
+  }
+  if(mode==='window'){
+    if(e.button!==0 || !plan) return;
+    const h=hitWindow(sx,sy);
+    if(h){ selWindow=h.key; dragging={type:'window', win:h, undo:windowSnapshot(), moved:false}; e.preventDefault(); if(typeof updateWindowPanel==='function') updateWindowPanel(); render(); }
     return;
   }
   if(mode==='struct'){
@@ -464,8 +488,27 @@ svg.addEventListener('mousedown',e=>{
   if(pts.length && p.x===pts[pts.length-1].x && p.y===pts[pts.length-1].y) return;
   pts.push({x:p.x,y:p.y}); render();
 });
-/* kapı modu: çift tık — duvarda kapı ekle, mevcut kapıyı sil */
+/* pencere modu: çift tık — cepheye pencere ekle, mevcut pencereyi sil */
 svg.addEventListener('dblclick',e=>{
+  if(mode==='window'&&plan){
+    e.preventDefault();
+    const rb=svg.getBoundingClientRect(), sx=e.clientX-rb.left, sy=e.clientY-rb.top;
+    const h=hitWindow(sx,sy);
+    if(h){ /* sil: ekstra pencere kalkar, otomatik pencere bastırılır */
+      pushEdit({type:'window', prev:windowSnapshot()});
+      if(h.i!=null) extraWindows.splice(h.i,1); else windowHidden[h.key]=true;
+      if(selWindow===h.key) selWindow=null;
+      hoverWindow=null; if(typeof updateWindowPanel==='function') updateWindowPanel(); render(); return;
+    }
+    const near=winEdgeNear(S2Wx(sx),S2Wy(sy));
+    if(near){
+      pushEdit({type:'window', prev:windowSnapshot()});
+      extraWindows.push({ei:near.ei, t:near.t});
+      selWindow='xw'+(extraWindows.length-1);
+      if(typeof updateWindowPanel==='function') updateWindowPanel(); render();
+    }
+    return;
+  }
   if(mode==='roomdraw'){ e.preventDefault(); finishRoomPoly(); return; }
   if(mode!=='door'||!plan) return;
   e.preventDefault();
@@ -537,6 +580,10 @@ function finishDrag(){
   } else if(dragging.type==='door' && dragging.undo){
     if(JSON.stringify(dragging.undo)!==JSON.stringify(doorSnapshot()))
       pushEdit({type:'door', prev:dragging.undo});
+  } else if(dragging.type==='window' && dragging.undo){
+    if(JSON.stringify(dragging.undo)!==JSON.stringify(windowSnapshot()))
+      pushEdit({type:'window', prev:dragging.undo});
+    if(typeof updateWindowPanel==='function') updateWindowPanel();
   } else if((dragging.type==='balkD'||dragging.type==='balkT') && dragging.undo){
     if(JSON.stringify(dragging.undo)!==JSON.stringify(balkSnapshot()))
       pushEdit({type:'balk', prev:dragging.undo});
@@ -631,7 +678,7 @@ window.addEventListener('keydown',e=>{
 /* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
    pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.
    Space/Esc/Ctrl+Z/Y'ye DOKUNMAZ (ayrı handler'lar); form alanı + sürükleme ortasında YUTULUR. */
-const MODE_KEYS={d:'tDraw',o:'tRoom',k:'tDoor',b:'tBalk',a:'tAvlu',y:'tStruct',p:'tParcel',t:'tPark',s:'tSite'};
+const MODE_KEYS={d:'tDraw',o:'tRoom',k:'tDoor',w:'tWin',b:'tBalk',a:'tAvlu',y:'tStruct',p:'tParcel',t:'tPark',s:'tSite'};
 window.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey) return;          // Ctrl/Cmd/Alt kombinasyonları başka handler'larda
   if(dragging) return;                                 // sürükleme ortasında mod değişimi yok (B1 dragOverlay yarım kalmasın)
@@ -658,6 +705,7 @@ function undoEdit(){
     balkChecksRefresh(); render(); return true;
   }
   if(e.type==='door'){ doorRestore(e.prev); hoverDoor=null; if(plan) runChecks(); render(); return true; }
+  if(e.type==='window'){ windowRestore(e.prev); hoverWindow=null; if(typeof updateWindowPanel==='function') updateWindowPanel(); render(); return true; }
   if(e.type==='park'){ if(plan&&e.prev){ plan.parking=e.prev; hoverBay=null; parkGhost=null;
     runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); } return true; }
   if(e.type==='avlu'){ courtyards=(e.prev||[]).map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})); avluGhost=null; avluChanged(); return true; }
@@ -881,6 +929,7 @@ const MODE_BADGE={
   balkon:  {ic:'balcony',   name:'Balkon',  hint:'Dış duvara tıkla-ekle; tutamaçlardan boyutlandır'},
   avlu:    {ic:'avlu',      name:'Avlu',    hint:'Boşlukta sürükle: yeni avlu · gövde: taşı · kenar/köşe: boyutlandır · sağ tık: sil'},
   door:    {ic:'door',      name:'Kapı',    hint:'Kapıyı sürükleyerek komşu duvara taşı'},
+  window:  {ic:'window',    name:'Pencere', hint:'Cepheye çift-tık ekle · sürükle-taşı · çift-tık sil · seçince genişlik/yükseklik/parapet ayarla'},
   struct:  {ic:'structure', name:'Yapı',    hint:'Çekirdek ve bina köşe tutamaçlarından boyutlandır'},
   roomdraw:{ic:'roomdraw',  name:'Oda Çiz', hint:'Kapalı poligon çizerek yeni oda oluştur'},
   site:    {ic:'blok',      name:'Site',    hint:'Blokları sürükleyerek yerleştir'}
@@ -896,11 +945,12 @@ function updateModeBadge(m){
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
-  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
+  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tWin','window'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
   if(m==='park') showParkBar();
+  if(typeof updateWindowPanel==='function') updateWindowPanel();
   updateModeBadge(m);
   positionOnb();
   svg.classList.toggle('panning',m==='pan'); render(); };
@@ -932,6 +982,45 @@ document.getElementById('tParcel').onclick=()=>setMode('parcel');
 document.getElementById('tBalk').onclick=()=>setMode('balkon');
 document.getElementById('tAvlu').onclick=()=>setMode('avlu');
 document.getElementById('tDoor').onclick=()=>setMode('door');
+{ const tw=document.getElementById('tWin'); if(tw) tw.onclick=()=>setMode('window'); }
+/* seçili pencere ayar paneli: genişlik + yükseklik + parapet + tam boy cam.
+   Değişiklikler otomatik pencerede windowOverrides[key]'e, ekstra pencerede
+   extraWindows[i]'ye yazılır; canlı render + geçmişe tek 'window' düzenlemesi. */
+function winRecForKey(key){ return (typeof computeWindows==='function'?computeWindows():[]).find(w=>w.key===key)||null; }
+function setWinField(key, field, val){
+  const rec=winRecForKey(key); if(!rec) return;
+  const target = (rec.i!=null) ? extraWindows[rec.i] : (windowOverrides[key]||(windowOverrides[key]={}));
+  if(!target) return;
+  target[field]=val;
+  if(typeof runChecks==='function' && plan) render(); else render();
+}
+function updateWindowPanel(){
+  const wp=document.getElementById('winPanel'); if(!wp) return;
+  if(mode!=='window' || !selWindow){ wp.style.display='none'; wp.innerHTML=''; return; }
+  const rec=winRecForKey(selWindow); if(!rec){ wp.style.display='none'; wp.innerHTML=''; selWindow=null; return; }
+  const P=REG.pencere;
+  const w=(typeof winWidthM==='function')?winWidthM(rec):(rec.w||P.wDef);
+  const full=!!rec.full;
+  const h=(typeof winHeightM==='function')?winHeightM(rec):(rec.height!=null?rec.height:P.h);
+  const sill=(typeof winSillM==='function')?winSillM(rec):(rec.sill!=null?rec.sill:P.sill);
+  wp.innerHTML=
+    '<div class="wpH">Pencere'+(rec.roomType?(' · '+rec.roomType):'')+'</div>'+
+    '<div class="wpR"><label>Genişlik</label><input type="range" id="wpW" min="0.6" max="3" step="0.1" value="'+w.toFixed(1)+'"><span class="wpV" id="wpWv">'+fmt(w)+' m</span></div>'+
+    '<div class="wpR"><label>Yükseklik</label><input type="range" id="wpH" min="0.6" max="2.7" step="0.1" value="'+h.toFixed(1)+'"'+(full?' disabled':'')+'><span class="wpV" id="wpHv">'+fmt(h)+' m</span></div>'+
+    '<div class="wpR"><label>Parapet</label><input type="range" id="wpS" min="0" max="1.5" step="0.05" value="'+sill.toFixed(2)+'"'+(full?' disabled':'')+'><span class="wpV" id="wpSv">'+fmt(sill)+' m</span></div>'+
+    '<div class="wpR wpChk"><label for="wpFull">Tam boy cam</label><input type="checkbox" id="wpFull"'+(full?' checked':'')+'></div>'+
+    '<div class="wpNote">Genişlik 2B\'de görünür · yükseklik/parapet 3B\'yi etkiler · çift-tık sil</div>';
+  wp.style.display='block';
+  let liveUndo=null;
+  const beginEdit=()=>{ if(!liveUndo) liveUndo=windowSnapshot(); };
+  const commitEdit=()=>{ if(liveUndo){ if(JSON.stringify(liveUndo)!==JSON.stringify(windowSnapshot())) pushEdit({type:'window', prev:liveUndo}); liveUndo=null; } };
+  const wire=(id,vid,field,unit)=>{ const inp=wp.querySelector('#'+id), lab=wp.querySelector('#'+vid); if(!inp) return;
+    inp.oninput=()=>{ beginEdit(); if(lab) lab.textContent=fmt(+inp.value)+' '+unit; setWinField(selWindow, field, +inp.value); };
+    inp.onchange=commitEdit; };
+  wire('wpW','wpWv','w','m'); wire('wpH','wpHv','height','m'); wire('wpS','wpSv','sill','m');
+  const fc=wp.querySelector('#wpFull');
+  if(fc) fc.onchange=()=>{ beginEdit(); setWinField(selWindow,'full',fc.checked); commitEdit(); updateWindowPanel(); };
+}
 document.getElementById('tStruct').onclick=()=>setMode('struct');
 { const tr=document.getElementById('tRoom'); if(tr) tr.onclick=()=>setMode('roomdraw'); }
 document.getElementById('tPark').onclick=()=>setMode('park');
@@ -950,7 +1039,7 @@ document.getElementById('tRedo').onclick=()=>{ redoEdit(); };
 document.getElementById('tHist').onclick=()=>{ const p=document.getElementById('histPanel');
   if(p){ const open=p.style.display==='none'||!p.style.display; p.style.display=open?'flex':'none'; if(open) refreshHistoryUI(true); } };
 document.getElementById('tClear').onclick=()=>{ pts=[];roomPts=[];closed=false;plan=null;editHistory=[];redoHistory=[];resetCuts();
-  parcelPts=[];parcelClosed=false;balconies=[];courtyards=[];avluGhost=null;hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;
+  parcelPts=[];parcelClosed=false;balconies=[];courtyards=[];avluGhost=null;hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;windowOverrides={};extraWindows=[];windowHidden={};hoverWindow=null;
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
   updateStructResetBtn();

@@ -79,7 +79,14 @@ const REG = {
      Bu değerler MEVZUAT MİNİMUMU / VARSAYILAN — kullanıcı görsel duvar kalınlığını yalnız
      ARTIRABİLİR (bkz. wallThick + walls.js wallThickM: override min'in altına inemez). çekirdek
      UI'da açılmaz (yangın/yapı perde → hep min). Brüt alan (L1-A2) bu paylardan türetilecek. */
-  duvar:{ dis:0.30, daireArasi:0.20, icBolme:0.10, cekirdek:0.25 }
+  duvar:{ dis:0.30, daireArasi:0.20, icBolme:0.10, cekirdek:0.25 },
+  /* ── PENCERE (2026-07-04) — cephe penceresi ilk-sınıf nesne varsayılanları ─────
+     Kapı sisteminin ikizi: cephe pencereleri otomatik üretilir (render.js FAZ3 =
+     yaşam-odası komşulu dış kenar parçaları), windowOverrides/extraWindows/
+     windowHidden ile taşı/sil/ekle. genişlik 2B'de görünür; H+parapet 3B'yi etkiler.
+     tamBoy = parapet 0 + H = duvar (zemin-tavan cam). GÖRSEL/EXPORT katmanı: hücre
+     modeli / bölge alanı / checks DOGAL_ISIK semantiği DEĞİŞMEZ. */
+  pencere:{ wMin:1.0, wMax:1.8, wDef:1.4, h:1.4, sill:0.9, edgeMin:0.3 }
 };
 /* Kullanıcının duvar-kalınlığı override'ı (m) — tip başına. Boş/eksik ya da minimumun altı =
    REG.duvar minimumu kullanılır (walls.js wallThickM clamp'ler). Kayda girer (io.js stateSnapshot);

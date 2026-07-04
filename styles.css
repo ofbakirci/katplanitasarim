@@ -319,6 +319,17 @@
   #roomMenu .mi.dis:hover{background:none; color:var(--muted);}
   #roomMenu .note{padding:6px 12px; color:var(--bad); max-width:230px; white-space:normal;}
   #roomMenu hr{border:none; border-top:1px solid var(--line); margin:4px 0;}
+  /* pencere ayar paneli (seçili pencere: genişlik/yükseklik/parapet/tam boy) */
+  #winPanel{position:absolute; right:14px; bottom:48px; z-index:9; background:var(--panel); border:1px solid var(--line);
+    border-radius:9px; box-shadow:0 4px 14px rgba(0,0,0,.13); font-size:12px; width:210px; padding:10px 12px; user-select:none;}
+  #winPanel .wpH{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
+  #winPanel .wpR{display:flex; align-items:center; gap:8px; margin:6px 0;}
+  #winPanel .wpR label{flex:0 0 62px; color:var(--muted);}
+  #winPanel .wpR input[type=range]{flex:1; min-width:60px;}
+  #winPanel .wpR .wpV{flex:0 0 44px; text-align:right; font-variant-numeric:tabular-nums;}
+  #winPanel .wpR.wpChk{gap:6px;}
+  #winPanel .wpR.wpChk label{flex:1;}
+  #winPanel .wpNote{color:var(--muted); font-size:11px; margin-top:6px; line-height:1.35;}
   /* ---- mobil / dokunmatik ---- */
   svg{touch-action:none;}            /* svg dokunuşları script yönetir (tek parmak araç, iki parmak yakınlaştırma) */
   #utHead{touch-action:none;}

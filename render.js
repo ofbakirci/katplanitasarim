@@ -313,40 +313,31 @@ function render(){
         g.appendChild(c); });
     }
     if(!clean) polyDims(g, pts, closed, '#6b5e4d'); // dış kenar ölçüleri ("32 m"/"16 m") AI temiz modda yok
-    /* --- FAZ 3: pencereler — bina sınırının yaşam odasına (salon/yatak/mutfak) komşu
-       kenar parçalarına açıklık. Sınır poligonu kenarları boyunca yürünür; her kenara
-       içten komşu oda bulunur → pencere DUVARIN İÇİNDE (eğik cephede bile) oturur, yüzmez.
-       Aynı duvar koşuluyla (sınır çizgisi üstünde) çizilir; köşeden ≥0,3 m içeride,
-       1,0–1,8 m genişlik. Islak/iç hacim cephe almaz (PAİY denetimi runChecks'te). */
-    if(plan && closed){
-      const habit={salon:1,yatak:1,mutfak:1};
-      const regAt=(x,y)=>{ const c=Math.floor((x-plan.minX)/M), r=Math.floor((y-plan.minY)/M);
-        if(r<0||c<0||r>=plan.rows||c>=plan.cols) return null; const i=r*plan.cols+c;
-        if(!plan.inside[i]) return null; const id2=plan.cm[i]; return id2>=0?(plan.regions[id2]||null):null; };
+    /* --- FAZ 3: pencereler — artık İLK-SINIF nesneler (windows.js computeWindows).
+       Otomatik varsayılan set (yaşam-odası komşulu cephe parçaları) + elle
+       taşınmış/eklenmiş/silinmiş pencereler tek listede. Sınır çizgisi üstünde,
+       duvarın içinde (eğik cephede de) çizilir; genişlik pencere kaydından (winWidthM).
+       Pencere modunda: seçili pencere vurgulu + orta tutamaç. AI temiz modda tutamaç
+       yok (görsel export = cam çizgisi kalır). */
+    if(plan && closed && typeof computeWindows==='function'){
       const wg=el('g',{}); g.appendChild(wg);
       const cutW=Math.max(3,pxPerM*0.22)+1.6, glassW=Math.max(1,pxPerM*0.055);
-      for(let i=0;i<pts.length;i++){
-        const A=pts[i], B=pts[(i+1)%pts.length];
-        const dx=B.x-A.x, dy=B.y-A.y, len=Math.hypot(dx,dy); if(len<1.6) continue;
-        const ux=dx/len, uy=dy/len; let nx=-uy, ny=ux;                 // iç normal (probe ile yön doğrulanır)
-        if(!regAt(A.x+dx*0.5+nx*0.35, A.y+dy*0.5+ny*0.35)){ nx=-nx; ny=-ny; }
-        const win=(s,e)=>{ const L=e-s; if(L<1.6) return;             // s,e: kenar boyunca metre
-          const w=Math.min(1.8,Math.max(1.0,L-0.6)), mid=(s+e)/2, a=mid-w/2, b=mid+w/2;
-          const p0={x:A.x+ux*a,y:A.y+uy*a}, p1={x:A.x+ux*b,y:A.y+uy*b};
-          wg.appendChild(el('line',{x1:W2Sx(p0.x),y1:W2Sy(p0.y),x2:W2Sx(p1.x),y2:W2Sy(p1.y),stroke:'#faf8f3','stroke-width':cutW}));
-          [0.0,0.13].forEach(o=>wg.appendChild(el('line',{x1:W2Sx(p0.x+nx*o),y1:W2Sy(p0.y+ny*o),
-            x2:W2Sx(p1.x+nx*o),y2:W2Sy(p1.y+ny*o),stroke:'#3f6a8c','stroke-width':glassW,'stroke-linecap':'butt'})));
-        };
-        let segS=null, segR=null;                                      // yaşam-odası komşulu kesintisiz parça
-        const step=0.25;
-        for(let t=0;t<=len+1e-9;t+=step){
-          const rg=regAt(A.x+ux*t+nx*0.35, A.y+uy*t+ny*0.35);
-          const ok=rg&&habit[rg.type];
-          if(ok&&rg===segR) continue;
-          if(segS!=null) win(segS, t); segS=ok?t:null; segR=ok?rg:null;
+      const editMode=(mode==='window' && !clean);
+      computeWindows().forEach(rec=>{
+        if(rec.status!=='ok'||!rec.e) return;
+        const e2=rec.e, w=(typeof winWidthM==='function')?winWidthM(rec):(rec.w||1.4);
+        const ux=e2.ux, uy=e2.uy, nx=e2.nx, ny=e2.ny;
+        const p0={x:e2.x-ux*w/2, y:e2.y-uy*w/2}, p1={x:e2.x+ux*w/2, y:e2.y+uy*w/2};
+        const sel=(editMode && selWindow===rec.key);
+        wg.appendChild(el('line',{x1:W2Sx(p0.x),y1:W2Sy(p0.y),x2:W2Sx(p1.x),y2:W2Sy(p1.y),stroke:'#faf8f3','stroke-width':cutW}));
+        [0.0,0.13].forEach(o=>wg.appendChild(el('line',{x1:W2Sx(p0.x+nx*o),y1:W2Sy(p0.y+ny*o),
+          x2:W2Sx(p1.x+nx*o),y2:W2Sy(p1.y+ny*o),stroke:sel?'#b35a2e':'#3f6a8c','stroke-width':glassW*(sel?1.7:1),'stroke-linecap':'butt'})));
+        if(editMode){
+          const mx=W2Sx(e2.x), my=W2Sy(e2.y), hv=(hoverWindow&&hoverWindow.key===rec.key);
+          if(sel||hv) wg.appendChild(el('circle',{cx:mx,cy:my,r:(sel?6:4)+2,fill:'#b35a2e',opacity:sel?0.18:0.12,'pointer-events':'none'}));
+          wg.appendChild(el('circle',{cx:mx,cy:my,r:sel?5:4,fill:'#fff',stroke:sel?'#b35a2e':'#3f6a8c','stroke-width':2}));
         }
-        if(segS!=null) win(segS, len);
-      }
+      });
     }
   }
 

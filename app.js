@@ -36,6 +36,11 @@ let doorOverrides = {};       // elle kapı yeri: key -> {h,x,y}; geçersizleşi
 let extraDoors = [];          // çift tıkla eklenen kapılar: {h,x,y}
 let doorHidden = {};          // çift tıkla silinen otomatik kapılar: key -> true
 let hoverDoor = null;         // kapı modunda imleç altındaki kapı kaydı
+let windowOverrides = {};     // elle pencere ayarı: key -> {ei?,t?,w?,height?,sill?,full?} (kapının ikizi)
+let extraWindows = [];        // çift tıkla eklenen cephe pencereleri: {ei,t,w?,height?,sill?,full?}
+let windowHidden = {};        // çift tıkla silinen otomatik pencere: key -> true
+let hoverWindow = null;       // pencere modunda imleç altındaki pencere kaydı
+let selWindow = null;         // pencere modunda seçili pencere key'i (genişlik/yükseklik/parapet ayar paneli) | null
 let koridorYon = 'oto';       // apartman koridor yönü: 'oto'|'yatay'|'dikey' (manuel override)
 let katKullanim = 'konut';    // AKTİF katın kullanım tipi (apartman + katları ayrı): 'konut'|'ticari'|'otopark'|'siginak'
 let blocks = null;            // site "çoklu blok": blok başına TAM durum anlık görüntüsü (stateSnapshot biçimi, kendi katlarını içerir) | null
@@ -301,7 +306,7 @@ document.getElementById('katKullanim').addEventListener('change',e=>{
   if(!usageEnabled()){ e.target.value='konut'; return; }
   katKullanim=e.target.value;
   syncKatKullanimUI();
-  resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
+  resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={}; editHistory=[];
   safeGen();
   if(floorsOn()&&plan) villaFloors[activeFloor]=stateSnapshot(true);
   renderFloorTabs();
@@ -508,7 +513,7 @@ function switchFloor(k){
       if(!plan.villa && lockedCore){
         const cur=captureCoreFrom(plan);
         if(JSON.stringify(cur)!==JSON.stringify(lockedCore)){
-          resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
+          resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={}; editHistory=[];
           generate(); villaFloors[k]=stateSnapshot(true);
         }
       }
@@ -518,7 +523,7 @@ function switchFloor(k){
     /* ilk ziyaret: sınır, program ve balkonlar komşu kattan miras kalır; merdiven
        zemindeki konumuna sabitlenir. Bodrum katı otopark başlar (mimari varsayılan), üstü konut. */
     katKullanim = (floorLevel(k)<0 && document.getElementById('binaTipi').value==='apartman') ? 'otopark' : 'konut';
-    resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
+    resetCuts(); unitLayout={}; doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={}; editHistory=[];
     try{ generate(); villaFloors[k]=stateSnapshot(true); }
     catch(err){ console.error('kat üretimi:', err); }
   }
@@ -793,7 +798,7 @@ function removeBlock(k){
 function clearCanvasForNewBlock(){
   pts=[]; roomPts=[]; closed=false; plan=null;
   balconies=[]; courtyards=[]; avluGhost=null; avluDragIdx=-1; editHistory=[]; resetCuts();
-  doorOverrides={}; extraDoors=[]; doorHidden={};
+  doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={};
   villaFloors=null; activeFloor=0; lockedCore=null;
   const ka=document.getElementById('katAyri'); if(ka) ka.checked=false;
   document.getElementById('genBtn').disabled=true;

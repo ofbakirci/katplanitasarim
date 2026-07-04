@@ -14,6 +14,7 @@ const ICON_PATHS = {
   parcel:    '<path d="M10.83 2.38a2 2 0 0 1 2.34 0l8 5.74a2 2 0 0 1 .73 2.25l-3.04 9.26a2 2 0 0 1-1.9 1.37H7.04a2 2 0 0 1-1.9-1.37L2.1 10.37a2 2 0 0 1 .73-2.25z"/>',
   balcony:   '<path d="M3 9h18"/><path d="M3 20h18"/><path d="M5 9v11"/><path d="M9 9v11"/><path d="M15 9v11"/><path d="M19 9v11"/>',
   door:      '<path d="M18 20V6a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v14"/><path d="M2 20h20"/><path d="M14 12v.01"/>',
+  window:    '<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M12 3v18"/><path d="M4 12h16"/>',
   structure: '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
   parking:   '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>',
   avlu:      '<rect x="3" y="3" width="18" height="18" rx="2"/><rect x="9" y="9" width="6" height="6"/>',

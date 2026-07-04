@@ -153,7 +153,7 @@ function dissolveUnit(k){
   if(mine.size) flood(v=>{ const reg=p.regions[v]; return !FIX(reg.type); }); // kalan: çekirdek dışı herhangi komşu (koridor dahil)
   if(mine.size){ const dp=newRegRuntime('ORTAK DEPO','teknik'); mine.forEach(i=>{ p.cm[i]=dp.id; dp.cells.push(i); }); } // izole kalıntı
   u.rooms.forEach(g=>{ g.cells=[]; }); u.antre=null;
-  doorOverrides={}; doorHidden={}; unitLayout={}; // daire indeks anahtarlı düzenlemeler bayatladı
+  doorOverrides={}; doorHidden={}; windowOverrides={}; windowHidden={}; unitLayout={}; // daire indeks anahtarlı düzenlemeler bayatladı
   p.regions.forEach(g=>calcRegionMetrics(g,p.cols,p.minX,p.minY));
   refreshAfterRoomEdit();
   return true;

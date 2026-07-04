@@ -128,6 +128,7 @@ function stateSnapshot(bare, withBlocks){
     courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ?customCutsZ.map(a=>a?a.slice():null):null, unitLayout:Object.assign({},unitLayout),
     doors:{ov:doorOverrides, extra:extraDoors, hidden:doorHidden},
+    windows:{ov:windowOverrides, extra:extraWindows, hidden:windowHidden},
     plan:{rows:plan.rows, cols:plan.cols, minX:plan.minX, minY:plan.minY,
       corridorR0:plan.corridorR0, corridorR1:plan.corridorR1,
       kat:plan.kat, binaYuk:plan.binaYuk, perFloor:plan.perFloor, villa:plan.villa,
@@ -221,6 +222,9 @@ function restoreState(st, opt){
   doorOverrides=(st.doors&&st.doors.ov)||{};
   extraDoors=(st.doors&&st.doors.extra)||[];
   doorHidden=(st.doors&&st.doors.hidden)||{};
+  windowOverrides=(st.windows&&st.windows.ov)||{};      // additive, geri-uyumlu (eski kayıtta yok → {})
+  extraWindows=(st.windows&&st.windows.extra)||[];
+  windowHidden=(st.windows&&st.windows.hidden)||{};
   editHistory=[];
   /* villa katları: dosyadan geliyorsa diziyi kur; kat geçişinde (keepFloors) dokunma */
   const ka=document.getElementById('katAyri');
@@ -691,6 +695,15 @@ function buildFloorplanMap(opt){
       const a=fr.px(e.h?e.x+c0:e.x, e.h?e.y:e.y+c0), b=fr.px(e.h?e.x+c1:e.x, e.h?e.y:e.y+c1);
       return { kind:d.kind, orient:e.h?'h':'v', width_m:+Wd.toFixed(2),
                p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; });
+  // pencereler: cephe pencere açıklıkları (3B + AI besleme; doors[] şemasının ikizi, ADDITIVE — mevcut alanlar değişmez).
+  // span = pencere merkezinden ±genişlik/2 (kenar boyu, dünya→px). height_m + sill_m 3B'yi besler (tam boy → sill 0, full:true).
+  const windows=(typeof computeWindows==='function'?computeWindows():[])
+    .filter(d=>d&&d.status==='ok'&&d.e)
+    .map(d=>{ const e=d.e, Ww=(typeof winWidthM==='function')?winWidthM(d):(d.w||1.4),
+              Wh=(typeof winHeightM==='function')?winHeightM(d):1.4, Ws=(typeof winSillM==='function')?winSillM(d):0.9;
+      const a=fr.px(e.x-e.ux*Ww/2, e.y-e.uy*Ww/2), b=fr.px(e.x+e.ux*Ww/2, e.y+e.uy*Ww/2);
+      return { orient:e.h?'h':'v', width_m:+Ww.toFixed(2), height_m:+Wh.toFixed(2), sill_m:+Ws.toFixed(2), full:!!d.full,
+               p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; });
   // C3: tanınmayan oda tipi denetimi — enum sessizce 'room'/_def bej'e düşen bölge oranı >%5 → uyar + export'a işle.
   // Normal planda (motor bilinen tipleri üretir) 0 tanınmaz → uyarı YOK. Denetim/alanlar değişmez.
   const warnings=[];
@@ -710,7 +723,7 @@ function buildFloorplanMap(opt){
     scale:{ metersPerPixel:mpp, origin_px:fr.px(0,0),
       formula:'px = world_m * '+(fr.S*fr.SC)+' + origin_px ; world_m = (px - origin_px) * metersPerPixel',
       norm_formula:'render_px_x = x_norm * renderWidth ; render_px_y = y_norm * renderHeight (kadraj render oranında → her iki eksen tek çarpan)' },
-    units, common_areas:common, doors, warnings
+    units, common_areas:common, doors, windows, warnings
   };
 }
 /* render üstüne bindirilebilen doğrulama SVG'si (aynı viewBox; düz string → headless de çalışır) */
@@ -1266,7 +1279,7 @@ function kpBuildPlanFromCells(geom){
   parcelPts=[]; parcelClosed=false; parcelSetback=[]; parcelRot=0; parcelImar=null; psFrontEdge=-1; if(typeof imarRender==='function') imarRender(null); balconies=[];
   unitSpecs=[...specMap.values()]; renderUnits();
   customCutsZ=null; unitLayout={};
-  doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[];
+  doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={}; editHistory=[];
   plan={regions:regs, cm:cm2, inside:inside2, rows:rows2, cols:cols2, minX:0, minY:0,
     corridorR0:kR0<=kR1?kR0:-1, corridorR1:kR0<=kR1?kR1:-1, stairs:stairs2,
     unitObjs:unitObjs2, villa:false,

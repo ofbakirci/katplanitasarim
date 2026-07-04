@@ -800,6 +800,28 @@
       const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
       return {ax:a[0],az:a[1],bx:b[0],bz:b[1],kind:d.kind};
     });
+    // pencere açıklıkları (metre uzayı): map.windows px → px2m. Kapı boşluğu oymanın ikizi;
+    // parapet altı + lento üstü duvar korunur, boşlukta saydam cam + ince kasa.
+    const winSegs=(map.windows||[]).map(function(d){
+      const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
+      return {ax:a[0],az:a[1],bx:b[0],bz:b[1],height:d.height_m||1.4,sill:d.full?0:(d.sill_m!=null?d.sill_m:0.9),full:!!d.full};
+    });
+    const matGlass=new THREE.MeshStandardMaterial({color:0xbcd6e8,roughness:0.08,metalness:0.15,transparent:true,opacity:0.34,side:THREE.DoubleSide});
+    const matFrame=new THREE.MeshStandardMaterial({color:0xe8e4da,roughness:0.7,metalness:0.05}); // pencere kasası (açık, ince)
+    // pencere boşluğuna cam paneli + ince kasa kur (mx,mz=boşluk ortası, gw=genişlik, ang=duvar açısı)
+    function addWindowGlass(mx,mz,gw,ang,sill,wh,parent){
+      if(gw<0.2) return;
+      var top=Math.min(WALL_H, sill+wh);                 // cam üst kotu (duvarı aşmasın)
+      var gh=Math.max(0.1, top-sill), fr=0.05;           // cam yüksekliği + kasa payı
+      var grp=new THREE.Group(); grp.position.set(mx,0,mz); grp.rotation.y=ang;
+      var gl=new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.1,gw-2*fr),Math.max(0.1,gh-2*fr),0.03),matGlass);
+      gl.position.set(0,sill+gh/2,0); grp.add(gl);
+      // ince kasa: alt+üst+iki yan çerçeve (WALL_T'yi sarar → her açıdan pencere okunur)
+      var ft=Math.max(0.14,WALL_T+0.02);
+      [[0,sill,gw,fr],[0,top,gw,fr]].forEach(function(s){ var m=new THREE.Mesh(new THREE.BoxGeometry(s[2],s[3],ft),matFrame); m.position.set(s[0],s[1],0); grp.add(m); });
+      [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2),sill+gh/2,0); grp.add(m); });
+      grp.userData.isWin=true; grp.scale.y=roofOn?1:WALL_LOW; parent.add(grp);
+    }
     // C1-3: kapı boşluğuna KAPALI kanat kur (mesh grubu). mx,mz=boşluk ortası, gw=genişlik, ang=duvar açısı,
     //   kind=kapı türü (ext=bina girişi koyu ton). abartısız: kanat paneli + iki dikey kasa + kol nub'ı.
     //   Kanat boşluktan hafif dar (kasa payı) + duvar ekseninde ince → kapı "kapalı" okunur, gerçek geometri.
@@ -838,13 +860,20 @@
     function wallEdge(a,b){
       const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz); if(len<0.05) return;
       const ux=dx/len,uz=dz/len, ang=-Math.atan2(dz,dx);
-      const gaps=[];
+      const gaps=[], winGaps=[];
       doorSegs.forEach(function(d){
         const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
         const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
         if(e0>0.2||e1>0.2) return;                          // kapı bu duvar doğrultusunda değil (uzaklık toleransı)
         const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
         if(g1-g0>0.1) gaps.push([g0,g1,d.kind]);            // duvarla örtüşen kapı boşluğu (+kind = kanat tonu)
+      });
+      winSegs.forEach(function(d){
+        const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
+        const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
+        if(e0>0.3||e1>0.3) return;                          // pencere bu duvar doğrultusunda değil
+        const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
+        if(g1-g0>0.1){ gaps.push([g0,g1,null]); winGaps.push([g0,g1,d.sill,d.height,d.full]); }  // tam-yükseklik duvarı oy → parapet/lento refill
       });
       gaps.sort(function(p,q){return p[0]-q[0];});
       function seg(s0,s1){ if(s1-s0<0.04) return;
@@ -855,7 +884,18 @@
         wm.castShadow=true; wm.userData.isWall=true; walls.add(wm);
       }
       let s=0; gaps.forEach(function(g){ seg(s,g[0]); s=Math.max(s,g[1]); }); seg(s,len);
+      // pencere boşlukları: parapet altı (0..sill) + lento üstü (top..WALL_H) duvar + boşlukta cam
+      winGaps.forEach(function(g){
+        const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
+        const sill=g[2], wh=g[3], top=Math.min(WALL_H, sill+wh);
+        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,WALL_T),matWall);  // parapet (tam boyda yok)
+          pw.position.set(mx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
+        if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,WALL_T),matWall); // lento üstü
+          lw.position.set(mx,top+lh/2,mz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
+        addWindowGlass(mx,mz,gw,ang,sill,wh,walls);
+      });
       gaps.forEach(function(g){
+        if(g[2]==null) return;   // pencere boşluğu → kapı kanadı/eşiği/lentosu ÇİZME (winGaps hallediyor)
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
         const th=new THREE.Mesh(new THREE.BoxGeometry(gw,0.04,Math.max(0.2,WALL_T)),matDoor);  // eşik: her açıdan "kapı burada" (duvar kalınlığını kapsasın)
         th.position.set(mx,0.02,mz); th.rotation.y=ang; th.receiveShadow=true; th.userData.isSill=true; walls.add(th);
@@ -1044,8 +1084,8 @@
   function applyRoof(){ if(!scene||!scene.__walls) return;
     scene.__walls.children.forEach(function(w){ if(w.userData.isWall){ w.scale.y=roofOn?1:WALL_LOW;
       w.position.y=(roofOn?WALL_H:WALL_H*WALL_LOW)/2-0.02; }   // Q6: taban zemine gömülü kalsın (çatı toggle'ında da)
-      else if(w.userData.isLeaf){ w.scale.y=roofOn?1:WALL_LOW; } });   // C1-3: kanat da duvarla aynı oranda kısalır (dollhouse)
-    if(scene.__lintels) scene.__lintels.visible=roofOn; }   // lentö = kapı başlığı, sadece tam yükseklikte
+      else if(w.userData.isLeaf||w.userData.isWin){ w.scale.y=roofOn?1:WALL_LOW; } });   // C1-3: kanat + pencere parapet/cam da duvarla aynı oranda kısalır (dollhouse)
+    if(scene.__lintels) scene.__lintels.visible=roofOn; }   // lentö = kapı başlığı + pencere üstü, sadece tam yükseklikte
   // PNG'yi İNGİLİZCE etiketle ver (AI 3D-render İngilizce sever; pipeline'ın geri kalanı da EN).
   // Etiketleri EN'e çevir → render → indir → ekrandaki TR'yi geri koy.
   function snap(){ if(!renderer) return;
