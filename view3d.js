@@ -43,7 +43,7 @@
   //   walkOn: gezinti aktif (pointer-lock + WASD + fare-bak). walkSavedView: girişten ÖNCEKİ görüş (çıkışta BİREBİR geri).
   //   walkKeys: basılı tuşlar. walkYaw/walkPitch: fare-bakış açıları (rad). walkRoofSav/walkGizSav/walkLblSav/walkCeilSav:
   //   giriş anındaki chrome durumları (çıkışta geri). walkClock: dt için son kare zamanı.
-  let walkOn=false, walkSavedView=null, walkYaw=0, walkPitch=0, walkClock=0;
+  let walkOn=false, walkSavedView=null, walkYaw=0, walkPitch=0, walkClock=0, walkCamMsgT=null;   // R9: walkCamMsgT = onay ipucu zamanlayıcı
   const walkKeys={ w:false, a:false, s:false, d:false, shift:false };
   let walkRoofSav=false, walkGizSav=true, walkLblSav=true, walkCeilSav=false, walkFogSav=null;
   let walkRay=null;                                          // gezinti çarpışması için ayrılmış Raycaster (picker'dan bağımsız)
@@ -1509,7 +1509,7 @@
      Giriş: Pointer Lock + WASD yürü + fare bak (yaw/pitch). Çarpışma: RAYCAST (duvar+pencere-cam bloklar,
      kapı kanadı GEÇİLİR) + mobilya ayak-izi bloğu. Tavan AÇIK, etiket/gizmo/dock gizli (C3-4 deseni). */
   function walkHintHTML(){
-    return 'WASD yürü · Fare bak · Shift koş · Esc çık';
+    return 'WASD yürü · Fare bak · Shift koş · <b style="color:#e0843a">C: bu açıda kamera</b> · Esc çık';   // R9: C ipucu
   }
   function ensureWalkHint(){
     if(!overlay) return null;
@@ -1523,6 +1523,23 @@
     }
     el.innerHTML=walkHintHTML();
     return el;
+  }
+  // R9: görünür KÜÇÜK buton (klavye 'C' yanında ikinci yol). pointer-events:auto → tıklanabilir (pointer-lock'u
+  //   bozar ama kamerayı ekler; birincil yol yine C tuşu). Gezintide göster / çıkışta gizle.
+  function ensureWalkCamBtn(){
+    if(!overlay) return null;
+    let b=overlay.querySelector('#v3dWalkCamBtn');
+    if(!b){
+      b=document.createElement('button'); b.id='v3dWalkCamBtn'; b.type='button';
+      b.title='Bu açıda kamera yerleştir (C)';
+      b.style.cssText='position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:9;display:none;'+
+        'background:#e0843a;color:#1a1a1f;font:12px/1 system-ui,sans-serif;font-weight:700;padding:8px 14px;border:0;'+
+        'border-radius:9px;box-shadow:0 8px 22px rgba(0,0,0,.45);cursor:pointer;pointer-events:auto;white-space:nowrap';
+      b.textContent='Bu açıda kamera (C)';
+      b.addEventListener('click', function(ev){ ev.preventDefault(); addWalkCamera(); });
+      overlay.appendChild(b);
+    }
+    return b;
   }
   // gezinti-modu ⇒ mesh dışındaki tüm dock/panel/çip gizlensin (temiz POV). Çıkışta restore etmeye gerek yok
   //   (mevcut activeGroup renderDrawer ile geri gelir); burada sadece anlık gizleriz.
@@ -1612,6 +1629,7 @@
     cam.fov=72; cam.up.set(0,1,0); applyWalkLook();           // geniş-açı iç mekan hissi
     hideChromeForWalk(true);
     const hint=ensureWalkHint(); if(hint) hint.style.display='block';
+    const camBtn=ensureWalkCamBtn(); if(camBtn) camBtn.style.display='block';   // R9: 'bu açıda kamera' butonu
     const mini=overlay&&overlay.querySelector('#v3dMiniMap'); if(mini) mini.style.display='block';   // R8: minimap göster
     renderRail();
     // pointer lock iste (kullanıcı hareketiyle tetiklendi → tarayıcı izin verir)
@@ -1641,6 +1659,7 @@
     if(walkAmbient&&walkAmbient.parent) walkAmbient.parent.remove(walkAmbient);
     hideChromeForWalk(false);
     const hint=overlay&&overlay.querySelector('#v3dWalkHint'); if(hint) hint.style.display='none';
+    const camBtn=overlay&&overlay.querySelector('#v3dWalkCamBtn'); if(camBtn) camBtn.style.display='none';   // R9: butonu gizle
     const mini=overlay&&overlay.querySelector('#v3dMiniMap'); if(mini) mini.style.display='none';   // R8: minimap gizle (çıkışta kaybolur)
     if(walkSavedView) restoreView(walkSavedView);            // önceki görüşe BİREBİR dön
     walkSavedView=null;
@@ -1658,6 +1677,7 @@
     else if(k==='a'||k==='arrowleft'){ walkKeys.a=true; e.preventDefault(); }
     else if(k==='d'||k==='arrowright'){ walkKeys.d=true; e.preventDefault(); }
     else if(e.key==='Shift'){ walkKeys.shift=true; }
+    else if(k==='c'){ addWalkCamera(); e.preventDefault(); }   // R9: bu açıda kamera yerleştir (pointer-lock aktifken KLAVYE birincil yol)
     // Esc: tarayıcı pointer-lock'u KENDİ bırakır → walkLockChange çıkışı yapar (ayrıca burada yakala)
     else if(e.key==='Escape'){ exitWalk(); }
   }
@@ -1761,6 +1781,25 @@
     applyWalkLook(); walkSyncLamp();
   }
   function walkSyncLamp(){ if(walkLamp&&cam) walkLamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z); }
+  // R9: FPV gezinti sırasında 'C' / overlay butonu → o anki yürüyüş görüşünü camList'e YENİ render kamerası ekle.
+  //   pos = göz konumu (y=WALK_EYE=1.6 → customY özel yükseklik). target = pos + bakış vektörü (walkYaw+walkPitch
+  //   → PITCH DAHİL, kullanıcının gördüğü kare neyse o). lens = varsayılan 24. Kamera-ekleme MEVCUT yoldan
+  //   (camList sözleşmesi, aynı item şekli) → exportCameras şeması DEĞİŞMEZ. Gezinti KESİLMEZ (yürümeye devam).
+  function addWalkCamera(){
+    if(!walkOn||!cam) return;
+    const cp=Math.cos(walkPitch);
+    const fx=Math.sin(walkYaw)*cp, fy=Math.sin(walkPitch), fz=-Math.cos(walkYaw)*cp;   // applyWalkLook ile aynı bakış vektörü
+    const AIM=3.0;                                          // hedef mesafesi (m) — makul bakış noktası (pitch korunur)
+    const pos={ x:cam.position.x, y:WALK_EYE, z:cam.position.z };
+    const c={ pos:pos, target:{ x:pos.x+fx*AIM, y:pos.y+fy*AIM, z:pos.z+fz*AIM }, lens:24, height:'eye', customY:WALK_EYE };
+    camList.push(c); activeCamIdx=camList.length-1;         // yeni kamera seçili → çıkışta şeritte+PiP'te hazır
+    logRoom(c);                                             // doğrulama log (room_id export'ta camViewObj ile hesaplanır)
+    renderCamGizmos();                                      // gizmo grubu tazele (gezintide gizli; çıkışta görünür)
+    // overlay onayı (gezinti kesilmez): kısa "Kx eklendi · toplam N"
+    const hint=overlay&&overlay.querySelector('#v3dWalkHint');
+    if(hint){ const base=walkHintHTML(); hint.innerHTML='<b style="color:#e0843a">K'+camList.length+' eklendi · toplam '+camList.length+'</b> &nbsp; '+base;
+      if(walkCamMsgT) clearTimeout(walkCamMsgT); walkCamMsgT=setTimeout(function(){ const h=overlay&&overlay.querySelector('#v3dWalkHint'); if(h&&walkOn) h.innerHTML=walkHintHTML(); }, 2200); }
+  }
 
   /* ====================== KAMERA-KOYMA MODU (adım 4) ======================
      Raycaster ile zemin mesh'ine tıkla → kamera dünya konumu. İKİ TIKLAMA:
