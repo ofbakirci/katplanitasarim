@@ -214,8 +214,10 @@
     island: function(x,y,bw,bd){ return ftRect(x+bw*0.2,y+bd*0.25,bw*0.6,bd*0.5,1); },
     fridge: function(x,y,bw,bd){ return ftLine(x+bw*0.5,y+1,x+bw*0.5,y+bd-1,1.2)+ftLine(x+bw*0.2,y+bd*0.3,x+bw*0.2,y+2,1); },
     oven_hob: function(x,y,bw,bd){ return ftCircle(x+bw*0.32,y+bd*0.4,Math.min(bw,bd)*0.16)+ftCircle(x+bw*0.68,y+bd*0.4,Math.min(bw,bd)*0.16); },
-    dishwasher: function(x,y,bw,bd){ return ftRect(x+bw*0.22,y+bd*0.22,bw*0.56,bd*0.56,1); },
+    // M4: bulaşık = DÜZ ön panel (dikdörtgen çerçeve) + YATAY kol çizgisi üstte — çamaşırın YUVARLAK kapağıyla karışmaz.
+    dishwasher: function(x,y,bw,bd){ return ftRect(x+bw*0.16,y+bd*0.16,bw*0.68,bd*0.68,1)+ftLine(x+bw*0.22,y+bd*0.28,x+bw*0.78,y+bd*0.28,1.3); },
     sink: function(x,y,bw,bd){ return ftRect(x+bw*0.22,y+bd*0.2,bw*0.56,bd*0.42,1.3)+ftLine(x+bw*0.5,y+bd*0.2,x+bw*0.5,y+2,1); },
+    // M4: çamaşır = YUVARLAK lombar kapak (daire) — dişwasher'ın düz panelinden ayrışır.
     washer: function(x,y,bw,bd){ return ftCircle(x+bw/2,y+bd/2,Math.min(bw,bd)*0.3); },
     // banyo
     toilet: function(x,y,bw,bd){ return ftRect(x+bw*0.15,y+1,bw*0.7,bd*0.22,1)+ftCircle(x+bw/2,y+bd*0.62,Math.min(bw,bd*0.7)*0.42); },
@@ -2014,6 +2016,10 @@
            cabinet:M(0xcdb089,0.72), cabinetLine:M(0x8a6f4c,0.75),   // C3-5: dolap = açık ahşap + ayrım çizgisi (kapı koyu tonundan bariz ayrışır)
            fabric:M(0x8593a8,0.95), fabric2:M(0xb7a98c,0.95), cushion:M(0x9aa7bb,0.96), leather:M(0x7c5a44,0.5),
            white:M(0xf1f1f3,0.55), porcelain:M(0xf5f5f7,0.35), steel:M(0xc2c4c8,0.4,0.5), metal:M(0x9a9aa0,0.45,0.6),
+           tubInner:M(0xcfd8dc,0.4),   // M2: küvet/lavabo İÇ çukur — porselenden belirgin koyu/gölgeli ton (oyuk okunsun)
+           plywood:(function(){ const mm=M(0x8a6d47,0.88); mm.emissive=new THREE.Color(0x2a1c10); mm.emissiveIntensity=0.5; return mm; })(),
+             // M3: kitaplık ARKA PANEL — gövdeden (FMAT.cabinet) belirgin koyu/mat kontrplak tonu (kontrast=okunur sırt);
+             // hafif emissive → üst gözler gibi ana ışıktan uzak/gölgeli konumlarda bile SİYAH BOŞLUK değil, panel tonu okunur.
            dark:M(0x303036,0.6,0.3), glass:M(0xbcd6e6,0.2,0.2), green:M(0x5f8f5f,0.9), leaf:M(0x4f8453,0.85),
            pot:M(0x9a6b4e,0.85), rug:M(0xb09277,0.97), rugDark:M(0x8a6f58,0.97) };
     FMAT_SET=new Set(Object.keys(FMAT).map(function(k){ return FMAT[k]; }));   // paylaşılan → dispose etme
@@ -2047,6 +2053,11 @@
   //   raflar GÖVDENİN İÇİNDE (girintili, ön yüzden dışarı taşmaz — eski hata: raflar "askılık çıkıntısı"
   //   gibi ön yüzeyden fırlıyordu). İsteğe bağlı 3-5 kitap iması (farklı yükseklik/kalınlık ince kutular,
   //   birkaç sönük renk) → nano'ya "kitaplık" sinyali netleşir.
+  // M3 (revizyon): arka panel geometrik olarak DOĞRUYDU (var, konumu doğru) ama gövdeyle AYNI açık-ahşap
+  //   tonundaydı (FMAT.cabinet) → kontrast yok, uzaktan/dollhouse ışığında "boşluk" gibi okunuyordu (kullanıcı:
+  //   "arkası yok, bi kontrplak ver"). Kök neden KONUM değil, MALZEME KONTRASTI. Fix: arka panel artık BELİRGİN
+  //   kontrplak tonu (FMAT.plywood, gövdeden koyu/farklı) — önden bakınca rafların arasından NET bir "sırt" görünür.
+  //   Ayrıca raf derinliği arka panelin ön yüzüyle 2mm çakışmasın diye hafif kısaltıldı (z-fighting payı kaldırıldı).
   function bookcaseMesh(g,w,d,h,mat,shelfCount){
     mat=mat||FMAT.cabinet; shelfCount=shelfCount||3;
     const pt=0.03;                                    // yan/üst/alt panel kalınlığı
@@ -2054,11 +2065,11 @@
     [-1,1].forEach(function(s){ const side=fbox(pt,h,d,mat); side.position.set(s*(w/2-pt/2),h/2,0); g.add(side); });
     const top=fbox(w,pt,d,mat); top.position.set(0,h-pt/2,0); g.add(top);
     const bot=fbox(w,pt,d,mat); bot.position.set(0,pt/2,0); g.add(bot);
-    const back=fbox(w-2*pt,h-2*pt,backT,mat); back.position.set(0,h/2,-d/2+backT/2); g.add(back);
-    const innerW=w-2*pt, shelfD=d-pt-0.02;             // raf, arka panelden hafif önde durur (girintili, dışarı taşmaz)
+    const back=fbox(w-2*pt,h-2*pt,backT,FMAT.plywood); back.position.set(0,h/2,-d/2+backT/2); g.add(back);
+    const innerW=w-2*pt, shelfD=d-pt-0.03;             // raf, arka panelin ÖN yüzünden içeride durur (net ayrım, çakışma yok)
     for(let i=1;i<shelfCount;i++){
       const sy=pt+(h-2*pt)*i/shelfCount;
-      const sh=fbox(innerW,0.025,shelfD,mat); sh.position.set(0,sy,-pt/2); g.add(sh);
+      const sh=fbox(innerW,0.025,shelfD,mat); sh.position.set(0,sy,-pt/2+0.005); g.add(sh);
     }
     // isteğe bağlı: raf başına 2-3 kitap iması (ince, farklı yükseklik/kalınlık, sönük renk çeşidi)
     const bookMats=[FMAT.woodDark,FMAT.cushion,FMAT.leather,FMAT.fabric2];
@@ -2085,6 +2096,41 @@
   function plantMesh(g,h){ h=h||1.2; const pot=fcyl(0.16,0.30,FMAT.pot,12); pot.position.y=0.15; g.add(pot);
     const stem=fcyl(0.03,h-0.5,FMAT.woodDark,6); stem.position.y=0.30+(h-0.5)/2; g.add(stem);
     [0,1,2].forEach(function(i){ const fol=fcyl(0.22-i*0.04,0.26,FMAT.leaf,7); fol.position.y=h-0.35+i*0.12; g.add(fol); }); }
+  // M2: KÜVET — dış gövde (rim) + GERÇEK OYUK iç çukur (4 ince duvar + koyu-ton taban, kutu-DEĞİL boşluk okunur)
+  //   + kenar bordürü (üst rim ince şerit, iç/dış ayrımı netleşir) + batarya bloğu (duvar ucunda musluk+kollar).
+  //   nano'ya "bu bir küvet" sinyali: dıştan kapalı gövde ama İÇİ GÖRÜNÜR OYUK (koyu iç ton + rim vurgusu).
+  function bathtubMesh(g,w,d,h){
+    h=h||0.55;
+    const wallT=0.06, rimT=0.03, cavD=h-wallT-0.02;                 // iç çukur derinliği (taban tabanından rim altına)
+    // dış gövde: taban + 4 ince duvar (KAPALI kutu değil — İÇİ BOŞ, taban görünür çukur)
+    const base=fbox(w,wallT,d,FMAT.porcelain); base.position.y=wallT/2; g.add(base);
+    const sideT=0.05;
+    [ [w/2-sideT/2,0,sideT,d], [-(w/2-sideT/2),0,sideT,d] ].forEach(function(s){ const sw=fbox(s[2],h,s[3],FMAT.porcelain); sw.position.set(s[0],h/2,s[1]); g.add(sw); });
+    [ [0,d/2-sideT/2,w-2*sideT,sideT], [0,-(d/2-sideT/2),w-2*sideT,sideT] ].forEach(function(s){ const sw=fbox(s[2],h,s[3],FMAT.porcelain); sw.position.set(s[0],h/2,s[1]); g.add(sw); });
+    // İÇ ÇUKUR: koyu-ton taban (gölgeli oval izlenimi) — dış gövdenin içine, biraz alçakta → "oyuk" okunur
+    const cavW=w-2*sideT-0.03, cavDp=d-2*sideT-0.03;
+    const cavFloor=fbox(cavW,0.03,cavDp,FMAT.tubInner); cavFloor.position.y=h-cavD-0.015; g.add(cavFloor);
+    [ [cavW/2-0.015,0], [-(cavW/2-0.015),0] ].forEach(function(s){ const cw=fbox(0.03,cavD,cavDp-0.03,FMAT.tubInner); cw.position.set(s[0],h-cavD/2,s[1]); g.add(cw); });
+    [ [0,cavDp/2-0.015], [0,-(cavDp/2-0.015)] ].forEach(function(s){ const cw=fbox(cavW-0.03,cavD,0.03,FMAT.tubInner); cw.position.set(s[0],h-cavD/2,s[1]); g.add(cw); });
+    // kenar bordürü — üst rim ince açık şerit (iç/dış sınırı vurgular)
+    const rim=fbox(w+0.02,rimT,d+0.02,FMAT.white); rim.position.y=h+rimT/2-0.005; g.add(rim);
+    // batarya bloğu — kısa kenarda musluk gövdesi + iki kol (sıcak/soğuk)
+    const fx=0, fz=-d/2+0.08;
+    const faBase=fbox(0.10,0.06,0.06,FMAT.metal); faBase.position.set(fx,h+0.03,fz); g.add(faBase);
+    const faSpout=fcyl(0.014,0.16,FMAT.metal,8); faSpout.rotation.z=Math.PI/2.3; faSpout.position.set(fx,h+0.12,fz+0.03); g.add(faSpout);
+    [-0.09,0.09].forEach(function(kx){ const kn=fcyl(0.018,0.03,FMAT.metal,8); kn.position.set(fx+kx,h+0.05,fz); g.add(kn); });
+  }
+  // M2: LAVABO — çanak (basık geniş silindir, İÇİ hafif çukur imi) + batarya + tip'e göre ayak/tezgah.
+  //   washbasin (tezgahlı, mevcut kabin) ayrı case'de kalır; bu yardımcı SERBEST çanak biçimi verir (gerekirse başka yerde kullanılabilir).
+  function basinBowlMesh(g,w,d,topY){
+    const rx=w/2*0.92, rz=d/2*0.92;
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(rx,rx*0.82,0.14,20), FMAT.porcelain);
+    bowl.scale.z=rz/rx; bowl.position.y=topY-0.05; g.add(bowl);
+    const cav=new THREE.Mesh(new THREE.CylinderGeometry(rx*0.78,rx*0.6,0.07,20), FMAT.tubInner);
+    cav.scale.z=(rz*0.8)/(rx*0.78); cav.position.y=topY-0.015; g.add(cav);                 // iç çukur imi (koyu, basık)
+    const fa=fcyl(0.018,0.24,FMAT.metal,8); fa.position.set(0,topY+0.12,-d/2*0.3); g.add(fa);
+    const faSpout=fcyl(0.012,0.10,FMAT.metal,8); faSpout.rotation.z=Math.PI/2.4; faSpout.position.set(0,topY+0.20,-d/2*0.3+0.05); g.add(faSpout);
+  }
   // tek mobilya item'i → mesh grubu. Bilinmeyen tip = kutu (çökmez).
   function buildFurnMesh(f){
     ensureFMAT();
@@ -2120,13 +2166,27 @@
         const doors=Math.max(1,Math.round(W/0.6)); for(let i=1;i<doors;i++){ const gv=fbox(0.012,0.80,0.012,FMAT.woodDark); gv.position.set(-W/2+W/doors*i,0.45,Dp/2+0.005); g.add(gv);} break; }
       case 'island': { const c=fbox(W,0.86,Dp,FMAT.panel); c.position.y=0.43; g.add(c); const tp=fbox(W+0.04,0.05,Dp+0.04,FMAT.steel); tp.position.y=0.88; g.add(tp); break; }
       case 'oven_hob': { const c=fbox(W,0.86,Dp,FMAT.dark); c.position.y=0.43; g.add(c); const tp=fbox(W,0.05,Dp,FMAT.steel); tp.position.y=0.88; g.add(tp); [[-1],[1]].forEach(function(s){ const b=fcyl(0.09,0.012,FMAT.dark,12); b.position.set(s[0]*0.13,0.91,0); g.add(b);}); break; }
-      case 'dishwasher': case 'washer': { const c=fbox(W,D.h,Dp,FMAT.steel); c.position.y=D.h/2; g.add(c); const dr=fcyl(W*0.32,0.03,FMAT.glass,16); dr.rotation.x=Math.PI/2; dr.position.set(0,D.h*0.55,Dp/2+0.01); g.add(dr); break; }
+      // M4: ÇAMAŞIR — ön yüzde YUVARLAK lombar kapak (cam daire, davul okunur) + ÜST kontrol bandı (yatay şerit + 3 düğme).
+      case 'washer': { const c=fbox(W,D.h,Dp,FMAT.steel); c.position.y=D.h/2; g.add(c);
+        const ring=fcyl(W*0.34,0.02,FMAT.dark,20); ring.rotation.x=Math.PI/2; ring.position.set(0,D.h*0.42,Dp/2+0.008); g.add(ring);          // lombar çerçeve (koyu halka)
+        const dr=fcyl(W*0.30,0.03,FMAT.glass,20); dr.rotation.x=Math.PI/2; dr.position.set(0,D.h*0.42,Dp/2+0.014); g.add(dr);                  // cam kapak (yuvarlak)
+        const band=fbox(W*0.86,D.h*0.14,0.02,FMAT.dark); band.position.set(0,D.h*0.82,Dp/2+0.006); g.add(band);                                // üst kontrol bandı
+        [-0.18,0,0.18].forEach(function(kx){ const kn=fcyl(0.016,0.015,FMAT.metal,10); kn.rotation.x=Math.PI/2; kn.position.set(kx*W,D.h*0.82,Dp/2+0.02); g.add(kn); }); break; }
+      // M4: BULAŞIK — DÜZ ön panel (yuvarlak kapak YOK, tezgah-altı görünüm) + YATAY kol/kulp çizgisi (üstte, tezgah komşusu).
+      case 'dishwasher': { const c=fbox(W,D.h,Dp,FMAT.steel); c.position.y=D.h/2; g.add(c);
+        const panel=fbox(W*0.9,D.h*0.7,0.015,FMAT.dark); panel.position.set(0,D.h*0.42,Dp/2+0.008); g.add(panel);                              // düz ön panel (davul/kapak imi yok)
+        const handle=fbox(W*0.82,0.03,0.03,FMAT.metal); handle.position.set(0,D.h*0.86,Dp/2+0.02); g.add(handle); break; }                     // yatay kol çizgisi (üst kenar, tezgah komşusu)
       case 'fridge': { const r=fbox(W,D.h,Dp,FMAT.white); r.position.y=D.h/2; g.add(r); const gv=fbox(0.015,D.h*0.96,0.015,FMAT.metal); gv.position.set(0,D.h*0.62,Dp/2+0.006); g.add(gv);
         [0.40,0.72].forEach(function(fy){ const h2=fbox(0.03,0.22,0.03,FMAT.metal); h2.position.set(-W/2+0.10,D.h*fy,Dp/2+0.02); g.add(h2);}); break; }
       case 'sink': { const c=fbox(W,0.86,Dp,FMAT.panel); c.position.y=0.43; g.add(c); const bs=fbox(W*0.7,0.12,Dp*0.6,FMAT.steel); bs.position.y=0.86; g.add(bs); const fa=fcyl(0.02,0.28,FMAT.metal,8); fa.position.set(0,1.0,-Dp/2+0.12); g.add(fa); break; }
       case 'toilet': { const tank=fbox(W,0.40,0.18,FMAT.porcelain); tank.position.set(0,0.55,-Dp/2+0.09); g.add(tank); const bowl=fbox(W*0.9,0.40,Dp-0.18,FMAT.porcelain); bowl.position.set(0,0.20,0.05); g.add(bowl); const seat=fbox(W*0.92,0.04,Dp-0.16,FMAT.white); seat.position.set(0,0.42,0.06); g.add(seat); break; }
-      case 'washbasin': { const cab=fbox(W,0.72,Dp,FMAT.panel); cab.position.y=0.36; g.add(cab); const top=fbox(W,0.08,Dp,FMAT.porcelain); top.position.y=0.76; g.add(top); const bs=fbox(W*0.6,0.06,Dp*0.6,FMAT.porcelain); bs.position.y=0.74; g.add(bs); const fa=fcyl(0.018,0.22,FMAT.metal,8); fa.position.set(0,0.92,-Dp/2+0.08); g.add(fa); break; }
-      case 'bathtub': { const sh=fbox(W,0.55,Dp,FMAT.porcelain); sh.position.y=0.275; g.add(sh); const inner=fbox(W-0.16,0.40,Dp-0.16,FMAT.white); inner.position.y=0.40; g.add(inner); break; }
+      // M2: LAVABO — tezgah/kabin AYNEN (dolap gövdesi) + tezgah üstü ÇANAK artık basık silindir (düz dikdörtgen "top" DEĞİL)
+      //   + içi hafif çukur imi + batarya. Kabin/tezgah dış boyutları (W×Dp) DEĞİŞMEDİ (furnFits/SAT etkilenmez).
+      case 'washbasin': { const cab=fbox(W,0.72,Dp,FMAT.panel); cab.position.y=0.36; g.add(cab);
+        const top=fbox(W,0.05,Dp,FMAT.porcelain); top.position.y=0.745; g.add(top);            // ince tezgah üstü (çanağın oturduğu zemin)
+        basinBowlMesh(g,Math.min(W*0.62,0.50),Math.min(Dp*0.8,0.40),0.795); break; }
+      // M2: KÜVET — dış gövde/İÇ oyuk çukur/kenar bordürü/batarya (bathtubMesh); dış boyut W×Dp×h DEĞİŞMEDİ.
+      case 'bathtub': bathtubMesh(g,W,Dp,D.h); break;
       case 'shower_tray': {   // köşe duş kabini — kapalı cam kutu, TEK açıklık = ön kapı (odaya bakar). Arka cam DUVARA FLUSH (alçak-duvar dollhouse'ta bile kapalı görünür → "ikinci açıklık" yok).
         // Yalnız YANLAR ayak-izinden inset (köşe duvarını geç → clipping yok). Arka cam ~1cm önde (flush, z-fight yok).
         const sm=0.05, w2=Math.max(0.4,W-2*sm), gh=2.0, gt=0.02;
@@ -2716,6 +2776,29 @@
   function furnishDressing(ctx){ const an=ctx.an, placed=ctx.placed;
     for(let k=0;k<3;k++){ if(!placeChain(an,['wardrobe_4','wardrobe_3','wardrobe_2'],placed,{}, allEdges(an,{minLen:0.95}))) break; }
     placeAny(an,'dresser',placed,{}, allEdges(an,{minLen:0.95})); }
+  // M1: komodin(ler) yatağın BAŞ ucu İKİ YANINA, duvar hizasında (mutfak gibi ilişkisel yerleşim — ankraja göre konumlanır).
+  //   hb kenarı boyunca t-koordinatında yatağın sol/sağ kenarından hemen dışarıda aday nokta kurar (genel duvar-taraması DEĞİL,
+  //   doğrudan yatağa göre); furnFits ile sığma/kapı/çakışma denetimi AYNEN korunur. İki taraf da sığarsa ikisi de konur (cap'e kadar),
+  //   yalnız biri sığarsa o taraf, hiçbiri sığmazsa hiç komodin yok (mevcut "sığmıyorsa yok" davranışı).
+  function placeNightstandsFlanking(an, hb, bed, placed, cap){
+    const bd=FURN_DIM[bed.type]||{w:1.5,d:2.0}, bw=(bed.__w!=null?bed.__w:bd.w);
+    const nd=FURN_DIM.nightstand||{w:0.45,d:0.40}, nw=nd.w;
+    const tBed=edgeT(hb, bed.pos.x, bed.pos.z);
+    const gap=0.03, half=bw/2+gap+nw/2;
+    const sides=[tBed-half, tBed+half];                       // sol yan, sağ yan (t-koordinatı)
+    let placedCount=0;
+    for(let i=0;i<sides.length && placedCount<cap;i++){
+      const t=sides[i];
+      const px=hb.a[0]+hb.dir[0]*t + hb.nIn[0]*(nd.d/2+0.05);
+      const pz=hb.a[1]+hb.dir[1]*t + hb.nIn[1]*(nd.d/2+0.05);
+      const rot=wallRotDeg(hb);
+      if(furnFits(px,pz,rot,nw,nd.d, an, placed, false)){
+        const p={ type:'nightstand', pos:{x:px,z:pz}, rot_deg:rot, __fp:furnFootprintM(px,pz,rot,nw,nd.d) };
+        placed.push(p); placedCount++;
+      }
+    }
+    if(!placedCount) place(an, hb, 'nightstand', placed, {});                                    // hiç yan sığmadıysa eski genel-duvar davranışı (yok olmasın)
+  }
   function furnishBedroom(ctx, master){ const an=ctx.an, placed=ctx.placed, A=ctx.A;
     const order=['bed_king','bed_queen','bed_double','bed_single'];
     const start = master?(A>=13?0:1):(A>=10?2:3);
@@ -2727,7 +2810,7 @@
     } }
     if(!bed){ furnishDressing(ctx); return; }                                                    // hiç yatak erişimle sığmadı → giyinme odası
     const hb=bedHbEdge(an, bed);
-    const nNs=master?2:1; for(let i=0;i<nNs;i++) place(an, hb, 'nightstand', placed, {});
+    placeNightstandsFlanking(an, hb, bed, placed, master?2:1);
     const wo = master?['wardrobe_4','wardrobe_3','wardrobe_2']:['wardrobe_3','wardrobe_2'];
     placeChain(an, wo, placed, {}, allEdges(an,{exclude:[hb],minLen:0.95}));
     if(A>=12) placeAny(an, master?'vanity':'dresser', placed, {}, allEdges(an,{exclude:[hb],minLen:0.9}));
