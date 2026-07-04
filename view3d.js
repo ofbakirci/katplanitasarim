@@ -559,7 +559,8 @@
       '#v3dCamDock textarea{width:230px;max-width:40vw;box-sizing:border-box;background:#26262c;color:#e8e6e0;border:1px solid #3a3a44;border-radius:6px;font:11px/1.45 system-ui;padding:6px;resize:vertical}'+
       '#v3dCamDock img.snap{width:180px;max-width:34vw;display:block;border-radius:6px;border:1px solid #3a3a44;background:#111;cursor:pointer}'+
       // B2-1 mobilya dock (kamera dock görsel dilini paylaşır)
-      '#v3dFurnDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;font:12px/1.4 system-ui,sans-serif}'+
+      // U4: .dk KATLANMAZ (nowrap) → dock TEK satır kolon = SABİT yükseklik; taşarsa yatay kaydırır (dikey büyümez)
+      '#v3dFurnDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:nowrap;max-width:calc(100vw - 28px);overflow-x:auto;font:12px/1.4 system-ui,sans-serif}'+
       '#v3dFurnDock .col{display:flex;flex-direction:column;gap:7px;min-width:0}'+
       '#v3dFurnDock .sep{width:1px;background:rgba(255,255,255,.10);align-self:stretch}'+
       '#v3dFurnDock .lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;opacity:.62;font-weight:700;margin-bottom:1px}'+
@@ -567,15 +568,21 @@
       '#v3dFurnDock .seg button{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
       '#v3dFurnDock .seg button:hover{filter:brightness(1.12)}'+
       '#v3dFurnDock .seg button.on{background:#c9a16b;color:#1a1a1f}'+
-      // kategori sekmeleri (yatay şerit) + kaydırılabilir palet ızgarası
-      '#v3dFurnDock .cats{display:flex;gap:4px;flex-wrap:wrap;max-width:150px}'+
-      '#v3dFurnDock .cat{background:#33333c;color:#c9b79a;border:0;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit}'+
+      // U4: KATEGORİ sekmeleri TEK yatay şerit (katlanmaz) — kompakt, sabit yükseklik
+      '#v3dFurnDock .cats{display:flex;gap:4px;flex-wrap:nowrap;max-width:150px;overflow-x:auto;padding-bottom:2px}'+
+      '#v3dFurnDock .cat{background:#33333c;color:#c9b79a;border:0;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex:0 0 auto}'+
       '#v3dFurnDock .cat:hover{filter:brightness(1.15)}#v3dFurnDock .cat.on{background:#c9a16b;color:#1a1a1f}'+
-      '#v3dFurnDock .palgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;max-width:296px;max-height:132px;overflow-y:auto;padding-right:2px}'+
-      '#v3dFurnDock .pit{display:flex;flex-direction:column;align-items:center;gap:2px;background:#2c2c33;border:1px solid transparent;border-radius:9px;padding:5px 3px 4px;cursor:pointer;font-family:inherit}'+
+      // U4: PARÇA paleti TEK SATIR (katlanma yok → dock yüksekliği SABİT/öngörülebilir). Yatay kaydırma;
+      //   C1-1 dersi: kaydırma çubuğu HEP görünür + kenar solması (fade). scrollbar-gutter sabit yer ayırır.
+      '#v3dFurnDock .palwrap{position:relative;max-width:330px}'+
+      '#v3dFurnDock .palgrid{display:flex;flex-wrap:nowrap;gap:5px;overflow-x:scroll;overflow-y:hidden;padding:0 2px 6px;scrollbar-gutter:stable;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}'+
+      '#v3dFurnDock .palgrid::-webkit-scrollbar{height:7px}'+
+      '#v3dFurnDock .palgrid::-webkit-scrollbar-thumb{background:rgba(201,161,107,.55);border-radius:4px}'+
+      '#v3dFurnDock .palgrid::-webkit-scrollbar-track{background:rgba(255,255,255,.06);border-radius:4px}'+
+      '#v3dFurnDock .pit{display:flex;flex-direction:column;align-items:center;gap:2px;background:#2c2c33;border:1px solid transparent;border-radius:9px;padding:5px 3px 4px;cursor:pointer;font-family:inherit;flex:0 0 auto;width:60px}'+
       '#v3dFurnDock .pit:hover{background:#3a3a44;border-color:rgba(201,161,107,.5)}'+
       '#v3dFurnDock .pit.on{border-color:#7bbf8a;background:#33403a}'+
-      '#v3dFurnDock .pit .pn{font-size:8.6px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:62px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '#v3dFurnDock .pit .pn{font-size:8.6px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:56px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
       '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer}'+
       '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:#7bbf8a;cursor:pointer}'+
       // M2: MALZEME DOCK (mobilya dock görsel dilini paylaşır)
@@ -2886,8 +2893,8 @@
     // sütun 1: kategori sekmeleri
     html+='<div class="col"><div class="lbl">Kategori</div><div class="cats">'+cats+'</div></div>';
     html+='<div class="sep"></div>';
-    // sütun 2: seçili kategorinin parçaları (kuşbakışı küçük-resim + ad)
-    html+='<div class="col"><div class="lbl">Parça — tıkla, sonra zemine tıkla</div><div class="palgrid">'+items+'</div></div>';
+    // sütun 2: seçili kategorinin parçaları (kuşbakışı küçük-resim + ad) — U4: TEK yatay satır (kaydırılır, katlanmaz)
+    html+='<div class="col"><div class="lbl">Parça — tıkla, sonra zemine tıkla</div><div class="palwrap"><div class="palgrid">'+items+'</div></div></div>';
     html+='<div class="sep"></div>';
     // sütun 3: otomatik döşe + render on/off + hint + tümünü temizle
     html+='<div class="col" style="max-width:190px">'+
