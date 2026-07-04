@@ -4286,6 +4286,8 @@
     snapCameraDataURL:snapCameraDataURL, snapCameraDepthMap:snapCameraDepthMap, captureCameraSnapshots:captureCameraSnapshots,
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
     clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras,
+    // KAMERA-S2: iç-mekân render yöntemi oku/yaz ('snapshot'=Sadık · 'prompt'=Yaratıcı · 'both'). exportCameras şeması DEĞİŞMEZ.
+    getCamRenderMethod:function(){ return camRenderMethod; }, setCamRenderMethod:setCamRenderMethod,
     // B1-4: gün saati — global oku/yaz (iso render köprüsü + prototip). Kamera-başına override camList'te.
     getTimeOfDay:function(){ return timeOfDay; }, setTimeOfDay:function(t){ setTimeOfDay(t,false); },
     // mobilya: map'ten furnList'i tazele + çiz (test + Faz 3). getMap = canlı harita erişimi.
