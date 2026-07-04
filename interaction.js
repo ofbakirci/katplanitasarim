@@ -323,8 +323,24 @@ svg.addEventListener('mousedown',e=>{
       e.preventDefault(); return;
     }
     const nb=ghostBalk(wx,wy);
-    if(nb){ pushEdit({type:'balk', prev:balkSnapshot()}); balconies.push(nb);
-      hoverBalk=null; balkChecksRefresh(); render(); }
+    if(nb){
+      /* E3(b): dejenere/çok kısa balkonu ENGELLE + eğik dış kenarda dürüst bilgi ver.
+         ghostBalk asgari 1 m açıklık ve depth 1,5 m üretir; yine de span<1 m (dejenere) ise
+         yerleştirme. Eğik (90°'ye hizalı OLMAYAN) kenarda balkon geometrik olarak DESTEKLENİR
+         (dörtgen sağlam, taşınır/silinir) ama plan ızgarası dik olduğundan balkon eğik cepheye
+         paralel oturur — kullanıcıya sessiz kalmayıp durumu bildiririz. */
+      if((nb.t1-nb.t0) < 1-1e-6){ setStatusHint('Balkon için kenar teması çok kısa (en az 1 m) — kenara daha yakın tıklayın.', '#b45309'); return; }
+      const A=pts[nb.ei], B=pts[(nb.ei+1)%pts.length];
+      const dx=Math.abs(B.x-A.x), dy=Math.abs(B.y-A.y);
+      const tilted = dx>1e-3 && dy>1e-3;   // ne yatay ne dikey → eğik dış duvar
+      pushEdit({type:'balk', prev:balkSnapshot()}); balconies.push(nb);
+      hoverBalk=null; balkChecksRefresh(); render();
+      setStatusHint(tilted
+        ? 'Balkon eğik dış duvara eklendi (eğik cepheye paralel oturur). Sağ tık → sil, ya da tutamaçlardan boyutlandır.'
+        : 'Balkon eklendi. Sağ tık → sil, ya da tutamaçlardan boyutlandır.');
+    } else {
+      setStatusHint('Balkon eklenemedi — bir dış duvara daha yakın tıklayın.', '#b45309');
+    }
     return;
   }
   if(mode==='door'){
@@ -599,6 +615,18 @@ window.addEventListener('keydown',e=>{
 window.addEventListener('keydown',e=>{
   if(e.key!=='Escape' || mode!=='roomdraw' || !roomPts.length) return;
   roomPts=[]; hoverP=null; render();
+});
+/* E3(c) EMNİYET AĞI: balkon modunda üzerine gelinen (hover) balkonu Del/Backspace ile sil.
+   Sağ-tık silme (balkon modu + her mod) asıl yol; bu, hayalet balkona takılan kullanıcı için
+   klavye kaçış kapısı. Yalnız balkon modunda + gerçek bir balkon hover'dayken; form alanı yut. */
+window.addEventListener('keydown',e=>{
+  if(e.key!=='Delete' && e.key!=='Backspace') return;
+  if(mode!=='balkon' || !(hoverBalk&&hoverBalk.hit)) return;
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
+  e.preventDefault();
+  pushEdit({type:'balk', prev:balkSnapshot()});
+  balconies.splice(hoverBalk.hit.i,1); hoverBalk=null; balkChecksRefresh(); render();
 });
 /* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
    pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.

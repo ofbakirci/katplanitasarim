@@ -1967,6 +1967,11 @@ function generate(keepCuts){
       const secWidth=line=>{ const arr=[]; kor.cells.forEach(i=>{ if(lineOf(i)===line) arr.push(perp(i)); });
         if(!arr.length) return 0; arr.sort((a,b)=>a-b); let mx=1,cur=1;
         for(let k=1;k<=arr.length;k++){ if(k<arr.length&&arr[k]===arr[k-1]+1)cur++; else{ if(cur>mx)mx=cur; cur=1; } } return mx; };
+      /* EĞİK CEPHE NOTU (E1): kat-52/54 gibi eğik dış-duvarlı planda koridorun UÇ sütunu cephe
+         basamağıyla 1 m'ye tıraşlanabilir (SAHTE boğum). K3 burada oda YEMEZ — aşağıdaki
+         `attempt` kendi bad-sayısı guard'ıyla (b>badRef→ok=false) sahte-boğum drain'ini reddeder
+         (draini bad'i düşürmez → geri alınır). Kullanıcı-görünür SAHTE uyarı checks.js'te
+         corridorMinWidth(inside-aware) ile susturulur; buradaki iç ölçüm kasıtlı HAM kalır. */
       /* KASKAD boşalt (rectifyCorridorEnds attempt ile aynı): sütunu tek yöne akıt */
       const attempt=(L,sink)=>{
         const moves=[], touched=new Set();

@@ -234,7 +234,7 @@ function ruleFloor(add,p){
        (zikzak) koridoru bile ok gösteriyordu. corridorMinWidth (walls.js) baskın eksende
        en dar kesiti ölçer; < koridorMin ise kaçış/erişim bloke → kırmızı. */
     { const kor=p.regions.find(g=>g.type==='koridor'&&g.cells.length);
-      if(kor){ const w=corridorMinWidth(kor, p.cols);
+      if(kor){ const w=corridorMinWidth(kor, p.cols, p.inside, p.rows);
         if(w < REG.koridorMin-1e-6)
           add('bad',`Apartman holü en dar yerinde ${fmt(w)} m < ${REG.koridorMin.toLocaleString('tr-TR')} m — koridor daralmış (kaçış/erişim engellenir). Holü genişletin veya yeniden üretin.`, kor.id);
         else

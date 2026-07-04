@@ -51,11 +51,12 @@ function run(pts, specs, opts){
       const depoArea=depo.reduce((s,g)=>{ let a=0; g.cells.forEach(()=>a+=M*M); return s+a; },0);
       // daire alanları
       const units=(plan.unitObjs||[]).map(u=>{ let c=0; u.rooms.forEach(g=>c+=g.cells.length); return +(c*M*M).toFixed(2); });
-      // koridor min genişlik
+      // koridor min genişlik (eğik-cephe farkında — E1: kat-52 sol dış duvar EĞİK, koridorun uç
+      // sütunu cephe basamağıyla 1 m'ye tıraşlanır ama işlevsel en tüm boyunca 1,5 m; inside verilir)
       let corMin=Infinity, corArea=0, floorArea=0;
       for(let i=0;i<plan.inside.length;i++) if(plan.inside[i]) floorArea+=M*M;
       plan.regions.filter(g=>g.type==='koridor'&&g.cells.length).forEach(g=>{
-        corMin=Math.min(corMin, corridorMinWidth(g, cols)); let a=0; g.cells.forEach(()=>a+=M*M); corArea+=a; });
+        corMin=Math.min(corMin, corridorMinWidth(g, cols, plan.inside, plan.rows)); let a=0; g.cells.forEach(()=>a+=M*M); corArea+=a; });
       if(corMin===Infinity) corMin=0;
       // giriş kapıları (antre→koridor)
       let unitDoors=0;

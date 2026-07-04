@@ -682,6 +682,29 @@ const roomMenu=document.getElementById('roomMenu');
 function hideRoomMenu(){ roomMenu.style.display='none'; }
 svg.addEventListener('contextmenu',e=>{
   e.preventDefault(); hideRoomMenu();
+  /* E3(a): HANGİ MODDA olursa olsun bir balkona sağ tık → silme. Balkon modunda doğrudan siler
+     (eski davranış); DİĞER modlarda küçük "Balkonu sil" menüsü açar (avlu deseni). Kök neden:
+     balkon silme eskiden yalnız mode==='balkon' dalındaydı → balkon oluşturulup mod değişince
+     silinemeyen "hayalet balkon" kalıyordu (özellikle eğik kenarda kullanıcı balkonu bırakıp
+     başka moda geçince — kat-55 vakası). hitBalk yalnız `balconies`+`pts`'e dayanır → plan
+     gerekmez, bu yüzden mod-özel erken-return'lerden ÖNCE (door/avlu return'ü balkonu yutmasın). */
+  if(closed && typeof balconies!=='undefined' && balconies.length){
+    const rbB=svg.getBoundingClientRect();
+    const hb=hitBalk(S2Wx(e.clientX-rbB.left), S2Wy(e.clientY-rbB.top));
+    if(hb){
+      if(mode==='balkon'){ pushEdit({type:'balk', prev:balkSnapshot()});
+        balconies.splice(hb.i,1); hoverBalk=null; balkChecksRefresh(); render(); return; }
+      const wrapB=roomMenu.parentElement.getBoundingClientRect();
+      roomMenu.innerHTML='<div class="mh">BALKON</div><hr><div class="mi" data-balkdel>Balkonu sil</div>';
+      roomMenu.style.display='block';
+      roomMenu.style.left=Math.min(e.clientX-wrapB.left, wrapB.width-170)+'px';
+      roomMenu.style.top =Math.min(e.clientY-wrapB.top,  wrapB.height-roomMenu.offsetHeight-10)+'px';
+      const db=roomMenu.querySelector('.mi[data-balkdel]');
+      if(db) db.onclick=()=>{ pushEdit({type:'balk', prev:balkSnapshot()});
+        balconies.splice(hb.i,1); hoverBalk=null; hideRoomMenu(); balkChecksRefresh(); render(); };
+      return;
+    }
+  }
   if(mode==='balkon'){
     const rb=svg.getBoundingClientRect();
     const h=hitBalk(S2Wx(e.clientX-rb.left), S2Wy(e.clientY-rb.top));
