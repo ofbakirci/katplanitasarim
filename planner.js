@@ -499,6 +499,60 @@ function generate(keepCuts){
     return false;
   };
 
+  /* --- KÜÇÜK KAT (≤2 daire, taban ≤ REG.kucukKatAlan): bant koridor İSRAFTIR — tek-daire
+         vakasının (trySingleUnit) aynı hastalığı 2 dairede de görülür: 18 m bant tüm eni
+         claim eder, karşı kanat sahipsiz kalıp ORTAK DEPO'ya düşer (kat-plani-52: 26 m² hol
+         + 31,5 m² depo = katın ~%41'i ölü). Bunun yerine kompakt çekirdeği (merdiven+asansör
+         +teknik+yangın TEK SIRADA) bir üst köşeye yasla, altına BİNA GENİŞLİĞİNCE 1,5 m lobi
+         koy; kalan TÜM taban splitZone ile daire başına bir şeride bölünür (her şerit lobiye
+         komşu → antre↔lobi kapısı garanti). Çekirdek yanındaki üst köşe bitişik şeride akar
+         (ORTAK DEPO doğmaz). Sığmazsa/köşe bulunamazsa false → eski bant yoluna güvenli
+         geri-düşüş (egzotik/çok-daireli tabanlar HİÇ etkilenmez). --- */
+  const trySmallFloorCore=()=>{
+    const elems=[{nm:'MERDİVEN',tp:'merdiven',w:10,stair:true}];      // 5,0 × 3,0 m
+    for(let a=0;a<nAsansor;a++) elems.push({nm:asansorYeri?'ASANSÖR YERİ':'ASANSÖR',tp:'asansor',w:4});
+    if(teknikNeeded) elems.push({nm:'TEKNİK / ŞAFT',tp:'teknik',w:3});
+    if(fireStairNeeded) elems.push({nm:'YANGIN MERD.',tp:'yangin',w:5,stair:true});
+    const stH=6, coreH=elems.reduce((s,e)=>s+e.w,0);           // çekirdek stH=3 m derin × coreH geniş (yatay sıra)
+    const cw=Math.max(3, Math.round(1.5/M));                    // 1,5 m koridor bandı derinliği
+    let ins=0; inside.forEach(v=>ins+=v);
+    if(ins-(stH+cw)*coreH < 100*perFloor/2 + 100) return false; // daire başına ≥25 m² kalmalı
+
+    /* ── ÇİFT-YÜKLÜ KORİDOR (küçük 2 daire kat): koridor ORTADA tam-boy bant, ÇEKİRDEK bandın
+       BİR UCUNA (köşe) yaslanır — bir kanadı sterilize etmez; DAİRE 1 üst kanat, DAİRE 2 alt
+       kanat, her ikisi de koridora tek temiz kenardan bakar (SARMA YOK → layoutUnit T-planı
+       antreyi koridor kenarına koyar → giriş kapısı garanti). Küçük çekirdek (7×3 m) tek uca
+       sıkışır; kanatlar (~3–3,5 m derin) tek-yüklü daire olur. rectifyCorridor israfı dairelere
+       aktarır. Kanatlar sığmazsa false → band yoluna güvenli geri-düşüş. ── */
+    /* Çekirdek ÜST-SOL köşeyi stH (3 m) yüksekliğinde doldurur; koridor bandı çekirdeğin hemen
+       ALTINDA tam boy. ÜST kanat (rows 0..stH-1) çekirdek YANI = DAİRE 1 (koridora güneyden
+       bakar). ALT kanat (koridor altı) = DAİRE 2 (kuzeyden bakar). Her iki daire tek temiz
+       kenardan koridora bakar (SARMA YOK). Alt/üst kanat derinliği yetmezse false → band yolu. */
+    const bandR0=stH, bandR1=bandR0+cw-1;
+    if(bandR1>=rows-cw) return false;                          // alt kanat için yer yok
+    if(!rectFree(0,0,stH,coreH)) return false;                 // çekirdek üst-sol köşeye sığmıyor
+    if(rows-1-bandR1 < cw) return false;                       // alt kanat ≥1,5 m
+    // üst kanatta çekirdek yanında ≥3 m daire cephesi (yoksa DAİRE 1 sığmaz)
+    let topRestCols=0; for(let c2=coreH;c2<cols;c2++){ for(let r=0;r<stH;r++){ const i=r*cols+c2;
+      if(inside[i]&&cm[i]===-1){ topRestCols++; break; } } }
+    if(topRestCols<6) return false;
+    // COMMIT: çekirdek (üst-sol) + koridor bandı (tam boy)
+    let c=0; elems.forEach(e=>{ const g=newReg(e.nm,e.tp); claimRect(g,0,c,stH,e.w);
+      if(e.stair) stairs.push({r0:0,c0:c,h:stH,w:e.w}); c+=e.w; });
+    const hol=newReg('APARTMAN HOLÜ','koridor');
+    for(let r=bandR0;r<=bandR1;r++)for(let cc=0;cc<cols;cc++){ const i=r*cols+cc;
+      if(inside[i]&&cm[i]===-1){ cm[i]=hol.id; hol.cells.push(i); } }
+    corridorR0=bandR0; corridorR1=bandR1;
+    // DAİRE 1 = üst kanat (çekirdek yanı; koridora güneyden bakar → side 'S'); DAİRE 2 = alt kanat (side 'N')
+    const topCells=[], botCells=[];
+    for(let i=0;i<rows*cols;i++){ if(!inside[i]||cm[i]!==-1) continue;
+      const r=(i/cols)|0; if(r<bandR0) topCells.push(i); else botCells.push(i); }
+    customCutsZ=[];
+    if(topCells.length) unitObjs.push(layoutUnit(topCells, expanded[0], 'S'));
+    if(botCells.length) unitObjs.push(layoutUnit(botCells, expanded[1]||expanded[0], 'N'));
+    return unitObjs.length>0;
+  };
+
   /* tek daire + KİLİTLİ çekirdek (katlar arası ortak): çekirdek yukarıda zaten claim'li.
      Bant koridoru kullanma — karşı kanat sahipsiz kalıp ORTAK DEPO + dev hol doğuruyor
      (kat-plani-40: 57 m² depo + 38,5 m² hol = kat'ın ~%48'i ölü). Bunun yerine çekirdeğin
@@ -534,10 +588,14 @@ function generate(keepCuts){
     return true;
   };
 
+  let __floorArea=0; for(let i=0;i<rows*cols;i++) if(inside[i]) __floorArea+=M*M;
+  const smallFloor = perFloor<=2 && __floorArea<=REG.layout.kucukKatAlan;
   if(!villa && perFloor===1 && !coreLocked && trySingleUnit()){
     customCutsZ=[]; // ayırıcı yok; ince ayar duvar sürükleme + oda ekle/sil ile
   } else if(!villa && perFloor===1 && coreLocked && !wantV && trySingleUnitLockedCore()){
     customCutsZ=[]; // kilitli çekirdek + tek daire: lobi + tüm taban tek daireye
+  } else if(!villa && perFloor===2 && !coreLocked && !wantV && smallFloor && trySmallFloorCore()){
+    // K1 küçük kat: kompakt çekirdek + bina-genişliği lobi + 2 daire şeridi (band koridor yerine)
   } else if(!villa){
     /* --- ortak hol: ana bant --- */
     let sumR=0,n=0; const colMin=new Array(cols).fill(1e9), colMax=new Array(cols).fill(-1e9);

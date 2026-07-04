@@ -50,7 +50,8 @@ const REG = {
     sigDerinlik:9,      // derinlik ≤9 → sığ daire (shallowU: antre kompakt, alan odalara)
     railDerinlik:10.5,  // derinlik ≥10,5 → demiryolu planı (yataklar derinlikte katmanlanır)
     girisMinD:{oda:2.5, islak:2.0, taban:1.5}, // giriş şeridi asgari derinliği: yatak/merdiven itildiyse / ıslak-hacimli >45 m² / diğer
-    govdeOran:0.45      // kulak algısı: gövde alanı < taban×0,45 → belirgin gövde yok, band düzeni
+    govdeOran:0.45,     // kulak algısı: gövde alanı < taban×0,45 → belirgin gövde yok, band düzeni
+    kucukKatAlan:180    // K1: ≤2 daireli + taban ≤ bu (m²) → kompakt çekirdek+lobi (band koridor israfını kes); üstü/çok-daire eski band yolu
   },
   checks:{ /* ── checks.js panel-uyarı eşikleri (A7 konsolidasyon, 2026-07-03) ────────
        Mevzuat DEĞİL: denetim panelinin heuristik info/bad eşikleri (şişme, biçim
