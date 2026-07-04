@@ -568,21 +568,19 @@
       '#v3dFurnDock .seg button{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
       '#v3dFurnDock .seg button:hover{filter:brightness(1.12)}'+
       '#v3dFurnDock .seg button.on{background:#c9a16b;color:#1a1a1f}'+
-      // U4: KATEGORİ sekmeleri TEK yatay şerit (katlanmaz) — kompakt, sabit yükseklik
-      '#v3dFurnDock .cats{display:flex;gap:4px;flex-wrap:nowrap;max-width:150px;overflow-x:auto;padding-bottom:2px}'+
+      // R4: KATEGORİ = ÇİP SARMASI (hepsi görünür, SCROLL YOK) → yatay kaydırma kaldırıldı.
+      '#v3dFurnDock .cats{display:flex;gap:4px;flex-wrap:wrap;max-width:118px}'+
       '#v3dFurnDock .cat{background:#33333c;color:#c9b79a;border:0;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex:0 0 auto}'+
       '#v3dFurnDock .cat:hover{filter:brightness(1.15)}#v3dFurnDock .cat.on{background:#c9a16b;color:#1a1a1f}'+
-      // U4: PARÇA paleti TEK SATIR (katlanma yok → dock yüksekliği SABİT/öngörülebilir). Yatay kaydırma;
-      //   C1-1 dersi: kaydırma çubuğu HEP görünür + kenar solması (fade). scrollbar-gutter sabit yer ayırır.
-      '#v3dFurnDock .palwrap{position:relative;max-width:330px}'+
-      '#v3dFurnDock .palgrid{display:flex;flex-wrap:nowrap;gap:5px;overflow-x:scroll;overflow-y:hidden;padding:0 2px 6px;scrollbar-gutter:stable;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 14px),transparent 100%)}'+
-      '#v3dFurnDock .palgrid::-webkit-scrollbar{height:7px}'+
-      '#v3dFurnDock .palgrid::-webkit-scrollbar-thumb{background:rgba(201,161,107,.55);border-radius:4px}'+
-      '#v3dFurnDock .palgrid::-webkit-scrollbar-track{background:rgba(255,255,255,.06);border-radius:4px}'+
-      '#v3dFurnDock .pit{display:flex;flex-direction:column;align-items:center;gap:2px;background:#2c2c33;border:1px solid transparent;border-radius:9px;padding:5px 3px 4px;cursor:pointer;font-family:inherit;flex:0 0 auto;width:60px}'+
+      // R4: PARÇA ızgarası SABİT 2 SATIR × 6 SÜTUN, SCROLL YOK. Thumb küçültüldü → en kalabalık kategori (12 parça)
+      //   iki satıra sığar; dock yüksekliği HİÇBİR durumda değişmez (2-satır alanı sabit rezerve).
+      '#v3dFurnDock .palwrap{position:relative;flex:none;width:302px}'+
+      '#v3dFurnDock .palgrid{display:grid;grid-template-columns:repeat(6,46px);grid-template-rows:repeat(2,auto);grid-auto-flow:row;gap:4px;padding:0 2px;overflow:visible}'+
+      '#v3dFurnDock .pit{display:flex;flex-direction:column;align-items:center;gap:1px;background:#2c2c33;border:1px solid transparent;border-radius:8px;padding:3px 2px;cursor:pointer;font-family:inherit;width:46px}'+
       '#v3dFurnDock .pit:hover{background:#3a3a44;border-color:rgba(201,161,107,.5)}'+
       '#v3dFurnDock .pit.on{border-color:#7bbf8a;background:#33403a}'+
-      '#v3dFurnDock .pit .pn{font-size:8.6px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:56px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      '#v3dFurnDock .pit svg{width:22px;height:22px}'+
+      '#v3dFurnDock .pit .pn{font-size:8px;line-height:1.1;color:#d8d2c6;text-align:center;max-width:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
       '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer}'+
       '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:#7bbf8a;cursor:pointer}'+
       // R3: MALZEME DOCK — kamera dock kadar mütevazı: TEK yatay satır, SABİT yükseklik, sarma YOK (görünümü kapatmaz).
