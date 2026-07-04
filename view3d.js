@@ -55,6 +55,12 @@
   // furnDockCat: paletin açık kategori sekmesi (FURN_PALETTE indexi). furnGhost: kuşbakışı-kilitli
   //   yerleştirme hayaleti {type, mesh, pos, rot, valid} — imleci izler, tık=bırak, Esc/sağ-tık=vazgeç.
   let furnDockCat=0, furnGhost=null;
+  // ── MALZEME (M-serisi): oda-başına zemin/duvar malzemesi (mobilya sözleşmesinin ikizi) ──
+  //   matUIEnabled = "Malzeme" rail grubu görünür. matSelRoom = seçili oda (room_id) — swatch'lar ona uygulanır.
+  //   materialOverrides: {room_id -> {floor:presetKey|null, wall:presetKey|null}} — RUNTIME düzenleme durumu.
+  //   Kalıcılık: window.__kptaMaterials (persistMaterials yazar, io.js buildFloorplanMap okur; furniture ikizi).
+  //   SEÇİLMEMİŞ oda (kayıt yok / null preset) → ESKİ renk-kodlu görünüm (M4: varsayılan sıfır değişim).
+  let matUIEnabled=false, matSelRoom=null, materialOverrides={}, lastMatHint='';
   // katalog + TR karşılıkları (UI tip seçici + prompt cümlesi)
   const FURN_TR = {
     sofa_2:'İkili Kanepe', sofa_3:'Üçlü Kanepe', sectional_l:'Köşe Kanepe', armchair:'Koltuk', pouf:'Puf',
@@ -137,7 +143,8 @@
     rotccw:'<path d="M3 2v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L3 8"/>',          // saat yönü TERSİ döndür
     rotcw:'<path d="M21 2v6h-6"/><path d="M21 12A9 9 0 1 1 18.36 5.64L21 8"/>',          // saat yönü döndür
     copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',   // çoğalt
-    sofa:'<path d="M5 11V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 13a2 2 0 0 1 4 0v3h10v-3a2 2 0 0 1 4 0v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'  // mobilya rail ikonu
+    sofa:'<path d="M5 11V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 13a2 2 0 0 1 4 0v3h10v-3a2 2 0 0 1 4 0v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',  // mobilya rail ikonu
+    swatch:'<path d="M2 13a2 2 0 0 0 2 2h1M2 13V4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v9M2 13a9 9 0 0 0 9 9 9 9 0 0 0 9-9M11 13h9a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-1"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>'  // malzeme rail ikonu (renk paleti/swatch)
   };
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
@@ -273,13 +280,14 @@
       '<div class="v3dnote">Etiketler İngilizce — AI 3D render için.</div>';
     // B1-R: Kamera/Mobilya araçları alt DOCK'ta (#v3dCamDock / #v3dFurnDock). Rail ikonu grup kilidini + dock'u
     //   DOĞRUDAN açar; çekmecede ARTIK yönlendirme notu YOK (emekli). Drawer bu gruplarda boş → renderDrawer gizler.
-    if(g==='camera'||g==='furniture') return '';
+    if(g==='camera'||g==='furniture'||g==='material') return '';   // araçlar alt DOCK'ta → çekmece boş
     return '';
   }
   function railGroups(){
     const gs=[{k:'view',i:'view',t:'Görünüm'},{k:'layers',i:'layers',t:'Katman'}];
     if(camUIEnabled) gs.push({k:'camera',i:'camera',t:'Kamera'});
     if(furnUIEnabled) gs.push({k:'furniture',i:'sofa',t:'Mobilya'});
+    if(matUIEnabled) gs.push({k:'material',i:'swatch',t:'Malzeme'});
     gs.push({k:'export',i:'download',t:'İndir'});
     return gs;
   }
@@ -293,8 +301,8 @@
   }
   function renderDrawer(){
     const d=overlay&&overlay.querySelector('#v3dDrawer'); if(!d) return;
-    // B1-R: kamera/mobilya grubunda çekmece BOŞ (araçlar alt dock'ta) → çekmeceyi gizle, dock'u aç.
-    if(!activeGroup || activeGroup==='camera' || activeGroup==='furniture'){ d.style.display='none'; d.innerHTML=''; }
+    // B1-R: kamera/mobilya/malzeme grubunda çekmece BOŞ (araçlar alt dock'ta) → çekmeceyi gizle, dock'u aç.
+    if(!activeGroup || activeGroup==='camera' || activeGroup==='furniture' || activeGroup==='material'){ d.style.display='none'; d.innerHTML=''; }
     else { d.style.display='block'; d.innerHTML=groupHTML(activeGroup); }
     if(activeGroup==='camera'){ renderCamDock(); }
     // B2-1: mobilya dock yalnız mobilya grubunda görünür (kamera dock deseni); başka grupta gizle.
@@ -302,6 +310,12 @@
       renderFurnDock();
       const cd=overlay.querySelector('#v3dCamDock'); if(cd) cd.style.display='none';   // iki dock aynı anda görünmesin (adım 4: kamera+mobilya ikisi de etkin)
     } else { const fd=overlay.querySelector('#v3dFurnDock'); if(fd){ fd.style.display='none'; fd.innerHTML=''; } }
+    // M2: malzeme dock yalnız malzeme grubunda görünür (mobilya dock deseni).
+    if(activeGroup==='material'){
+      renderMatDock();
+      const cd=overlay.querySelector('#v3dCamDock'); if(cd) cd.style.display='none';
+      const fd=overlay.querySelector('#v3dFurnDock'); if(fd) fd.style.display='none';
+    } else { const md=overlay.querySelector('#v3dMatDock'); if(md){ md.style.display='none'; md.innerHTML=''; } }
   }
   function setGroup(g){
     const prev=activeGroup;
@@ -456,6 +470,8 @@
       '<div id="v3dCamDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>'+
       // B2-1: MOBİLYA DOCK — mobilya grubuna girince alt kenara yaslanır (renderFurnDock kurar). Kamera dock ikizi.
       '<div id="v3dFurnDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>'+
+      // M2: MALZEME DOCK — malzeme grubuna girince alt kenara yaslanır (renderMatDock kurar). Mobilya dock ikizi.
+      '<div id="v3dMatDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>'+
       // B2-3: seçili mobilyanın yanında YÜZEN mini araç çubuğu (döndür/çoğalt/odakla/sil). loop'ta konumlanır.
       '<div id="v3dFurnBar" style="position:absolute;z-index:6;display:none;gap:4px;background:rgba(28,28,34,.96);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:5px;box-shadow:0 8px 26px rgba(0,0,0,.5);backdrop-filter:blur(8px)">'+
         '<button data-furnrot="-90" class="v3dfb" title="Sola 90°">'+ic('rotccw',15)+'</button>'+
@@ -545,6 +561,22 @@
       '#v3dFurnDock .pit .pn{font-size:8.6px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:62px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
       '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer}'+
       '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:#7bbf8a;cursor:pointer}'+
+      // M2: MALZEME DOCK (mobilya dock görsel dilini paylaşır)
+      '#v3dMatDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;font:12px/1.4 system-ui,sans-serif}'+
+      '#v3dMatDock .col{display:flex;flex-direction:column;gap:5px}'+
+      '#v3dMatDock .sep{width:1px;background:rgba(255,255,255,.1);align-self:stretch}'+
+      '#v3dMatDock .lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;opacity:.62;font-weight:700;margin-bottom:1px}'+
+      '#v3dMatDock .swgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-width:240px}'+
+      '#v3dMatDock .sw{display:flex;flex-direction:column;align-items:center;gap:3px;background:#2c2c33;border:1px solid transparent;border-radius:9px;padding:4px 3px;cursor:pointer;font-family:inherit}'+
+      '#v3dMatDock .sw:hover{background:#3a3a44;border-color:rgba(201,161,107,.5)}'+
+      '#v3dMatDock .sw.on{border-color:#7bbf8a;background:#33403a}'+
+      '#v3dMatDock .sw .chip{width:40px;height:26px;border-radius:5px;border:1px solid rgba(0,0,0,.25)}'+
+      '#v3dMatDock .sw .sn{font-size:8.6px;line-height:1.1;color:#d8d2c6;text-align:center;max-width:52px}'+
+      '#v3dMatDock .roomrow{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;max-width:210px;flex-wrap:wrap}'+
+      '#v3dMatDock .roomtag{background:#c9a16b;color:#1a1a1f;border-radius:7px;padding:3px 8px;font-weight:700;font-size:11px}'+
+      '#v3dMatDock .reset{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
+      '#v3dMatDock .reset:hover{filter:brightness(1.15)}'+
+      '#v3dMatDock .hint{font-size:10.5px;opacity:.72;max-width:220px;line-height:1.35;min-height:22px}'+
       // B2-3 yüzen mini araç çubuğu
       '.v3dfb{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:8px;background:#33333c;color:#e8e6e0;cursor:pointer;padding:0}'+
       '.v3dfb:hover{background:#c9a16b;color:#1a1a1f}.v3dfbdanger{background:#5a3a3a;color:#f0d8d8}.v3dfbdanger:hover{background:#7a3a3a;color:#fff}'+
@@ -565,7 +597,7 @@
       // B1-R (R3): ölü delege dalları temizlendi — hiçbir öğe artık şunları YAYMIYOR:
       //   data-furntype/furnsel/furndel/furndesel/furnact (B2 mobilya paleti hayalet-akışına geçti),
       //   data-camdel (silme yalnız data-v3d="camdel" ikonundan). Selektörden + handler'dan kaldırıldı.
-      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camtime],[data-camact],[data-camsel],[data-camdesel],[data-furnrot],[data-furncat],[data-furnpick],[data-v3d]')||e.target;
+      const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camtime],[data-camact],[data-camsel],[data-camdesel],[data-furnrot],[data-furncat],[data-furnpick],[data-matslot],[data-v3d]')||e.target;
       const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ setGroup(gp); return; }
       const ch=t.getAttribute&&t.getAttribute('data-camh'); if(ch){ setCamHeight(ch); return; }
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
@@ -576,6 +608,7 @@
       const cdz=t.getAttribute&&t.getAttribute('data-camdesel'); if(cdz){ deselectCam(); return; }   // çip × = seçimi bırak (silmez)
       const fca=t.getAttribute&&t.getAttribute('data-furncat'); if(fca!=null&&fca!==''){ furnDockCat=+fca; renderFurnDock(); return; }   // B2-1: kategori sekmesi
       const fpk=t.getAttribute&&t.getAttribute('data-furnpick'); if(fpk){ startFurnGhost(fpk); return; }   // B2-1: palet parçası → hayalet yerleştirme
+      const mslot=t.getAttribute&&t.getAttribute('data-matslot'); if(mslot){ applyMaterial(mslot, t.getAttribute('data-matkey')); return; }   // M2: swatch → oda malzemesi
       const fr=t.getAttribute&&t.getAttribute('data-furnrot'); if(fr){ rotateFurn(+fr); return; }
       const a=t.getAttribute&&t.getAttribute('data-v3d'); if(!a) return;
       if(a==='close') close();
@@ -591,6 +624,7 @@
       else if(a==='camfocus'){ if(activeCamIdx>=0) focusCam(activeCamIdx); }        // A3: seçili kameraya odakla
       else if(a==='furndel'){ if(activeFurnIdx>=0) removeFurn(activeFurnIdx); }
       else if(a==='furnclear') clearFurn();
+      else if(a==='matreset') resetRoomMaterial();   // M2: seçili oda malzemesini renk-koda döndür
       else if(a==='furnauto') autoFurnishAll();
       else if(a==='furnrender'){ if(t.checked) autoFurnishAll(); else clearFurn(); }   // render on/off: döşe ↔ boşalt (snap mobilyalı/boş gider)
       else if(a==='rerender') doReRender();
@@ -857,7 +891,8 @@
       parent.add(grp);
     }
     // bir oda kenarını (a→b) kur — üstünden geçen kapılarda BOŞLUK bırak, eşik + (tam-yükseklikte) lentö ekle
-    function wallEdge(a,b){
+    function wallEdge(a,b,wallMat){
+      wallMat=wallMat||matWall;   // M4: oda-başına boya; verilmezse paylaşılan nötr duvar (sözleşme korunur)
       const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz); if(len<0.05) return;
       const ux=dx/len,uz=dz/len, ang=-Math.atan2(dz,dx);
       const gaps=[], winGaps=[];
@@ -877,7 +912,7 @@
       });
       gaps.sort(function(p,q){return p[0]-q[0];});
       function seg(s0,s1){ if(s1-s0<0.04) return;
-        const wm=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,WALL_H,WALL_T),matWall);
+        const wm=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,WALL_H,WALL_T),wallMat);
         // Q6: duvar tabanını zemine 2 cm GÖM (alt=y=-0.02) → duvar-zemin ekinde ışık sızıntısı/gölge-boşluğu biter (üst ihmal edilir kayar)
         wm.position.set(a[0]+ux*(s0+s1)/2, (roofOn?WALL_H/2:WALL_H*WALL_LOW/2)-0.02, a[1]+uz*(s0+s1)/2);
         wm.rotation.y=ang; wm.scale.y=roofOn?1:WALL_LOW;
@@ -888,9 +923,9 @@
       winGaps.forEach(function(g){
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
         const sill=g[2], wh=g[3], top=Math.min(WALL_H, sill+wh);
-        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,WALL_T),matWall);  // parapet (tam boyda yok)
+        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,WALL_T),wallMat);  // parapet (tam boyda yok)
           pw.position.set(mx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
-        if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,WALL_T),matWall); // lento üstü
+        if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,WALL_T),wallMat); // lento üstü
           lw.position.set(mx,top+lh/2,mz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
         addWindowGlass(mx,mz,gw,ang,sill,wh,walls);
       });
@@ -899,7 +934,7 @@
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
         const th=new THREE.Mesh(new THREE.BoxGeometry(gw,0.04,Math.max(0.2,WALL_T)),matDoor);  // eşik: her açıdan "kapı burada" (duvar kalınlığını kapsasın)
         th.position.set(mx,0.02,mz); th.rotation.y=ang; th.receiveShadow=true; th.userData.isSill=true; walls.add(th);
-        const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,WALL_T),matWall); // lentö: yalnız tam-yükseklikte görünür
+        const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,WALL_T),wallMat); // lentö: yalnız tam-yükseklikte görünür
         ln.position.set(mx,(DOOR_H+WALL_H)/2,mz); ln.rotation.y=ang; ln.castShadow=true; lintels.add(ln);
         // C1-3: KAPALI KANAT — kapısız ev "sakil" + nano tek-kapılı dolabı kapı sanabiliyor. Boşluğa
         //   ince panel + kasa (jamb) + kol imasi ekle. Sahne mesh'i → iso snapshot + kamera B yoluna
@@ -910,18 +945,22 @@
     }
 
     rooms.forEach(function(o){
+      // M4: SEÇİLİ zemin malzemesi varsa GERÇEK dokuyu göster; yoksa renk-kodlu (tip sinyali) — varsayılan sıfır değişim.
+      const fKey=roomMatKey(o.id,'floor'), fMat=fKey&&matMaterial(fKey);
       const col=colorFor(o);
       const g=new THREE.ExtrudeGeometry(shapeFrom(o.polygon_px,map),{depth:FLOOR_T,bevelEnabled:false});
       g.rotateX(Math.PI/2);
-      const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:col,roughness:0.78,metalness:0.03}));
+      const m=new THREE.Mesh(g, fMat || new THREE.MeshStandardMaterial({color:col,roughness:0.78,metalness:0.03}));
       m.receiveShadow=true; m.castShadow=true; m.userData.isFloor=true; m.userData.roomRef=o; G.add(m);
+      // M4: SEÇİLİ duvar boyası varsa o odanın kenarları boyalı; yoksa paylaşılan matWall (renk-kodsuz nötr duvar korunur).
+      const wKey=roomMatKey(o.id,'wall'), oWallMat=(wKey&&matMaterial(wKey))||matWall;
       // C3-4: aynı poligondan TAVAN dilimi (duvar üstü yüksekliğinde, mat açık ton) → __ceiling grubuna (gizli).
       const cg=new THREE.ExtrudeGeometry(shapeFrom(o.polygon_px,map),{depth:FLOOR_T,bevelEnabled:false});
       cg.rotateX(Math.PI/2);
       const cm=new THREE.Mesh(cg,matCeil); cm.position.y=WALL_H; cm.receiveShadow=true; cm.userData.isCeiling=true; ceil.add(cm);
-      // duvarlar = oda kenarları (kapı boşlukları oyulmuş)
+      // duvarlar = oda kenarları (kapı boşlukları oyulmuş) — M4: o odanın boya malzemesiyle
       const P=o.polygon_px;
-      for(let i=0;i<P.length;i++) wallEdge(px2m(map,P[i][0],P[i][1]), px2m(map,P[(i+1)%P.length][0],P[(i+1)%P.length][1]));
+      for(let i=0;i<P.length;i++) wallEdge(px2m(map,P[i][0],P[i][1]), px2m(map,P[(i+1)%P.length][0],P[(i+1)%P.length][1]), oWallMat);
       // etiket — pole-of-inaccessibility çapası (komşu odaya taşmaz); yoksa centroid'e düş
       let la=o.label_anchor_px||o.centroid_px;
       if(!la){ la=P.reduce(function(s,p){return [s[0]+p[0],s[1]+p[1]];},[0,0]).map(function(v){return v/P.length;}); }
@@ -1432,11 +1471,20 @@
   }
   function scenePick(ev){
     if(!renderer||!scene) return;
-    if(!camUIEnabled && !furnMode) return;
+    const matMode=(activeGroup==='material' && matUIEnabled);
+    if(!camUIEnabled && !furnMode && !matMode) return;
     const rect=renderer.domElement.getBoundingClientRect();
     const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
     if(!raycaster) raycaster=new THREE.Raycaster();
     raycaster.setFromCamera({x:nx,y:ny}, cam);
+    // ── MALZEME modu (M2): zemin mesh'ine tıkla → o odayı seç (userData.roomRef). Kamera/mobilya modundan bağımsız. ──
+    if(matMode){
+      if(scene.__floorGroup){
+        const rh=raycaster.intersectObjects(scene.__floorGroup.children,false);
+        if(rh.length){ const o=rh[0].object.userData&&rh[0].object.userData.roomRef; if(o&&o.id){ selectMatRoom(o.id); return; } }
+      }
+      selectMatRoom(null); return;   // boş → seçimi bırak
+    }
     // ── MOBİLYA modu (B2): mobilya hit → SEÇ; boş zemin tık → seçimi bırak. EKLEME palet-hayaleti üzerinden (startFurnGhost). ──
     if(furnMode){
       if(scene.__furnitureGroup){
@@ -1657,7 +1705,7 @@
     });
     el.addEventListener('pointerup',function(e){ if(furnDrag){ endFurnDrag(); return; }
       if(furnGhost){ if(!moved && e.button===0){ moveFurnGhost(e); dropFurnGhost(); } return; }   // hayalet: yerinde tık = bırak (sürükleyip orbit ettiyse bırakmaz)
-      if(!spacePan && (camUIEnabled||furnMode)&&!moved&&e.button===0) scenePick(e); });   // Space'te tıklama seçmesin/koymasın (kaydırma kipi)
+      if(!spacePan && (camUIEnabled||furnMode||(activeGroup==='material'&&matUIEnabled))&&!moved&&e.button===0) scenePick(e); });   // Space'te tıklama seçmesin/koymasın (kaydırma kipi); malzeme modu = oda seç
     // tekerlek = seçili mobilyayı döndür (5° hassas, Shift=1° ince ayar); orbit zoom'u furnMode+seçili iken atlanır (attachOrbit)
     el.addEventListener('wheel',function(e){ if(furnMode && activeFurnIdx>=0){ const f=furnList[activeFurnIdx], st=e.shiftKey?1:5;
       f.rot_deg=((((f.rot_deg||0)+(e.deltaY<0?st:-st))%360)+360)%360; f.source='manual'; f.locked=true; renderFurniture(); schedulePersist(); } }, {passive:true});
@@ -2054,6 +2102,91 @@
   // eski çekmece şeridi çağrıları → dock'u tazele (uyumluluk: updateCamPanel adı korunuyor, dock'a yönlenir)
   function updateCamPanel(){ const strip=overlay&&overlay.querySelector('#v3dCamStrip'); if(strip) strip.innerHTML=camStripHTML(); }
   function setHint(t){ lastHint=t||''; const h=overlay&&overlay.querySelector('#v3dCamHint'); if(h) h.textContent=lastHint; }
+
+  /* ====================== MALZEME — prosedürel preset katalog + CanvasTexture (M-serisi) ======================
+     M1: texture DOSYASI YOK — hepsi canvas'ta prosedürel çizilir (offline kalır). 3 sınıf:
+       floor.parke ×4 (tahta çizgi deseni) · floor.seramik ×4 (fuga ızgarası) · wall.boya ×6 (düz + hafif noise).
+     Her preset: {key, group, cls, name, base(hex), swatch(css)} + prosedürel çizici. THREE CanvasTexture cache'lenir
+     (ensureMatTex — lazy, THREE hazır olunca; test/headless'te THREE yok → çizim atlanır, katalog/kalıcılık saf JS). */
+  const MAT_PRESETS = [
+    // ── ZEMİN — PARKE (basit tahta çizgi deseni) ──
+    { key:'parke_mese',   group:'floor', cls:'parke',   name:'Açık Meşe',     base:0xc9a978, plank:0xbb9866, line:0x9c7a4e },
+    { key:'parke_ceviz',  group:'floor', cls:'parke',   name:'Koyu Ceviz',    base:0x6f4d31, plank:0x664529, line:0x40291a },
+    { key:'parke_gri',    group:'floor', cls:'parke',   name:'Gri Meşe',      base:0x9a938a, plank:0x8e867c, line:0x6d665e },
+    { key:'parke_balik',  group:'floor', cls:'parke',   name:'Balıksırtı',    base:0xc0a072, plank:0xb0925f, line:0x8a6d43, herringbone:true },
+    // ── ZEMİN — SERAMİK (fuga ızgarası; ıslak hacim önceliği) ──
+    { key:'seramik_beyaz',   group:'floor', cls:'seramik', name:'Beyaz Seramik',   base:0xeceae4, grout:0xc2beb2, wet:true },
+    { key:'seramik_gri',     group:'floor', cls:'seramik', name:'Gri Seramik',     base:0xb8b6b2, grout:0x8f8d88, wet:true },
+    { key:'seramik_bej',     group:'floor', cls:'seramik', name:'Bej Seramik',     base:0xd8cdb6, grout:0xb0a488, wet:true },
+    { key:'seramik_antrasit',group:'floor', cls:'seramik', name:'Antrasit Seramik',base:0x4a4c50, grout:0x35373a, wet:true },
+    // ── DUVAR — BOYA (düz + çok hafif noise doku) ──
+    { key:'boya_krikbeyaz', group:'wall', cls:'boya', name:'Kırık Beyaz', base:0xf0ece2 },
+    { key:'boya_bej',       group:'wall', cls:'boya', name:'Bej',         base:0xe1d3ba },
+    { key:'boya_adacayi',   group:'wall', cls:'boya', name:'Adaçayı',     base:0xb7c4ac },
+    { key:'boya_dumanmavi', group:'wall', cls:'boya', name:'Duman Mavisi',base:0xaebfca },
+    { key:'boya_terracotta',group:'wall', cls:'boya', name:'Terracotta',  base:0xc08163 },
+    { key:'boya_antrasit',  group:'wall', cls:'boya', name:'Antrasit',    base:0x565961 }
+  ];
+  const MAT_BY_KEY = {}; MAT_PRESETS.forEach(function(p){ MAT_BY_KEY[p.key]=p; });
+  function hexCss(h){ return '#'+('000000'+(h>>>0).toString(16)).slice(-6); }
+  // swatch (küçük önizleme karesi) için CSS arka planı — prosedürel dokuyu ima eden hafif gradient/çizgi.
+  function matSwatchCss(p){
+    const b=hexCss(p.base);
+    if(p.cls==='parke'){ const ln=hexCss(p.line||p.base); return 'repeating-linear-gradient(90deg,'+b+' 0 6px,'+ln+' 6px 7px)'; }
+    if(p.cls==='seramik'){ const gr=hexCss(p.grout||p.base); return b+' repeating-linear-gradient(0deg,transparent 0 8px,'+gr+' 8px 9px),'+b+' repeating-linear-gradient(90deg,transparent 0 8px,'+gr+' 8px 9px)'; }
+    return b;   // boya = düz renk
+  }
+  // ── prosedürel canvas çizimi (dosyasız) — 256×256 tekrarlı doku ──
+  let _matTexCache=null;
+  function drawParke(x,c,p){                                   // basit tahta çizgi deseni (yatay şerit + dikey ek yerleri)
+    x.fillStyle=hexCss(p.base); x.fillRect(0,0,c.width,c.height);
+    const rows=6, rh=c.height/rows, line=hexCss(p.line||p.base), plank=hexCss(p.plank||p.base);
+    for(let r=0;r<rows;r++){
+      const y=r*rh, off=(r%2)*(c.width/2);                     // kaydırmalı derz (tuğla dizilimi)
+      x.fillStyle=plank; x.fillRect(0,y+1,c.width,rh-2);
+      x.strokeStyle=line; x.lineWidth=1.4;
+      x.beginPath(); x.moveTo(0,y); x.lineTo(c.width,y); x.stroke();      // tahta arası yatay derz
+      for(let k=0;k<2;k++){ const px=((off+k*c.width/2)%c.width);        // dikey ek yeri (tahta uçları)
+        x.beginPath(); x.moveTo(px,y); x.lineTo(px,y+rh); x.stroke(); }
+    }
+  }
+  function drawSeramik(x,c,p){                                 // düz kare + fuga (grout) ızgarası
+    x.fillStyle=hexCss(p.base); x.fillRect(0,0,c.width,c.height);
+    const n=4, s=c.width/n, gr=hexCss(p.grout||p.base);
+    x.strokeStyle=gr; x.lineWidth=2.2;
+    for(let i=0;i<=n;i++){ const v=i*s;
+      x.beginPath(); x.moveTo(v,0); x.lineTo(v,c.height); x.stroke();
+      x.beginPath(); x.moveTo(0,v); x.lineTo(c.width,v); x.stroke(); }
+  }
+  function drawBoya(x,c,p){                                    // düz renk + ÇOK hafif noise (mat boya dokusu)
+    x.fillStyle=hexCss(p.base); x.fillRect(0,0,c.width,c.height);
+    const img=x.getImageData(0,0,c.width,c.height), d=img.data;
+    for(let i=0;i<d.length;i+=4){ const n=(Math.random()-0.5)*10; d[i]+=n; d[i+1]+=n; d[i+2]+=n; }
+    x.putImageData(img,0,0);
+  }
+  function makeMatCanvas(p){
+    const c=document.createElement('canvas'); c.width=c.height=256; const x=c.getContext('2d');
+    if(p.cls==='parke') drawParke(x,c,p); else if(p.cls==='seramik') drawSeramik(x,c,p); else drawBoya(x,c,p);
+    return c;
+  }
+  // preset key → THREE.MeshStandardMaterial (CanvasTexture'lı, cache'li). THREE yoksa (test) null döner.
+  function matMaterial(key){
+    const p=MAT_BY_KEY[key]; if(!p || typeof THREE==='undefined' || !THREE.CanvasTexture) return null;
+    if(!_matTexCache) _matTexCache={};
+    if(_matTexCache[key]) return _matTexCache[key];
+    const tex=new THREE.CanvasTexture(makeMatCanvas(p));
+    tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+    const rep=(p.cls==='boya')?1:(p.cls==='seramik'?2:3);
+    tex.repeat.set(rep,rep);
+    if(THREE.SRGBColorSpace) tex.colorSpace=THREE.SRGBColorSpace; else if(THREE.sRGBEncoding) tex.encoding=THREE.sRGBEncoding;
+    const rough=(p.cls==='seramik')?0.35:(p.cls==='boya'?0.9:0.7);
+    const m=new THREE.MeshStandardMaterial({ map:tex, roughness:rough, metalness:(p.cls==='seramik'?0.06:0.02) });
+    _matTexCache[key]=m; return m;
+  }
+  // oda için seçili malzeme (floor|wall) preset key'i — override YOKSA null (→ renk-kodlu varsayılan).
+  function roomMatKey(roomId, slot){
+    const o=materialOverrides[roomId]; return (o && o[slot]) || null;
+  }
 
   /* ====================== MOBİLYA — mesh fabrikası + render (Faz 1) ======================
      Her mobilya = birkaç BoxGeometry grubu (lokal orijin = item merkezi, +Z = ön yön). Kamera
@@ -2485,6 +2618,79 @@
     updateFurnBar(); syncFurnTypeBtns();
   }
   function setFurnHint(t){ lastFurnHint=t||''; const h=overlay&&overlay.querySelector('#v3dFurnHint'); if(h) h.textContent=lastFurnHint; }
+
+  /* ====================== MALZEME — UI (dock + oda-seç + swatch uygula) — mobilya dock deseninin ikizi ====================== */
+  // ıslak hacim (banyo/wc) → seramik zemin öncelikli (M2). fpRoomEnum konvansiyonu (io.js) ile tutarlı okur.
+  function isWetRoom(r){ const t=((r&&(r.type||r.type_tr||r.name||''))+'').toLowerCase(); return /bath|banyo|wc|ıslak|islak/.test(t); }
+  function setMatHint(t){ lastMatHint=t||''; const h=overlay&&overlay.querySelector('#v3dMatHint'); if(h) h.textContent=lastMatHint; }
+  function setMatUI(on){
+    matUIEnabled=!!on;
+    if(!matUIEnabled){ if(activeGroup==='material') activeGroup='view'; matSelRoom=null; }
+    renderRail(); renderDrawer();
+  }
+  // seçili oda → swatch uygula: yalnız O ODANIN zemin/duvar malzemesini değiştirir (M3), sahneyi tazeler (M4).
+  function applyMaterial(slot, key){
+    if(!matSelRoom){ setMatHint('Önce bir oda seç (mesh\'te odaya tıkla).'); return; }
+    const cur=materialOverrides[matSelRoom]||{floor:null,wall:null};
+    cur[slot]=(cur[slot]===key?null:key);   // aynı swatch'a tekrar tıkla = kaldır (renk-koda dön)
+    materialOverrides[matSelRoom]=cur;
+    if(!cur.floor && !cur.wall) delete materialOverrides[matSelRoom];
+    persistMaterials(); rebuildKeepView();
+    renderMatDock();
+    const p=MAT_BY_KEY[key];
+    setMatHint(p ? (p.name+' uygulandı ('+(slot==='floor'?'zemin':'duvar')+')') : 'Varsayılana döndürüldü');
+  }
+  function resetRoomMaterial(){
+    if(!matSelRoom){ setMatHint('Önce bir oda seç.'); return; }
+    delete materialOverrides[matSelRoom];
+    persistMaterials(); rebuildKeepView(); renderMatDock();
+    setMatHint('Oda renk-kodlu varsayılana döndürüldü.');
+  }
+  // sahneyi yeniden kur ama mevcut kamera açısını KORU (buildScene sonunda setView('iso') var → view kaydet/geri yükle).
+  function rebuildKeepView(){
+    const map=scene&&scene.__map; if(!map) return;
+    const v=getView();
+    buildScene(map);
+    if(v) restoreView(v);
+  }
+  // mesh'te odaya tıkla → seç (scenePick material dalı bunu çağırır). floor mesh userData.roomRef taşır.
+  function selectMatRoom(roomId){
+    matSelRoom=roomId||null; renderMatDock();
+    const r=furnRoomById(roomId); setMatHint(r? ((r.name||roomId)+' seçildi · aşağıdan malzeme seç') : 'Oda seç');
+  }
+  function renderMatDock(){
+    const dk=overlay&&overlay.querySelector('#v3dMatDock'); if(!dk) return;
+    if(!matUIEnabled){ dk.style.display='none'; dk.innerHTML=''; return; }
+    dk.style.display='block';
+    const r=furnRoomById(matSelRoom);
+    const sel=materialOverrides[matSelRoom]||{};
+    const wet=r&&isWetRoom(r);
+    // zemin swatch'ları: ıslak hacimde SERAMİK önce, kuru hacimde PARKE önce (M2)
+    let floors=MAT_PRESETS.filter(function(p){ return p.group==='floor'; });
+    if(wet) floors=floors.slice().sort(function(a,b){ return (a.cls==='seramik'?0:1)-(b.cls==='seramik'?0:1); });
+    const walls=MAT_PRESETS.filter(function(p){ return p.group==='wall'; });
+    function swatch(p, slot, active){
+      return '<button data-matslot="'+slot+'" data-matkey="'+p.key+'" class="sw'+(active?' on':'')+'" title="'+p.name+'">'+
+        '<span class="chip" style="background:'+matSwatchCss(p)+'"></span><span class="sn">'+p.name+'</span></button>';
+    }
+    let html='<div class="dk">';
+    // sütun 1: seçili oda + varsayılana dön
+    html+='<div class="col" style="max-width:210px"><div class="lbl">Oda</div>'+
+      '<div class="roomrow">'+(r?('<span class="roomtag">'+(r.name||r.id)+'</span>'+(wet?'<span style="opacity:.7;font-size:10px">ıslak hacim</span>':'')):'<span style="opacity:.7">Mesh\'te bir odaya tıkla</span>')+'</div>'+
+      (r?'<button class="reset" data-v3d="matreset">Varsayılana dön</button>':'')+
+      '<div class="hint" id="v3dMatHint"></div></div>';
+    html+='<div class="sep"></div>';
+    // sütun 2: zemin swatch'ları
+    html+='<div class="col"><div class="lbl">Zemin'+(wet?' (seramik önce)':'')+'</div><div class="swgrid">'+
+      floors.map(function(p){ return swatch(p,'floor',sel.floor===p.key); }).join('')+'</div></div>';
+    html+='<div class="sep"></div>';
+    // sütun 3: duvar swatch'ları
+    html+='<div class="col"><div class="lbl">Duvar</div><div class="swgrid">'+
+      walls.map(function(p){ return swatch(p,'wall',sel.wall===p.key); }).join('')+'</div></div>';
+    html+='</div>';
+    dk.innerHTML=html;
+    setMatHint(lastMatHint);
+  }
 
   /* ====================== MOBİLYA — otomatik yerleşim (Faz 3; kural-tabanlı + override) ======================
      v1 bbox + "en uzun duvar" varsayımı. Eğik/L odada taşabilir (v1 kabul). pos MUTLAK metre, source:'auto'.
@@ -3024,6 +3230,23 @@
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(take); }); (map.common_areas||[]).forEach(take);
     try{ window.__kptaFurniture=store; }catch(e){}
   }
+  // M3: kalıcı store'dan (window.__kptaMaterials) runtime materialOverrides'a yükle. Yalnız GEÇERLİ preset key'ler alınır.
+  function hydrateMaterials(){
+    const store=(typeof window!=='undefined' && window.__kptaMaterials) || {};
+    materialOverrides={};
+    Object.keys(store).forEach(function(rid){
+      const o=store[rid]||{}, f=(o.floor&&MAT_BY_KEY[o.floor])?o.floor:null, w=(o.wall&&MAT_BY_KEY[o.wall])?o.wall:null;
+      if(f||w) materialOverrides[rid]={ floor:f, wall:w };
+    });
+  }
+  // M3: güncel malzeme seçimlerini kalıcı store'a yaz (mobilya ikizi). Yalnız DOLU (floor|wall set) odalar → boş kayıt yok.
+  function persistMaterials(){
+    const store={};
+    Object.keys(materialOverrides).forEach(function(rid){
+      const o=materialOverrides[rid]; if(o && (o.floor||o.wall)) store[rid]={ floor:o.floor||null, wall:o.wall||null };
+    });
+    try{ window.__kptaMaterials=store; }catch(e){}
+  }
   // kameranın gördüğü mobilyadan TR cümle (nano prompt'una iliştir → mobilyayı uydurmaz, koyduğunu boyar)
   function sceneDescription(cam){
     // kadrajda anlamlı oranı görünen (coverage≥0.2) ya da merkezi koni içinde (coverage null) mobilya
@@ -3062,6 +3285,7 @@
       }
       setCompareLayout(compareMode, compareRefURL);         // full / yan-yana yerleşimi uygula
       resize();
+      hydrateMaterials();                                    // M3: kalıcı store'dan malzeme seçimlerini yükle (save/load + 3B kapat-aç korunur)
       buildScene(map); built=true;
       // host bazen boot anında daha boyutlanmamış olur → fitView aşırı yakın çerçeveler.
       // Bir sonraki karede (host kesin boyutlu) yeniden boyutlandır + sığdır (açıyı korur).
@@ -3070,7 +3294,7 @@
     }).catch(function(e){ status.textContent='HATA: '+(e.message||e); return null; });
   }
   // tam-ekran 3B (toolbar / adım 2 "3B"): SALT İZLEME — kamera bölümü GİZLİ (#1), mesh serbest.
-  function open(opts){ compareMode=false; compareRefURL=null; embedded=!!(opts&&opts.embedded); setCamUI(false); return boot().then(function(map){ setCamUI(false); setFurnUI(true); return map; }); }
+  function open(opts){ compareMode=false; compareRefURL=null; embedded=!!(opts&&opts.embedded); setCamUI(false); return boot().then(function(map){ setCamUI(false); setFurnUI(true); setMatUI(true); return map; }); }
   // plan imzası: yerleşim değişince (oda sayısı / footprint ölçüsü) eski kameralar geçersiz olur
   function planSig(map){
     const u=(map&&map.units)||[]; let rc=0; u.forEach(function(x){ rc+=((x.rooms||[]).length); });
@@ -3088,6 +3312,7 @@
       angleDrift=false; updateAngleWarn();
       setCamUI(true);                                        // kamera bölümünü göster
       setFurnUI(true);                                       // mobilya bölümünü de göster (adım 5 / Döşe)
+      setMatUI(true);                                         // M2: malzeme bölümünü de göster (adım 3 boya / adım 5 döşe)
       const sig=planSig(map);
       if(camList.length && camPlanSig && camPlanSig!==sig) clearCams();   // plan değişti → eski (geçersiz koordinatlı) kameraları at
       if(!camList.length) deriveShowcaseCameras(map);       // daire başına vitrin kamera otomatik
@@ -3153,6 +3378,7 @@
     cancelFurnGhost(); if(activeFurnIdx>=0) selectFurn(-1);   // B2-4: kapanışta yarım hayalet + seçim temizlenir
     const dk=overlay&&overlay.querySelector('#v3dCamDock'); if(dk) dk.style.display='none';
     const fd=overlay&&overlay.querySelector('#v3dFurnDock'); if(fd) fd.style.display='none';
+    const md=overlay&&overlay.querySelector('#v3dMatDock'); if(md) md.style.display='none';
     const fb=overlay&&overlay.querySelector('#v3dFurnBar'); if(fb) fb.style.display='none';
     topLocked=false; freeSavedView=null; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); } }   // A4: kilit durumunu temizle
   function resize(){ if(!renderer||overlay.style.display==='none') return;
@@ -3175,7 +3401,11 @@
     // mobilya: map'ten furnList'i tazele + çiz (test + Faz 3). getMap = canlı harita erişimi.
     refreshFurniture:function(){ collectFurnList(); renderFurniture(); }, getMap:function(){ return scene&&scene.__map; },
     setFurnUI:setFurnUI, setFurnMode:setFurnMode, clearFurn:clearFurn, autoFurnishAll:function(){ autoFurnishAll(); },
-    exportFurniture:exportFurniture, sceneDescription:sceneDescription };
+    exportFurniture:exportFurniture, sceneDescription:sceneDescription,
+    // MALZEME (M-serisi): preset kataloğu + oda-başına seç/uygula/sıfırla + kalıcılık (test + prototip).
+    setMatUI:setMatUI, materialPresets:function(){ return MAT_PRESETS.map(function(p){ return {key:p.key,group:p.group,cls:p.cls,name:p.name}; }); },
+    selectMatRoom:selectMatRoom, applyMaterial:applyMaterial, resetRoomMaterial:resetRoomMaterial,
+    getMaterials:function(){ return JSON.parse(JSON.stringify(materialOverrides)); }, hydrateMaterials:hydrateMaterials };
   function bind(){
     const btn=document.getElementById('t3d');
     if(btn) btn.addEventListener('click', open);

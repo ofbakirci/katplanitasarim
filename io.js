@@ -636,7 +636,8 @@ function fpRegionGeom(g, fr, classify){
     area_m2:+net.toFixed(2),                         // = NET (değişmez; mevcut tüketiciler/testler bunu okur)
     area_net_m2:+net.toFixed(2),                     // net = hücre alanı (piyes/mevzuat esas)
     area_brut_m2:+brut.toFixed(2),                   // brüt = net + çevre duvar payı (bilgi/rapor/DXF)
-    furniture:[]                                    // §Faz5 şema: mobilya alanı (buildFloorplanMap store'dan doldurur)
+    furniture:[],                                   // §Faz5 şema: mobilya alanı (buildFloorplanMap store'dan doldurur)
+    materials:null                                  // MALZEME: oda-başına {floor,wall} preset key'i (buildFloorplanMap store'dan doldurur; seçilmedi→null)
   };
 }
 /* daire için konum etiketi: bina bbox'una göre sol/sağ + alt/üst */
@@ -687,6 +688,10 @@ function buildFloorplanMap(opt){
   const FS=(typeof window!=='undefined' && window.__kptaFurniture) || {};
   units.forEach(u=>u.rooms.forEach(o=>{ if(FS[o.id]) o.furniture=FS[o.id].map(f=>f); }));
   common.forEach(o=>{ if(FS[o.id]) o.furniture=FS[o.id].map(f=>f); });
+  // MALZEME (additive): runtime store'dan (view3d persistMaterials yazar) room_id ile eşle → export + render sinyali.
+  const MS=(typeof window!=='undefined' && window.__kptaMaterials) || {};
+  units.forEach(u=>u.rooms.forEach(o=>{ if(MS[o.id]) o.materials={ floor:MS[o.id].floor||null, wall:MS[o.id].wall||null }; }));
+  common.forEach(o=>{ if(MS[o.id]) o.materials={ floor:MS[o.id].floor||null, wall:MS[o.id].wall||null }; });
   // kapılar: gerçek kapı boşlukları (3B görünüm + AI besleme); oda poligonlarıyla AYNI px uzayı.
   // span = exportWallBoundaryPNG ile birebir (orta e+0.45, genişlik doorWidthM: bina1.5/daire1.0/oda0.9/ıslak0.8).
   const doors=(typeof computeDoors==='function'?computeDoors():[])
