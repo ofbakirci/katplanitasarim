@@ -649,6 +649,8 @@
       else if(a==='furndel'){ if(activeFurnIdx>=0) removeFurn(activeFurnIdx); }
       else if(a==='furnclear') clearFurn();
       else if(a==='matreset') resetRoomMaterial();   // M2: seçili oda malzemesini renk-koda döndür
+      else if(a==='matauto') applyMaterialsByType();  // R2: tüm odalara tür-bazlı malzeme
+      else if(a==='matresetall') resetAllMaterials(); // R2: tüm odaları renk-koda döndür
       else if(a==='furnauto') autoFurnishAll();
       else if(a==='furnrender'){ if(t.checked) autoFurnishAll(); else clearFurn(); }   // render on/off: döşe ↔ boşalt (snap mobilyalı/boş gider)
       else if(a==='rerender') doReRender();
@@ -2977,6 +2979,28 @@
     persistMaterials(); rebuildKeepView(); renderMatDock();
     setMatHint('Oda renk-kodlu varsayılana döndürüldü.');
   }
+  // R2: ODA TÜRÜNE GÖRE OTOMATİK ATA — tek tıkla tüm odalara tutarlı set. roomKind → zemin/duvar preset'i.
+  //   salon=Açık Meşe · yataklar=Koyu Ceviz · antre/koridor=Gri Meşe · banyo/wc=Beyaz Seramik · mutfak=Bej Seramik;
+  //   duvarlar HEP Kırık Beyaz (banyo dahil, sade). Mevcut applyMaterial mekanizması (materialOverrides) toplu set edilir.
+  //   yerleşemeyen tipler (çekirdek/depo=skip, balkon, çalışma vs.) DOKUNULMAZ → renk-kodlu kalır.
+  const MAT_FLOOR_BY_KIND = { living:'parke_mese', living_kitchen:'parke_mese', studio:'parke_mese',
+    bedroom:'parke_ceviz', master:'parke_ceviz', entry:'parke_gri', corridor:'parke_gri',
+    bathroom:'seramik_beyaz', wc:'seramik_beyaz', kitchen:'seramik_bej' };
+  function applyMaterialsByType(){
+    const map=scene&&scene.__map; if(!map){ setMatHint('Plan yok.'); return; }
+    let n=0;
+    furnAllRooms(map).forEach(function(r){
+      const floor=MAT_FLOOR_BY_KIND[roomKind(r)]; if(!floor) return;              // eşleşmeyen tip → dokunma
+      materialOverrides[r.id]={ floor:floor, wall:'boya_krikbeyaz' }; n++;
+    });
+    persistMaterials(); rebuildKeepView(); renderMatDock();
+    setMatHint(n+' odaya tür-bazlı malzeme atandı.');
+  }
+  function resetAllMaterials(){
+    materialOverrides={}; matSelRoom=null;
+    persistMaterials(); rebuildKeepView(); renderMatDock();
+    setMatHint('Tüm odalar renk-koda döndürüldü.');
+  }
   // sahneyi yeniden kur ama mevcut kamera açısını KORU (buildScene sonunda setView('iso') var → view kaydet/geri yükle).
   function rebuildKeepView(){
     const map=scene&&scene.__map; if(!map) return;
@@ -3009,6 +3033,8 @@
     html+='<div class="col" style="max-width:210px"><div class="lbl">Oda</div>'+
       '<div class="roomrow">'+(r?('<span class="roomtag">'+(r.name||r.id)+'</span>'+(wet?'<span style="opacity:.7;font-size:10px">ıslak hacim</span>':'')):'<span style="opacity:.7">Mesh\'te bir odaya tıkla</span>')+'</div>'+
       (r?'<button class="reset" data-v3d="matreset">Varsayılana dön</button>':'')+
+      '<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="reset" data-v3d="matauto" title="Oda türüne göre tüm odalara tutarlı malzeme">Türe göre ata</button>'+
+      '<button class="reset" data-v3d="matresetall" title="Tüm odaları renk-koda döndür">Tümünü sıfırla</button></div>'+
       '<div class="hint" id="v3dMatHint"></div></div>';
     html+='<div class="sep"></div>';
     // sütun 2: zemin swatch'ları
