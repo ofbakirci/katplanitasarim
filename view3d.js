@@ -2133,16 +2133,18 @@
       applyCamAim(c,tilt);                                 // taşıyınca pitch'i koru (target yeni konuma göre yeniden)
       renderCamGizmos(); syncCamBtns(); logRoom(c);
       setHint('Kamera taşındı · tekrar tıkla = yine taşı · yön için "Yön"');
-    } else {                                               // 'add' (ya da seçili yokken): 2 tık = yeni kamera
+    } else if(placeAction==='add' || activeCamIdx<0){      // 'add' (ya da seçili yokken): 2 tık = yeni kamera
       if(!pendingPos){ pendingPos={x:p.x,z:p.z}; renderCamGizmos(); setHint('Şimdi kameranın BAKACAĞI noktaya tıkla'); }
       else {
         const pos={x:pendingPos.x,y:CAM_Y[camHeight],z:pendingPos.z};
         const c={ pos:pos, target:aimTargetFrom(pos,p), lens:camLens, height:camHeight };
-        camList.push(c); activeCamIdx=camList.length-1; pendingPos=null; placeAction='aim';
-        renderCamGizmos(); syncCamBtns(); logRoom(c);   // yeni kamera + action 'aim' → buton vurgusunu tazele
-        setHint('Kamera '+camList.length+' kondu · zemine tıkla = yön çevir');
+        camList.push(c); activeCamIdx=camList.length-1; pendingPos=null; placeAction='none';   // KAMERA-S2: eklenince NÖTR (stray boş-tık aim etmesin)
+        renderCamGizmos(); syncCamBtns(); logRoom(c);
+        setHint('Kamera '+camList.length+' kondu · "Yön" ile bakış noktasını ayarla');
       }
     }
+    // KAMERA-S2 (mobilya paritesi): kamera seçili + eylem NÖTR ('none') → boş zemin tık = NO-OP
+    //   (seçim düşmez, PiP+çubuk kalır; boş zemin sürükle zaten pan). Deselect yalnız çip × + Esc.
   }
 
   /* ═══ KAMERA-S: MOBİLYA-KALİTESİ AKICILIK ═══════════════════════════════════════════════
@@ -2629,10 +2631,10 @@
     placeMode=!!on; pendingPos=null;
     if(placeMode && furnMode){ cancelFurnGhost(); furnMode=false; if(activeFurnIdx>=0) selectFurn(-1); applyFurnModeUI(); renderFurniture(); }   // B2-4: mobilya düzenlemeyi + hayalet + seçim temizle (dışlayan)
     if(controls) controls.enabled=!placeMode;
-    if(placeMode) placeAction=(activeCamIdx>=0)?'aim':'add';
+    if(placeMode) placeAction=(activeCamIdx>=0)?'none':'add';   // KAMERA-S2: seçili kamerada NÖTR (boş-tık aim etmez)
     renderCamGizmos(); applyPlaceModeUI();
     setHint(placeMode
-      ? (placeAction==='add' ? 'Kamera KONUMUNA tıkla (sonra bakış noktası)' : 'Zemine tıkla = seçili kamerayı çevir · Ekle = yeni')
+      ? (placeAction==='add' ? 'Kamera KONUMUNA tıkla (sonra bakış noktası)' : 'Kamera seçili · "Yön" / "Taşı" ile düzenle · Ekle = yeni')
       : 'Mesh serbest — döndür/yakınlaştır · kamerayı seçmek için üstüne tıkla');
   }
   function togglePlaceMode(){ setPlaceMode(!placeMode); }
@@ -2650,12 +2652,14 @@
     if(i<0||i>=camList.length) return;
     pipClosed=false;                                        // C3-6: HER seçim eylemi (çip/sahne/aynı kamera) X bayrağını temizler → PiP geri gelir
     activeCamIdx=i; pendingPos=null;
-    if(placeMode && placeAction==='add') placeAction='aim';   // seçince düzenlemeye geç
+    // KAMERA-S2: seçince NÖTR eyleme geç ('aim' değil) → stray boş-zemin tık seçili kamerayı re-aim ETMESİN
+    //   (mobilya paritesi). Yön/Taşı yalnız kullanıcı çubuk/dock butonuna basınca (setPlaceAction) armlanır.
+    if(placeMode && (placeAction==='add' || placeAction==='aim' || placeAction==='move')) placeAction='none';
     const c=camList[i]; camHeight=c.height||'eye'; camLens=c.lens||24;
     renderCamGizmos(); applyPlaceModeUI();
     focusCam(i);                                            // A3: seçince hedefi kameranın baktığı noktaya kaydır (mesafe sabit)
     openPipForSelection();                                  // B1-R (R2): seçim = canlı PiP önizlemesini geri getir (× ile kapatılmışsa da)
-    setHint('Kamera '+(i+1)+' seçili · Yön / Taşı ya da zemine tıkla · F odakla');
+    setHint('Kamera '+(i+1)+' seçili · "Yön" / "Taşı" ile düzenle · F odakla · × ya da Esc = bırak');
   }
   // çip × → seçimi bırak (kamerayı SİLMEZ; silme rail'deki çöp kutusu = data-v3d="camdel")
   function deselectCam(){
