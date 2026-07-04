@@ -903,10 +903,19 @@
       parent.add(grp);
     }
     // bir oda kenarını (a→b) kur — üstünden geçen kapılarda BOŞLUK bırak, eşik + (tam-yükseklikte) lentö ekle
-    function wallEdge(a,b,wallMat){
+    // U1: BOYA ÇAKIŞMASI FIX — paylaşılan iç duvar iki odanın kenarı olarak İKİ KEZ kurulur (üst üste iki kutu).
+    //   İkisi de farklı malzeme boyanınca eş-düzlem z-fight/clipping. ÇÖZÜM: her odanın BOYALI duvar kabuğunu
+    //   KENDİ tarafına (iç normal yönünde) yarım-kalınlık çeker → her oda YALNIZ kendi yüzünün yarısını doldurur,
+    //   iki yarı sırt-sırta oturur, eş-düzlem yok. nIn = odanın iç birim normali (metre uzayı; verilmezse eski
+    //   tam-kalınlık merkezli davranış = sözleşme/geriye-uyum korunur). Kapı/pencere BOŞLUK hizaları t-ekseninde
+    //   hesaplandığından (nIn yalnız kalınlık-ekseni ofseti) span'lar DEĞİŞMEZ.
+    function wallEdge(a,b,wallMat,nIn){
       wallMat=wallMat||matWall;   // M4: oda-başına boya; verilmezse paylaşılan nötr duvar (sözleşme korunur)
       const dx=b[0]-a[0],dz=b[1]-a[1],len=Math.hypot(dx,dz); if(len<0.05) return;
       const ux=dx/len,uz=dz/len, ang=-Math.atan2(dz,dx);
+      // U1: boyalı kutular için kalınlık + iç-yön ofseti. nIn yoksa eski (tam WALL_T, ofsetsiz).
+      const halfT=nIn?WALL_T/2:WALL_T;                  // her oda kendi yarısını doldurur (nIn varsa)
+      const ofx=nIn?nIn[0]*WALL_T/4:0, ofz=nIn?nIn[1]*WALL_T/4:0;   // merkezi iç tarafa WALL_T/4 kaydır
       const gaps=[], winGaps=[];
       doorSegs.forEach(function(d){
         const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
@@ -924,9 +933,9 @@
       });
       gaps.sort(function(p,q){return p[0]-q[0];});
       function seg(s0,s1){ if(s1-s0<0.04) return;
-        const wm=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,WALL_H,WALL_T),wallMat);
+        const wm=new THREE.Mesh(new THREE.BoxGeometry(s1-s0,WALL_H,halfT),wallMat);   // U1: kendi yarısı
         // Q6: duvar tabanını zemine 2 cm GÖM (alt=y=-0.02) → duvar-zemin ekinde ışık sızıntısı/gölge-boşluğu biter (üst ihmal edilir kayar)
-        wm.position.set(a[0]+ux*(s0+s1)/2, (roofOn?WALL_H/2:WALL_H*WALL_LOW/2)-0.02, a[1]+uz*(s0+s1)/2);
+        wm.position.set(a[0]+ux*(s0+s1)/2+ofx, (roofOn?WALL_H/2:WALL_H*WALL_LOW/2)-0.02, a[1]+uz*(s0+s1)/2+ofz);
         wm.rotation.y=ang; wm.scale.y=roofOn?1:WALL_LOW;
         wm.castShadow=true; wm.userData.isWall=true; walls.add(wm);
       }
@@ -935,10 +944,10 @@
       winGaps.forEach(function(g){
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
         const sill=g[2], wh=g[3], top=Math.min(WALL_H, sill+wh);
-        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,WALL_T),wallMat);  // parapet (tam boyda yok)
-          pw.position.set(mx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
-        if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,WALL_T),wallMat); // lento üstü
-          lw.position.set(mx,top+lh/2,mz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
+        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,halfT),wallMat);  // parapet (tam boyda yok) — U1: kendi yarısı
+          pw.position.set(mx+ofx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz+ofz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
+        if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,halfT),wallMat); // lento üstü — U1: kendi yarısı
+          lw.position.set(mx+ofx,top+lh/2,mz+ofz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
         addWindowGlass(mx,mz,gw,ang,sill,wh,walls);
       });
       gaps.forEach(function(g){
@@ -946,8 +955,8 @@
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
         const th=new THREE.Mesh(new THREE.BoxGeometry(gw,0.04,Math.max(0.2,WALL_T)),matDoor);  // eşik: her açıdan "kapı burada" (duvar kalınlığını kapsasın)
         th.position.set(mx,0.02,mz); th.rotation.y=ang; th.receiveShadow=true; th.userData.isSill=true; walls.add(th);
-        const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,WALL_T),wallMat); // lentö: yalnız tam-yükseklikte görünür
-        ln.position.set(mx,(DOOR_H+WALL_H)/2,mz); ln.rotation.y=ang; ln.castShadow=true; lintels.add(ln);
+        const ln=new THREE.Mesh(new THREE.BoxGeometry(gw,WALL_H-DOOR_H,halfT),wallMat); // lentö: yalnız tam-yükseklikte görünür — U1: kendi yarısı
+        ln.position.set(mx+ofx,(DOOR_H+WALL_H)/2,mz+ofz); ln.rotation.y=ang; ln.castShadow=true; lintels.add(ln);
         // C1-3: KAPALI KANAT — kapısız ev "sakil" + nano tek-kapılı dolabı kapı sanabiliyor. Boşluğa
         //   ince panel + kasa (jamb) + kol imasi ekle. Sahne mesh'i → iso snapshot + kamera B yoluna
         //   OTOMATİK girer. SPAN mantığına DOKUNMAZ (mx/mz/gw/ang yalnız OKUNUR). Kanat DOOR_H yüksekliğinde;
@@ -972,7 +981,17 @@
       const cm=new THREE.Mesh(cg,matCeil); cm.position.y=WALL_H; cm.receiveShadow=true; cm.userData.isCeiling=true; ceil.add(cm);
       // duvarlar = oda kenarları (kapı boşlukları oyulmuş) — M4: o odanın boya malzemesiyle
       const P=o.polygon_px;
-      for(let i=0;i<P.length;i++) wallEdge(px2m(map,P[i][0],P[i][1]), px2m(map,P[(i+1)%P.length][0],P[(i+1)%P.length][1]), oWallMat);
+      // U1: oda poligonunu metreye çevir + kütle-merkezi (iç normal referansı) — her kenarın odaya BAKAN yönü
+      const Pm=P.map(function(p){ return px2m(map,p[0],p[1]); });
+      let ccx=0,ccz=0; Pm.forEach(function(p){ ccx+=p[0]; ccz+=p[1]; }); ccx/=Pm.length; ccz/=Pm.length;
+      for(let i=0;i<Pm.length;i++){
+        const A2=Pm[i], B2=Pm[(i+1)%Pm.length];
+        const edx=B2[0]-A2[0], edz=B2[1]-A2[1], el=Math.hypot(edx,edz)||1;
+        // kenar normali (iki aday) → oda merkezine bakan işaret = iç normal (paylaşılan duvarda her oda kendi yarısına çeker)
+        let nx=-edz/el, nz=edx/el; const mx2=(A2[0]+B2[0])/2, mz2=(A2[1]+B2[1])/2;
+        if((ccx-mx2)*nx+(ccz-mz2)*nz<0){ nx=-nx; nz=-nz; }
+        wallEdge(A2, B2, oWallMat, [nx,nz]);
+      }
       // etiket — pole-of-inaccessibility çapası (komşu odaya taşmaz); yoksa centroid'e düş
       let la=o.label_anchor_px||o.centroid_px;
       if(!la){ la=P.reduce(function(s,p){return [s[0]+p[0],s[1]+p[1]];},[0,0]).map(function(v){return v/P.length;}); }
