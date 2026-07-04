@@ -585,22 +585,21 @@
       '#v3dFurnDock .pit .pn{font-size:8.6px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:56px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
       '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer}'+
       '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:#7bbf8a;cursor:pointer}'+
-      // M2: MALZEME DOCK (mobilya dock görsel dilini paylaşır)
-      '#v3dMatDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;font:12px/1.4 system-ui,sans-serif}'+
-      '#v3dMatDock .col{display:flex;flex-direction:column;gap:5px}'+
-      '#v3dMatDock .sep{width:1px;background:rgba(255,255,255,.1);align-self:stretch}'+
-      '#v3dMatDock .lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;opacity:.62;font-weight:700;margin-bottom:1px}'+
-      '#v3dMatDock .swgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;max-width:240px}'+
-      '#v3dMatDock .sw{display:flex;flex-direction:column;align-items:center;gap:3px;background:#2c2c33;border:1px solid transparent;border-radius:9px;padding:4px 3px;cursor:pointer;font-family:inherit}'+
-      '#v3dMatDock .sw:hover{background:#3a3a44;border-color:rgba(201,161,107,.5)}'+
-      '#v3dMatDock .sw.on{border-color:#7bbf8a;background:#33403a}'+
-      '#v3dMatDock .sw .chip{width:40px;height:26px;border-radius:5px;border:1px solid rgba(0,0,0,.25)}'+
-      '#v3dMatDock .sw .sn{font-size:8.6px;line-height:1.1;color:#d8d2c6;text-align:center;max-width:52px}'+
-      '#v3dMatDock .roomrow{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;max-width:210px;flex-wrap:wrap}'+
-      '#v3dMatDock .roomtag{background:#c9a16b;color:#1a1a1f;border-radius:7px;padding:3px 8px;font-weight:700;font-size:11px}'+
-      '#v3dMatDock .reset{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
+      // R3: MALZEME DOCK — kamera dock kadar mütevazı: TEK yatay satır, SABİT yükseklik, sarma YOK (görünümü kapatmaz).
+      '#v3dMatDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:7px 10px;display:flex;gap:10px;align-items:center;flex-wrap:nowrap;max-width:min(94vw,880px);font:12px/1.4 system-ui,sans-serif}'+
+      '#v3dMatDock .grp{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}'+
+      '#v3dMatDock .sep{width:1px;height:26px;background:rgba(255,255,255,.1);flex:none}'+
+      '#v3dMatDock .lbl{font-size:9px;letter-spacing:.05em;text-transform:uppercase;opacity:.6;font-weight:700;flex:none}'+
+      '#v3dMatDock .sws{display:flex;gap:4px;flex-wrap:nowrap}'+
+      '#v3dMatDock .sw{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:#2c2c33;border:1px solid transparent;border-radius:7px;padding:0;cursor:pointer;font-family:inherit;flex:none}'+
+      '#v3dMatDock .sw:hover{border-color:rgba(201,161,107,.6)}'+
+      '#v3dMatDock .sw.on{border-color:#7bbf8a}'+
+      '#v3dMatDock .sw .chip{width:20px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.25)}'+
+      '#v3dMatDock .roomtag{background:#c9a16b;color:#1a1a1f;border-radius:7px;padding:3px 8px;font-weight:700;font-size:11px;white-space:nowrap;flex:none}'+
+      '#v3dMatDock .wet{opacity:.7;font-size:9.5px;flex:none}'+
+      '#v3dMatDock .reset{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 9px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}'+
       '#v3dMatDock .reset:hover{filter:brightness(1.15)}'+
-      '#v3dMatDock .hint{font-size:10.5px;opacity:.72;max-width:220px;line-height:1.35;min-height:22px}'+
+      '#v3dMatDock .hint{font-size:10.5px;opacity:.72;white-space:nowrap;flex:none}'+
       // B2-3 yüzen mini araç çubuğu
       '.v3dfb{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:8px;background:#33333c;color:#e8e6e0;cursor:pointer;padding:0}'+
       '.v3dfb:hover{background:#c9a16b;color:#1a1a1f}.v3dfbdanger{background:#5a3a3a;color:#f0d8d8}.v3dfbdanger:hover{background:#7a3a3a;color:#fff}'+
@@ -3024,29 +3023,28 @@
     let floors=MAT_PRESETS.filter(function(p){ return p.group==='floor'; });
     if(wet) floors=floors.slice().sort(function(a,b){ return (a.cls==='seramik'?0:1)-(b.cls==='seramik'?0:1); });
     const walls=MAT_PRESETS.filter(function(p){ return p.group==='wall'; });
+    // R3: swatch = sadece renk karesi (tek satır sığsın); isim tooltip'te.
     function swatch(p, slot, active){
       return '<button data-matslot="'+slot+'" data-matkey="'+p.key+'" class="sw'+(active?' on':'')+'" title="'+p.name+'">'+
-        '<span class="chip" style="background:'+matSwatchCss(p)+'"></span><span class="sn">'+p.name+'</span></button>';
+        '<span class="chip" style="background:'+matSwatchCss(p)+'"></span></button>';
     }
+    // R3: TEK yatay satır. Global düğmeler (Türe göre ata / Tümünü sıfırla) HEP görünür; oda seçilince swatch grupları eklenir.
     let html='<div class="dk">';
-    // sütun 1: seçili oda + varsayılana dön
-    html+='<div class="col" style="max-width:210px"><div class="lbl">Oda</div>'+
-      '<div class="roomrow">'+(r?('<span class="roomtag">'+(r.name||r.id)+'</span>'+(wet?'<span style="opacity:.7;font-size:10px">ıslak hacim</span>':'')):'<span style="opacity:.7">Mesh\'te bir odaya tıkla</span>')+'</div>'+
-      (r?'<button class="reset" data-v3d="matreset">Varsayılana dön</button>':'')+
-      '<div style="display:flex;gap:5px;flex-wrap:wrap"><button class="reset" data-v3d="matauto" title="Oda türüne göre tüm odalara tutarlı malzeme">Türe göre ata</button>'+
-      '<button class="reset" data-v3d="matresetall" title="Tüm odaları renk-koda döndür">Tümünü sıfırla</button></div>'+
-      '<div class="hint" id="v3dMatHint"></div></div>';
-    html+='<div class="sep"></div>';
-    // sütun 2: zemin swatch'ları
-    html+='<div class="col"><div class="lbl">Zemin'+(wet?' (seramik önce)':'')+'</div><div class="swgrid">'+
-      floors.map(function(p){ return swatch(p,'floor',sel.floor===p.key); }).join('')+'</div></div>';
-    html+='<div class="sep"></div>';
-    // sütun 3: duvar swatch'ları
-    html+='<div class="col"><div class="lbl">Duvar</div><div class="swgrid">'+
-      walls.map(function(p){ return swatch(p,'wall',sel.wall===p.key); }).join('')+'</div></div>';
+    if(r){
+      html+='<span class="roomtag">'+(r.name||r.id)+'</span>'+(wet?'<span class="wet">ıslak</span>':'')+
+        '<div class="sep"></div>'+
+        '<div class="grp"><span class="lbl">Zemin</span><div class="sws">'+floors.map(function(p){ return swatch(p,'floor',sel.floor===p.key); }).join('')+'</div></div>'+
+        '<div class="sep"></div>'+
+        '<div class="grp"><span class="lbl">Duvar</span><div class="sws">'+walls.map(function(p){ return swatch(p,'wall',sel.wall===p.key); }).join('')+'</div></div>'+
+        '<div class="sep"></div>'+
+        '<button class="reset" data-v3d="matreset">Varsayılana dön</button>';
+    } else {
+      html+='<span class="hint">Mesh\'te odaya tıkla</span><div class="sep"></div>';
+    }
+    html+='<button class="reset" data-v3d="matauto" title="Oda türüne göre tüm odalara tutarlı malzeme">Türe göre ata</button>'+
+      '<button class="reset" data-v3d="matresetall" title="Tüm odaları renk-koda döndür">Tümünü sıfırla</button>';
     html+='</div>';
     dk.innerHTML=html;
-    setMatHint(lastMatHint);
   }
 
   /* ====================== MOBİLYA — otomatik yerleşim (Faz 3; kural-tabanlı + override) ======================
