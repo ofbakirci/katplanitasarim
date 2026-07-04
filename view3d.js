@@ -36,6 +36,8 @@
   //   pipClosed: kullanıcı × ile kapattı → seçili kamera olsa da gösterme (yeniden seçince/aç ile geri gelir).
   //   pipBig: 2.4× büyütülmüş mü. _snapBusy: snapshot pass'i çalışıyor → PiP scissor pass'i ATLA (renderer setSize çatışması).
   const PIP_W=232, PIP_BIG=1.9;                            // kapalı PiP genişliği (px) + büyütme çarpanı
+  const MINI_W=170, MINI_H=130;                            // R8: WASD minimap çerçeve boyutu (sol-alt kuşbakışı)
+  let miniCam=null;                                        // R8: minimap ortho tepe kamera (lazy)
   let pipCam=null, pipClosed=false, pipBig=false, _snapBusy=false;
   // ── W1: WASD FIRST-PERSON GEZİNTİ (kat içinde POV gezmek) ──
   //   walkOn: gezinti aktif (pointer-lock + WASD + fare-bak). walkSavedView: girişten ÖNCEKİ görüş (çıkışta BİREBİR geri).
@@ -516,6 +518,13 @@
         // gövde: ŞEFFAF pencere (16:9) — arkasındaki WebGL canvas'a scissor pass ile o kamera görüntüsü çizilir.
         //   Bu div OPAK OLMAMALI yoksa canvas render'ını örter (siyah kalır). pointer-events:none = tıklama alta geçer.
         '<div id="v3dPipBody" style="width:100%;height:'+Math.round(PIP_W*9/16)+'px;background:transparent;pointer-events:none"></div>'+
+      '</div>'+
+      // R8: WASD MİNİMAP — gezinti sırasında sol-altta kuşbakışı (ortho tepe kamera, sabit çerçeve, plan tamamı) +
+      //   oyuncu konum/yön OKU (SVG overlay). Gövde ŞEFFAF (PiP deseni) → loop scissor-pass o bölgeye ortho-top çizer.
+      //   Yalnız gezintide görünür (enter/exit toggle). pointer-events:none = tıklama alta geçer.
+      '<div id="v3dMiniMap" style="position:absolute;left:14px;bottom:14px;z-index:8;display:none;width:'+MINI_W+'px;height:'+MINI_H+'px;background:rgba(20,20,26,.55);border:1px solid rgba(255,255,255,.18);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.5);overflow:hidden;pointer-events:none">'+
+        '<div id="v3dMiniBody" style="position:absolute;inset:0;background:transparent"></div>'+
+        '<svg id="v3dMiniMarker" viewBox="0 0 '+MINI_W+' '+MINI_H+'" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></svg>'+
       '</div>';
     document.body.appendChild(overlay);
     // buton stilleri
@@ -1355,6 +1364,64 @@
   }
   function updatePipTitle(){ const t=overlay&&overlay.querySelector('#v3dPipTitle');
     if(t) t.textContent=(activeCamIdx>=0?('K'+(activeCamIdx+1)+' görüşü'):'Kamera görüşü'); }
+
+  // R8: WASD MİNİMAP — gezinti sırasında sol-alt kuşbakışı. PiP scissor-pass DESENİNİ yeniden kullanır:
+  //   ortho TEPE kamera (plan tamamını sabit çerçeveye sığdırır), scissor'lı ikinci render pass minimap
+  //   dikdörtgenine çizer; çatı KAPALI (kuşbakışı → içi görünsün), etiket/gizmo gizli. Sonra SVG marker'ı
+  //   oyuncu konum/yön (üçgen) ile günceller. _snapBusy iken ATLA (PiP ile aynı guard). Yalnız walkOn'da.
+  function renderMiniMap(){
+    if(_snapBusy || !renderer || !scene || !cam) return;
+    const mini=overlay&&overlay.querySelector('#v3dMiniMap');
+    const body=overlay&&overlay.querySelector('#v3dMiniBody');
+    if(!mini||!body) return;
+    const hx=(scene.__hx!=null?scene.__hx:12), hz=(scene.__hz!=null?scene.__hz:12);
+    const canvas=renderer.domElement;
+    const cr=canvas.getBoundingClientRect(), br=body.getBoundingClientRect();
+    const w=Math.max(2,Math.round(br.width)), h=Math.max(2,Math.round(br.height));
+    const x=Math.round(br.left-cr.left);
+    const y=Math.round(cr.bottom-br.bottom);                 // alttan ölç (Y flip), CSS piksel (PiP ile aynı)
+    if(w<2||h<2) return;
+    // ortho frustum: plan bbox'ını (2hx × 2hz) minimap aspect'ine sığdır (contain — hepsi görünür), %8 pay.
+    const margin=1.08, viewAspect=w/h, planAspect=(2*hx)/(2*hz);
+    let halfX, halfZ;
+    if(planAspect>viewAspect){ halfX=hx*margin; halfZ=halfX/viewAspect; }
+    else { halfZ=hz*margin; halfX=halfZ*viewAspect; }
+    if(!miniCam) miniCam=new THREE.OrthographicCamera(-1,1,1,-1,0.1,400);
+    miniCam.left=-halfX; miniCam.right=halfX; miniCam.top=halfZ; miniCam.bottom=-halfZ; miniCam.updateProjectionMatrix();
+    miniCam.position.set(0,200,0); miniCam.up.set(0,0,-1); miniCam.lookAt(0,0,0);   // tepeden düz aşağı, kuzey=-Z yukarı
+    const savGiz=camGizmos?camGizmos.visible:true;
+    const labels=scene.__labels, savLbl=labels?labels.visible:true;
+    const savRoof=roofOn;
+    const ceilG=scene.__ceiling, savCeil=ceilG?ceilG.visible:false;
+    const savVp=renderer.getViewport(new THREE.Vector4());
+    const savSc=renderer.getScissor(new THREE.Vector4());
+    const savScTest=renderer.getScissorTest();
+    try{
+      if(camGizmos) camGizmos.visible=false;
+      if(labels) labels.visible=false;
+      if(roofOn){ roofOn=false; applyRoof(); }               // kuşbakışı: çatı/duvar-üstü KALK (içi görünsün)
+      if(ceilG) ceilG.visible=false;                         // tavan kapalı (yoksa üstten tavan görürüz)
+      renderer.setViewport(x,y,w,h); renderer.setScissor(x,y,w,h); renderer.setScissorTest(true);
+      renderer.render(scene,miniCam);
+    } finally {
+      renderer.setScissorTest(savScTest);
+      renderer.setViewport(savVp.x,savVp.y,savVp.z,savVp.w);
+      renderer.setScissor(savSc.x,savSc.y,savSc.z,savSc.w);
+      if(labels) labels.visible=savLbl;
+      if(camGizmos) camGizmos.visible=savGiz;
+      if(ceilG) ceilG.visible=savCeil;
+      if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }
+    }
+    // SVG marker: oyuncu (cam.position dünya) → minimap px. Ortho: worldX∈[-halfX,halfX]→[0,MINI_W], worldZ benzer.
+    const svg=overlay.querySelector('#v3dMiniMarker'); if(!svg) return;
+    const mx=(cam.position.x+halfX)/(2*halfX)*MINI_W;
+    const mz=(cam.position.z+halfZ)/(2*halfZ)*MINI_H;         // +Z aşağı (up=-Z → -Z ekranda yukarı)
+    // yön oku: walkYaw (0=-Z=yukarı, +X saat yönü). SVG'de yukarı=-Y. Üçgeni yaw kadar döndür.
+    const deg=walkYaw*180/Math.PI;
+    svg.innerHTML='<g transform="translate('+mx.toFixed(1)+','+mz.toFixed(1)+') rotate('+deg.toFixed(1)+')">'+
+      '<circle r="7" fill="rgba(224,132,58,.25)"/>'+
+      '<path d="M0,-7 L4.5,5 L0,2.5 L-4.5,5 Z" fill="#e0843a" stroke="#1a1a1f" stroke-width="0.6"/></g>';
+  }
   // PiP boyutu (kapalı/büyük). body yüksekliği 16:9 sabit.
   function applyPipSize(){ const pipEl=overlay&&overlay.querySelector('#v3dPip'), body=overlay&&overlay.querySelector('#v3dPipBody');
     if(!pipEl||!body) return;
@@ -1545,6 +1612,7 @@
     cam.fov=72; cam.up.set(0,1,0); applyWalkLook();           // geniş-açı iç mekan hissi
     hideChromeForWalk(true);
     const hint=ensureWalkHint(); if(hint) hint.style.display='block';
+    const mini=overlay&&overlay.querySelector('#v3dMiniMap'); if(mini) mini.style.display='block';   // R8: minimap göster
     renderRail();
     // pointer lock iste (kullanıcı hareketiyle tetiklendi → tarayıcı izin verir)
     const el=renderer.domElement;
@@ -1573,6 +1641,7 @@
     if(walkAmbient&&walkAmbient.parent) walkAmbient.parent.remove(walkAmbient);
     hideChromeForWalk(false);
     const hint=overlay&&overlay.querySelector('#v3dWalkHint'); if(hint) hint.style.display='none';
+    const mini=overlay&&overlay.querySelector('#v3dMiniMap'); if(mini) mini.style.display='none';   // R8: minimap gizle (çıkışta kaybolur)
     if(walkSavedView) restoreView(walkSavedView);            // önceki görüşe BİREBİR dön
     walkSavedView=null;
     renderRail();
@@ -3764,7 +3833,7 @@
   }
   function loop(){ raf=requestAnimationFrame(loop);
     if(overlay.style.display!=='none'&&controls){
-      if(walkOn){ walkStep(); renderer.render(scene,cam); return; }   // W1: gezinti kendi kamera durumunu sürer (orbit/PiP/koni pass ATLA)
+      if(walkOn){ walkStep(); renderer.render(scene,cam); renderMiniMap(); return; }   // W1: gezinti kendi kamera durumunu sürer (orbit/PiP/koni pass ATLA); R8: minimap scissor-pass (ana pass'ten SONRA)
       controls.update(); renderer.render(scene,cam);
       renderPip();                                           // B1-R (R2): CANLI PiP — seçili kamera perspektifi (scissor pass, sadece kamera grubu+seçim varken)
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
