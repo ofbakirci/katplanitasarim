@@ -1945,6 +1945,58 @@ function generate(keepCuts){
       for(let L=hi0; L>hiServed; L--){ if(!evacuateLine(L)) break; }   // sağ/alt dış uçtan içeri
     });
   }
+  /* --- K3: DEGENERATE koridor UCU (corridorMinWidth < REG.koridorMin). rectifyCorridor(Ends)
+         genişlik-körü bir boğumu (ör. eğik/çentikli tabanda koridorun UÇ sütunu 2 hücreye =
+         1 m'ye düşmesi) kaçırabilir → checks.js "koridor daralmış" (kaçış/erişim güvenliği).
+         Çözüm: koridorun UÇ (dış) hizalarını dıştan içeri tara; bir hiza koridor asgarisinin
+         (REG.koridorMin) altında dik-kesit veriyorsa o BOĞULAN sütunu bir BÜTÜN olarak komşu
+         odaya KASKAD boşalt (rectifyCorridorEnds'ün attempt/evacuate deseni; connectivity +
+         bad-sayısı-artmama guard'ları aynen). İç (iki yanı ≥asgari) boğum DRAIN edilmez —
+         yalnız gerçek uç budanır (koridor ikiye bölünmez: healDisconnected/regConnected mühür
+         dokunulmaz). Boğum içerdeyse (drain edilemez) bad yine dürüstçe raporlanır. */
+  function rectifyCorridorPinch(){
+    const minCells=Math.ceil(REG.koridorMin/M - 1e-9);        // asgari dik-kesit hücre sayısı (1,2 m → 3 hücre)
+    let badRef=collectChecks().filter(o=>o.s==='bad').length;
+    regions.filter(g=>g.type==='koridor'&&g.cells.length).forEach(kor=>{
+      let r0=1e9,r1=-1e9,c0=1e9,c1=-1e9;
+      kor.cells.forEach(i=>{const r=(i/cols)|0,c=i%cols; if(r<r0)r0=r;if(r>r1)r1=r;if(c<c0)c0=c;if(c>c1)c1=c;});
+      const horiz=(c1-c0)>=(r1-r0);
+      const lineOf=i=>horiz?(i%cols):((i/cols)|0);
+      const perp=i=>horiz?((i/cols)|0):(i%cols);
+      const lo0=horiz?c0:r0, hi0=horiz?c1:r1;
+      const set=new Set(kor.cells);
+      const secWidth=line=>{ const arr=[]; kor.cells.forEach(i=>{ if(lineOf(i)===line) arr.push(perp(i)); });
+        if(!arr.length) return 0; arr.sort((a,b)=>a-b); let mx=1,cur=1;
+        for(let k=1;k<=arr.length;k++){ if(k<arr.length&&arr[k]===arr[k-1]+1)cur++; else{ if(cur>mx)mx=cur; cur=1; } } return mx; };
+      /* KASKAD boşalt (rectifyCorridorEnds attempt ile aynı): sütunu tek yöne akıt */
+      const attempt=(L,sink)=>{
+        const moves=[], touched=new Set();
+        const pref = sink>0 ? (horiz?[[1,0],[-1,0]]:[[0,1],[0,-1]]) : (horiz?[[-1,0],[1,0]]:[[0,-1],[0,1]]);
+        for(let pass=0; pass<REG.iter.corridorEndDrain; pass++){ let moved=false;
+          const cs=kor.cells.filter(i=>lineOf(i)===L).sort((a,b)=> sink>0? perp(b)-perp(a) : perp(a)-perp(b));
+          for(const i of cs){ if(cm[i]!==kor.id) continue; const r=(i/cols)|0,c=i%cols;
+            for(const [dr,dc] of pref){ const rr=r+dr,cc=c+dc; if(rr<0||cc<0||rr>=rows||cc>=cols) continue;
+              const j=rr*cols+cc; if(!inside[j]||cm[j]<0||cm[j]===kor.id) continue;
+              const h=regions[cm[j]]; if(isStructReg(h)||h.type==='koridor'||unitOfRoom(h.id)<0) continue;
+              kor.cells=kor.cells.filter(x=>x!==i); h.cells.push(i); cm[i]=h.id;
+              moves.push({i,hId:h.id}); touched.add(h.id); moved=true; break; } }
+          if(!moved) break;
+        }
+        calcRegionMetrics(kor,cols,minX,minY); touched.forEach(id=>calcRegionMetrics(regions[id],cols,minX,minY));
+        let ok = !kor.cells.some(i=>lineOf(i)===L)
+              && (!kor.cells.length || regConnected(kor))
+              && [...touched].every(id=>regConnected(regions[id]));
+        if(ok){ const b=collectChecks().filter(o=>o.s==='bad').length; if(b>badRef) ok=false; else badRef=b; }
+        if(!ok){ moves.forEach(({i,hId})=>{ const h=regions[hId]; h.cells=h.cells.filter(x=>x!==i); kor.cells.push(i); cm[i]=kor.id; });
+          calcRegionMetrics(kor,cols,minX,minY); touched.forEach(id=>calcRegionMetrics(regions[id],cols,minX,minY)); }
+        return ok;
+      };
+      const evac=L=> attempt(L,1) || attempt(L,-1);
+      /* DIŞTAN içeri: uç hiza asgarinin altındaysa buda; asgariye ulaşınca dur (iç boğum korunur) */
+      for(let L=lo0; L<=hi0; L++){ if(secWidth(L)>=minCells) break; if(!evac(L)) break; }
+      for(let L=hi0; L>=lo0; L--){ if(secWidth(L)>=minCells) break; if(!evac(L)) break; }
+    });
+  }
   /* --- (c) bölge-sinyali kanıtlı kural: oda dikdörtgenliği. region_signal.py 39 çiftte
          oda dikdörtgenliği (hücre/bbox = mean_rect ölçütü) +%5,9 (%85 tutarlı) ölçtü —
          kullanıcı L/çentikli odaları düzeltip dikdörtgene yakınlaştırıyor. moveWallStep
@@ -2314,6 +2366,7 @@ function generate(keepCuts){
   plan.wallRuns=computeWallRuns();
   PROF.wrap('rectifyCorridor', rectifyCorridor); // (c) ortak hol israfını dairelere aktar — bkz fonksiyon üstü yorum
   PROF.wrap('rectifyCorridorEnds', rectifyCorridorEnds); // apartman holü cepheye dayanan ölü UÇLARINI odalara devret — bkz fonksiyon üstü yorum
+  PROF.wrap('rectifyCorridorPinch', rectifyCorridorPinch); // K3: koridor UÇ boğumu (corridorMinWidth < REG.koridorMin) budama
   PROF.wrap('rectifyRoomShape', rectifyRoomShape); // (c) oda dikdörtgenliği — bkz fonksiyon üstü yorum
   PROF.wrap('rectifyUnitBalance', rectifyUnitBalance); // (c) daire alan dengeleme — bkz fonksiyon üstü yorum
   regions.forEach(g=>calcRegionMetrics(g, cols, minX, minY));
