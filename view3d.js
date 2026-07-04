@@ -47,6 +47,11 @@
   let walkRay=null;                                          // gezinti çarpışması için ayrılmış Raycaster (picker'dan bağımsız)
   let walkLamp=null, walkAmbient=null;                        // W3: gezinti-özel iç aydınlatma (kafa lambası + fill); kapalı iç mekan karanlık kalmasın
   const WALK_EYE=1.6, WALK_SPEED=2.5, WALK_RUN=4.0, WALK_BUFFER=0.25, WALK_PITCH_MAX=85*Math.PI/180;
+  // U2: GEZİNTİ AYDINLATMA — tek ayar nesnesi (NAV deseni). Kafa feneri "patlak ışık" (blown-out) idi:
+  //   önceki lampInt 0.35 + range 16 + fillInt 0.85 birlikte yüzeyleri yakıyordu. Değerler kısıldı +
+  //   fener menzili daraltılıp decay artırıldı (yakın mesafe okunur, uzak yumuşak düşer). Sahne ambient
+  //   (0.38) + hemisphere fill zaten odayı taşıyor → fener yalnız önü hafif vurgular.
+  const WALK_LIGHT={ lampColor:0xfff2e0, lampInt:0.16, lampRange:7, lampDecay:2.2, fillSky:0xfff6ea, fillGround:0xb8b0a4, fillInt:0.5 };
   // ── katlanabilir panel: sağ kenarda ikon-rail + açılır çekmece (mesh'i örtmez) ──
   let activeGroup=null, lockedViewRef=null, onReRenderCb=null, angleDrift=false, lastHint='';
   // A4: KUŞBAKIŞI KİLİDİ — kamera/mobilya grubunda varsayılan ÜST açı + döndürme kapalı (pan+zoom serbest).
@@ -1483,8 +1488,11 @@
     // W3: iç aydınlatma — kapalı çatı/tavan key ışığı gölgeler → iç mekan KARANLIK. Gezinti-özel
     //   kafa lambası (kameraya bağlı point) + yumuşak fill ambient ekle (yalnız gezinti; çıkışta kaldır).
     if(scene){
-      if(!walkLamp){ walkLamp=new THREE.PointLight(0xfff2e0, 0.35, 16, 1.7); }    // kafa lambası: yakın hacmi yumuşak vurgular (patlatmaz)
-      if(!walkAmbient){ walkAmbient=new THREE.HemisphereLight(0xfff6ea, 0xb8b0a4, 0.85); }  // iç mekan gündüz fill: tavan aydınlık, zemin hafif koyu → oda BÜTÜN aydınlık okunur
+      // U2: değerler WALK_LIGHT'tan (patlak-ışık düzeltmesi: kısık fener + kısa menzil/hızlı düşüş + ölçülü fill)
+      if(!walkLamp){ walkLamp=new THREE.PointLight(WALK_LIGHT.lampColor, WALK_LIGHT.lampInt, WALK_LIGHT.lampRange, WALK_LIGHT.lampDecay); }    // kafa lambası: yakın hacmi yumuşak vurgular (patlatmaz)
+      else { walkLamp.intensity=WALK_LIGHT.lampInt; walkLamp.distance=WALK_LIGHT.lampRange; walkLamp.decay=WALK_LIGHT.lampDecay; }             // tekrar girişte güncel ayar
+      if(!walkAmbient){ walkAmbient=new THREE.HemisphereLight(WALK_LIGHT.fillSky, WALK_LIGHT.fillGround, WALK_LIGHT.fillInt); }  // iç mekan gündüz fill: oda okunur ama yakmaz
+      else { walkAmbient.intensity=WALK_LIGHT.fillInt; }
       scene.add(walkLamp); scene.add(walkAmbient);             // lamba dünya-uzayında; konumu her karede kameraya izler (walkStep)
       walkLamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z);
     }
