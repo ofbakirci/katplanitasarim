@@ -37,6 +37,16 @@
   //   pipBig: 2.4× büyütülmüş mü. _snapBusy: snapshot pass'i çalışıyor → PiP scissor pass'i ATLA (renderer setSize çatışması).
   const PIP_W=232, PIP_BIG=1.9;                            // kapalı PiP genişliği (px) + büyütme çarpanı
   let pipCam=null, pipClosed=false, pipBig=false, _snapBusy=false;
+  // ── W1: WASD FIRST-PERSON GEZİNTİ (kat içinde POV gezmek) ──
+  //   walkOn: gezinti aktif (pointer-lock + WASD + fare-bak). walkSavedView: girişten ÖNCEKİ görüş (çıkışta BİREBİR geri).
+  //   walkKeys: basılı tuşlar. walkYaw/walkPitch: fare-bakış açıları (rad). walkRoofSav/walkGizSav/walkLblSav/walkCeilSav:
+  //   giriş anındaki chrome durumları (çıkışta geri). walkClock: dt için son kare zamanı.
+  let walkOn=false, walkSavedView=null, walkYaw=0, walkPitch=0, walkClock=0;
+  const walkKeys={ w:false, a:false, s:false, d:false, shift:false };
+  let walkRoofSav=false, walkGizSav=true, walkLblSav=true, walkCeilSav=false, walkFogSav=null;
+  let walkRay=null;                                          // gezinti çarpışması için ayrılmış Raycaster (picker'dan bağımsız)
+  let walkLamp=null, walkAmbient=null;                        // W3: gezinti-özel iç aydınlatma (kafa lambası + fill); kapalı iç mekan karanlık kalmasın
+  const WALK_EYE=1.6, WALK_SPEED=2.5, WALK_RUN=4.0, WALK_BUFFER=0.25, WALK_PITCH_MAX=85*Math.PI/180;
   // ── katlanabilir panel: sağ kenarda ikon-rail + açılır çekmece (mesh'i örtmez) ──
   let activeGroup=null, lockedViewRef=null, onReRenderCb=null, angleDrift=false, lastHint='';
   // A4: KUŞBAKIŞI KİLİDİ — kamera/mobilya grubunda varsayılan ÜST açı + döndürme kapalı (pan+zoom serbest).
@@ -144,7 +154,8 @@
     rotcw:'<path d="M21 2v6h-6"/><path d="M21 12A9 9 0 1 1 18.36 5.64L21 8"/>',          // saat yönü döndür
     copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',   // çoğalt
     sofa:'<path d="M5 11V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 13a2 2 0 0 1 4 0v3h10v-3a2 2 0 0 1 4 0v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',  // mobilya rail ikonu
-    swatch:'<path d="M2 13a2 2 0 0 0 2 2h1M2 13V4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v9M2 13a9 9 0 0 0 9 9 9 9 0 0 0 9-9M11 13h9a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-1"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>'  // malzeme rail ikonu (renk paleti/swatch)
+    swatch:'<path d="M2 13a2 2 0 0 0 2 2h1M2 13V4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v9M2 13a9 9 0 0 0 9 9 9 9 0 0 0 9-9M11 13h9a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-1"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>',  // malzeme rail ikonu (renk paleti/swatch)
+    walk:'<circle cx="13" cy="4" r="2"/><path d="M13 6l-2.5 4 3 2 1 6M10.5 10 7 13M13.5 12l3.5 2M6 22l3-6M15 16l1.5 6"/>'  // gezinti rail ikonu (yürüyen kişi)
   };
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
@@ -288,13 +299,14 @@
     if(camUIEnabled) gs.push({k:'camera',i:'camera',t:'Kamera'});
     if(furnUIEnabled) gs.push({k:'furniture',i:'sofa',t:'Mobilya'});
     if(matUIEnabled) gs.push({k:'material',i:'swatch',t:'Malzeme'});
+    gs.push({k:'walk',i:'walk',t:'Gezinti (masaüstü)'});   // W1: WASD first-person POV — pointer-lock, göz hizası 1.6m
     gs.push({k:'export',i:'download',t:'İndir'});
     return gs;
   }
   function renderRail(){
     const rail=overlay&&overlay.querySelector('#v3dRail'); if(!rail) return;
     let h='';
-    railGroups().forEach(function(g){ h+='<button data-grp="'+g.k+'" class="v3drailb'+(activeGroup===g.k?' on':'')+'" title="'+g.t+'">'+ic(g.i,19)+'</button>'; });
+    railGroups().forEach(function(g){ const on=(g.k==='walk')?walkOn:(activeGroup===g.k); h+='<button data-grp="'+g.k+'" class="v3drailb'+(on?' on':'')+'" title="'+g.t+'">'+ic(g.i,19)+'</button>'; });
     // Kapat (X) YALNIZ standalone'da (toolbar 3B). Akış içinde (embedded) yok — adımlar arası gezilir, kapatılmaz.
     if(!embedded) h+='<div class="v3draild"></div><button data-v3d="close" class="v3drailb v3drailx" title="Kapat">'+ic('close',19)+'</button>';
     rail.innerHTML=h;
@@ -598,7 +610,7 @@
       //   data-furntype/furnsel/furndel/furndesel/furnact (B2 mobilya paleti hayalet-akışına geçti),
       //   data-camdel (silme yalnız data-v3d="camdel" ikonundan). Selektörden + handler'dan kaldırıldı.
       const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camtime],[data-camact],[data-camsel],[data-camdesel],[data-furnrot],[data-furncat],[data-furnpick],[data-matslot],[data-v3d]')||e.target;
-      const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ setGroup(gp); return; }
+      const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ if(gp==='walk'){ toggleWalk(); return; } setGroup(gp); return; }
       const ch=t.getAttribute&&t.getAttribute('data-camh'); if(ch){ setCamHeight(ch); return; }
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
       const cm=t.getAttribute&&t.getAttribute('data-cammethod'); if(cm){ setCamRenderMethod(cm); return; }
@@ -1356,6 +1368,252 @@
     if(v.fov){ cam.fov=v.fov; cam.updateProjectionMatrix(); }
     controls.sync(); controls.update();
   }
+
+  /* ====================== W1-W3: WASD FIRST-PERSON GEZİNTİ ======================
+     Kat'ın İÇİNDE göz-hizası (1.6m) POV gezinti. Kamera-YERLEŞTİRME sistemine (camList) DOKUNMAZ —
+     kendi kamera durumunu yönetir, çıkışta restoreView ile önceki görüşe BİREBİR döner.
+     Giriş: Pointer Lock + WASD yürü + fare bak (yaw/pitch). Çarpışma: RAYCAST (duvar+pencere-cam bloklar,
+     kapı kanadı GEÇİLİR) + mobilya ayak-izi bloğu. Tavan AÇIK, etiket/gizmo/dock gizli (C3-4 deseni). */
+  function walkHintHTML(){
+    return 'WASD yürü · Fare bak · Shift koş · Esc çık';
+  }
+  function ensureWalkHint(){
+    if(!overlay) return null;
+    let el=overlay.querySelector('#v3dWalkHint');
+    if(!el){
+      el=document.createElement('div'); el.id='v3dWalkHint';
+      el.style.cssText='position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:8;display:none;'+
+        'background:rgba(20,20,26,.82);color:#e8e6e0;font:12px/1.3 system-ui,sans-serif;padding:7px 14px;'+
+        'border-radius:9px;backdrop-filter:blur(6px);pointer-events:none;white-space:nowrap';
+      overlay.appendChild(el);
+    }
+    el.innerHTML=walkHintHTML();
+    return el;
+  }
+  // gezinti-modu ⇒ mesh dışındaki tüm dock/panel/çip gizlensin (temiz POV). Çıkışta restore etmeye gerek yok
+  //   (mevcut activeGroup renderDrawer ile geri gelir); burada sadece anlık gizleriz.
+  function hideChromeForWalk(hide){
+    if(!overlay) return;
+    ['#v3dDock','#v3dCamDock','#v3dFurnDock','#v3dMatDock','#v3dFurnBar','#v3dPip','#v3dCompareThumb','#v3dLockBtn','#v3dZoomBar','#v3dStatus','#v3dOrb']
+      .forEach(function(sel){ const e=overlay.querySelector(sel); if(e) e.style.visibility=hide?'hidden':''; });
+  }
+  function walkIsCoarse(){
+    return (typeof matchMedia==='function' && matchMedia('(pointer: coarse)').matches)
+        || (typeof navigator!=='undefined' && navigator.maxTouchPoints>0 && !(typeof matchMedia==='function' && matchMedia('(pointer: fine)').matches));
+  }
+  // W1: gezinti başlangıç noktası — bina İÇİNDE mantıklı bir yer (yoksa orbit kamerası dışarıda/yukarıda
+  //   kalır → siyah kadraj). Tercih: apartman holü / antre / en büyük ortak alan / merkeze en yakın oda.
+  //   Dönüş: {x,z} DÜNYA uzayında (grup -cx,-cz ofsetli → oda px2m'den -cx,-cz çıkarılır). Yoksa null.
+  function walkSpawnPoint(){
+    const map=scene&&scene.__map; if(!map) return null;
+    const cx=scene.__cx||0, cz=scene.__cz||0;
+    const cands=[];
+    (map.common_areas||[]).forEach(function(r){ cands.push(r); });
+    (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ cands.push(r); }); });
+    // en GENİŞ oda = en açık görüş hattı (dar antrede duvara bakıp siyah kalmaz). alanı poligon-px ile ölç.
+    function polyAreaPx(P){ let a=0; for(let i=0,j=P.length-1;i<P.length;j=i++) a+=(P[j][0]+P[i][0])*(P[j][1]-P[i][1]); return Math.abs(a/2); }
+    let best=null, bestArea=-1;
+    cands.forEach(function(r){ if(!r.polygon_px||r.polygon_px.length<3) return;
+      if(/MERDİVEN|MERDIVEN|ASANSÖR|ASANSOR|ŞAFT|SAFT|DEPO/i.test(r.name||'')) return;   // çekirdek/depo iç mekan gezintiye uygun değil
+      const ar=polyAreaPx(r.polygon_px); if(ar>bestArea){ bestArea=ar; best=r; } });
+    if(!best) return null;
+    const la=best.label_anchor_px||best.centroid_px; if(!la) return null;
+    const m=px2m(map,la[0],la[1]);
+    const wx=m[0]-cx, wz=m[1]-cz;
+    // bakış yönü: odanın kendi merkezinden UZAK köşesine değil, oda içinde en uzun eksene bak (açık hat).
+    //   basit: poligon merkezinden en uzak köşeye doğru (o yönde en çok mesafe var → duvara yapışmaz).
+    let far=null,fd=-1;
+    best.polygon_px.forEach(function(p){ const pm=px2m(map,p[0],p[1]); const dx=pm[0]-cx-wx, dz=pm[1]-cz-wz; const d=dx*dx+dz*dz; if(d>fd){ fd=d; far=[dx,dz]; } });
+    let aimYaw=null;
+    if(far){ const L=Math.hypot(far[0],far[1])||1; aimYaw=Math.atan2(far[0]/L, -far[1]/L); }
+    return {x:wx,z:wz,room:best,yaw:aimYaw};
+  }
+  function toggleWalk(){
+    if(walkOn){ exitWalk(); return; }
+    // W3 (dokunmatik): coarse-pointer'da pointer-lock + fare-bak yok → giriş yerine ipucu (mobil joystick SONRA)
+    if(walkIsCoarse() || typeof (renderer&&renderer.domElement.requestPointerLock)!=='function'){
+      if(status) status.textContent='Gezinti masaüstünde kullanılabilir (klavye + fare).';
+      const st=overlay&&overlay.querySelector('#v3dStatus'); if(st){ st.textContent='Gezinti masaüstünde kullanılabilir (klavye + fare)'; st.style.display='block'; }
+      return;
+    }
+    enterWalk();
+  }
+  function enterWalk(){
+    if(walkOn || !cam || !controls || !renderer) return;
+    if(compareMode){ /* akış içi: yine izin ver, ama açı-uyarısı gezinti sırasında saçmalar → gizle */ }
+    walkSavedView=getView();
+    // giriş açısından yaw türet (mevcut bakış yönünü koru), pitch'i yatay al (iç mekan doğal başlangıç)
+    const dir=new THREE.Vector3().subVectors(controls.target, cam.position);
+    if(dir.lengthSq()<1e-6) dir.set(0,0,-1);
+    dir.normalize();
+    walkYaw=Math.atan2(dir.x, -dir.z);                       // 0 = -Z'ye bakış
+    walkPitch=0;                                             // göz hizası → düz karşıya bak (yukarı/aşağı fareyle)
+    // bina İÇİNE ışınlan: orbit kamerası dışarıda/yukarıda → göz hizasına düşünce siyah kalırdı
+    const sp=walkSpawnPoint();
+    if(sp){ cam.position.set(sp.x, WALK_EYE, sp.z); if(sp.yaw!=null) walkYaw=sp.yaw; }   // en geniş odaya, açık görüş hattına bak
+    else { cam.position.y=WALK_EYE; }
+    // chrome: tavan+çatı aç (iç mekan), etiket/gizmo/dock/koni gizle (snapCameraDataURL deseni)
+    walkRoofSav=roofOn; walkGizSav=camGizmos?camGizmos.visible:true;
+    const labels=scene&&scene.__labels; walkLblSav=labels?labels.visible:true;
+    const ceilG=scene&&scene.__ceiling; walkCeilSav=ceilG?ceilG.visible:false;
+    if(!roofOn){ roofOn=true; applyRoof(); }
+    if(ceilG) ceilG.visible=true;
+    if(labels) labels.visible=false;
+    if(camGizmos) camGizmos.visible=false;
+    walkFogSav=scene?scene.fog:null; if(scene) scene.fog=null;   // iç mekanda uzak-sis kadrajı boğar → kapat
+    // W3: iç aydınlatma — kapalı çatı/tavan key ışığı gölgeler → iç mekan KARANLIK. Gezinti-özel
+    //   kafa lambası (kameraya bağlı point) + yumuşak fill ambient ekle (yalnız gezinti; çıkışta kaldır).
+    if(scene){
+      if(!walkLamp){ walkLamp=new THREE.PointLight(0xfff2e0, 0.35, 16, 1.7); }    // kafa lambası: yakın hacmi yumuşak vurgular (patlatmaz)
+      if(!walkAmbient){ walkAmbient=new THREE.HemisphereLight(0xfff6ea, 0xb8b0a4, 0.85); }  // iç mekan gündüz fill: tavan aydınlık, zemin hafif koyu → oda BÜTÜN aydınlık okunur
+      scene.add(walkLamp); scene.add(walkAmbient);             // lamba dünya-uzayında; konumu her karede kameraya izler (walkStep)
+      walkLamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z);
+    }
+    walkOn=true;
+    Object.keys(walkKeys).forEach(function(k){ walkKeys[k]=false; });
+    walkClock=(typeof performance!=='undefined'?performance.now():Date.now());
+    cam.fov=72; cam.up.set(0,1,0); applyWalkLook();           // geniş-açı iç mekan hissi
+    hideChromeForWalk(true);
+    const hint=ensureWalkHint(); if(hint) hint.style.display='block';
+    renderRail();
+    // pointer lock iste (kullanıcı hareketiyle tetiklendi → tarayıcı izin verir)
+    const el=renderer.domElement;
+    window.addEventListener('keydown', walkKeyDown, true);
+    window.addEventListener('keyup', walkKeyUp, true);
+    document.addEventListener('pointerlockchange', walkLockChange);
+    document.addEventListener('mousemove', walkMouseMove);
+    if(el.requestPointerLock) try{ el.requestPointerLock(); }catch(e){}
+  }
+  function exitWalk(){
+    if(!walkOn) return;
+    walkOn=false;
+    window.removeEventListener('keydown', walkKeyDown, true);
+    window.removeEventListener('keyup', walkKeyUp, true);
+    document.removeEventListener('pointerlockchange', walkLockChange);
+    document.removeEventListener('mousemove', walkMouseMove);
+    if(document.pointerLockElement) try{ document.exitPointerLock(); }catch(e){}
+    // chrome geri: giriş anındaki durumlar
+    const ceilG=scene&&scene.__ceiling; if(ceilG) ceilG.visible=walkCeilSav;
+    const labels=scene&&scene.__labels; if(labels) labels.visible=walkLblSav;
+    if(camGizmos) camGizmos.visible=walkGizSav;
+    if(roofOn!==walkRoofSav){ roofOn=walkRoofSav; applyRoof(); }
+    if(scene) scene.fog=walkFogSav;
+    // W3: gezinti aydınlatmasını kaldır (ana render/iso/snapshot ışıkları BİREBİR eski kalsın)
+    if(walkLamp&&walkLamp.parent) walkLamp.parent.remove(walkLamp);
+    if(walkAmbient&&walkAmbient.parent) walkAmbient.parent.remove(walkAmbient);
+    hideChromeForWalk(false);
+    const hint=overlay&&overlay.querySelector('#v3dWalkHint'); if(hint) hint.style.display='none';
+    if(walkSavedView) restoreView(walkSavedView);            // önceki görüşe BİREBİR dön
+    walkSavedView=null;
+    renderRail();
+  }
+  function walkLockChange(){
+    // kullanıcı Esc'e bastı → tarayıcı kilidi bıraktı → gezintiden çık (durum tutarlı)
+    if(walkOn && !document.pointerLockElement) exitWalk();
+  }
+  function walkKeyDown(e){
+    if(!walkOn) return;
+    const k=e.key.toLowerCase();
+    if(k==='w'||k==='arrowup'){ walkKeys.w=true; e.preventDefault(); }
+    else if(k==='s'||k==='arrowdown'){ walkKeys.s=true; e.preventDefault(); }
+    else if(k==='a'||k==='arrowleft'){ walkKeys.a=true; e.preventDefault(); }
+    else if(k==='d'||k==='arrowright'){ walkKeys.d=true; e.preventDefault(); }
+    else if(e.key==='Shift'){ walkKeys.shift=true; }
+    // Esc: tarayıcı pointer-lock'u KENDİ bırakır → walkLockChange çıkışı yapar (ayrıca burada yakala)
+    else if(e.key==='Escape'){ exitWalk(); }
+  }
+  function walkKeyUp(e){
+    if(!walkOn) return;
+    const k=e.key.toLowerCase();
+    if(k==='w'||k==='arrowup') walkKeys.w=false;
+    else if(k==='s'||k==='arrowdown') walkKeys.s=false;
+    else if(k==='a'||k==='arrowleft') walkKeys.a=false;
+    else if(k==='d'||k==='arrowright') walkKeys.d=false;
+    else if(e.key==='Shift') walkKeys.shift=false;
+  }
+  function walkMouseMove(e){
+    if(!walkOn || !document.pointerLockElement) return;
+    const sens=0.0022;
+    walkYaw   -= (e.movementX||0)*sens;
+    walkPitch -= (e.movementY||0)*sens;
+    walkPitch = Math.max(-WALK_PITCH_MAX, Math.min(WALK_PITCH_MAX, walkPitch));
+    applyWalkLook();
+  }
+  // yaw/pitch → kamera lookAt hedefi (kamera pozisyonu step'te güncellenir; burada yön)
+  function applyWalkLook(){
+    if(!cam) return;
+    const cp=Math.cos(walkPitch);
+    const fx=Math.sin(walkYaw)*cp, fy=Math.sin(walkPitch), fz=-Math.cos(walkYaw)*cp;
+    cam.up.set(0,1,0);
+    cam.lookAt(cam.position.x+fx, cam.position.y+fy, cam.position.z+fz);
+    if(controls) controls.target.set(cam.position.x+fx, cam.position.y+fy, cam.position.z+fz);
+  }
+  // W2: bir eksende (dünya birim vektörü) belirli mesafe serbest mi? RAYCAST duvar+pencere-cam'e;
+  //   kapı kanadı (isLeaf)/eşik(isSill)/tavan(isCeiling) çarpışma DIŞI → kapı boşluğundan geçilir.
+  //   +mobilya ayak-izi bloğu (ucuz nokta-poligon, buffer'lı). dist = adım + tampon.
+  function walkAxisClear(px,pz, dirx,dirz, dist){
+    if(!scene||!scene.__walls) return true;
+    if(!walkRay) walkRay=new THREE.Raycaster();
+    const wg=scene.__walls;
+    // duvar grubu ofsetli (-cx,-cz) → ray origin DÜNYA uzayında (cam.position da dünya). intersect dünya-uzayı sonuç verir.
+    walkRay.set(new THREE.Vector3(px, WALK_EYE, pz), new THREE.Vector3(dirx,0,dirz).normalize());
+    walkRay.far=dist;
+    const hits=walkRay.intersectObjects(wg.children, false);
+    for(let i=0;i<hits.length;i++){
+      const u=hits[i].object.userData||{};
+      if(u.isLeaf||u.isSill||u.isCeiling) continue;           // kapı kanadı/eşik → geçilir
+      if(u.isWall||u.isWin) return false;                     // duvar + parapet + cam panel → engel
+    }
+    // mobilya: hedef nokta bir ayak-izi (buffer'la şişmiş) içine giriyorsa engel
+    const tx=px+dirx*dist, tz=pz+dirz*dist;
+    for(let i=0;i<furnList.length;i++){
+      const f=furnList[i]; if(!f||!f.pos) continue;
+      if(COLLISION_EXEMPT[f.type]) continue;                  // halı/kilim gibi geçilebilir mobilya
+      const fp=f.__fp; if(!fp) continue;
+      if(pointNearPoly(tx,tz,fp,WALK_BUFFER)) return false;
+    }
+    return true;
+  }
+  // nokta poligona buffer kadar yakın mı (içinde ya da herhangi bir kenara < buffer)
+  function pointNearPoly(x,z,poly,buf){
+    if(pointInPolyM(x,z,poly)) return true;
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+      const a=poly[i],b=poly[j], dx=b[0]-a[0],dz=b[1]-a[1], L2=dx*dx+dz*dz;
+      let t=L2>0?((x-a[0])*dx+(z-a[1])*dz)/L2:0; t=Math.max(0,Math.min(1,t));
+      const cxp=a[0]+t*dx, czp=a[1]+t*dz, ddx=x-cxp, ddz=z-czp;
+      if(ddx*ddx+ddz*ddz < buf*buf) return true;
+    }
+    return false;
+  }
+  // her karede (loop) çağrılır: dt hesapla, WASD yönünü kur, eksen-ayrık çarpışma (duvar boyunca kayar), uygula.
+  function walkStep(){
+    if(!walkOn||!cam) return;
+    const now=(typeof performance!=='undefined'?performance.now():Date.now());
+    let dt=(now-walkClock)/1000; walkClock=now;
+    if(dt>0.1) dt=0.1;                                        // sekme arka-plandan dönünce sıçramayı önle
+    let mf=0, ms=0;                                          // ileri / yan giriş
+    if(walkKeys.w) mf+=1; if(walkKeys.s) mf-=1;
+    if(walkKeys.d) ms+=1; if(walkKeys.a) ms-=1;
+    if(mf===0&&ms===0){ cam.position.y=WALK_EYE; applyWalkLook(); walkSyncLamp(); return; }
+    // yatay düzlemde ileri/yan yön (pitch'ten bağımsız → merdiven yok, düz yürü)
+    const fx=Math.sin(walkYaw), fz=-Math.cos(walkYaw);       // ileri (yatay)
+    const rx=Math.cos(walkYaw), rz=Math.sin(walkYaw);        // sağ (yatay)
+    let vx=fx*mf+rx*ms, vz=fz*mf+rz*ms;
+    const vl=Math.hypot(vx,vz)||1; vx/=vl; vz/=vl;
+    const speed=(walkKeys.shift?WALK_RUN:WALK_SPEED)*dt;
+    const px=cam.position.x, pz=cam.position.z;
+    // eksen-ayrık: X ve Z ayrı test → bir duvara çarpınca diğer eksende kayar
+    if(vx!==0 && walkAxisClear(px,pz, vx,0, Math.abs(vx*speed)+WALK_BUFFER)) cam.position.x=px+vx*speed;
+    if(vz!==0 && walkAxisClear(cam.position.x,pz, 0,vz, Math.abs(vz*speed)+WALK_BUFFER)) cam.position.z=pz+vz*speed;
+    // güvenlik ağı: bina dış bbox'ı DIŞINA çıkma (cephedeki kapı boşluğundan boşluğa yürüyüp kadraj-dışı
+    //   siyaha düşmeyi önler; iç kapı geçişleri bbox İÇİNDE olduğundan etkilenmez). hx/hz merkez-hizalı yarı-en.
+    const hx=(scene&&scene.__hx)||1e9, hz=(scene&&scene.__hz)||1e9, mrg=WALK_BUFFER;
+    cam.position.x=Math.max(-hx+mrg, Math.min(hx-mrg, cam.position.x));
+    cam.position.z=Math.max(-hz+mrg, Math.min(hz-mrg, cam.position.z));
+    cam.position.y=WALK_EYE;                                 // göz hizası sabit (head-bob YOK)
+    applyWalkLook(); walkSyncLamp();
+  }
+  function walkSyncLamp(){ if(walkLamp&&cam) walkLamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z); }
 
   /* ====================== KAMERA-KOYMA MODU (adım 4) ======================
      Raycaster ile zemin mesh'ine tıkla → kamera dünya konumu. İKİ TIKLAMA:
@@ -3374,7 +3632,8 @@
     if(onReRenderCb){ try{ onReRenderCb(getView()); }catch(e){} }
     lockedViewRef=getView(); angleDrift=false; updateAngleWarn();   // yeni açı = yeni kilit
   }
-  function close(){ if(overlay) overlay.style.display='none'; setPlaceMode(false);
+  function close(){ if(walkOn) exitWalk();                   // W1: kapanışta gezinti kilidi bırak
+    if(overlay) overlay.style.display='none'; setPlaceMode(false);
     cancelFurnGhost(); if(activeFurnIdx>=0) selectFurn(-1);   // B2-4: kapanışta yarım hayalet + seçim temizlenir
     const dk=overlay&&overlay.querySelector('#v3dCamDock'); if(dk) dk.style.display='none';
     const fd=overlay&&overlay.querySelector('#v3dFurnDock'); if(fd) fd.style.display='none';
@@ -3384,7 +3643,9 @@
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();} }
   function loop(){ raf=requestAnimationFrame(loop);
-    if(overlay.style.display!=='none'&&controls){ controls.update(); renderer.render(scene,cam);
+    if(overlay.style.display!=='none'&&controls){
+      if(walkOn){ walkStep(); renderer.render(scene,cam); return; }   // W1: gezinti kendi kamera durumunu sürer (orbit/PiP/koni pass ATLA)
+      controls.update(); renderer.render(scene,cam);
       renderPip();                                           // B1-R (R2): CANLI PiP — seçili kamera perspektifi (scissor pass, sadece kamera grubu+seçim varken)
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
       updateOrb();                                           // B1-1: yön küresi iğnesini mevcut azimuta döndür (hafif DOM yazımı)
