@@ -655,6 +655,7 @@ function buildFloorplanMap(opt){
   const fr=fpFraming(), cols=plan.cols, mnX=plan.minX, mnY=plan.minY;
   const mpp=Math.round(1/(fr.S*fr.SC)*1e6)/1e6;            // metre / px
   const classify=(typeof makeWallClassifier==='function')?makeWallClassifier():null;   // L1-A2: brüt alan payı için
+  const regRoomId=new Map();   // bölge referansı → export room_id (balkon "arkasındaki oda" ataması için)
   const units=plan.unitObjs.map((u,k)=>{
     const id='D'+(k+1);
     const live=u.rooms.filter(g=>g.cells.length);
@@ -664,6 +665,7 @@ function buildFloorplanMap(opt){
       const o=fpRegionGeom(g,fr,classify); const e=o.type;
       seen[e]=(seen[e]||0)+1;
       o.id=id+'-'+e+(cnt[e]>1?('-'+seen[e]):'');
+      regRoomId.set(g, o.id);
       return o;
     });
     let X0=1e9,Y0=1e9,X1=-1e9,Y1=-1e9;
@@ -682,7 +684,7 @@ function buildFloorplanMap(opt){
     };
   });
   const common=plan.regions.filter(g=>g.cells.length && g.unit<0).map(g=>{
-    const o=fpRegionGeom(g,fr,classify); o.id='C-'+g.id; return o;
+    const o=fpRegionGeom(g,fr,classify); o.id='C-'+g.id; regRoomId.set(g, o.id); return o;
   });
   // mobilya (kalıcılık): runtime store'dan (view3d yazar) room_id ile eşle → 3B kapat-aç + JSON export korunur.
   const FS=(typeof window!=='undefined' && window.__kptaFurniture) || {};
@@ -709,6 +711,42 @@ function buildFloorplanMap(opt){
       const a=fr.px(e.x-e.ux*Ww/2, e.y-e.uy*Ww/2), b=fr.px(e.x+e.ux*Ww/2, e.y+e.uy*Ww/2);
       return { orient:e.h?'h':'v', width_m:+Ww.toFixed(2), height_m:+Wh.toFixed(2), sill_m:+Ws.toFixed(2), full:!!d.full,
                p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; });
+  // balkonlar (additive): B aracıyla dış cepheye çizilen AÇIK balkonlar — 3B'de plaka+korkuluk+cam kapı sürer.
+  // Dünya-metre poligonu (balkQuad = 4 köşe) + render-px poligonu (doors/windows ile AYNI fr.px dönüşümü → parity).
+  // door_span = balkonun dayandığı cephe duvarında ODA→BALKON geçişi (iç kenar orta ±0.45m; render.js kapı boşluğuyla birebir).
+  // unit_id = bağlı daire (D{k}); room_id = balkonun dayandığı duvarın ARKASINDAKİ oda (iç-probe bölgesi → export room_id).
+  const balconyList=(typeof balconies!=='undefined' && Array.isArray(balconies) ? balconies : [])
+    .filter(b=>b && typeof b.ei==='number' && typeof balkBase==='function')
+    .map(b=>{
+      const base=balkBase(b.ei), A=base.A, u=base.u, n=base.n;
+      const P=(t,d)=>({x:A.x+u.x*t+n.x*d, y:A.y+u.y*t+n.y*d});
+      const quad=[P(b.t0,0),P(b.t1,0),P(b.t1,b.depth),P(b.t0,b.depth)];   // iç0,iç1,dış1,dış0 (balkQuad ile aynı sıra)
+      const poly_m=quad.map(p=>[+p.x.toFixed(3),+p.y.toFixed(3)]);
+      const poly_px=quad.map(p=>fr.px(p.x,p.y));
+      const width=+(b.t1-b.t0).toFixed(2), depth=+(+b.depth).toFixed(2);
+      // ODA→BALKON kapısı: iç kenarın (d=0) ortası ±0.45m → cam kapı boşluğu (render.js drawB ile birebir).
+      const tm=(b.t0+b.t1)/2, da=P(tm-0.45,0), db=P(tm+0.45,0);
+      const d0=fr.px(da.x,da.y), d1=fr.px(db.x,db.y);
+      // bağlı daire + arkadaki oda: balkUnit iç-probe hücresini bulur; aynı probe ile bölge→export id.
+      let unit_id=null, room_id=null;
+      if(plan){
+        const x=A.x+u.x*tm-n.x*0.3, y=A.y+u.y*tm-n.y*0.3;
+        const c=Math.floor((x-plan.minX)/M), r=Math.floor((y-plan.minY)/M);
+        if(r>=0&&c>=0&&r<plan.rows&&c<plan.cols){ const j=r*plan.cols+c;
+          if(plan.inside[j]&&plan.cm[j]>=0){ const g=plan.regions[plan.cm[j]];
+            if(g){ if(g.unit>=0) unit_id='D'+(g.unit+1); room_id=regRoomId.get(g)||null; } } }
+      }
+      return {
+        edge_index:b.ei, orient:Math.abs(u.x)>=Math.abs(u.y)?'h':'v',
+        width_m:width, depth_m:depth, area_m2:+(width*depth).toFixed(2),
+        base_px:fr.px(A.x+u.x*b.t0, A.y+u.y*b.t0),          // iç kenar başlangıcı (referans)
+        normal_out:[+n.x.toFixed(4),+n.y.toFixed(4)],        // cepheden DIŞA birim normal (dünya)
+        dir:[+u.x.toFixed(4),+u.y.toFixed(4)],               // cephe boyunca birim vektör (dünya)
+        polygon_m:poly_m, polygon_px:poly_px, polygon_norm:poly_px.map(p=>fr.norm(p)),
+        door_span_px:[d0,d1], door_span_norm:[fr.norm(d0),fr.norm(d1)],
+        unit_id, room_id
+      };
+    });
   // C3: tanınmayan oda tipi denetimi — enum sessizce 'room'/_def bej'e düşen bölge oranı >%5 → uyar + export'a işle.
   // Normal planda (motor bilinen tipleri üretir) 0 tanınmaz → uyarı YOK. Denetim/alanlar değişmez.
   const warnings=[];
@@ -728,7 +766,7 @@ function buildFloorplanMap(opt){
     scale:{ metersPerPixel:mpp, origin_px:fr.px(0,0),
       formula:'px = world_m * '+(fr.S*fr.SC)+' + origin_px ; world_m = (px - origin_px) * metersPerPixel',
       norm_formula:'render_px_x = x_norm * renderWidth ; render_px_y = y_norm * renderHeight (kadraj render oranında → her iki eksen tek çarpan)' },
-    units, common_areas:common, doors, windows, warnings
+    units, common_areas:common, doors, windows, balconies:balconyList, warnings
   };
 }
 /* render üstüne bindirilebilen doğrulama SVG'si (aynı viewBox; düz string → headless de çalışır) */

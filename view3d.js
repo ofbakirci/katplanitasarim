@@ -1010,6 +1010,12 @@
       const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
       return {ax:a[0],az:a[1],bx:b[0],bz:b[1],height:d.height_m||1.4,sill:d.full?0:(d.sill_m!=null?d.sill_m:0.9),full:!!d.full};
     });
+    // BALKON kapı boşlukları (metre uzayı): map.balconies door_span_px → px2m. Cephe duvarında ODA→BALKON
+    // tam-boy CAM KAPI: gap OYULUR + full:true cam + ince kasa. YÜRÜNEBİLİR (collider oymaz → FPV'de balkona çıkılır).
+    const balkSegs=(map.balconies||[]).filter(function(bk){ return bk&&bk.door_span_px&&bk.door_span_px.length===2; }).map(function(bk){
+      const a=px2m(map,bk.door_span_px[0][0],bk.door_span_px[0][1]), b=px2m(map,bk.door_span_px[1][0],bk.door_span_px[1][1]);
+      return {ax:a[0],az:a[1],bx:b[0],bz:b[1]};
+    });
     const matGlass=new THREE.MeshStandardMaterial({color:0xbcd6e8,roughness:0.08,metalness:0.15,transparent:true,opacity:0.34,side:THREE.DoubleSide});
     // W4: klasik TR PVC pencere = BEYAZ çerçeve + orta dikme(ler) + ince kanat profilleri + dışa denizlik.
     const matFrame=new THREE.MeshStandardMaterial({color:0xf4f4f2,roughness:0.55,metalness:0.02}); // beyaz PVC çerçeve/kanat
@@ -1128,7 +1134,16 @@
       const halfT=nIn?(WALL_T/2+WALL_EPS):WALL_T;      // her oda kendi yarısını doldurur (nIn varsa) + EPS bindirme
       const ctrOff=nIn?(WALL_T/4-WALL_EPS/2):0;        // iç yüz WALL_T/2'de sabit; arka yüz merkezi EPS aşar
       const ofx=nIn?nIn[0]*ctrOff:0, ofz=nIn?nIn[1]*ctrOff:0;   // merkezi iç tarafa kaydır (bindirmeli)
-      const gaps=[], winGaps=[];
+      const gaps=[], winGaps=[], balkGaps=[];
+      // BALKON kapısı: cephe duvarında tam-boy CAM boşluk. gap OYULUR (winGaps gibi refill) ama collider EKLENMEZ
+      //   → yürünebilir (balkona çıkılır). Cam + kasa addWindowGlass(sill=0,full) ile çizilir.
+      balkSegs.forEach(function(d){
+        const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
+        const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
+        if(e0>0.3||e1>0.3) return;                          // balkon kapısı bu duvar doğrultusunda değil
+        const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
+        if(g1-g0>0.1){ gaps.push([g0,g1,null]); balkGaps.push([g0,g1]); }   // tam-yükseklik duvarı oy (collider YOK → yürünür)
+      });
       doorSegs.forEach(function(d){
         const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
         const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
@@ -1163,6 +1178,14 @@
           lw.position.set(mx+ofx,top+lh/2,mz+ofz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
         addWindowGlass(mx,mz,gw,ang,sill,wh,walls,nIn);   // W4: nIn → denizlik DIŞ tarafa taşar
         addCollider(mx,mz,gw,WALL_T,ang);                 // W5: pencerelerden yürüyerek geçilemez → tam-yükseklik çarpışma kutusu
+      });
+      // BALKON kapıları: tam-boy CAM KAPI (sill=0, full) + eşik. COLLIDER YOK → FPV'de balkona çıkılır.
+      //   Görsel-yalnız (doors[]/windows[] şemasına dokunmaz; balkSegs = map.balconies'ten türer).
+      balkGaps.forEach(function(g){
+        const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
+        addWindowGlass(mx,mz,gw,ang,0,WALL_H,walls,nIn);  // tam-boy cam kapı (parapetsiz) + ince PVC kasa
+        const th=new THREE.Mesh(new THREE.BoxGeometry(gw,0.04,Math.max(0.2,WALL_T)),matDoor);  // eşik: "burada kapı var"
+        th.position.set(mx,0.02,mz); th.rotation.y=ang; th.receiveShadow=true; th.userData.isSill=true; walls.add(th);
       });
       gaps.forEach(function(g){
         if(g[2]==null) return;   // pencere boşluğu → kapı kanadı/eşiği/lentosu ÇİZME (winGaps hallediyor)
@@ -1214,6 +1237,9 @@
       const spr=makeLabel(trName); spr.userData.tr=trName; spr.userData.en=enName;
       spr.position.set(lm[0],0.6,lm[1]); labels.add(spr);
     });
+
+    // BALKON plakaları + korkulukları (cephe CAM KAPI zaten wallEdge'de oyuldu/çizildi).
+    buildBalconies(map, {G:G, walls:walls, collide:collide, addCollider:addCollider, cx:cx, cz:cz});
 
     // mobilya: geçersizleri ele (A8) → düz furnList'e topla → px damgala → çiz
     furnPruneInvalid(map); collectFurnList(); syncFurniturePx(map); renderFurniture();
@@ -3510,6 +3536,7 @@
     const map=scene&&scene.__map; if(!map) return;
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ (r.furniture||[]).forEach(function(f){ furnList.push(f); }); }); });
     (map.common_areas||[]).forEach(function(r){ (r.furniture||[]).forEach(function(f){ furnList.push(f); }); });
+    balconyRooms(map).forEach(function(r){ (r.furniture||[]).forEach(function(f){ furnList.push(f); }); });
   }
   // furnList → __furnitureGroup mesh'leri (renderCamGizmos ikizi). Her render'da eski mesh bırakılır.
   function renderFurniture(){
@@ -3786,7 +3813,23 @@
     if(!room.__polyM) room.__polyM=room.polygon_px.map(function(p){ return px2m(map,p[0],p[1]); });
     return room.__polyM;
   }
-  function furnAllRooms(map){ const rs=[]; (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ rs.push(r); }); }); (map.common_areas||[]).forEach(function(r){ rs.push(r); }); return rs; }
+  /* BALKON döşeme: cephe balkonları (map.balconies) mobilya akışına GİRSİN diye SENTETİK oda objeleri
+     (polygon_px + stabil id + type:'balcony'). furnAnalyzeRoom/furnRoomPolyM bunları oda gibi işler
+     (roomKind 'balcony' → furnishBalcony bistro seti). Kalıcılık __kptaFurniture'a id ile yazılır.
+     Cache map.__balconyRooms → collectFurnList/persist/autoFurnish AYNI referansı görür. */
+  function balconyRooms(map){
+    if(!map) return [];
+    if(map.__balconyRooms) return map.__balconyRooms;
+    const FS=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+    const rs=(map.balconies||[]).filter(function(bk){ return bk&&bk.polygon_px&&bk.polygon_px.length>=4; }).map(function(bk){
+      const id='BALK-'+(bk.unit_id||'X')+'-'+(bk.edge_index!=null?bk.edge_index:0);
+      return { id:id, type:'balcony', type_tr:'Balkon', name:'Balkon', name_en:'Balcony',
+        polygon_px:bk.polygon_px.map(function(p){ return p.slice(); }),
+        furniture:(FS[id]?FS[id].map(function(f){ return f; }):[]), __balcony:true };
+    });
+    map.__balconyRooms=rs; return rs;
+  }
+  function furnAllRooms(map){ const rs=[]; (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ rs.push(r); }); }); (map.common_areas||[]).forEach(function(r){ rs.push(r); }); balconyRooms(map).forEach(function(r){ rs.push(r); }); return rs; }
   // ayak izi 4 köşe (metre) — Three.js rotation.y konvansiyonu (renderFurniture/furnToPolygonPx ile aynı)
   function furnFootprintM(x,z,rotDeg,w,d){
     const a=(rotDeg||0)*Math.PI/180, ca=Math.cos(a), sa=Math.sin(a), hw=w/2, hd=d/2;
@@ -4355,8 +4398,54 @@
   }
 
   // ----- BALKON -----
-  function furnishBalcony(ctx){ const an=ctx.an, placed=ctx.placed; const t=scanPlace(an,placed,'bistro_table',0.35);
+  function furnishBalcony(ctx){ const an=ctx.an, placed=ctx.placed;
+    // derinlik ≥1.2m → masa+2 sandalye. Dar balkon (cephe balkonu ~1.5m) → clearance kademeli gevşet (0.35→0.15)
+    //   ki bistro seti sığsın; yoksa scanPlace tam ortada 1.3m footprint'i 1.5m derinliğe oturtamaz.
+    const t=scanPlace(an,placed,'bistro_table',0.35) || scanPlace(an,placed,'bistro_table',0.20) || scanPlace(an,placed,'bistro_table',0.12);
     if(t){ place2(an,placed,'bistro_chair',t.pos.x-0.55,t.pos.z,90); place2(an,placed,'bistro_chair',t.pos.x+0.55,t.pos.z,270); } }
+
+  /* BALKON 3B: cephe balkonlarının (map.balconies[]) döşeme plakası + korkuluğu. Cephe CAM KAPI
+     wallEdge içinde oyulur/çizilir (balkSegs); burada plaka + üç açık kenarda korkuluk kurulur.
+     Poligon sırası io.js buildFloorplanMap'ten: [iç0, iç1, dış1, dış0] → kenar iç0→iç1 = CEPHE
+     (korkuluk YOK, kapı orada); diğer üç kenar açık → korkuluk. Pozisyonlar MUTLAK metre
+     (grup ofseti -cx,-cz; furniture/wall ile aynı konvansiyon). */
+  const BALK_RAIL_H=1.05, BALK_DROP=0.05;   // korkuluk yüksekliği + plakanın bina zemininden alçaklığı
+  function buildBalconies(map, S){
+    const list=(map&&map.balconies)||[]; if(!list.length) return;
+    const balkGroup=new THREE.Group(); balkGroup.position.set(-S.cx,0,-S.cz); scene.add(balkGroup); scene.__balconies=balkGroup;
+    const matSlab=new THREE.MeshStandardMaterial({color:0xbfb8ac,roughness:0.95,metalness:0.02});   // nötr beton plaka
+    const matPost=new THREE.MeshStandardMaterial({color:0x9a9a9e,roughness:0.5,metalness:0.55});     // metal dikme/küpeşte
+    const matPanel=new THREE.MeshStandardMaterial({color:0xbcd6e8,roughness:0.1,metalness:0.15,transparent:true,opacity:0.28,side:THREE.DoubleSide}); // cam panel
+    const railH=(roofOn?1:WALL_LOW)*BALK_RAIL_H;   // dollhouse modunda duvarlarla aynı oranda kısal
+    list.forEach(function(bk){
+      const poly=bk.polygon_px; if(!poly||poly.length<4) return;
+      const Pm=poly.map(function(p){ return px2m(map,p[0],p[1]); });   // 4 köşe metre (oda duvarlarıyla AYNI uzay)
+      // döşeme plakası: poligon şekli, kalın (FLOOR_T), üst yüzü bina zemininden BALK_DROP alçak
+      const shp=new THREE.Shape(); Pm.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
+      const sg=new THREE.ExtrudeGeometry(shp,{depth:FLOOR_T+BALK_DROP,bevelEnabled:false}); sg.rotateX(Math.PI/2);
+      const slab=new THREE.Mesh(sg,matSlab); slab.position.y=-BALK_DROP; slab.receiveShadow=true; slab.castShadow=true;
+      slab.userData.isBalconyFloor=true; balkGroup.add(slab);
+      // KORKULUK: kenar iç0→iç1 (index 0→1) CEPHE → atla; kalan üç kenara cam+küpeşte+köşe dikmesi.
+      for(var i=0;i<Pm.length;i++){
+        if(i===0) continue;                                       // cephe kenarı (kapı burada) → korkuluk yok
+        var A2=Pm[i], B2=Pm[(i+1)%Pm.length];
+        var dx=B2[0]-A2[0], dz=B2[1]-A2[1], el=Math.hypot(dx,dz); if(el<0.15) continue;
+        var mx=(A2[0]+B2[0])/2, mz=(A2[1]+B2[1])/2, ang=-Math.atan2(dz,dx);
+        // cam panel (alt yarı, hafif saydam): tabandan ~0.9*railH yüksekliğe
+        var panelH=railH*0.82;
+        var panel=new THREE.Mesh(new THREE.BoxGeometry(el-0.06,panelH,0.03),matPanel);
+        panel.position.set(mx,panelH/2+0.04,mz); panel.rotation.y=ang; balkGroup.add(panel);
+        // üst küpeşte (ince profil)
+        var cap=new THREE.Mesh(new THREE.BoxGeometry(el,0.06,0.06),matPost);
+        cap.position.set(mx,railH,mz); cap.rotation.y=ang; cap.castShadow=true; balkGroup.add(cap);
+        // köşe dikmeleri (kenar uçlarında dikey profil)
+        [A2,B2].forEach(function(C){ var post=new THREE.Mesh(new THREE.BoxGeometry(0.06,railH,0.06),matPost);
+          post.position.set(C[0],railH/2,C[1]); post.castShadow=true; balkGroup.add(post); });
+        // W5: korkuluk = DÜŞÜLMEZ → tam-yükseklik görünmez collider (FPV'de balkondan cepheye düşme engellenir)
+        if(S.addCollider) S.addCollider(mx,mz,el,0.12,ang);
+      }
+    });
+  }
 
   // ----- ÇALIŞMA ODASI (A7) -----
   function furnishStudy(ctx){ const an=ctx.an, placed=ctx.placed;
@@ -4409,6 +4498,7 @@
     const map=scene&&scene.__map; if(!map){ setFurnHint('Plan yok.'); return; } furnSnapshot();
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ autoFurnish(r, map); }); });
     (map.common_areas||[]).forEach(function(r){ autoFurnish(r, map); });
+    balconyRooms(map).forEach(function(r){ autoFurnish(r, map); });   // cephe balkonu bistro seti
     collectFurnList(); activeFurnIdx=-1; renderFurniture(); updateFurnPanel(); persistFurniture();
     setFurnHint(furnList.length+' mobilya yerleşti · elle düzenlenenler korundu');
   }
@@ -4430,6 +4520,7 @@
     map=map||(scene&&scene.__map); if(!map) return;
     function stamp(r){ (r.furniture||[]).forEach(function(f){ if(f&&f.pos){ f.polygon_px=furnToPolygonPx(f,map); f.centroid_px=m2px(map,f.pos.x,f.pos.z); } }); }
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(stamp); }); (map.common_areas||[]).forEach(stamp);
+    balconyRooms(map).forEach(stamp);
   }
   // güncel mobilyayı kalıcı store'a yaz (px dahil, derin kopya → serileştirilebilir + alias yok)
   function persistFurniture(){
@@ -4438,6 +4529,7 @@
     const store={};
     function take(r){ const fs=r.furniture||[]; if(fs.length) store[r.id]=fs.map(function(f){ return JSON.parse(JSON.stringify(f)); }); }
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(take); }); (map.common_areas||[]).forEach(take);
+    balconyRooms(map).forEach(take);
     try{ window.__kptaFurniture=store; }catch(e){}
   }
   // M3: kalıcı store'dan (window.__kptaMaterials) runtime materialOverrides'a yükle. Yalnız GEÇERLİ preset key'ler alınır.
