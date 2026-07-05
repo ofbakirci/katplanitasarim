@@ -59,16 +59,51 @@ function winSillM(rec){ const P=REG.pencere;
    kesintisiz parçalar → parça başına bir pencere (FAZ3 ile aynı segmentleme).
    key = 'w'+ei+'_'+segIndex (kenar+parça sırası; generate'te bölge kimlikleri
    yeniden doğar → set yeniden hesaplanır, kapı 'r'+id / 'u'+k ile aynı ruh). */
+/* SUNUM-4A B2: bu kenardaki (ei) BALKON span'leri (kenar-boyu [t0,t1], küçük payla genişletilmiş).
+   Balkon kapısı (ODA→BALKON cam kapı) balkonun dayandığı cephe aralığını kaplar → o aralıkta cephe
+   PENCERESİ olmamalı (2B plan + 3B çakışması). balkBase (interaction.js) ile AYNI kenar-parametrizasyonu:
+   t0/t1 origin = pts[ei], birim vektör u=(B-A)/L → windows.js winEdgeGeom ile birebir karşılaştırılabilir.
+   Balkon verisi motorda (balconies dizisi) → 2B pencere işareti de balkonlu kenarda çizilmez (tutarlı). */
+function _balkSpansOnEdge(ei){
+  if(typeof balconies==='undefined' || !Array.isArray(balconies) || !balconies.length) return [];
+  const PAD=0.30;   // balkon iç kenarı ± pay: pencere ile küçük dokunma da engellensin
+  const out=[];
+  for(const b of balconies){
+    if(!b || b.ei!==ei || typeof b.t0!=='number' || typeof b.t1!=='number') continue;
+    const lo=Math.min(b.t0,b.t1)-PAD, hi=Math.max(b.t0,b.t1)+PAD;
+    if(hi>lo) out.push([lo,hi]);
+  }
+  return out;
+}
+/* [s,e] aralığından balkon span'lerini çıkar → kalan alt-aralıklar dizisi (boş = tamamen balkon altında) */
+function _subtractSpans(s,e,spans){
+  let parts=[[s,e]];
+  for(const sp of spans){ const bs=sp[0], be=sp[1];
+    const next=[];
+    for(const p of parts){ const ps=p[0], pe=p[1];
+      if(be<=ps || bs>=pe){ next.push([ps,pe]); continue; }   // örtüşme yok
+      if(bs>ps) next.push([ps,bs]);                            // sol kalıntı
+      if(be<pe) next.push([be,pe]);                            // sağ kalıntı
+    }
+    parts=next;
+  }
+  return parts;
+}
 function autoWindows(){
   const out=[]; if(!plan||!pts||pts.length<3||!closed) return out;
   const P=REG.pencere, habit={salon:1,yatak:1,mutfak:1};
   for(let ei=0; ei<pts.length; ei++){
     const g=winEdgeGeom(ei); if(!g||g.len<1.6) continue;
+    const balkSpans=_balkSpansOnEdge(ei);   // B2: bu kenardaki balkon aralıkları (pencere dışlanır)
     let segS=null, segR=null, segIdx=0;
-    const push=(s,e)=>{ const L=e-s; if(L<1.6) return;
-      const w=Math.min(P.wMax,Math.max(P.wMin,L-0.6)), mid=(s+e)/2;
-      out.push({ei, t:mid, segIdx:segIdx++, w, roomType:segR&&segR.type||null,
-                 s:mid-w/2, e2:mid+w/2}); };
+    // ham yaşam-odası segmentini balkon span'lerine böl → her kalan parça için bir pencere.
+    const push=(s,e)=>{
+      const roomType=segR&&segR.type||null;
+      const parts=balkSpans.length?_subtractSpans(s,e,balkSpans):[[s,e]];   // B2: balkonlu aralığı çıkar
+      for(const pr of parts){ const ps=pr[0], pe=pr[1], L=pe-ps; if(L<1.6) continue;
+        const w=Math.min(P.wMax,Math.max(P.wMin,L-0.6)), mid=(ps+pe)/2;
+        out.push({ei, t:mid, segIdx:segIdx++, w, roomType, s:mid-w/2, e2:mid+w/2}); }
+    };
     const step=0.25;
     for(let t=0;t<=g.len+1e-9;t+=step){
       const rg=_winRegAt(g.A.x+g.ux*t+g.nx*0.35, g.A.y+g.uy*t+g.ny*0.35);

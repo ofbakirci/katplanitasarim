@@ -1169,13 +1169,21 @@
       }
       let s=0; gaps.forEach(function(g){ seg(s,g[0]); s=Math.max(s,g[1]); }); seg(s,len);
       // pencere boşlukları: parapet altı (0..sill) + lento üstü (top..WALL_H) duvar + boşlukta cam
+      // SUNUM-4A B1 (pencere-altı SİYAH BANT kök nedeni): parapet/lento eskiden `halfT` (yarım duvar) +
+      //   iç-yön ofseti (ofx/ofz) ile çiziliyordu → duvarın DIŞ yarısı BOŞ kalıyordu. Pencere DAİMA dış
+      //   cephede (autoWindows yalnız sınır kenarına koyar) → komşu oda o dış yarıyı DOLDURMUYOR. Alçak
+      //   parapette (0.9 m) FPV/kamera aşağı-eğik grazing açıdan bakış hattı parapetin üstünü SIYIRIP
+      //   eksik dış-yarıdan geçerek dış boşluğa (siyah) çıkıyordu → pencere altında yatay siyah bant.
+      //   (Orbit yukarıdan baktığı için hat iç yüze çarpıyor, bant görünmüyordu — bakış-açısına bağlı.)
+      // FIX: pencere parapeti + lentosu TAM `WALL_T` kalınlıkta, MERKEZDE (ofsetsiz) → dış-yarı gediği kapanır.
+      //   Dış duvarda z-fight yok (komşu yarı yok); iç duvarda olsa bile tam-doldurma zararsız (gedik/bant yok).
       winGaps.forEach(function(g){
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
         const sill=g[2], wh=g[3], top=Math.min(WALL_H, sill+wh);
-        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,halfT),wallMat);  // parapet (tam boyda yok) — U1: kendi yarısı
-          pw.position.set(mx+ofx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz+ofz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
-        if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,halfT),wallMat); // lento üstü — U1: kendi yarısı
-          lw.position.set(mx+ofx,top+lh/2,mz+ofz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
+        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,WALL_T),wallMat);  // parapet: TAM kalınlık (B1: dış-yarı gediği kapanır)
+          pw.position.set(mx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
+        if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,WALL_T),wallMat); // lento üstü: TAM kalınlık (B1)
+          lw.position.set(mx,top+lh/2,mz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
         addWindowGlass(mx,mz,gw,ang,sill,wh,walls,nIn);   // W4: nIn → denizlik DIŞ tarafa taşar
         addCollider(mx,mz,gw,WALL_T,ang);                 // W5: pencerelerden yürüyerek geçilemez → tam-yükseklik çarpışma kutusu
       });
@@ -1714,6 +1722,54 @@
     return { position:{x:cam.position.x,y:cam.position.y,z:cam.position.z},
              target:{x:controls.target.x,y:controls.target.y,z:controls.target.z},
              up:{x:cam.up.x,y:cam.up.y,z:cam.up.z}, fov:cam.fov };
+  }
+  /* SUNUM-4A B1 TEŞHİS/RENDER: FPV göz-hizası (1.6m) tek-kare snapshot (indirmesiz dataURL).
+     Gezinti moduna girmeden orbit kamerasını göz-hizası poza koyar (iç chrome: çatı+tavan açık),
+     render eder, dataURL döndürür, sonra önceki görüşü BİREBİR geri yükler. Pencere-altı siyah
+     bant gibi BAKIŞ-AÇISINA bağlı render sorunlarını programatik yakalamak için (SS'li kanıt).
+     opts: {eye:{x,z}, look:{x,z}, eyeH=1.6, lookH=1.2}  — dünya-metre. */
+  function fpvSnapDataURL(opts){
+    if(!renderer||!scene||!cam||!controls) return null;
+    opts=opts||{};
+    const eye=opts.eye||{x:0,z:0}, look=opts.look||{x:eye.x,z:eye.z-1};
+    const eyeH=(opts.eyeH!=null?opts.eyeH:1.6), lookH=(opts.lookH!=null?opts.lookH:1.2);
+    const savView=getView();
+    const savRoof=roofOn, savFov=cam.fov, savAspect=cam.aspect;
+    const savPR=renderer.getPixelRatio(), savSize=renderer.getSize(new THREE.Vector2());
+    const savNear=cam.near, savFar=cam.far;
+    const ceilG=scene&&scene.__ceiling, savCeil=ceilG?ceilG.visible:false;
+    const labels=scene&&scene.__labels, savLbl=labels?labels.visible:true;
+    let url=null;
+    try{
+      if(!roofOn){ roofOn=true; applyRoof(); }
+      if(ceilG) ceilG.visible=true;
+      if(labels) labels.visible=false;
+      // C2 disiplini: viewport'tan BAĞIMSIZ sabit boyut (preview iframe 0×0/tiny tuzağını atlar)
+      renderer.setPixelRatio(1); renderer.setSize(1440,810,false);
+      cam.aspect=1440/810; cam.fov=70; cam.near=0.05;   // FPV yakın-düzlem: pencere/parapet yakın geometri kırpılmasın
+      cam.position.set(eye.x, eyeH, eye.z);
+      controls.target.set(look.x, lookH, look.z);
+      cam.updateProjectionMatrix(); controls.sync&&controls.sync(); controls.update();
+      // iç aydınlatma = gezinti ile AYNI (kafa lambası + hemisphere fill) → gerçek FPV kadrına birebir
+      const savFog=scene.fog; scene.fog=null;
+      const _lamp=new THREE.PointLight(WALK_LIGHT.lampColor, WALK_LIGHT.lampInt, WALK_LIGHT.lampRange, WALK_LIGHT.lampDecay);
+      _lamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z);
+      const _amb=new THREE.HemisphereLight(WALK_LIGHT.fillSky, WALK_LIGHT.fillGround, WALK_LIGHT.fillInt);
+      scene.add(_lamp); scene.add(_amb);
+      renderer.render(scene,cam);
+      url=renderer.domElement.toDataURL('image/png');
+      scene.remove(_lamp); scene.remove(_amb); scene.fog=savFog;
+    } finally {
+      // geri yükle (boyut + chrome + görüş) — BİREBİR
+      renderer.setPixelRatio(savPR); renderer.setSize(savSize.x,savSize.y,false);
+      if(labels) labels.visible=savLbl;
+      if(ceilG) ceilG.visible=savCeil;
+      if(roofOn!==savRoof){ roofOn=savRoof; applyRoof(); }
+      cam.fov=savFov; cam.aspect=savAspect; cam.near=savNear; cam.far=savFar;
+      cam.updateProjectionMatrix(); restoreView(savView);
+      renderer.render(scene,cam);
+    }
+    return url;
   }
   // kilitli açıyı geri uygula (adım 4'te boyalı render ile AYNI açı / adım 2'ye dönüş).
   function restoreView(v){
@@ -2339,8 +2395,10 @@
     raycaster.setFromCamera({x:nx,y:ny}, cam);
     // ── MALZEME modu (M2): zemin mesh'ine tıkla → o odayı seç (userData.roomRef). Kamera/mobilya modundan bağımsız. ──
     if(matMode){
-      if(scene.__floorGroup){
-        const rh=raycaster.intersectObjects(scene.__floorGroup.children,false);
+      // B4: oda zeminleri + BALKON plakaları (roomRef taşır) tek raycast hedefinde → balkona tıklayınca seçilir.
+      const matTargets=(scene.__floorGroup?scene.__floorGroup.children.slice():[]).concat(scene.__balconies?scene.__balconies.children:[]);
+      if(matTargets.length){
+        const rh=raycaster.intersectObjects(matTargets,false);
         if(rh.length){ const o=rh[0].object.userData&&rh[0].object.userData.roomRef; if(o&&o.id){ selectMatRoom(o.id); return; } }
       }
       selectMatRoom(null); return;   // boş → seçimi bırak
@@ -3575,12 +3633,17 @@
     const px=worldToPx(map,p.x,p.z); let found=null;
     function test(r){ if(found||!r.polygon_px||r.polygon_px.length<3) return; if(furnPip(px[0],px[1],r.polygon_px)) found=r.id; }
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(test); }); (map.common_areas||[]).forEach(test);
+    // SUNUM-4A B4/B5: cephe balkonları da tıklanabilir/döşenebilir oda → BALK-<unit>-<edge> poligonu içinde mi?
+    //   (oda poligonlarından SONRA test → gerçek oda önceliği; balkon dış cephede, çakışma olmaz.)
+    if(!found) balconyRooms(map).forEach(test);
     return found;
   }
   function furnRoomById(roomId){
     const map=scene&&scene.__map; if(!map||!roomId) return null; let hit=null;
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(function(r){ if(r.id===roomId) hit=r; }); });
-    (map.common_areas||[]).forEach(function(r){ if(r.id===roomId) hit=r; }); return hit;
+    (map.common_areas||[]).forEach(function(r){ if(r.id===roomId) hit=r; });
+    if(!hit) balconyRooms(map).forEach(function(r){ if(r.id===roomId) hit=r; });   // B4/B5: balkon sentetik odası
+    return hit;
   }
   function attachFurnToMap(f){ const r=furnRoomById(f&&f.room_id); if(r){ (r.furniture=r.furniture||[]).push(f); } }
   function detachFurnFromMap(f){ const r=furnRoomById(f&&f.room_id); if(r&&r.furniture){ const k=r.furniture.indexOf(f); if(k>=0) r.furniture.splice(k,1); } }
@@ -4417,23 +4480,34 @@
     const matPost=new THREE.MeshStandardMaterial({color:0x9a9a9e,roughness:0.5,metalness:0.55});     // metal dikme/küpeşte
     const matPanel=new THREE.MeshStandardMaterial({color:0xbcd6e8,roughness:0.1,metalness:0.15,transparent:true,opacity:0.28,side:THREE.DoubleSide}); // cam panel
     const railH=(roofOn?1:WALL_LOW)*BALK_RAIL_H;   // dollhouse modunda duvarlarla aynı oranda kısal
+    // SUNUM-4A B4: balkon = ODA gibi → sentetik balkon oda objesini (balconyRooms) plakaya bağla.
+    //   room_id → materialOverrides floor/wall → slab/korkuluk seçili malzemeyle çizilir + material modunda
+    //   plakaya tıklayınca (roomRef) seçilir. balconyRooms map.balconies ile AYNI edge_index/unit_id türetir.
+    const brooms=balconyRooms(map);
+    function balkRoomFor(bk){ const rid='BALK-'+(bk.unit_id||'X')+'-'+(bk.edge_index!=null?bk.edge_index:0);
+      for(var q=0;q<brooms.length;q++){ if(brooms[q].id===rid) return brooms[q]; } return null; }
     list.forEach(function(bk){
       const poly=bk.polygon_px; if(!poly||poly.length<4) return;
       const Pm=poly.map(function(p){ return px2m(map,p[0],p[1]); });   // 4 köşe metre (oda duvarlarıyla AYNI uzay)
+      const broom=balkRoomFor(bk);
+      // B4: seçili malzeme → zemin (plaka) + duvar (korkuluk cam paneli); yoksa nötr beton/cam.
+      const fKey=broom&&roomMatKey(broom.id,'floor'), slabMat=(fKey&&matMaterial(fKey))||matSlab;
+      const wKey=broom&&roomMatKey(broom.id,'wall'), railMat=(wKey&&matMaterial(wKey))||matPanel;
       // döşeme plakası: poligon şekli, kalın (FLOOR_T), üst yüzü bina zemininden BALK_DROP alçak
       const shp=new THREE.Shape(); Pm.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
       const sg=new THREE.ExtrudeGeometry(shp,{depth:FLOOR_T+BALK_DROP,bevelEnabled:false}); sg.rotateX(Math.PI/2);
-      const slab=new THREE.Mesh(sg,matSlab); slab.position.y=-BALK_DROP; slab.receiveShadow=true; slab.castShadow=true;
-      slab.userData.isBalconyFloor=true; balkGroup.add(slab);
+      const slab=new THREE.Mesh(sg,slabMat); slab.position.y=-BALK_DROP; slab.receiveShadow=true; slab.castShadow=true;
+      slab.userData.isBalconyFloor=true; if(broom) slab.userData.roomRef=broom;   // B4: material modunda tıklanabilir
+      balkGroup.add(slab);
       // KORKULUK: kenar iç0→iç1 (index 0→1) CEPHE → atla; kalan üç kenara cam+küpeşte+köşe dikmesi.
       for(var i=0;i<Pm.length;i++){
         if(i===0) continue;                                       // cephe kenarı (kapı burada) → korkuluk yok
         var A2=Pm[i], B2=Pm[(i+1)%Pm.length];
         var dx=B2[0]-A2[0], dz=B2[1]-A2[1], el=Math.hypot(dx,dz); if(el<0.15) continue;
         var mx=(A2[0]+B2[0])/2, mz=(A2[1]+B2[1])/2, ang=-Math.atan2(dz,dx);
-        // cam panel (alt yarı, hafif saydam): tabandan ~0.9*railH yüksekliğe
+        // cam panel (alt yarı, hafif saydam): tabandan ~0.9*railH yüksekliğe — B4: seçili duvar malzemesi varsa o
         var panelH=railH*0.82;
-        var panel=new THREE.Mesh(new THREE.BoxGeometry(el-0.06,panelH,0.03),matPanel);
+        var panel=new THREE.Mesh(new THREE.BoxGeometry(el-0.06,panelH,0.03),railMat);
         panel.position.set(mx,panelH/2+0.04,mz); panel.rotation.y=ang; balkGroup.add(panel);
         // üst küpeşte (ince profil)
         var cap=new THREE.Mesh(new THREE.BoxGeometry(el,0.06,0.06),matPost);
@@ -4719,6 +4793,7 @@
   // dışa aç + buton bağla
   window.View3D = { open:open, openCompare:openCompare, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
     snapCameraDataURL:snapCameraDataURL, snapCameraDepthMap:snapCameraDepthMap, captureCameraSnapshots:captureCameraSnapshots,
+    fpvSnapDataURL:fpvSnapDataURL,   // B1 teşhis: FPV göz-hizası tek-kare (pencere-altı bant reprodüksiyonu)
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
     clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras,
     // KAMERA-S2: iç-mekân render yöntemi oku/yaz ('snapshot'=Sadık · 'prompt'=Yaratıcı · 'both'). exportCameras şeması DEĞİŞMEZ.
@@ -4738,6 +4813,21 @@
     analyzeRoomForTest:function(room, map){ room.__an=null; return furnAnalyzeRoom(room, map); },
     furnDimForTest:function(type){ return FURN_DIM[type]||null; },
     collisionHoleScan:function(){ return collisionHoleScan(); },   // W5: görsel duvar segmentlerinde çarpışma-deliği taraması
+    // SUNUM-4A B3 TEŞHİS: FPV çarpışma ray'i (walkAxisClear) doğrudan sorgu — balkon kapısı hizasından
+    //   geçiş açık mı (true=engel yok/geçilir, false=collider engeli). Read-only, sahneyi değiştirmez.
+    //   NOT: px/pz = DÜNYA koordinatı (grup -cx,-cz ofsetli). Plan koordu için sceneCenterForTest çıkar.
+    walkClearForTest:function(px,pz,dx,dz,dist){ if(scene&&scene.__colliders) scene.__colliders.updateMatrixWorld(true); return walkAxisClear(px,pz,dx,dz,dist); },
+    sceneCenterForTest:function(){ return {cx:(scene&&scene.__cx)||0, cz:(scene&&scene.__cz)||0}; },
+    // B3 debug: verilen dünya-z bandındaki collider'ların dünya-x aralıkları (üst cephe boşluk analizi)
+    collidersNearForTest:function(worldZ, tol){ tol=tol||0.4; const cg=scene&&scene.__colliders; if(!cg) return [];
+      const cxo=scene.__cx||0, czo=scene.__cz||0; const out=[];
+      cg.children.forEach(function(c){ const wz=c.position.z-czo, wx=c.position.x-cxo;
+        if(Math.abs(wz-worldZ)<tol){ const gp=c.geometry&&c.geometry.parameters; out.push({wx:+wx.toFixed(2), wz:+wz.toFixed(2), w:gp?+gp.width.toFixed(2):null, angDeg:+(c.rotation.y*180/Math.PI).toFixed(0)}); } });
+      return out.sort(function(a,b){ return a.wx-b.wx; }); },
+    // dünya→px (test: balkon plaka/oda tık doğrulaması)
+    worldToPxForTest:function(wx,wz){ var m=scene&&scene.__map; return m?worldToPx(m,wx,wz):null; },
+    roomIdAtPointForTest:function(wx,wz){ return roomIdAtPoint({x:wx,z:wz}); },   // B4/B5: balkon dahil oda kimliği
+    balconyRoomsForTest:function(){ var m=scene&&scene.__map; return m?balconyRooms(m).map(function(r){ return {id:r.id, type:r.type, npoly:r.polygon_px.length, nfurn:(r.furniture||[]).length}; }):[]; },
     exportFurniture:exportFurniture, sceneDescription:sceneDescription,
     // MALZEME (M-serisi): preset kataloğu + oda-başına seç/uygula/sıfırla + kalıcılık (test + prototip).
     setMatUI:setMatUI, materialPresets:function(){ return MAT_PRESETS.map(function(p){ return {key:p.key,group:p.group,cls:p.cls,name:p.name}; }); },
