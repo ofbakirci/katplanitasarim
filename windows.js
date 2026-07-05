@@ -59,18 +59,24 @@ function winSillM(rec){ const P=REG.pencere;
    kesintisiz parçalar → parça başına bir pencere (FAZ3 ile aynı segmentleme).
    key = 'w'+ei+'_'+segIndex (kenar+parça sırası; generate'te bölge kimlikleri
    yeniden doğar → set yeniden hesaplanır, kapı 'r'+id / 'u'+k ile aynı ruh). */
-/* SUNUM-4A B2: bu kenardaki (ei) BALKON span'leri (kenar-boyu [t0,t1], küçük payla genişletilmiş).
-   Balkon kapısı (ODA→BALKON cam kapı) balkonun dayandığı cephe aralığını kaplar → o aralıkta cephe
-   PENCERESİ olmamalı (2B plan + 3B çakışması). balkBase (interaction.js) ile AYNI kenar-parametrizasyonu:
-   t0/t1 origin = pts[ei], birim vektör u=(B-A)/L → windows.js winEdgeGeom ile birebir karşılaştırılabilir.
-   Balkon verisi motorda (balconies dizisi) → 2B pencere işareti de balkonlu kenarda çizilmez (tutarlı). */
+/* SUNUM-4A B2 → SUNUM-5 S4 RAFİNE: bu kenardaki (ei) balkona bağlı PENCERE-DIŞLAMA span'leri.
+   ESKİ (B2): balkonun TÜM cephe aralığı [t0,t1] pencereden dışlanıyordu → geniş balkonda kapı yanına
+   pencere KOYULAMIYORDU (kullanıcı düzeltmesi).
+   YENİ (S4): yalnız ODA→BALKON KAPI SPAN'İ dışlanır (io.js ile birebir: kapı = iç-kenar ortası tm ± 0.45,
+   ± küçük PAD). Kenarın kalan kısmı (kapı yanı DAHİL) autoWindows'a AÇIK kalır — orada pencere-min genişlik
+   (segment L≥1.6) sığıyorsa pencere ÜRETİLİR (geniş balkon), sığmazsa (dar balkon) segment kısa → zaten
+   pencere doğmaz. Böylece "balkonun binaya bağlantı/dar bölümü pencere almaz, açık geniş bölümü alır" kuralı
+   mevcut min-genişlik kapısıyla OTOMATİK sağlanır. balkBase parametrizasyonuyla AYNI (t0/t1 origin=pts[ei]).
+   Balkonsuz plan: balconies boş → [] → pencere seti BİREBİR eski (frozen snapshot korunur). */
 function _balkSpansOnEdge(ei){
   if(typeof balconies==='undefined' || !Array.isArray(balconies) || !balconies.length) return [];
-  const PAD=0.30;   // balkon iç kenarı ± pay: pencere ile küçük dokunma da engellensin
+  const PAD=0.30;         // kapı span'i ± pay: cam kapı ile pencere küçük dokunma da engellensin
+  const DOOR_HALF=0.45;   // io.js balconyList door_span = tm ± 0.45 (ODA→BALKON cam kapı yarı-genişliği) ile birebir
   const out=[];
   for(const b of balconies){
     if(!b || b.ei!==ei || typeof b.t0!=='number' || typeof b.t1!=='number') continue;
-    const lo=Math.min(b.t0,b.t1)-PAD, hi=Math.max(b.t0,b.t1)+PAD;
+    const tm=(b.t0+b.t1)/2;                                  // balkon iç-kenar ortası = kapı merkezi (io.js ile aynı)
+    const lo=tm-DOOR_HALF-PAD, hi=tm+DOOR_HALF+PAD;          // YALNIZ kapı span'i (± pay) dışlanır — balkon geneli DEĞİL
     if(hi>lo) out.push([lo,hi]);
   }
   return out;

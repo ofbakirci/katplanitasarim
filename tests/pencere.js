@@ -114,29 +114,42 @@ ok(exp.n>0, 'export windows[] boş olmamalı ('+exp.n+')');
 ok(exp.shape, 'export penceresi width_m/height_m/sill_m/full + p0/p1 px+norm taşımalı');
 ok(exp.doorsIntact, 'export doors[] şeması BOZULMAMALI (additive)');
 
-/* 7) SUNUM-4A B2: BALKON span'inde pencere OLMAMALI (balkon kapısı ↔ pencere çakışması).
-   Aynı cephe kenarına balkon eklenince o aralıkta otomatik pencere üretilmez; balkon kaldırılınca geri gelir.
-   autoWindows balcony span'ini _subtractSpans ile çıkarır (kenar-parametrizasyonu balkBase ile aynı). */
-const b2 = run(`(function(){
-  // taze standart plan (balkonsuz referans)
+/* 7) SUNUM-5 S4 (eski B2 rafine): balkon kenarında yalnız ODA→BALKON KAPI SPAN'İ pencereden dışlanır
+   (balkonun TÜM cephe aralığı DEĞİL). Böylece:
+     - Kapı span'i (tm ± 0.45 ± PAD) İÇİNDE pencere OLMAZ (kapı↔pencere çakışması korunur).
+     - GENİŞ balkonda kapının YANINDA (kalan segment ≥ pencere-min) pencere ÜRETİLİR (kullanıcı düzeltmesi).
+     - DAR balkonda kapı yanı segment kısa → pencere doğmaz (min-genişlik kapısı otomatik hallediyor).
+     - Balkon kaldırılınca set eski haline döner. */
+const s4 = run(`(function(){
   pts=[{x:0,y:0},{x:20,y:0},{x:20,y:12},{x:0,y:12}]; closed=true;
   unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:1}];
   balconies=[]; generate();
   function edgeWins(ei){ return computeWindows().filter(w=>w.status==='ok'&&w.e&&w.ei===ei)
     .map(w=>({t:w.e.t, s:w.e.t-w.w/2, e:w.e.t+w.w/2})); }
   const before=edgeWins(0);
-  // alt cepheye (ei=0) balkon: kenar-boyu [6,10]
-  balconies=[{ei:0, t0:6, t1:10, depth:1.5}];
-  const after=edgeWins(0);
-  // balkon span (± PAD 0.30) → [5.7, 10.3]; hiçbir pencere bununla ÖRTÜŞMEMELİ
-  const overlap=after.filter(w=>!(w.e<=5.7||w.s>=10.3)).length;
-  // balkonu kaldır → set eski haline (adet) dönmeli
+  // GENİŞ balkon alt cephe (ei=0), kenar-boyu [4,14] (10 m) → kapı tm=9 (±0.45±0.30 = [8.25,9.75])
+  balconies=[{ei:0, t0:4, t1:14, depth:1.5}];
+  const excl=(typeof _balkSpansOnEdge==='function')?_balkSpansOnEdge(0):[];
+  const wide=edgeWins(0);
+  // kapı span'i [8.25,9.75] ile ÖRTÜŞEN pencere olmamalı
+  const doorOverlap=wide.filter(w=>!(w.e<=8.25||w.s>=9.75)).length;
+  // balkon gövdesi [4,14] içinde ama kapı-DIŞI pencere VAR mı (geniş balkon → kapı yanı pencere)
+  const besideDoor=wide.filter(w=>w.t>4&&w.t<14&&(w.e<=8.25||w.s>=9.75)).length;
+  // DAR balkon: [9,11] (2 m) → kapı tm=10 [9.25,10.75]; kapı yanı 0.55 m < pencere-min → pencere YOK
+  balconies=[{ei:0, t0:9, t1:11, depth:1.5}];
+  const narrow=edgeWins(0);
+  const narrowInBody=narrow.filter(w=>w.t>9&&w.t<11).length;
   balconies=[]; const restored=edgeWins(0);
-  return { beforeN:before.length, afterOverlap:overlap, afterN:after.length, restoredN:restored.length };
+  return { beforeN:before.length, excl:excl, doorOverlap:doorOverlap, besideDoor:besideDoor,
+    narrowInBody:narrowInBody, restoredN:restored.length };
 })()`);
-ok(b2.beforeN>0, 'B2: balkonsuz alt cephede otomatik pencere var (referans '+b2.beforeN+')');
-ok(b2.afterOverlap===0, 'B2: balkon span icinde pencere YOK (cakisma '+b2.afterOverlap+')');
-ok(b2.restoredN===b2.beforeN, 'B2: balkon kaldırılınca pencere seti geri gelir ('+b2.restoredN+'='+b2.beforeN+')');
+ok(s4.beforeN>0, 'S4: balkonsuz alt cephede otomatik pencere var (referans '+s4.beforeN+')');
+ok(s4.excl.length===1 && Math.abs(s4.excl[0][0]-8.25)<0.01 && Math.abs(s4.excl[0][1]-9.75)<0.01,
+   'S4: dışlama YALNIZ kapı span'+"'"+'i (tm±0.45±0.30=[8.25,9.75]), balkon geneli değil ('+JSON.stringify(s4.excl)+')');
+ok(s4.doorOverlap===0, 'S4: kapı span'+"'"+'i icinde pencere YOK (cakisma '+s4.doorOverlap+')');
+ok(s4.besideDoor>0, 'S4: GENIS balkonda kapı YANINDA pencere URETILIR ('+s4.besideDoor+')');
+ok(s4.narrowInBody===0, 'S4: DAR balkonda kapı yanı pencere YOK (min-genislik kapısı; '+s4.narrowInBody+')');
+ok(s4.restoredN===s4.beforeN, 'S4: balkon kaldırılınca pencere seti geri gelir ('+s4.restoredN+'='+s4.beforeN+')');
 
 console.log('PENCERE: ' + pass + ' geçti, ' + fail + ' hata');
 if (fail) process.exit(1);

@@ -114,6 +114,7 @@
   let walkRay=null;                                          // gezinti çarpışması için ayrılmış Raycaster (picker'dan bağımsız)
   let walkLamp=null, walkAmbient=null;                        // W3: gezinti-özel iç aydınlatma (kafa lambası + fill); kapalı iç mekan karanlık kalmasın
   const WALK_EYE=1.6, WALK_SPEED=2.5, WALK_RUN=4.0, WALK_BUFFER=0.25, WALK_PITCH_MAX=85*Math.PI/180;
+  const WALK_BODY=0.22;   // SUNUM-5 S2: FPV gövde YARIÇAPI — çarpışma yanal ofset ray'leri (köşe/açı sıyrılması engeli; kapılar 0.8m+ → geçilir)
   // ── ADIM SESİ: dosya YOK — WebAudio ile prosedürel filtreli-gürültü patlaması (bkz. walkFootstepFire). ──
   //   walkSoundOn: oturum-içi Açık/Kapal aç/kapa (yardım çubuğu düğmesi); varsayılan AÇIK. AudioContext İLK
   //   kullanıcı jestinde (pointer-lock tıklaması) kurulur → autoplay kısıtına takılmaz.
@@ -1146,8 +1147,12 @@
       var botExtend=full?Math.min(wd,Math.max(0,sill)):wd;      // tam-boyda parapet yok → zemin altına inme (clamp)
       var jGh=gh+wd+botExtend;                             // yan kayıt yüksekliği: altta botExtend + üstte wd bindirme
       var jCy=sill+gh/2+(wd-botExtend)/2;                  // yan kayıt merkezi (asimetrik bindirme → merkez kayar)
-      // alt kayıt: TEPESİ cam altına (sill+fr) hizalı, TABANI sill-botExtend (parapet solidine gömülü) → siyah bant kapanır
-      var botH=fr+botExtend, botCy=(sill+fr+(sill-botExtend))/2;
+      // alt kayıt: TABANI sill-botExtend (parapet solidine gömülü). TEPESİ eskiden cam-altı (sill+fr) hizasındaydı →
+      //   parapet-tepesi (S1'de sill+PARK_OVER'a çıkarıldı) ile cam-başlangıcı EL ELE aynı kotta buluşunca bıçak-sırtı
+      //   3px sızıntı kalıyordu. SUNUM-5 S1: alt kayıt TEPESİNİ camın içine railUp kadar UZAT → parapet↔cam ekini
+      //   kasa ÖRTER (üç yüzey aynı kotta buluşmaz), residual siyah şerit kapanır. Cam paneli kasanın arkasında.
+      var railUp=0.04;                                     // alt kayıt tepesi cam-altını bu kadar aşar (parapet↔cam ekini örter)
+      var botTop=sill+fr+railUp, botBot=sill-botExtend, botH=botTop-botBot, botCy=(botTop+botBot)/2;
       var botRail=new THREE.Mesh(new THREE.BoxGeometry(gw+2*we,botH,ft),matFrame); botRail.position.set(0,botCy,0); grp.add(botRail);
       // üst kayıt: TABANI cam üstüne (top-fr) hizalı, TEPESİ top+wd (lento solidine gömülü) → bej bant kapanır
       var topH=fr+wd, topCy=((top-fr)+(top+wd))/2;
@@ -1267,8 +1272,20 @@
       winGaps.forEach(function(g){
         const mx=a[0]+ux*(g[0]+g[1])/2, mz=a[1]+uz*(g[0]+g[1])/2, gw=g[1]-g[0];
         const sill=g[2], wh=g[3], top=Math.min(WALL_H, sill+wh);
-        if(!g[4] && sill>0.04){ const pw=new THREE.Mesh(new THREE.BoxGeometry(gw,sill,WALL_T),wallMat);  // parapet: TAM kalınlık (B1: dış-yarı gediği kapanır)
-          pw.position.set(mx,(roofOn?sill/2:sill/2*WALL_LOW)-0.02,mz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
+        // SUNUM-5 S1 (pencere-ALTI ince SİYAH ŞERİT — 5. tur): parapet TEPESİ eskiden `sill-0.02`ye düşüyordu
+        //   (kutu yüksekliği=sill, merkez=sill/2-0.02 → Q6 zemin-gömme tepeyi de 2 cm aşağı çekiyordu). Cam+kasa
+        //   alt kaydı sill+... hizasından başlayınca, parapet-tepesi (sill-0.02) ile kasa-altı arasında, duvar
+        //   OYUĞUNUN (0..WALL_H tam-boy oyulmuş) karanlık iç yüzü grazing/düz bakışta ince bir bant olarak sızıyordu.
+        //   FIX: parapet TEPESİ sill'i PARK_OVER kadar AŞSIN (oyuğun alt kotu = sill'e kadar SOLİD dolsun); taban
+        //   Q6 zemin-gömmesini korusun. Yükseklik = sill + PARK_OVER + 0.02 (gömme telafisi) → tepe = sill+PARK_OVER.
+        //   Kasa alt kaydı (addWindowGlass botExtend) bu SOLİD parapete gömülür → ne cam ne kasa ne duvar bandı KALMAZ.
+        //   PIKSEL KANITI (FPV dikey tarama, pencereye düz+grazing bakış): PARK_OVER=0.06 → 3px residual delik
+        //   (rgb ~23,21,18 = oyuk arkası, SAHNE değil duvar); PARK_OVER=0.14 → 0px (düz VE dik grazing açıda).
+        //   Parapet tam-WALL_T merkezli, cam ince (z≈0) → tepenin cam-altını ~8cm örtmesi "biraz derin denizlik"
+        //   okunur (görsel kabul); delik kesin kapanır (kullanıcı 2 kez "çözüldü" görüp geri geldi → geniş pay).
+        const PARK_OVER=0.14;   // parapet tepesi sill'i bu kadar aşar → oyuk alt-yarısı SOLİD dolar, dışarı delik KALMAZ
+        if(!g[4] && sill>0.04){ const ph=sill+PARK_OVER+0.02, pw=new THREE.Mesh(new THREE.BoxGeometry(gw,ph,WALL_T),wallMat);  // parapet: TAM kalınlık + tepe sill'i aşar (S1)
+          pw.position.set(mx,(roofOn?ph/2:ph/2*WALL_LOW)-0.02,mz); pw.rotation.y=ang; pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw); }
         if(WALL_H-top>0.04){ const lh=WALL_H-top, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lh,WALL_T),wallMat); // lento üstü: TAM kalınlık (B1)
           lw.position.set(mx,top+lh/2,mz); lw.rotation.y=ang; lw.castShadow=true; lw.userData.isLeaf=true; lw.scale.y=roofOn?1:WALL_LOW; lintels.add(lw); }
         addWindowGlass(mx,mz,gw,ang,sill,wh,walls,nIn);   // W4: nIn → denizlik DIŞ tarafa taşar
@@ -1335,6 +1352,16 @@
 
     // BALKON plakaları + korkulukları (cephe CAM KAPI zaten wallEdge'de oyuldu/çizildi).
     buildBalconies(map, {G:G, walls:walls, collide:collide, addCollider:addCollider, cx:cx, cz:cz});
+    // SUNUM-5 S3: YÜRÜYÜŞ SINIR KUTUSU balkonları DA kapsasın. walkStep güvenlik-ağı clamp'i (kamerayı bina
+    //   dış bbox İÇİNDE tutar → cepheden boşluğa düşmeyi önler) eskiden __hx/__hz (SADECE oda bbox'ı) kullanıyordu.
+    //   Balkon plakası cepheden DIŞARI taşar → balkona pegman bırakınca İLK KAREDE clamp kamerayı odaya geri
+    //   ışınlıyordu ("balkona çıkılamıyor"). __hx/__hz'yi DEĞİŞTİRME (kamera fit/orbit onları kullanır); AYRI
+    //   walk-bbox tut: oda bbox + balkon poligonları (dünya uzayı = metre − merkez). walkStep bunu clamp'ler.
+    (function(){ let wminX=-scene.__hx, wmaxX=scene.__hx, wminZ=-scene.__hz, wmaxZ=scene.__hz;   // oda bbox (merkez-hizalı → ±hx/±hz)
+      ((map&&map.balconies)||[]).forEach(function(bk){ const poly=bk&&bk.polygon_px; if(!poly) return;
+        poly.forEach(function(p){ const m=px2m(map,p[0],p[1]); const wx=m[0]-cx, wz=m[1]-cz;
+          if(wx<wminX)wminX=wx; if(wx>wmaxX)wmaxX=wx; if(wz<wminZ)wminZ=wz; if(wz>wmaxZ)wmaxZ=wz; }); });
+      scene.__walkMinX=wminX; scene.__walkMaxX=wmaxX; scene.__walkMinZ=wminZ; scene.__walkMaxZ=wmaxZ; })();
 
     // mobilya: geçersizleri ele (A8) → düz furnList'e topla → px damgala → çiz
     furnPruneInvalid(map); collectFurnList(); syncFurniturePx(map); renderFurniture();
@@ -2192,16 +2219,27 @@
     const cg=(scene&&scene.__colliders);
     if(!cg){ if(!scene||!scene.__walls) return true; } // geriye-uyum: collider yoksa eski davranışa düşme
     if(!walkRay) walkRay=new THREE.Raycaster();
-    // grup ofsetli (-cx,-cz) → ray origin DÜNYA uzayında (cam.position da dünya). intersect dünya-uzayı sonuç verir.
-    walkRay.set(new THREE.Vector3(px, WALK_EYE, pz), new THREE.Vector3(dirx,0,dirz).normalize());
-    walkRay.far=dist;
     const target=cg?cg.children:scene.__walls.children;
-    const hits=walkRay.intersectObjects(target, false);
-    for(let i=0;i<hits.length;i++){
-      const u=hits[i].object.userData||{};
-      if(u.isCollider) return false;                         // W5: görünmez tam-kalınlık duvar/pencere kutusu → engel
-      if(u.isLeaf||u.isSill||u.isCeiling) continue;          // (eski yol) kapı kanadı/eşik → geçilir
-      if(u.isWall||u.isWin) return false;                    // (eski yol) duvar + parapet + cam panel → engel
+    // SUNUM-5 S2: GÖVDE YARIÇAPI — eski tek-merkez ray, duvarı YALNIZ göz noktasının tam önünde test ediyordu.
+    //   Bir duvara AÇIYLA/köşeye yaklaşınca (eksen-ayrık adımın bir ekseninde duvar "yan"da kalınca) merkez ray
+    //   duvar kenarını IŞKALAYIP omuz duvara girebiliyordu → "odalar arası duvardan geçiş" (collisionHoleScan tüm
+    //   duvarlarda collider görse bile, çünkü sorun EKSİK collider değil, NOKTA-ray'in yandan sıyırması). FIX: üç
+    //   paralel ray (merkez + ±WALK_BODY yanal ofset, hareket yönüne DİK). Herhangi biri collider'a çarparsa engel.
+    //   Kapılar (≥0.8m) gövde çapından (2·0.22=0.44m) geniş → yine geçilir; duvar kenarı artık sıyrılamaz.
+    const dlen=Math.hypot(dirx,dirz)||1, ndx=(-dirz)/dlen, ndz=(dirx)/dlen;   // hareket yönüne DİK birim (yanal ofset ekseni)
+    const dirV=new THREE.Vector3(dirx,0,dirz).normalize();
+    const OFFS=[0, WALK_BODY, -WALK_BODY];
+    for(let o=0;o<OFFS.length;o++){
+      const ox=px+ndx*OFFS[o], oz=pz+ndz*OFFS[o];
+      walkRay.set(new THREE.Vector3(ox, WALK_EYE, oz), dirV);
+      walkRay.far=dist;
+      const hits=walkRay.intersectObjects(target, false);
+      for(let i=0;i<hits.length;i++){
+        const u=hits[i].object.userData||{};
+        if(u.isCollider) return false;                       // W5: görünmez tam-kalınlık duvar/pencere kutusu → engel
+        if(u.isLeaf||u.isSill||u.isCeiling) continue;        // (eski yol) kapı kanadı/eşik → geçilir
+        if(u.isWall||u.isWin) return false;                  // (eski yol) duvar + parapet + cam panel → engel
+      }
     }
     // F1 (SUNUM-2A): mobilya FPV'de TAM PASS-THROUGH. Kullanıcı kararı: mobilya içinden geçilebilir
     //   olsun (spawnda/dar geçitte sıkışmayı önler). Yatay çarpışma yalnız duvar/pencere collider'ında;
@@ -2313,10 +2351,17 @@
       if(vx!==0 && walkAxisClear(px,pz, vx,0, Math.abs(vx*speed)+WALK_BUFFER)) cam.position.x=px+vx*speed;
       if(vz!==0 && walkAxisClear(cam.position.x,pz, 0,vz, Math.abs(vz*speed)+WALK_BUFFER)) cam.position.z=pz+vz*speed;
       // güvenlik ağı: bina dış bbox'ı DIŞINA çıkma (cephedeki kapı boşluğundan boşluğa yürüyüp kadraj-dışı
-      //   siyaha düşmeyi önler; iç kapı geçişleri bbox İÇİNDE olduğundan etkilenmez). hx/hz merkez-hizalı yarı-en.
-      const hx=(scene&&scene.__hx)||1e9, hz=(scene&&scene.__hz)||1e9, mrg=WALK_BUFFER;
-      cam.position.x=Math.max(-hx+mrg, Math.min(hx-mrg, cam.position.x));
-      cam.position.z=Math.max(-hz+mrg, Math.min(hz-mrg, cam.position.z));
+      //   siyaha düşmeyi önler; iç kapı geçişleri bbox İÇİNDE olduğundan etkilenmez).
+      // SUNUM-5 S3: clamp artık BALKONLARI DA kapsayan walk-bbox (asimetrik min/max, __walkMinX..__walkMaxX) →
+      //   balkon plakası bbox içinde kalır (üstünde yürünür), oda-only bbox'a geri ışınlama YOK. Yoksa (balkonsuz
+      //   ya da eski sahne) __hx/__hz merkez-hizalı yarı-en'e düş (geriye-uyum).
+      const mrg=WALK_BUFFER;
+      const wminX=(scene&&scene.__walkMinX!=null)?scene.__walkMinX:(scene&&scene.__hx!=null?-scene.__hx:-1e9);
+      const wmaxX=(scene&&scene.__walkMaxX!=null)?scene.__walkMaxX:(scene&&scene.__hx!=null?scene.__hx:1e9);
+      const wminZ=(scene&&scene.__walkMinZ!=null)?scene.__walkMinZ:(scene&&scene.__hz!=null?-scene.__hz:-1e9);
+      const wmaxZ=(scene&&scene.__walkMaxZ!=null)?scene.__walkMaxZ:(scene&&scene.__hz!=null?scene.__hz:1e9);
+      cam.position.x=Math.max(wminX+mrg, Math.min(wmaxX-mrg, cam.position.x));
+      cam.position.z=Math.max(wminZ+mrg, Math.min(wmaxZ-mrg, cam.position.z));
     }
     // J1: DİKEY BALİSTİK — her karede yerçekimi entegre et, zemine (taban ya da alçak mobilya tepesi) in.
     const floorY=walkFloorAt(cam.position.x, cam.position.z);
@@ -4933,11 +4978,35 @@
     analyzeRoomForTest:function(room, map){ room.__an=null; return furnAnalyzeRoom(room, map); },
     furnDimForTest:function(type){ return FURN_DIM[type]||null; },
     collisionHoleScan:function(){ return collisionHoleScan(); },   // W5: görsel duvar segmentlerinde çarpışma-deliği taraması
+    // SUNUM-5 S3 TEŞHİS: yürüyüş güvenlik-ağı bbox'ı (balkonlar dahil) + oda-only bbox (fark = balkon taşması).
+    walkBoundsForTest:function(){ if(!scene) return null; return {
+      walk:{minX:scene.__walkMinX,maxX:scene.__walkMaxX,minZ:scene.__walkMinZ,maxZ:scene.__walkMaxZ},
+      roomOnly:{hx:scene.__hx,hz:scene.__hz} }; },
+    // SUNUM-5 S3 TEŞHİS: enterWalk spawn'ını HEADLESS türet + güvenlik-ağı clamp'ini uygula → balkon dropu
+    //   odaya geri ışınlanıyor mu (clamp balkon noktasını içeri çekiyor mu). Read-only (cam'e dokunmaz).
+    walkSpawnClampForTest:function(wx,wz){ if(!scene) return null;
+      var sp=walkSpawnAt(wx,wz); if(!sp) return {spawn:null};
+      var mrg=WALK_BUFFER;
+      var wminX=scene.__walkMinX!=null?scene.__walkMinX:-scene.__hx, wmaxX=scene.__walkMaxX!=null?scene.__walkMaxX:scene.__hx;
+      var wminZ=scene.__walkMinZ!=null?scene.__walkMinZ:-scene.__hz, wmaxZ=scene.__walkMaxZ!=null?scene.__walkMaxZ:scene.__hz;
+      var cxp=Math.max(wminX+mrg,Math.min(wmaxX-mrg,sp.x)), czp=Math.max(wminZ+mrg,Math.min(wmaxZ-mrg,sp.z));
+      return {spawn:{x:+sp.x.toFixed(3),z:+sp.z.toFixed(3),room:sp.room&&sp.room.id},
+              afterClamp:{x:+cxp.toFixed(3),z:+czp.toFixed(3)},
+              roomAtClamped:roomIdAtPoint({x:cxp,z:czp}) }; },
     // SUNUM-4A B3 TEŞHİS: FPV çarpışma ray'i (walkAxisClear) doğrudan sorgu — balkon kapısı hizasından
     //   geçiş açık mı (true=engel yok/geçilir, false=collider engeli). Read-only, sahneyi değiştirmez.
     //   NOT: px/pz = DÜNYA koordinatı (grup -cx,-cz ofsetli). Plan koordu için sceneCenterForTest çıkar.
     walkClearForTest:function(px,pz,dx,dz,dist){ if(scene&&scene.__colliders) scene.__colliders.updateMatrixWorld(true); return walkAxisClear(px,pz,dx,dz,dist); },
     sceneCenterForTest:function(){ return {cx:(scene&&scene.__cx)||0, cz:(scene&&scene.__cz)||0}; },
+    // SUNUM-5 S2 TEŞHİS: walkStep'in eksen-ayrık çarpışma mantığını HEADLESS simüle et (dünya px,pz'den steps adım,
+    //   birim yön). walkAxisClear (gövde-yarıçaplı, canlı) ile aynı kapı → köşe-sıyrılma before/after ölçülür.
+    walkSimForTest:function(px,pz,dirx,dirz,steps,stepLen){ if(scene&&scene.__colliders) scene.__colliders.updateMatrixWorld(true);
+      var s=stepLen||0.10, BUF=WALK_BUFFER, dl=Math.hypot(dirx,dirz)||1, vx=dirx/dl, vz=dirz/dl;
+      for(var k=0;k<(steps||10);k++){ var nx=px;
+        if(vx!==0 && walkAxisClear(px,pz,vx,0,Math.abs(vx*s)+BUF)) nx=px+vx*s;
+        var nz=pz; if(vz!==0 && walkAxisClear(nx,pz,0,vz,Math.abs(vz*s)+BUF)) nz=pz+vz*s;
+        px=nx; pz=nz; }
+      return {x:+px.toFixed(3), z:+pz.toFixed(3)}; },
     // B3 debug: verilen dünya-z bandındaki collider'ların dünya-x aralıkları (üst cephe boşluk analizi)
     collidersNearForTest:function(worldZ, tol){ tol=tol||0.4; const cg=scene&&scene.__colliders; if(!cg) return [];
       const cxo=scene.__cx||0, czo=scene.__cz||0; const out=[];
