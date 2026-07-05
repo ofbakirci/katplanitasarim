@@ -61,3 +61,37 @@ KÖŞE pencereler (0,3,6,12,13): FPV gözü tek-dominant-normalle bina köşesi 
 karışır (harness sınırı, mesh kusuru değil; görsel doğrulandı). Merkez mullion dikey çizgisi = iki cam
 panel arası cam boşluğu (pencere camı, dikiş DEĞİL). Görsel kapı: içeriden FPV temiz + dışarıdan cephe
 pencereler fluş.
+
+## R3 NOTU (2026-07-06) — SÖVE (reveal) + gerçek KÖK NEDEN (applyRoof parapet ölçek hatası)
+Kullanıcı R2'yi reddetti (SS1: kasa "kabartma panel", üst/alt farklı düzlem, "duvara pencere boyu kesik
+açıp kasayı İÇİNE OTURT, lento dışarıdan belli olmasın"). R3 SÖVE modeli:
+- Kasa artık FLUŞ-tam-tünel değil: oyuğun İÇ ağzına 4 kenar DUVAR-BOYALI reveal cap (iç yüzle fluş, `REVEAL≈0.06`
+  derin), beyaz PVC kasa cap ARKASINDA (tam `WALL_T` derin, sızdırmaz) → içeriden "duvar → söve(gölgeli) →
+  ince beyaz kasa → cam". Cam TEK PANEL, açıklıktan `fr` taşkın (kenar strip'i örter).
+- **GERÇEK KÖK NEDEN (kalıcı see-through `23,21,18` kara yarık):** `applyRoof` parapet/lento dolgusunu
+  (`isWin`/`isLeaf`) çatı geçişinde SADECE `scale.y` ile ölçekliyordu, `position.y`'yi SIFIRLAMIYORDU →
+  build (dollhouse, roofOn=false, WALL_LOW konum) sonrası FPV (roofOn=true, scale→1) parapet MERKEZDEN
+  büyüyüp TEPESİ düşüyordu → kasa bandı ile parapet arasında dış cepheye bakış hattı (kara yarık). Fix:
+  parapet/lento `isWinFill`/`isLeafFill` tag'i + `__baseY`/`__h0` userData + applyRoof TABANDAN yeniden
+  konumlar (`scaleGrounded`). Kasa/cam/söve geometrisi zaten doğruydu; hata çatı-ölçek katmanındaydı.
+- **Kanıt (opak-magenta cam ile teşhis + geri alındı):** kara yarık cam ARDINDA değil, alt kasa bandı ↔
+  parapet arasında gerçek delikti; renk-kodlu mesh probu (parapet yeşil / band mavi) yarığı tam yerleştirdi.
+
+### R3 tarama (bg-count, opak-arka doğrulandı) — HEPSİ 0
+`fpvSnapDataURL` 16 iç-cepheli pencere × 4 açı (a düz / b grazeUp / c aşağı / d dışarı), pencere merkez
+kolon şeridinde `rgb<(28,26,23)` bg pikseli say = **64 hücre TÜMÜ 0** (2026-07-06 koşumu). Ek: opak cam
+ile de 16 pencere frontal = 0 (kara yarık cam-see-through değil, gerçek delik değil artık).
+
+## R3 KÖŞE (R3-3) — köşe dolgu prizması
+Yarım-kalınlık (U1) duvar kutuları köşede uç uca bitince köşe karesi dolmuyordu + iç ofsetle dış köşede
+uç yüzeyi/derz görünüyordu ("kalınlık gözüküyor, tam birleşmemiş"). Fix: her poligon vertex'ine (kenar BAŞ
+köşesi) tam-`WALL_T` dikdörtgen prizma (`isWallPost`, vertex-merkezli, `nIn` yönünde `WALL_EPS` mikro-ofset
+z-fight için) → köşe her açıdan dolu (90°-dışı/T-birleşim de). `holeScan` wall-run saymaz (isWallPost),
+çarpışma segment'lerden gelir → 0 hole korunur; applyRoof tam-boy duvar gibi ölçekler.
+
+## R3-2 (dither/clipping + core çarpışma) — DOĞRULAMA, KOD DEĞİŞİKLİĞİ YOK
+- Kullanıcının SS2 "dama/noktalı çözünme (clipping)" algısı için: motorda alphaHash/dither/wall-fade/near-
+  fade MEKANİZMASI YOK (grep doğrulandı); FPV duvarları daima opak (isWall'da transparency yok). FPV/orbit
+  core-komşu duvarlarda dither üretilemedi (flipRatio 0; orbit yakın-plan temiz) → zaten çözülmüş (S2 commit).
+- Core (MERDİVEN/ASANSÖR) çarpışma: `walkSimForTest` her core kenarına dik yürüyüş → penetrasyon HEP negatif
+  (karakter duvarı GEÇMİYOR, 0.38m dışarıda durur); `collisionHoleScan` 0 hole. Core duvarları sağlam.
