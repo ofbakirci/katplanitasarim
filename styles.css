@@ -208,7 +208,9 @@
   .chkSummary .openBtn:hover{border-color:var(--acc); background:var(--acc-soft);}
   /* Mevzuat popup */
   #checksModal{position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; background:var(--scrim); padding:24px;}
-  #checksModalWin{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-xl); box-shadow:var(--sh-modal); width:min(560px,100%); max-height:min(80vh,720px); display:flex; flex-direction:column; overflow:hidden;}
+  /* max-height %100 = overlay yüksekliği (fixed inset:0 → viewport) − padding; vh KULLANMA
+     (iframe/zoom ortamlarında vh yanıltabilir; %100 her ortamda görünür alana kilitler). */
+  #checksModalWin{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-xl); box-shadow:var(--sh-modal); width:min(560px,100%); max-height:min(100%,720px); display:flex; flex-direction:column; overflow:hidden;}
   #cmHead{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line); flex-shrink:0;}
   #cmTitle{font-size:14px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); flex:1;}
   #cmClose{width:28px; height:28px; padding:0; border:1px solid var(--line); border-radius:var(--r-sm); background:#fff; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;}
