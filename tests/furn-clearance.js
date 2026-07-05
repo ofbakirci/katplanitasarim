@@ -96,9 +96,38 @@ ok(audit.winChk > 0, 'en az bir pencere-önü denetimi çalışmalı (winChk>0)'
 ok(audit.tallSeen > 0, 'senaryoda yüksek mobilya (gardırop/kitaplık) bulunmalı (tallSeen>0)');
 ok(audit.winViol === 0, 'W3: yüksek mobilya (veya tam-boy önü alçak) pencere önünde olmamalı (ihlal: ' + audit.winViol + ')');
 
+/* --- KORİDOR kuralı: "daracık koridora bir şey koyma; geniş yeri varsa koyarsın" ---
+   Motor kaynağı burada devreye SOKULMAZ (senaryo bağımsız) — doğrudan sentetik oda poligonlarıyla
+   furnishMapForTest'in kullandığı furnPlaceRoom dispatch'ini çağırırız (View3D.furnishMapForTest map alır). */
+run(`
+  __mkMap = function(poly_m, mpp){
+    mpp = mpp || 0.02;
+    var origin=[0,0];
+    var poly_px = poly_m.map(function(p){ return [p[0]/mpp+origin[0], p[1]/mpp+origin[1]]; });
+    return { scale:{ metersPerPixel:mpp, origin_px:origin }, doors:[], windows:[],
+      units:[], common_areas:[ { id:'C-corridor', type:'KORİDOR', name:'KORİDOR', polygon_px:poly_px } ] };
+  };
+`);
+// dar koridor: 1.10m genişlik × 6m uzunluk → console(d=0.37) sonrası kalan geçiş 0.73m < 0.90m eşiği → HİÇ mobilya olmamalı
+const narrowN = run(`(function(){
+  var map=__mkMap([[0,0],[6,0],[6,1.10],[0,1.10]]);
+  var rows=window.View3D.furnishMapForTest(map);
+  return rows[0].furniture.length;
+})()`);
+ok(narrowN === 0, 'dar koridor (1,10m): mobilya YOK beklenirdi (kalan geçiş<0,90m), üretilen: ' + narrowN);
+
+// geniş koridor: 1.70m genişlik × 6m uzunluk → console sonrası kalan geçiş 1.33m ≥ 0.90m eşiği → yerleşmeli
+const wideN = run(`(function(){
+  var map=__mkMap([[0,0],[6,0],[6,1.70],[0,1.70]]);
+  var rows=window.View3D.furnishMapForTest(map);
+  return rows[0].furniture.length;
+})()`);
+ok(wideN > 0, 'geniş koridor (1,70m): en az 1 mobilya (konsol/bank) beklenirdi, üretilen: ' + wideN);
+
 console.log('');
 console.log('  kapı-önü denetim: ' + audit.doorChk + ' · ihlal ' + audit.doorViol);
 console.log('  pencere-önü denetim: ' + audit.winChk + ' · yüksek-mobilya ' + audit.tallSeen + ' · ihlal ' + audit.winViol);
+console.log('  koridor kuralı: dar(1,10m)→' + narrowN + ' mobilya · geniş(1,70m)→' + wideN + ' mobilya');
 console.log(pass + ' geçti, ' + fail + ' kaldı.');
 if(fail){ process.exitCode = 1; }
-else console.log('SONUÇ: ✓ FURN-CLEARANCE (W2 kapı-önü + W3 pencere-önü) tüm testleri GEÇTİ');
+else console.log('SONUÇ: ✓ FURN-CLEARANCE (W2 kapı-önü + W3 pencere-önü + koridor-genişlik) tüm testleri GEÇTİ');

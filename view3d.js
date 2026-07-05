@@ -55,6 +55,10 @@
   let walkRay=null;                                          // gezinti çarpışması için ayrılmış Raycaster (picker'dan bağımsız)
   let walkLamp=null, walkAmbient=null;                        // W3: gezinti-özel iç aydınlatma (kafa lambası + fill); kapalı iç mekan karanlık kalmasın
   const WALK_EYE=1.6, WALK_SPEED=2.5, WALK_RUN=4.0, WALK_BUFFER=0.25, WALK_PITCH_MAX=85*Math.PI/180;
+  // ── ADIM SESİ: dosya YOK — WebAudio ile prosedürel filtreli-gürültü patlaması (bkz. walkFootstepFire). ──
+  //   walkSoundOn: oturum-içi Açık/Kapal aç/kapa (yardım çubuğu düğmesi); varsayılan AÇIK. AudioContext İLK
+  //   kullanıcı jestinde (pointer-lock tıklaması) kurulur → autoplay kısıtına takılmaz.
+  let walkSoundOn=true, walkACtx=null, walkStepPhase=0;
   // J1: ZIPLAMA — göz-hizası (WALK_EYE) taban, üstüne balistik dikey ofset. Basit yerçekimi: v0/g öyle seçilir ki
   //   tepe ~0.5m (h=v0²/2g ⇒ v0=√(2·g·0.5)). İniş TABAN'a (floorY=WALK_EYE) ya da üstüne çıkılabilecek ALÇAK
   //   mobilya tepesine. walkY = göz konumu (dünya y). walkVelY = dikey hız. walkGrounded = yerde/mobilya üstünde.
@@ -612,7 +616,12 @@
       '#v3dFurnDock .pit:hover{background:#3a3a44;border-color:rgba(201,161,107,.5)}'+
       '#v3dFurnDock .pit.on{border-color:#7bbf8a;background:#33403a}'+
       '#v3dFurnDock .pit svg{width:22px;height:22px}'+
-      '#v3dFurnDock .pit .pn{font-size:8px;line-height:1.1;color:#d8d2c6;text-align:center;max-width:44px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+      // Demo-sweep pürüz (b): "Üçlü Kan…"/"Makyaj M…" gibi tek-satır kesilmiş etiketler okunmuyordu. title
+      //   tooltip zaten vardı (tam adı hover'da gösterir); ayrıca etiket 2 SATIRA izin verilir + font küçültüldü
+      //   (8px→7px) — SABİT yükseklik (2×line-height) rezerve edilir ki palet ızgarası (2 satır×6 sütun) BOZULMASIN.
+      '#v3dFurnDock .pit .pn{font-size:7px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:44px;'+
+      'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;'+
+      'height:2.3em;word-break:break-word}'+
       // R5: KONTRAST FIX — global label{background:#fbfaf7} sızıntısı 'Render\'a mobilya ekle' metnini görünmez yapıyordu
       //   (bg ~beyaz + color ~beyaz). Dock arka planında açık metin + saydam arka planı zorla.
       '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:#e8e6e0;border:0;padding:0;box-shadow:none}'+
@@ -693,6 +702,7 @@
       else if(a==='cambarpip'){ if(pipClosed) openPipForSelection(); else closePip(); }   // KAMERA-S S4: PiP aç-kapa
       else if(a==='roof'){ roofOn=t.checked; applyRoof(); }
       else if(a==='lbl'){ lblOn=t.checked; if(scene&&scene.__labels) scene.__labels.visible=lblOn; }
+      else if(a==='walksound'){ walkSoundOn=!walkSoundOn; ensureWalkAudio(); const h=overlay.querySelector('#v3dWalkHint'); if(h) h.innerHTML=walkHintHTML(); }
     });
     // A2: persistent zoom bar bir kez bağlanır (çekmeceden bağımsız, HER görünümde açık)
     window.addEventListener('pointerup',function(){ zoomActive=false; });
@@ -1593,7 +1603,10 @@
      Giriş: Pointer Lock + WASD yürü + fare bak (yaw/pitch). Çarpışma: RAYCAST (duvar+pencere-cam bloklar,
      kapı kanadı GEÇİLİR) + mobilya ayak-izi bloğu. Tavan AÇIK, etiket/gizmo/dock gizli (C3-4 deseni). */
   function walkHintHTML(){
-    return 'WASD yürü · Fare bak · Shift koş · Space: zıpla · <b style="color:#e0843a">C: bu açıda kamera</b> · Esc çık';   // R9: C ipucu · J1: Space
+    return 'WASD yürü · Fare bak · Shift koş · Space: zıpla · <b style="color:#e0843a">C: bu açıda kamera</b> · Esc çık'+
+      ' · <button data-v3d="walksound" style="pointer-events:auto;background:transparent;border:1px solid rgba(255,255,255,.3);'+
+      'color:#e8e6e0;border-radius:6px;padding:2px 8px;font:11px/1.3 system-ui,sans-serif;cursor:pointer;font-family:inherit">'+
+      'Ses: '+(walkSoundOn?'Açık':'Kapalı')+'</button>';   // adım sesi aç/kapa (oturum içi hatırlanır)
   }
   function ensureWalkHint(){
     if(!overlay) return null;
@@ -1655,8 +1668,25 @@
     const la=best.label_anchor_px||best.centroid_px; if(!la) return null;
     const m=px2m(map,la[0],la[1]);
     const wx=m[0]-cx, wz=m[1]-cz;
-    // bakış yönü: odanın kendi merkezinden UZAK köşesine değil, oda içinde en uzun eksene bak (açık hat).
-    //   basit: poligon merkezinden en uzak köşeye doğru (o yönde en çok mesafe var → duvara yapışmaz).
+    // Demo-sweep pürüz (a): giriş karesi bazen duvara/dolaba burun mesafesinde açılıyordu (tek-köşe hedefi
+    //   yakın bir mobilyanın arkasında kalabiliyor). 8 yönde (45° adım) collider raycast at, en az ~2m açık
+    //   görüşü olan yönü seç (birden fazla varsa EN GENİŞİ); hiçbiri 2m'yi bulamazsa en açık olanı yine de al
+    //   (dar odada da bir yöne bakmak gerekir). walkAxisClear henüz collider kuramadıysa (sahne hazır değil)
+    //   eski "en uzak köşeye bak" yöntemine düş (geriye-uyum, ölçülemezken siyah kadraja düşmeyi önler).
+    const MIN_OPEN=2.0, PROBE_DIST=6.0;
+    let bestYaw=null, bestOpen=-1;
+    for(let k=0;k<8;k++){ const yaw=k*Math.PI/4;
+      const dx=Math.sin(yaw), dz=-Math.cos(yaw);                          // walkStep ile aynı yaw→yön eşlemesi
+      // ikili arama: PROBE_DIST'e kadar en uzak açık mesafeyi bul (walkAxisClear(dist) net/false döner, mesafe vermiyor)
+      let lo=0, hi=PROBE_DIST;
+      if(!walkAxisClear(wx,wz,dx,dz,hi)){                                  // tam mesafe açık değilse ikili aramayla sınırı bul
+        for(let it=0;it<6;it++){ const mid=(lo+hi)/2; if(walkAxisClear(wx,wz,dx,dz,mid)) lo=mid; else hi=mid; }
+      } else lo=hi;
+      if(lo>bestOpen){ bestOpen=lo; bestYaw=yaw; }
+    }
+    if(bestYaw!=null && bestOpen>=MIN_OPEN) return {x:wx,z:wz,room:best,yaw:bestYaw};
+    if(bestYaw!=null && bestOpen>0) return {x:wx,z:wz,room:best,yaw:bestYaw};   // hiçbiri 2m değil → yine de en açığı seç
+    // yedek: collider ölçülemedi → oda içinde en uzun eksene (en uzak köşeye) bak
     let far=null,fd=-1;
     best.polygon_px.forEach(function(p){ const pm=px2m(map,p[0],p[1]); const dx=pm[0]-cx-wx, dz=pm[1]-cz-wz; const d=dx*dx+dz*dz; if(d>fd){ fd=d; far=[dx,dz]; } });
     let aimYaw=null;
@@ -1711,6 +1741,7 @@
     walkY=WALK_EYE; walkVelY=0; walkGrounded=true;           // J1: dikey durumu sıfırla (girişte yerde)
     Object.keys(walkKeys).forEach(function(k){ walkKeys[k]=false; });
     walkClock=(typeof performance!=='undefined'?performance.now():Date.now());
+    walkStepPhase=0; ensureWalkAudio();                       // adım sesi: bu tık kullanıcı jesti → AudioContext güvenle kurulur
     cam.fov=72; cam.up.set(0,1,0); applyWalkLook();           // geniş-açı iç mekan hissi
     hideChromeForWalk(true);
     const hint=ensureWalkHint(); if(hint) hint.style.display='block';
@@ -1742,6 +1773,7 @@
     // W3: gezinti aydınlatmasını kaldır (ana render/iso/snapshot ışıkları BİREBİR eski kalsın)
     if(walkLamp&&walkLamp.parent) walkLamp.parent.remove(walkLamp);
     if(walkAmbient&&walkAmbient.parent) walkAmbient.parent.remove(walkAmbient);
+    if(walkACtx&&walkACtx.state==='running'){ try{ walkACtx.suspend(); }catch(e){} }   // adım sesi: gezinti dışında CPU'yu boşta tutma
     hideChromeForWalk(false);
     const hint=overlay&&overlay.querySelector('#v3dWalkHint'); if(hint) hint.style.display='none';
     const camBtn=overlay&&overlay.querySelector('#v3dWalkCamBtn'); if(camBtn) camBtn.style.display='none';   // R9: butonu gizle
@@ -1882,6 +1914,46 @@
     }
     return floor;
   }
+  /* ====================== ADIM SESİ — WebAudio prosedürel (dosya YOK) ======================
+     Her adımda kısa filtreli-gürültü patlaması (~60-90ms decay, lowpass ~400-800Hz), hafif pitch/gain
+     rastgeleliği. AudioContext İLK kullanıcı jestinden (pointer-lock tıklaması) sonra kurulur → autoplay
+     kısıtına takılmaz. Ses seviyesi DÜŞÜK (gain 0.05-0.1). Kadans: yürürken ~2 adım/sn, koşarken daha sık
+     (hız oranıyla ölçekli). Yalnız zeminde + fiilen hareket ederken tetiklenir (havada/duvara yaslanınca sessiz). */
+  function ensureWalkAudio(){
+    if(walkACtx) return walkACtx;
+    const Ctor=(typeof AudioContext!=='undefined'?AudioContext:(typeof window!=='undefined'?window.webkitAudioContext:null));
+    if(!Ctor) return null;
+    try{ walkACtx=new Ctor(); }catch(e){ walkACtx=null; }
+    return walkACtx;
+  }
+  function walkFootstepFire(){
+    if(!walkSoundOn) return;
+    const actx=ensureWalkAudio(); if(!actx) return;
+    if(actx.state==='suspended'){ try{ actx.resume(); }catch(e){} }
+    const now=actx.currentTime;
+    const dur=0.06+Math.random()*0.03;                        // 60-90ms decay
+    const n=Math.max(1,Math.round(actx.sampleRate*dur));
+    const buf=actx.createBuffer(1,n,actx.sampleRate);
+    const data=buf.getChannelData(0);
+    for(let i=0;i<n;i++){ data[i]=(Math.random()*2-1)*Math.pow(1-i/n,1.6); }   // beyaz gürültü + üstel sönüm
+    const src=actx.createBufferSource(); src.buffer=buf;
+    const filt=actx.createBiquadFilter(); filt.type='lowpass';
+    filt.frequency.value=400+Math.random()*400;               // ~400-800Hz hafif rastgele
+    const gain=actx.createGain();
+    const g=0.05+Math.random()*0.05;                          // gain 0.05-0.10 (düşük)
+    gain.gain.setValueAtTime(g, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now+dur);
+    src.playbackRate.value=0.9+Math.random()*0.2;             // hafif pitch rastgeleliği
+    src.connect(filt); filt.connect(gain); gain.connect(actx.destination);
+    src.start(now); src.stop(now+dur+0.02);
+  }
+  // hareket ederken kadans biriktir → faz tamsayı sınırını her geçtiğinde bir adım sesi çal.
+  function walkFootstepStep(dt, moving, running){
+    if(!moving || !walkGrounded){ walkStepPhase=0; return; }
+    const stepsPerSec=running?3.4:2.0;                        // koşarken daha sık (~2 adım/sn yürüyüş)
+    const prev=walkStepPhase; walkStepPhase+=dt*stepsPerSec;
+    if(Math.floor(walkStepPhase)>Math.floor(prev)) walkFootstepFire();
+  }
   // her karede (loop) çağrılır: dt hesapla, WASD yönünü kur, eksen-ayrık çarpışma (duvar boyunca kayar), uygula.
   function walkStep(){
     if(!walkOn||!cam) return;
@@ -1891,6 +1963,7 @@
     let mf=0, ms=0;                                          // ileri / yan giriş
     if(walkKeys.w) mf+=1; if(walkKeys.s) mf-=1;
     if(walkKeys.d) ms+=1; if(walkKeys.a) ms-=1;
+    walkFootstepStep(dt, (mf!==0||ms!==0), !!walkKeys.shift);
     if(mf!==0||ms!==0){
       // yatay düzlemde ileri/yan yön (pitch'ten bağımsız → merdiven yok, düz yürü)
       const fx=Math.sin(walkYaw), fz=-Math.cos(walkYaw);       // ileri (yatay)
@@ -2931,10 +3004,16 @@
   const MAT_BY_KEY = {}; MAT_PRESETS.forEach(function(p){ MAT_BY_KEY[p.key]=p; });
   function hexCss(h){ return '#'+('000000'+(h>>>0).toString(16)).slice(-6); }
   // swatch (küçük önizleme karesi) için CSS arka planı — prosedürel dokuyu ima eden hafif gradient/çizgi.
+  // Demo-sweep pürüz (c): SERAMİK swatch'ları (Beyaz/Gri/Bej/Antrasit) siyah/boş görünüyordu. Kök neden:
+  //   `background` KISALTMASI çok-katmanlı değerde rengi YALNIZ SON katmanda kabul eder; eski kod HER iki
+  //   gradient katmanının ÖNÜNE de bir renk koyuyordu (b + gradient, b + gradient) → geçersiz CSS → tarayıcı
+  //   TÜM background'ı reddeder (şeffaf/boş swatch). Fix: renk yalnız SONDA (tek) — iki gradient katmanı image
+  //   olarak önce, taban rengi en sonda tek başına. Parke zaten tek katman olduğundan etkilenmemişti.
   function matSwatchCss(p){
     const b=hexCss(p.base);
     if(p.cls==='parke'){ const ln=hexCss(p.line||p.base); return 'repeating-linear-gradient(90deg,'+b+' 0 6px,'+ln+' 6px 7px)'; }
-    if(p.cls==='seramik'){ const gr=hexCss(p.grout||p.base); return b+' repeating-linear-gradient(0deg,transparent 0 8px,'+gr+' 8px 9px),'+b+' repeating-linear-gradient(90deg,transparent 0 8px,'+gr+' 8px 9px)'; }
+    if(p.cls==='seramik'){ const gr=hexCss(p.grout||p.base);
+      return 'repeating-linear-gradient(0deg,transparent 0 8px,'+gr+' 8px 9px),repeating-linear-gradient(90deg,transparent 0 8px,'+gr+' 8px 9px),'+b; }
     return b;   // boya = düz renk
   }
   // ── prosedürel canvas çizimi (dosyasız) — 256×256 tekrarlı doku ──
@@ -3675,6 +3754,26 @@
     return true;
   }
   function furnHeightOf(type){ const d=FURN_DIM[type]; return d?d.h:null; }
+  // KORİDOR: (x,z)'den (dx,dz) yönünde poligon SINIRINA olan mesafe (m) — ışın/kenar kesişimi, en yakını.
+  //   Kullanım: mobilyanın dayandığı kenardan iç normal boyunca karşı sınıra dik mesafe = yerel koridor genişliği.
+  function rayPolyDist(x,z,dx,dz,poly){
+    let best=1e9;
+    for(let i=0;i<poly.length;i++){ const a=poly[i], b=poly[(i+1)%poly.length];
+      const ex=b[0]-a[0], ez=b[1]-a[1], denom=dx*ez-dz*ex;
+      if(Math.abs(denom)<1e-9) continue;
+      const t=((a[0]-x)*ez-(a[1]-z)*ex)/denom;             // ışın parametresi (mesafe, dx/dz normalize varsayılır)
+      const u=((a[0]-x)*dz-(a[1]-z)*dx)/denom;             // kenar parametresi (0..1 arası kenar üstü)
+      if(t>1e-4 && u>=-1e-4 && u<=1+1e-4 && t<best) best=t;
+    }
+    return best<1e9?best:0;
+  }
+  // KORİDOR: bir kenara yaslı mobilya (derinlik d) için kalan GEÇİŞ payı (m) — kenar orta-noktasından
+  //   iç normal boyunca karşı sınıra kadar olan yerel bant genişliği - mobilya derinliği.
+  const CORRIDOR_MIN_PASS=0.90;                              // dar koridor kuralı: kalan geçiş < 0.90m ise o noktaya KOYMA
+  function corridorClearance(an, x, z, nIn, itemDepth){
+    const width=rayPolyDist(x,z,nIn[0],nIn[1],an.poly);      // mobilya merkezinden karşı sınıra (mobilyanın YARISI zaten duvar tarafında)
+    return width - itemDepth/2;                              // merkez → karşı sınır mesafesi zaten yarım-derinlik içeriyor, kalan geçiş budur
+  }
   // duvara yaslı item bakış açısı = iç normal yönü (local +Z → nIn). w duvar boyunca, d odaya doğru.
   function wallRotDeg(edge){ return (Math.atan2(edge.nIn[0], edge.nIn[1])*180/Math.PI+360)%360; }
   // kenar üzerinde kapı (+ clearance) ve uç payları düşülmüş serbest aralıklar
@@ -4012,6 +4111,42 @@
   function furnishEntry(ctx){ const an=ctx.an, placed=ctx.placed;
     placeChain(an, (an.area>3?['shoe_cabinet','console']:['console']), placed, {}, allEdges(an,{minLen:0.8})); }
 
+  // ----- KORİDOR/HOL (kullanıcı: "daracık koridorlara bir şey koyma; koridorun geniş yeri varsa koyarsın") -----
+  //   Yalnız KENARDAKİ genişçe bir noktaya (konsol/bank) — dar bant boyunca yürüyüş payı KORUNUR.
+  //   Aday t-noktalarını dener, her adayda o noktadaki YEREL koridor genişliğinden mobilya derinliği düşülünce
+  //   kalan geçiş < CORRIDOR_MIN_PASS ise o noktayı ELE (furnFits'e sormadan önce ekstra süzgeç). Koridorun
+  //   hiçbir yeri yetmiyorsa hiç mobilya konmaz (bu DOĞRU sonuç — boş koridor kabul edilir).
+  function placeOnEdgeCorridorAware(an, edge, type, placed, opt){
+    opt=opt||{};
+    const dim=FURN_DIM[type]||{w:0.6,d:0.6};
+    const w=(opt.w!=null?opt.w:dim.w), d=(opt.d!=null?opt.d:dim.d);
+    const rot=(opt.rot!=null?opt.rot:wallRotDeg(edge));
+    const inset=d/2+(opt.wallGap==null?WALL_CLR:opt.wallGap);
+    const spans=freeSpansOnEdge(edge, (opt.endClear==null?0.12:opt.endClear), (opt.doorClear==null?0.35:opt.doorClear));
+    const cand=[];
+    spans.forEach(function(s){ const slen=s[1]-s[0]; if(slen < w-1e-6) return;
+      cand.push((s[0]+s[1])/2);
+      for(let t=s[0]+w/2; t<=s[1]-w/2+1e-6; t+=0.2) cand.push(t);
+    });
+    for(let ci=0;ci<cand.length;ci++){ const t=cand[ci];
+      const px=edge.a[0]+edge.dir[0]*t + edge.nIn[0]*inset;
+      const pz=edge.a[1]+edge.dir[1]*t + edge.nIn[1]*inset;
+      if(corridorClearance(an, px, pz, edge.nIn, d) < CORRIDOR_MIN_PASS) continue;   // dar nokta → atla (kullanıcı kuralı)
+      if(furnFits(px,pz,rot,w,d, an, placed, opt.exempt, furnHeightOf(type))) return { type:type, pos:{x:px,z:pz}, rot_deg:rot, __fp:furnFootprintM(px,pz,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
+    }
+    return null;
+  }
+  function furnishCorridor(ctx){
+    const an=ctx.an, placed=ctx.placed;
+    const order=(an.area>4?['console','bench']:['bench']);
+    for(let i=0;i<order.length;i++){
+      const type=order[i], edges=allEdges(an,{minLen:(FURN_DIM[type]||{w:0.5}).w});
+      let placedItem=null;
+      for(let e=0;e<edges.length;e++){ placedItem=placeOnEdgeCorridorAware(an, edges[e], type, placed, {}); if(placedItem) break; }
+      if(placedItem){ placed.push(placedItem); return; }   // ilk sığan tip yeter (konsol yoksa bank dener, o da yoksa BOŞ kalır)
+    }
+  }
+
   // ----- BALKON -----
   function furnishBalcony(ctx){ const an=ctx.an, placed=ctx.placed; const t=scanPlace(an,placed,'bistro_table',0.35);
     if(t){ place2(an,placed,'bistro_chair',t.pos.x-0.55,t.pos.z,90); place2(an,placed,'bistro_chair',t.pos.x+0.55,t.pos.z,270); } }
@@ -4036,7 +4171,7 @@
   // dispatcher: oda → yerleşim listesi (seed = kilitli mobilya footprint'leri, auto onlardan kaçınır)
   function furnPlaceRoom(room, map, seed){
     const an=furnAnalyzeRoom(room, map); if(!an || an.area<1.5) return [];
-    const kind=roomKind(room); if(kind==='skip'||kind==='corridor'||kind==='other') return [];
+    const kind=roomKind(room); if(kind==='skip'||kind==='other') return [];
     (seed||[]).forEach(function(s){ s.__seed=true; });
     const ctx={ an:an, placed:(seed||[]).slice(), room:room, A:an.area };
     if(kind==='living') furnishLiving(ctx,false);
@@ -4049,6 +4184,7 @@
     else if(kind==='bathroom') furnishBath(ctx,false);
     else if(kind==='wc') furnishBath(ctx,true);
     else if(kind==='entry') furnishEntry(ctx);
+    else if(kind==='corridor') furnishCorridor(ctx);
     else if(kind==='balcony') furnishBalcony(ctx);
     furnishPlants(ctx, kind);
     return ctx.placed.filter(function(p){ return !p.__seed; });
