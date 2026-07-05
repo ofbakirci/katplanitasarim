@@ -955,9 +955,15 @@
       //   duvar = SİYAH BOŞLUK. Fix: alt kayıt tabanı sill'e (üst kayıt tepesi top'a) hizalı, we kadar duvara taşar.
       //   Hepsi AYNI sill/top/gw kaynağından türer (oyukla birebir): parapet 0..sill, lento top..WALL_H, cam sill+fr..top-fr.
       var we=0.02;                                        // epsilon bindirme (kasa ↔ parapet/lento buluşma payı)
-      var botRail=new THREE.Mesh(new THREE.BoxGeometry(gw,fr+we,ft),matFrame); botRail.position.set(0,sill+fr/2-we/2,0); grp.add(botRail);   // alt kayıt: taban sill'e (we kadar parapete gömülü)
-      var topRail=new THREE.Mesh(new THREE.BoxGeometry(gw,fr+we,ft),matFrame); topRail.position.set(0,top-fr/2+we/2,0); grp.add(topRail);   // üst kayıt: tepe top'a (we kadar lentoya gömülü)
-      [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2),sill+gh/2,0); grp.add(m); });   // iki yan kasa (oyuk boyunca)
+      // F3 (SUNUM-2A): oyuk DÖRT KENARDA da tam dolsun. Alt/üst kayıt J3'te çözülmüştü (we kadar parapet/lentoya
+      //   gömülü). Yan kayıt'lar (jamb) EKSİKTİ: yüksekliği tam gh (sill..top) + dış yüzü tam gw/2'de FLUŞ kalıyordu
+      //   → yan wall-segment/parapet/lento ile birleşme hattında NE cam NE kasa NE duvar = ince siyah şerit + bej
+      //   söve kalıntısı. Fix: yan kayıtları we kadar DIŞA (wall segmentine) + üst/altta we kadar UZAT (parapet/
+      //   lentoya gömülü) → dört köşe de bindirmeli, boşluk kapanır. gw/sill/top AYNI oyuk kaynağından türer.
+      var jGh=gh+2*we;                                     // yan kayıt yüksekliği: alt+üstte we bindirme
+      var botRail=new THREE.Mesh(new THREE.BoxGeometry(gw+2*we,fr+we,ft),matFrame); botRail.position.set(0,sill+fr/2-we/2,0); grp.add(botRail);   // alt kayıt: taban sill'e (we parapete + yanda we wall'a gömülü)
+      var topRail=new THREE.Mesh(new THREE.BoxGeometry(gw+2*we,fr+we,ft),matFrame); topRail.position.set(0,top-fr/2+we/2,0); grp.add(topRail);   // üst kayıt: tepe top'a (we lentoya + yanda we wall'a gömülü)
+      [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr+we,jGh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2+we/2),sill+gh/2,0); grp.add(m); });   // iki yan kasa: dış yüz we kadar wall'a gömülü + yükseklik parapet/lentoya bindirir
       // orta dikme(ler): dikey ince profil(ler) — çift/üçlü kanat görünümü (tam-boyda da devam)
       for(var mi=1;mi<=mull;mi++){ var mxp=-gw/2+mi*(gw/(mull+1));
         var dm=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); dm.position.set(mxp,sill+gh/2,0); grp.add(dm); }
@@ -1667,7 +1673,35 @@
     if(!best) return null;
     const la=best.label_anchor_px||best.centroid_px; if(!la) return null;
     const m=px2m(map,la[0],la[1]);
-    const wx=m[0]-cx, wz=m[1]-cz;
+    let wx=m[0]-cx, wz=m[1]-cz;
+    // F1 (SUNUM-2A): mobilya artık pass-through → spawn noktası bir mobilya AYAK-İZİNİN İÇİNE düşerse
+    //   kullanıcı mobilyanın gövdesi içinde doğar (görüş bloke). Ayak-izi içindeyse spawn'ı oda içinde
+    //   halka-tarama ile (artan yarıçap, 8 yön) mobilyasız en yakın açık noktaya kaydır. Poligon içinde
+    //   kalmaya çalışır; bulamazsa anchor'da bırakır (geriye-uyum, en kötü halde eski davranış).
+    function spawnInFurn(mx,mz){
+      for(let i=0;i<furnList.length;i++){ const f=furnList[i]; if(!f||!f.pos) continue;
+        if(COLLISION_EXEMPT[f.type]) continue;                 // halı vb. → geçilir, sorun değil
+        let fp=f.__fp;
+        if(!fp){ const dm=FURN_DIM[f.type]||{w:0.5,d:0.5}, fw=(f.__w!=null?f.__w:dm.w), fd=(f.__d!=null?f.__d:dm.d);
+          fp=furnFootprintM(f.pos.x,f.pos.z,f.rot_deg||0,fw,fd); }
+        if(pointNearPoly(mx,mz,fp,WALK_BUFFER)) return true;
+      }
+      return false;
+    }
+    if(spawnInFurn(wx+cx,wz+cz)){                              // ayak-izi kontrolü MODEL uzayında (fp mutlak metre)
+      // oda poligonunu MODEL-metre uzayına çevir (pointInPolyM ile aynı uzay: mutlak metre)
+      const rpM=(best.polygon_px&&best.polygon_px.length>=3)
+        ? best.polygon_px.map(function(p){ return px2m(map,p[0],p[1]); }) : null;
+      let found=false;
+      for(let ri=1;ri<=6 && !found;ri++){ const rad=ri*0.6;   // 0.6..3.6m halka
+        for(let k=0;k<8 && !found;k++){ const yaw=k*Math.PI/4;
+          const nx=wx+Math.sin(yaw)*rad, nz=wz-Math.cos(yaw)*rad;
+          if(spawnInFurn(nx+cx,nz+cz)) continue;               // yine mobilya içi → atla
+          if(rpM && !pointInPolyM(nx+cx,nz+cz,rpM)) continue;  // oda dışına taşma (model-metre)
+          wx=nx; wz=nz; found=true;
+        }
+      }
+    }
     // Demo-sweep pürüz (a): giriş karesi bazen duvara/dolaba burun mesafesinde açılıyordu (tek-köşe hedefi
     //   yakın bir mobilyanın arkasında kalabiliyor). 8 yönde (45° adım) collider raycast at, en az ~2m açık
     //   görüşü olan yönü seç (birden fazla varsa EN GENİŞİ); hiçbiri 2m'yi bulamazsa en açık olanı yine de al
@@ -1845,22 +1879,9 @@
       if(u.isLeaf||u.isSill||u.isCeiling) continue;          // (eski yol) kapı kanadı/eşik → geçilir
       if(u.isWall||u.isWin) return false;                    // (eski yol) duvar + parapet + cam panel → engel
     }
-    // mobilya: hedef nokta bir ayak-izi (buffer'la şişmiş) içine giriyorsa engel
-    // U3 FIX (koordinat uzayı): cam.position (px,pz) DÜNYA uzayında (walkSpawnPoint = m-cx,-cz).
-    //   f.__fp / f.pos ise MUTLAK metre (model uzayı, ofsetsiz). Eski kod dünya tx/tz'yi doğrudan
-    //   model footprint'e sokuyordu → cx/cz kadar kayık, çakışma HİÇ tutmuyordu (mobilyadan geçiliyordu).
-    //   worldToPx ile aynı dönüşüm: model = dünya + (cx,cz).
-    const cxo=(scene&&scene.__cx)||0, czo=(scene&&scene.__cz)||0;
-    const tx=px+dirx*dist+cxo, tz=pz+dirz*dist+czo;
-    for(let i=0;i<furnList.length;i++){
-      const f=furnList[i]; if(!f||!f.pos) continue;
-      if(COLLISION_EXEMPT[f.type]) continue;                  // halı/kilim gibi geçilebilir mobilya
-      // U3: kalıcı store'dan gelen mobilyada __fp olmayabilir (yalnız pos/rot/__w/__d taşınır) → taze hesapla.
-      let fp=f.__fp;
-      if(!fp){ const dm=FURN_DIM[f.type]||{w:0.5,d:0.5}, fw=(f.__w!=null?f.__w:dm.w), fd=(f.__d!=null?f.__d:dm.d);
-        fp=furnFootprintM(f.pos.x,f.pos.z,f.rot_deg||0,fw,fd); }
-      if(pointNearPoly(tx,tz,fp,WALK_BUFFER)) return false;
-    }
+    // F1 (SUNUM-2A): mobilya FPV'de TAM PASS-THROUGH. Kullanıcı kararı: mobilya içinden geçilebilir
+    //   olsun (spawnda/dar geçitte sıkışmayı önler). Yatay çarpışma yalnız duvar/pencere collider'ında;
+    //   mobilya ayak-izi bloğu KALDIRILDI. (Duvar çarpışması + SPACE zıplama aynen korunur.)
     return true;
   }
   // W5 TEST/DIAGNOSTIK: her GÖRSEL duvar segmentinin (isWall) ortasından her iki dik yöne göz-hizası ray at →
@@ -1901,18 +1922,10 @@
   //   masa) üstüne çıkılmaz (taban döner → o mobilyayı zaten yatay çarpışma engeller). Koordinat: (x,z) DÜNYA;
   //   footprint MUTLAK metre → worldToPx ile aynı (+cx,+cz) dönüşümü.
   function walkFloorAt(x,z){
-    let floor=WALK_EYE;
-    const cxo=(scene&&scene.__cx)||0, czo=(scene&&scene.__cz)||0;
-    const mx=x+cxo, mz=z+czo;
-    for(let i=0;i<furnList.length;i++){
-      const f=furnList[i]; if(!f||!f.pos) continue;
-      const h=furnHeightOf(f.type); if(h==null||h>WALK_STAND_MAX) continue;   // yalnız alçak mobilya üstü basılabilir
-      let fp=f.__fp;
-      if(!fp){ const dm=FURN_DIM[f.type]||{w:0.5,d:0.5}, fw=(f.__w!=null?f.__w:dm.w), fd=(f.__d!=null?f.__d:dm.d);
-        fp=furnFootprintM(f.pos.x,f.pos.z,f.rot_deg||0,fw,fd); }
-      if(pointInPolyM(mx,mz,fp)){ const top=WALK_EYE+h; if(top>floor) floor=top; }
-    }
-    return floor;
+    // F1 (SUNUM-2A): mobilya TAM PASS-THROUGH → alçak mobilya üstüne basma KALDIRILDI (üste çıkıp basma
+    //   sıkışma yaratıyordu; kullanıcı pass-through lehine feda etti). Taban her zaman WALK_EYE; SPACE
+    //   zıplama balistiği (walkStep) bu tabana iner, aynen korunur.
+    return WALK_EYE;
   }
   /* ====================== ADIM SESİ — WebAudio prosedürel (dosya YOK) ======================
      Her adımda kısa filtreli-gürültü patlaması (~60-90ms decay, lowpass ~400-800Hz), hafif pitch/gain
@@ -2353,7 +2366,8 @@
     const bar=overlay&&overlay.querySelector('#v3dCamBar'); if(!bar) return;
     const show=(camUIEnabled && activeGroup==='camera' && !camGhost && !camDrag && !camAimDrag
                 && activeCamIdx>=0 && activeCamIdx<camList.length && scene && cam && renderer);
-    if(!show){ if(bar.style.display!=='none') bar.style.display='none'; return; }
+    if(!show){ if(bar.style.display!=='none') bar.style.display='none'; bar.style.pointerEvents='none'; return; }  // F2 (SUNUM-2A): mobilya çubuğu ile aynı tedavi (sürükle/hayalette tıklamayı yutma)
+    bar.style.pointerEvents='auto';
     const c=camList[activeCamIdx];
     const v=new THREE.Vector3(c.pos.x, (c.pos.y||1.6)+0.35, c.pos.z).project(cam);
     const rect=renderer.domElement.getBoundingClientRect();
@@ -2409,6 +2423,16 @@
     if(COLLISION_EXEMPT[f.type]) return true;
     if(furnDoorBlocked(fp, an)) return false;                          // A1/W2: kapı geçiş koridorunu kapatma
     if(furnWindowBlocked(fp, an, furnHeightOf(f.type))) return false;  // W3: yüksek mobilya pencere önüne konamaz (drag kırmızı)
+    // F6 (SUNUM-2A): SÜRÜKLE-BIRAK de koridor/hol geçiş kuralını uygular (eskiden yalnız oto-döşe ediyordu →
+    //   kullanıcı daracık hole mobilyayı elle sürükleyebiliyordu). Yalnız sirkülasyon odalarında (koridor/hol/
+    //   antre) + geometrik olarak dar odalarda: item'ı sırtladığı kenardan iç normal boyunca karşı sınıra kalan
+    //   geçiş < CORRIDOR_MIN_PASS ise geçersiz (kırmızı). Yaşam/yatak odasında uygulanmaz (dar yatak odası duvarı
+    //   yanlış tetiklemesin). Kapı-önü/pencere zaten üstte denetlendi.
+    const kind=roomKind(an.room||{});
+    if(kind==='corridor' || kind==='entry'){
+      const near=furnNearestEdge(an, x, z);
+      if(near && corridorClearance(an, x, z, near.nIn, d) < CORRIDOR_MIN_PASS) return false;
+    }
     for(let i=0;i<furnList.length;i++){ const o=furnList[i]; if(o===f||o.room_id!==ra.rid||COLLISION_EXEMPT[o.type]) continue;
       const od=FURN_DIM[o.type]||{w:0.6,d:0.6}, ow=(o.__w!=null?o.__w:od.w), odd=(o.__d!=null?o.__d:od.d);
       if(furnRectsOverlap(fp, furnFootprintM(o.pos.x,o.pos.z,o.rot_deg,ow,odd))) return false; }
@@ -2500,8 +2524,11 @@
   // B2-3: seçili mobilyanın YÜZEN mini araç çubuğu — dünya konumunu ekrana projekte et, çubuğu üstüne yerleştir (kenarda taşmaz).
   function updateFurnBar(){
     const bar=overlay&&overlay.querySelector('#v3dFurnBar'); if(!bar) return;
-    const show=(furnMode && !furnGhost && activeFurnIdx>=0 && activeFurnIdx<furnList.length && scene && cam && renderer);
-    if(!show){ bar.style.display='none'; return; }
+    // F2 (SUNUM-2A): SÜRÜKLE/HAYALET yerleştirme AKTİFKEN çubuğu tamamen gizle + pointer-events:none →
+    //   bırakma sol-tıkı çubuğun altındaki butona (döndür/kopyala/odakla/sil) denk gelip yutulmasın.
+    const show=(furnMode && !furnGhost && !furnDrag && activeFurnIdx>=0 && activeFurnIdx<furnList.length && scene && cam && renderer);
+    if(!show){ bar.style.display='none'; bar.style.pointerEvents='none'; return; }
+    bar.style.pointerEvents='auto';
     const f=furnList[activeFurnIdx];
     const dim=FURN_DIM[f.type]||{h:0.8};
     const v=new THREE.Vector3(f.pos.x-(scene.__cx||0), (dim.h||0.8)+0.15, f.pos.z-(scene.__cz||0)).project(cam);
@@ -3714,13 +3741,16 @@
   //   MUTLAK yasak: span genişliği (±DOOR_CLR=0.35 yanal) × 1.20m derinlik. Derinlik 0.45→0.90→1.20 kademe kademe
   //   büyütüldü çünkü kapının tam önünde değil ama YAKLAŞIM yolunda duran mobilya hâlâ geçişi kesiyordu (kullanıcı).
   //   Kapı iç kapı olduğundan her iki odada da o duvar kenarı analiz edilir → koridor iki tarafta oluşur.
-  function furnDoorBlocked(fp, an){
+  // F5 (SUNUM-2A): passDepth override → banyo gibi dar odalarda kapı-önü yasak bölgesini kademeli gevşetmek için
+  //   (1.20→0.90→0.60). Verilmezse varsayılan DOOR_PASS_DEPTH (1.20) = eski davranış (byte-aynı).
+  function furnDoorBlocked(fp, an, passDepth){
+    const PD=(passDepth!=null?passDepth:DOOR_PASS_DEPTH);
     for(let i=0;i<an.edges.length;i++){ const e=an.edges[i]; if(!e.doorSpans.length) continue;
       let tMin=1e9,tMax=-1e9,perpMin=1e9;
       for(let k=0;k<fp.length;k++){ const dx=fp[k][0]-e.a[0], dz=fp[k][1]-e.a[1];
         const t=dx*e.dir[0]+dz*e.dir[1], perp=Math.abs(dx*(-e.dir[1])+dz*e.dir[0]);
         if(t<tMin)tMin=t; if(t>tMax)tMax=t; if(perp<perpMin)perpMin=perp; }
-      if(perpMin>DOOR_PASS_DEPTH) continue;  // W2: item kapı geçiş-koridoru derinliğinden UZAK → engellemez
+      if(perpMin>PD) continue;  // W2: item kapı geçiş-koridoru derinliğinden UZAK → engellemez
       for(let j=0;j<e.doorSpans.length;j++){ const ds=e.doorSpans[j]; if(tMax>ds[0]-DOOR_CLR && tMin<ds[1]+DOOR_CLR) return true; }
     }
     return false;
@@ -3745,11 +3775,11 @@
     return false;
   }
   // bir yerleşim odaya sığıyor mu: poligon-içi + kapı açmıyor + pencere önü (yükseklik-farkında) + çakışmıyor (muaf hariç)
-  function furnFits(x,z,rot,w,d, an, placed, skipOverlap, itemH){
+  function furnFits(x,z,rot,w,d, an, placed, skipOverlap, itemH, doorPass){
     const fp=furnFootprintM(x,z,rot,w,d);
     if(!furnRectInPoly(fp, an.poly)) return false;
     if(furnWindowBlocked(fp, an, itemH)) return false;   // W3: pencere-önü kuralı çakışma-atlamadan BAĞIMSIZ (skipOverlap'lı yerleşimlerde de geçerli)
-    if(!skipOverlap){ if(furnDoorBlocked(fp, an)) return false;
+    if(!skipOverlap){ if(furnDoorBlocked(fp, an, doorPass)) return false;   // F5: doorPass override (banyo duş kademeli gevşeme)
       for(let i=0;i<placed.length;i++){ const p=placed[i]; if(p.__exempt) continue; if(p.__fp && furnRectsOverlap(fp, p.__fp)) return false; } }
     return true;
   }
@@ -3773,6 +3803,19 @@
   function corridorClearance(an, x, z, nIn, itemDepth){
     const width=rayPolyDist(x,z,nIn[0],nIn[1],an.poly);      // mobilya merkezinden karşı sınıra (mobilyanın YARISI zaten duvar tarafında)
     return width - itemDepth/2;                              // merkez → karşı sınır mesafesi zaten yarım-derinlik içeriyor, kalan geçiş budur
+  }
+  // F6 (SUNUM-2A): (x,z)'ye en yakın oda kenarını döndür (sürükle-bırak koridor kontrolü: item hangi duvarı
+  //   sırtlıyor → iç normal boyunca karşı sınıra geçiş ölçülür). Perp mesafesi en küçük kenar.
+  function furnNearestEdge(an, x, z){
+    let best=null, bd=1e9;
+    (an.edges||[]).forEach(function(e){
+      const t=(x-e.a[0])*e.dir[0]+(z-e.a[1])*e.dir[1];
+      const tc=Math.max(0,Math.min(e.len,t));                              // kenar segmenti üzerinde kısıtla
+      const cxp=e.a[0]+e.dir[0]*tc, czp=e.a[1]+e.dir[1]*tc;
+      const dd=Math.hypot(x-cxp,z-czp);
+      if(dd<bd){ bd=dd; best=e; }
+    });
+    return best;
   }
   // duvara yaslı item bakış açısı = iç normal yönü (local +Z → nIn). w duvar boyunca, d odaya doğru.
   function wallRotDeg(edge){ return (Math.atan2(edge.nIn[0], edge.nIn[1])*180/Math.PI+360)%360; }
@@ -3810,7 +3853,7 @@
     for(let ci=0;ci<cand.length;ci++){ const t=cand[ci];
       const px=edge.a[0]+edge.dir[0]*t + edge.nIn[0]*inset;
       const pz=edge.a[1]+edge.dir[1]*t + edge.nIn[1]*inset;
-      if(furnFits(px,pz,rot,w,d, an, placed, opt.exempt, furnHeightOf(type))) return { type:type, pos:{x:px,z:pz}, rot_deg:rot, __fp:furnFootprintM(px,pz,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
+      if(furnFits(px,pz,rot,w,d, an, placed, opt.exempt, furnHeightOf(type), opt.doorPass)) return { type:type, pos:{x:px,z:pz}, rot_deg:rot, __fp:furnFootprintM(px,pz,rot,w,d), __w:opt.w, __d:opt.d, __exempt:!!opt.exempt };
     }
     return null;
   }
@@ -4099,17 +4142,52 @@
 
   // ----- BANYO / WC (boyut-farkındalık: küvet→duş→yok) -----
   function furnishBath(ctx, wc){ const an=ctx.an, placed=ctx.placed, A=ctx.A;
+    // B8: küvet 1.70m duvar gerektirir → varsa önce onu dene (büyük banyo). Sığarsa klasik sıra (klozet/lavabo sonra).
+    let bath=null;
+    if(!wc) bath=placeAny(an,'bathtub',placed,{align:'center', endClear:0.03}, allEdges(an,{minLen:1.74}));
+    // F5 (SUNUM-2A): küvet YOKSA (küçük/orta banyo) DUŞU ÖNCE yerleştir. Kök neden: klozet+lavabo iki uzun
+    //   duvarı kapıdan uzak z-bandında tutunca, en HANTAL parça (0.90×0.90 duş) için serbest 0.90m duvar koşusu
+    //   kalmıyordu → duş HİÇ konmuyordu (INCE-3 kapı-önü 1.20 bunu ağırlaştırdı ama asıl darboğaz PAKETLEME sırası).
+    //   Duşu ilk koy → hantal parça en iyi duvarı alır, klozet/lavabo kalan boşluğa daha esnek sığar. Klozet/lavabo
+    //   yine yerleşir (aşağıda), sadece SIRA değişti → mevcut davranış (ikisi de var) korunur, üstüne duş eklenir.
+    if(!wc && !bath) placeShowerGraduated(an, placed);
     placeAny(an,'toilet',placed,{}, allEdges(an,{minLen:0.45}));
     placeAny(an,'washbasin',placed,{}, allEdges(an,{minLen:0.55}));
-    // B8: küvet 1.70m duvar gerektirir → endClear küçük; sığmazsa duş; o da yoksa yıkanma yok
-    if(!wc){ let bath=placeAny(an,'bathtub',placed,{align:'center', endClear:0.03}, allEdges(an,{minLen:1.74}));
-      if(!bath) placeAny(an,'shower_tray',placed,{endClear:0.03}, allEdges(an,{minLen:0.92})); }
     if(!wc && A>=5) placeAny(an,'washer',placed,{align:'end'}, allEdges(an,{minLen:0.65}));
+  }
+  // F5 (SUNUM-2A): küçük/ebeveyn banyoda duş kabini regresyonu — INCE-3'te DOOR_PASS_DEPTH 1.20'ye çıkınca
+  //   dar banyoda kapı-önü yasak bölgesi tüm duvarları yutuyor, duş adayı furnDoorBlocked'a takılıp REDDEDİLİYOR,
+  //   boyut-zinciri küvet→duş→YOK'a düşüyordu ("artık duş koymuyorsun"). Fix: önce daha çok aday tara (tüm kenarlar,
+  //   iki hizalama), hâlâ sığmazsa SON ÇARE kapı-önü derinliğini KADEMELİ düşür (1.20→0.90→0.60) ve İLK sığan
+  //   derinliği kullan. Klozet/lavabo mevcut davranışla (varsayılan 1.20) yerleşti → onları BOZMAZ; yalnız duş
+  //   için pragmatik gevşeme (dar banyoda kapı önü tam açık kalamıyorsa duşu koymak > hiç yıkanma yeri olmaması).
+  function placeShowerGraduated(an, placed){
+    const edges=allEdges(an,{minLen:0.92});
+    // varsayılan kapı-önü (1.20) — köşe/ortalanmış tüm hizalarla dene. KAPI GEÇİŞİ TAM AÇIK kalır → W2 temiz.
+    //   Duş kabini duvar koşusundaki tüm t adaylarına + start/end/center hizalarına bakılır (placeOnEdge zaten
+    //   0.20m adımla tarar) → dar banyoda köşeye oturma şansı artar. Kapı-önü derinliği GEVŞETİLMEZ (W2 ihlali
+    //   olur, standart senaryoda duş kapı önüne düşerdi). F5 asıl çözümü PAKETLEME SIRASI: duş önce yerleşir.
+    for(const al of ['start','end',undefined]){
+      const p=placeAny(an,'shower_tray',placed,{endClear:0.03, align:al}, edges); if(p) return p;
+    }
+    return null;
   }
 
   // ----- GİRİŞ/ANTRE (orta boş, tek slim item) -----
+  // F6 (SUNUM-2A): ANTRE/HOL/APARTMAN HOLÜ da roomKind='entry' döner (koridor DEĞİL) → eski furnishEntry
+  //   koridor-payı kuralını HİÇ uygulamıyordu → daracık hollere konsol/dolap konup FPV geçişi kesiliyordu.
+  //   Artık entry de KORİDOR-BİLİNÇLİ yerleştirir (placeOnEdgeCorridorAware → her adayda kalan geçiş
+  //   ≥ CORRIDOR_MIN_PASS). Dar antrede hiçbir aday geçmez → BOŞ kalır (doğru sonuç). Salon-antresi gibi
+  //   geniş girişte konsol/dolap yine yerleşir.
   function furnishEntry(ctx){ const an=ctx.an, placed=ctx.placed;
-    placeChain(an, (an.area>3?['shoe_cabinet','console']:['console']), placed, {}, allEdges(an,{minLen:0.8})); }
+    const order=(an.area>3?['shoe_cabinet','console']:['console']);
+    for(let i=0;i<order.length;i++){
+      const type=order[i], edges=allEdges(an,{minLen:Math.max(0.8,(FURN_DIM[type]||{w:0.5}).w)});
+      let placedItem=null;
+      for(let e=0;e<edges.length;e++){ placedItem=placeOnEdgeCorridorAware(an, edges[e], type, placed, {}); if(placedItem) break; }
+      if(placedItem){ placed.push(placedItem); return; }
+    }
+  }
 
   // ----- KORİDOR/HOL (kullanıcı: "daracık koridorlara bir şey koyma; koridorun geniş yeri varsa koyarsın") -----
   //   Yalnız KENARDAKİ genişçe bir noktaya (konsol/bank) — dar bant boyunca yürüyüş payı KORUNUR.

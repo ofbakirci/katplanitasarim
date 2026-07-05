@@ -124,7 +124,80 @@ const wideN = run(`(function(){
 })()`);
 ok(wideN > 0, 'geniş koridor (1,70m): en az 1 mobilya (konsol/bank) beklenirdi, üretilen: ' + wideN);
 
+/* --- F6 (SUNUM-2A): ETİKETLİ HOL/ANTRE de koridor kuralına uymalı ---
+   Kök neden: roomKind ANTRE/HOL/APARTMAN HOLÜ → 'entry' döner (koridor DEĞİL) → furnishEntry eskiden
+   koridor-payını HİÇ uygulamıyordu → daracık hole konsol/dolap konup FPV geçişi kesiliyordu. Sentetik
+   'KORİDOR' case bunu kaçırdı (o zaten 'corridor'). Artık GERÇEK etiketli dar HOL da BOŞ kalmalı. */
+run(`
+  __mkNamed = function(poly_m, type, name, mpp){
+    mpp = mpp || 0.02; var origin=[0,0];
+    var poly_px = poly_m.map(function(p){ return [p[0]/mpp+origin[0], p[1]/mpp+origin[1]]; });
+    return { scale:{ metersPerPixel:mpp, origin_px:origin }, doors:[], windows:[],
+      units:[], common_areas:[ { id:'C-x', type:type, name:name, polygon_px:poly_px } ] };
+  };
+`);
+// dar HOL (1,10m) — 'entry' kind ama artık koridor-bilinçli → mobilya YOK
+const narrowHolN = run(`(function(){
+  var map=__mkNamed([[0,0],[6,0],[6,1.10],[0,1.10]], 'HOL', 'HOL');
+  return window.View3D.furnishMapForTest(map)[0].furniture.length;
+})()`);
+ok(narrowHolN === 0, 'dar HOL (1,10m, entry kind): mobilya YOK beklenirdi (F6 kaçağı), üretilen: ' + narrowHolN);
+// dar ANTRE (1,10m) — aynı
+const narrowAntreN = run(`(function(){
+  var map=__mkNamed([[0,0],[6,0],[6,1.10],[0,1.10]], 'ANTRE', 'ANTRE');
+  return window.View3D.furnishMapForTest(map)[0].furniture.length;
+})()`);
+ok(narrowAntreN === 0, 'dar ANTRE (1,10m): mobilya YOK beklenirdi, üretilen: ' + narrowAntreN);
+// geniş HOL (1,90m) — geçiş payı kalır → konsol/dolap yerleşebilir
+const wideHolN = run(`(function(){
+  var map=__mkNamed([[0,0],[6,0],[6,1.90],[0,1.90]], 'HOL', 'HOL');
+  return window.View3D.furnishMapForTest(map)[0].furniture.length;
+})()`);
+ok(wideHolN > 0, 'geniş HOL (1,90m): en az 1 mobilya beklenirdi (kural geniş girişi kapatmaz), üretilen: ' + wideHolN);
+
+/* --- F5 (SUNUM-2A): küçük/ebeveyn banyoda DUŞ regresyonu ---
+   Kök neden: INCE-3'te DOOR_PASS_DEPTH 0.90→1.20 → dar banyoda kapı-önü yasak bölgesi büyüdü, AMA asıl
+   darboğaz PAKETLEME SIRASI: klozet+lavabo iki uzun duvarı kapıdan-uzak z-bandında tutunca en HANTAL parça
+   (0.90×0.90 duş) için serbest 0.90m duvar koşusu kalmıyordu → duş HİÇ konmuyordu ("artık duş koymuyorsun").
+   Fix (view3d furnishBath): küvet yoksa DUŞU ÖNCE yerleştir → hantal parça en iyi duvarı alır, klozet/lavabo
+   kalan boşluğa esner. Kapı-önü GEVŞETİLMEZ (W2 temiz kalır). Gerçekçi küçük banyo: 1.7×2.2, kapı köşede. */
+run(`
+  __mkBath = function(poly_m, door_m, mpp){
+    mpp = mpp || 0.02; var origin=[0,0];
+    var px = function(p){ return [p[0]/mpp+origin[0], p[1]/mpp+origin[1]]; };
+    var poly_px = poly_m.map(px);
+    var doors = door_m ? [{ p0_px:px(door_m[0]), p1_px:px(door_m[1]) }] : [];
+    return { scale:{ metersPerPixel:mpp, origin_px:origin }, doors:doors, windows:[],
+      units:[ { id:'D1', rooms:[ { id:'D1-bath', type:'BANYO', name:'BANYO', polygon_px:poly_px } ] } ], common_areas:[] };
+  };
+`);
+// 1.7 (x) × 2.2 (z) küçük banyo; kapı alt köşede (z=0, x 0.1..0.8) → karşı bölge duşa açık
+const bathFurn = run(`(function(){
+  var map=__mkBath([[0,0],[1.7,0],[1.7,2.2],[0,2.2]], [[0.1,0],[0.8,0]]);
+  var rows=window.View3D.furnishMapForTest(map);
+  var types=rows[0].furniture.map(function(f){ return f.type; });
+  return { types:types, hasShower: types.indexOf('shower_tray')>=0, hasToilet: types.indexOf('toilet')>=0, hasBasin: types.indexOf('washbasin')>=0 };
+})()`);
+ok(bathFurn.hasShower, 'küçük banyo (1,7×2,2): DUŞ KABİNİ olmalı (F5 regresyon), tipler: ' + JSON.stringify(bathFurn.types));
+ok(bathFurn.hasToilet, 'küçük banyo: klozet korunmalı (F5 mevcut davranış bozulmasın)');
+ok(bathFurn.hasBasin, 'küçük banyo: lavabo korunmalı');
+// duş kapı geçişini KAPATMAMALI (W2 pragmatiği: duş önce gelse de kapı-önü 1.20 korunur)
+const bathDoorOK = run(`(function(){
+  var map=__mkBath([[0,0],[1.7,0],[1.7,2.2],[0,2.2]], [[0.1,0],[0.8,0]]);
+  var rows=window.View3D.furnishMapForTest(map);
+  var an=window.View3D.analyzeRoomForTest(rows[0].room, map), viol=0;
+  rows[0].furniture.forEach(function(f){ if(f.__exempt||!f.__fp) return;
+    an.edges.forEach(function(e){ var tMin=1e9,tMax=-1e9,perpMin=1e9;
+      f.__fp.forEach(function(p){ var dx=p[0]-e.a[0],dz=p[1]-e.a[1]; var t=dx*e.dir[0]+dz*e.dir[1], pp=Math.abs(dx*(-e.dir[1])+dz*e.dir[0]);
+        if(t<tMin)tMin=t; if(t>tMax)tMax=t; if(pp<perpMin)perpMin=pp; });
+      (e.doorSpans||[]).forEach(function(ds){ if(perpMin<=1.20 && tMax>ds[0]-0.35 && tMin<ds[1]+0.35) viol++; }); }); });
+  return viol;
+})()`);
+ok(bathDoorOK === 0, 'küçük banyo: duş dahil hiçbir parça kapı geçişini kapatmamalı (W2), ihlal: ' + bathDoorOK);
+
 console.log('');
+console.log('  F6 etiketli hol/antre: darHOL→' + narrowHolN + ' · darANTRE→' + narrowAntreN + ' · genişHOL→' + wideHolN);
+console.log('  F5 küçük banyo (1,7×2,2): ' + JSON.stringify(bathFurn.types) + ' · kapı-ihlal ' + bathDoorOK);
 console.log('  kapı-önü denetim: ' + audit.doorChk + ' · ihlal ' + audit.doorViol);
 console.log('  pencere-önü denetim: ' + audit.winChk + ' · yüksek-mobilya ' + audit.tallSeen + ' · ihlal ' + audit.winViol);
 console.log('  koridor kuralı: dar(1,10m)→' + narrowN + ' mobilya · geniş(1,70m)→' + wideN + ' mobilya');

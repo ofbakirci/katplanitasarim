@@ -188,7 +188,10 @@
   #cmClose{width:28px; height:28px; padding:0; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;}
   #cmClose svg{width:15px; height:15px;}
   #cmClose:hover{border-color:var(--acc); color:var(--acc); background:#fdf6f0;}
-  #cmBody{overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
+  /* F4 (SUNUM-2A): mevzuat popup SCROLLABLE. Flex zincirinde min-height:0 TUZAĞI — flex çocuğunun varsayılan
+     min-height:auto içerik boyudur → overflow-y:auto tetiklenmez, uzun liste pencereyi taşırırdı. flex:1 1 auto ile
+     kalan yüksekliği al + min-height:0 ile içerik altında büzülmeye izin ver → gövde kendi içinde kayar. */
+  #cmBody{flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
   /* Katlanabilir bölüm */
   .cmSec{border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#fff;}
   .cmSecHead{display:flex; align-items:center; gap:8px; width:100%; padding:9px 11px; border:0; background:#faf8f3; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--ink); text-align:left; letter-spacing:.02em;}
