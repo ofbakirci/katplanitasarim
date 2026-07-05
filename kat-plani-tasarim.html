@@ -8,22 +8,22 @@
 </head>
 <body>
 <header>
-  <button id="menuBtn" title="Paneli aç/kapat" data-ic="menu"></button>
+  <button id="menuBtn" data-tip="Paneli aç/kapat" aria-label="Paneli aç/kapat" data-ic="menu"></button>
   <h1>Kat Planı Tasarım Aracı</h1>
   <span class="sub">Türkiye mevzuatına göre şematik kat planı üretici — Planlı Alanlar İmar Yönetmeliği &amp; Yangın Yönetmeliği</span>
-  <div id="modeSel" title="Görünüm modu — Basit: sade çizim + daire · Profesyonel: parsel & imar dahil tüm araçlar">
-    <button type="button" id="modeBasic" data-mode="basic">Basit</button>
-    <button type="button" id="modePro" data-mode="pro">Profesyonel</button>
+  <div id="modeSel">
+    <button type="button" id="modeBasic" data-mode="basic" data-tip="Basit: sade çizim + daire (parsel & imar gizli)">Basit</button>
+    <button type="button" id="modePro" data-mode="pro" data-tip="Profesyonel: parsel, imar ve tüm araçlar açık">Profesyonel</button>
   </div>
 </header>
 <div id="backdrop"></div>
 <main>
 <aside>
-  <button id="asideClose" title="Paneli kapat">×</button>
+  <button id="asideClose" data-tip="Paneli kapat" aria-label="Paneli kapat">×</button>
   <div id="panelTabs" role="tablist" aria-label="Panel bölümleri">
-    <button type="button" class="ptab active" data-tab="bina" role="tab" aria-selected="true">Bina</button>
-    <button type="button" class="ptab pro-only" data-tab="parsel" role="tab" aria-selected="false">Parsel/İmar</button>
-    <button type="button" class="ptab" data-tab="daireler" role="tab" aria-selected="false">Daireler</button>
+    <button type="button" class="ptab active" data-tab="bina" role="tab" aria-selected="true" data-tip="Bina tipi, kat sayısı, koridor ve lejant">Bina</button>
+    <button type="button" class="ptab pro-only" data-tab="parsel" role="tab" aria-selected="false" data-tip="TKGM parsel sorgu, imar çekmesi, yapı sınırı">Parsel/İmar</button>
+    <button type="button" class="ptab" data-tab="daireler" role="tab" aria-selected="false" data-tip="Daire tipleri, dışa aktar (SVG/PNG/DXF), içe aktar">Daireler</button>
   </div>
   <div class="scroll">
     <div class="tabPane active" data-pane="bina" role="tabpanel">
@@ -120,8 +120,8 @@
       <button class="small" id="addUnit">+ Daire tipi ekle</button>
     </div>
     <div class="sec">
-      <button class="small" id="structReset" style="width:100%; display:none" data-ic="clear">Yapı iskeletini sıfırla</button>
-      <button class="small" id="floorCopyBtn" style="width:100%; margin-top:6px; display:none" data-ic="copy">Bu kat düzenini kopyala</button>
+      <button class="small" id="structReset" style="width:100%; display:none" data-ic="clear" data-tip="Merdiven/asansör/yangın çekirdeğini varsayılana döndür">Yapı iskeletini sıfırla</button>
+      <button class="small" id="floorCopyBtn" style="width:100%; margin-top:6px; display:none" data-ic="copy" data-tip="Bu katın düzenini kopyalayıp uyumlu katlara uygula">Bu kat düzenini kopyala</button>
       <div id="floorPastePanel" style="display:none; margin-top:6px; border:1px solid #e6dfce; border-radius:8px; padding:8px 9px; background:#fbf8f1">
         <div id="floorPasteHead" style="font-size:12px; color:#6b5e4d; line-height:1.35; margin-bottom:7px"></div>
         <div id="floorPasteList"></div>
@@ -131,12 +131,12 @@
         </div>
       </div>
       <div style="display:flex; gap:6px; margin-top:8px;">
-        <button class="small" id="svgBtn" style="flex:1" disabled>SVG indir</button>
-        <button class="small" id="pngBtn" style="flex:1" disabled>PNG indir</button>
-        <button class="small" id="dxfBtn" style="flex:1" disabled>DXF indir</button>
+        <button class="small" id="svgBtn" style="flex:1" disabled data-tip="Planı vektör SVG olarak indir (plan durumu gömülü)">SVG indir</button>
+        <button class="small" id="pngBtn" style="flex:1" disabled data-tip="Planı yüksek çözünürlüklü PNG görsel olarak indir">PNG indir</button>
+        <button class="small" id="dxfBtn" style="flex:1" disabled data-tip="Planı CAD için DXF çizim olarak indir">DXF indir</button>
       </div>
       <div style="display:flex; gap:6px; margin-top:6px;">
-        <button class="small" id="impBtn" style="flex:1">İçe aktar</button>
+        <button class="small" id="impBtn" style="flex:1" data-tip="SVG / JSON / DXF plan dosyasını içe aktar">İçe aktar</button>
         <input type="file" id="impFile" accept=".svg,image/svg+xml,.json,.dxf" style="display:none">
       </div>
       <div style="margin-top:4px; font-size:11px; color:#9c8e76; line-height:1.35">SVG (plan durumu gömülü ya da eski) · JSON · DXF</div>
@@ -152,14 +152,14 @@
     </div>
   </div>
   <div id="panelFooter">
-    <button class="primary" id="genBtn" style="width:100%" disabled>Yerleşimi Oluştur</button>
+    <button class="primary" id="genBtn" style="width:100%" disabled data-tip="Bina sınırı + daire tiplerinden kat planını üret">Yerleşimi Oluştur</button>
     <div id="checks"><div class="chk info"><span class="ic" data-ic="info"></span><span>Önce bir bina sınırı çizin, daire tiplerini girin ve “Yerleşimi Oluştur”a basın.</span></div></div>
   </div>
 </aside>
 <div id="canvasWrap">
   <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
   <div id="toolbar">
-    <button id="tbToggle" title="Araç çubuğunu daralt/genişlet">«</button>
+    <button id="tbToggle" data-tip="Araç çubuğunu daralt/genişlet" aria-label="Araç çubuğunu daralt/genişlet">«</button>
     <div class="tbgrp">
       <button id="tDraw" class="active" data-ic="draw" data-tip="Çiz (D)" aria-label="Çiz"></button>
       <button id="tRoom" data-ic="roomdraw" data-tip="Oda Çiz (O)" aria-label="Oda Çiz"></button>
@@ -196,17 +196,17 @@
     <button data-orient="h">Yatay</button>
     <button data-orient="v">Dikey</button>
     <button id="parkReset" title="Otomatik düzene dön" data-ic="reset">Sıfırla</button>
-    <span class="ph">tıkla=ekle/sil · sürükle=taşı</span>
+    <span class="ph">tıkla=ekle/sil · sürükle=taşı · R=yatay/dikey döndür</span>
   </div>
   <div id="status"><span>İmleç: <b id="stPos">–</b></span><span>Alan: <b id="stArea">–</b></span><span>Çevre: <b id="stPerim">–</b></span><span id="stDxf" style="color:#b45309"></span><span id="stHint"></span></div>
-  <div id="zoomCtl" title="Yakınlaştır / Uzaklaştır">
-    <button id="zIn" title="Yakınlaştır">+</button>
+  <div id="zoomCtl">
+    <button id="zIn" data-tip="Yakınlaştır" aria-label="Yakınlaştır">+</button>
     <input id="zRange" type="range" min="0" max="1000" value="500" aria-label="Yakınlık">
-    <button id="zOut" title="Uzaklaştır">−</button>
+    <button id="zOut" data-tip="Uzaklaştır" aria-label="Uzaklaştır">−</button>
     <span id="zoomLbl">100%</span>
   </div>
-  <div id="unitTable"><div id="utHead"><span>Daire Tablosu</span><button id="utToggle" title="Daralt/Genişlet">–</button></div><div id="utBody"></div></div>
-  <div id="histPanel"><div id="hpHead"><span>Geçmiş</span><button id="hpToggle" title="Daralt/Genişlet">–</button></div><div id="hpBody"></div></div>
+  <div id="unitTable"><div id="utHead"><span>Daire Tablosu</span><button id="utToggle" data-tip="Daire tablosunu daralt/genişlet" aria-label="Daralt/Genişlet">–</button></div><div id="utBody"></div></div>
+  <div id="histPanel"><div id="hpHead"><span>Geçmiş</span><button id="hpToggle" data-tip="Geçmiş panelini daralt/genişlet" aria-label="Daralt/Genişlet">–</button></div><div id="hpBody"></div></div>
   <div id="roomMenu"></div>
   <div id="winPanel" style="display:none"></div>
 </div>

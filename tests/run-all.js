@@ -31,6 +31,7 @@ const strictTests = [
   'tests/kucuk-kat.js',
   'tests/egik-duvar.js',
   'tests/cut-preserve.js',
+  'tests/siginak-duzenle.js',
   'tests/heal-disconnect.js',
   'tests/repair-import.js',
   'tests/core-shadow.js',

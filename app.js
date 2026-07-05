@@ -17,6 +17,8 @@ let hoverCut = null;          // B4: imleç altındaki turuncu ayırıcı (cut) 
 let hoverStructH = null;      // B4: yapı modunda imleç altındaki tutamaç {kind:'core',regId,handle} | {kind:'bvert'|'bedge',idx}
 let hoverBay = null;          // park modunda imleç altındaki park yeri index'i | null
 let parkGhost = null;         // park modunda eklenecek boş park yeri önizlemesi {x,y,w,h,ang} | null
+let parkGhostVert = null;     // U3: R ile çevrilen yerleştirme yönü override'ı (null=çubuk yönü) | true(dikey)/false(yatay)
+let parkLastSx = null, parkLastSy = null; // son imleç (park modu) — R basınca önizleme aynı noktada anında dönsün
 let editHistory = [];         // elle düzenleme geçmişi (geri al): {type, ...} — pushEdit() ile yazılır
 let redoHistory = [];         // ileri al yığını: undoEdit her geri almada o anki TAM durumu buraya iter; redoEdit geri yükler
 const HIST_CAP = 100;         // geçmiş üst sınırı (en eski adım düşürülür)
@@ -459,7 +461,8 @@ function renderFloorTabs(){
     b.innerHTML=ico+floorName(k)+(st?' · '+fmt(shoelace(st.pts))+' m²':'');
     if(k===activeFloor) b.className='active';
     else if(!st) b.className='empty';
-    b.title=st?(u!=='konut'?USAGE_TR[u]+' katı':''):'Henüz planlanmadı — geçince komşu katın sınırıyla başlar';
+    { const tip=st?(u!=='konut'?USAGE_TR[u]+' katı — tıkla: bu kata geç':'Tıkla: bu kata geç'):'Henüz planlanmadı — geçince komşu katın sınırıyla başlar';
+      b.setAttribute('data-tip',tip); b.setAttribute('aria-label',floorName(k)); }
     b.addEventListener('click',()=>switchFloor(k));
     box.appendChild(b);
   }

@@ -4,6 +4,9 @@ mountIcons();
 renderUnits(); updateKatAyriUI(); renderBlockTabs(); render();
 if(typeof initParselSorgu==='function') initParselSorgu();
 positionOnb();
+/* U1: açılışta seçili araç (Çiz) ipucu rozetini göster — kullanıcı ilk andan itibaren
+   aktif aracın kısa kullanım ipucunu görsün (setMode henüz çağrılmadı). */
+if(typeof updateModeBadge==='function' && typeof mode!=='undefined') updateModeBadge(mode);
 window.addEventListener('resize',()=>{ render(); positionOnb(); });
 
 /* ===== Görünüm modu: Basit (sade çizim+daire) / Profesyonel (parsel+imar dahil) =====

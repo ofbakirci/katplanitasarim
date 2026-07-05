@@ -293,12 +293,13 @@ svg.addEventListener('mousemove',e=>{
   }
   else if(mode==='park'){
     if(!plan||!plan.parking) return;
+    parkLastSx=sx; parkLastSy=sy;                         // U3: R basınca önizleme aynı noktada dönsün
     const hb=hitBay(sx,sy);
     const ghost = (hb==null)? parkGhostAt(sx,sy) : null;
-    const gKey=g=>g?g.x+','+g.y+','+g.w:'';
+    const gKey=g=>g?g.x+','+g.y+','+g.w+','+(g.invalid?'x':''):'';
     if(hb!==hoverBay || gKey(ghost)!==gKey(parkGhost)){
       hoverBay=hb; parkGhost=ghost;
-      svg.style.cursor = hb!=null? 'pointer' : (ghost?'copy':'not-allowed');
+      svg.style.cursor = hb!=null? 'pointer' : ((ghost&&!ghost.invalid)?'copy':'not-allowed'); // I4: geçersiz→yasak imleç
       render();
     }
   }
@@ -416,8 +417,8 @@ svg.addEventListener('mousedown',e=>{
       dragging={type:'park', idx:hb, gx:S2Wx(sx)-b.x, gy:S2Wy(sy)-b.y, undo:parkSnapshot(), moved:false};
       e.preventDefault();
     } else { const g=parkGhostAt(sx,sy);
-      if(g){ pushEdit({type:'park', prev:parkSnapshot()});
-        plan.parking.bays.push(g); parkGhost=null; parkEditRefresh(); }
+      if(g && !g.invalid){ pushEdit({type:'park', prev:parkSnapshot()});   // I4: geçersiz (çakışan/alan-dışı) hayalet eklenmez
+        plan.parking.bays.push({x:g.x,y:g.y,w:g.w,h:g.h,ang:g.ang}); parkGhost=null; parkEditRefresh(); }
     }
     return;
   }
@@ -675,6 +676,22 @@ window.addEventListener('keydown',e=>{
   pushEdit({type:'balk', prev:balkSnapshot()});
   balconies.splice(hoverBalk.hit.i,1); hoverBalk=null; balkChecksRefresh(); render();
 });
+/* U3: park modunda R → yerleştirilecek park yerinin yönünü (yatay/dikey) çevir.
+   Önizleme (parkGhost) aynı imleç noktasında ANINDA döner. parkGhostVert override'ı
+   yalnız yeni ekleme önizlemesini etkiler; çubuktan Oto/Yatay/Dikey seçilince sıfırlanır. */
+window.addEventListener('keydown',e=>{
+  if(mode!=='park' || (e.key||'').toLowerCase()!=='r') return;
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
+  e.preventDefault();
+  const cur = (parkGhostVert!=null)? parkGhostVert : !!(plan&&plan.parking&&plan.parking.vertical);
+  parkGhostVert = !cur;
+  if(parkLastSx!=null){ hoverBay=hitBay(parkLastSx,parkLastSy);
+    parkGhost = hoverBay==null? parkGhostAt(parkLastSx,parkLastSy) : null;
+    svg.style.cursor = hoverBay!=null? 'pointer' : ((parkGhost&&!parkGhost.invalid)?'copy':'not-allowed'); }
+  render();
+});
 /* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
    pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.
    Space/Esc/Ctrl+Z/Y'ye DOKUNMAZ (ayrı handler'lar); form alanı + sürükleme ortasında YUTULUR. */
@@ -839,12 +856,15 @@ function finishPoly(){
   render();
 }
 /* serbest oda çizimi: kısa uyarı baloncuğu (canvasWrap'a, ~1,6 sn) */
-function roomDrawToast(msg){
+function roomDrawToast(msg, dur){
   let t=document.getElementById('drawToast');
   if(!t){ t=document.createElement('div'); t.id='drawToast';
     (document.getElementById('canvasWrap')||document.body).appendChild(t); }
-  t.textContent=msg; t.classList.add('show');
-  clearTimeout(roomDrawToast._t); roomDrawToast._t=setTimeout(()=>t.classList.remove('show'),1600);
+  t.textContent=msg;
+  // uzun bilgi mesajı (U2) sarabilsin; kısa toast'lar tek satır kalır
+  t.classList.toggle('wide', (msg||'').length>60);
+  t.classList.add('show');
+  clearTimeout(roomDrawToast._t); roomDrawToast._t=setTimeout(()=>t.classList.remove('show'), dur||1600);
 }
 /* serbest oda çizimini kapat: poligonu rasterize edip yeni ODA'ya çevir (rooms.js) */
 function finishRoomPoly(){
@@ -874,7 +894,16 @@ function hitBay(sx,sy){
   }
   return null;
 }
-/* park yeri tümüyle otopark alanında mı (çekirdek/duvar/dış değil) — ekleme/önizleme denetimi */
+/* I2 (UI-İPUCU-2): park yeri hangi bölge tiplerine konabilir. Otopark HER katta uygundur;
+   sığınak KATINDA taban zeminin çoğu SIĞINAK bölgesidir (beton bodrum) → kullanıcı orada da
+   araç yerleştirebilmeli ("sadece silebiliyorum, ekleyemiyorum" = otopark-dışı zemine tıklıyordu).
+   Kat kullanımından bağımsız olarak BÖLGE TİPİNE bakılır; çekirdek/koridor/dış hariç. */
+function bayPlaceableType(t){
+  if(t==='otopark') return true;
+  if(t==='siginak' && plan && plan.katKullanim==='siginak') return true; // sığınak katı: sığınak zemini de park-uygun
+  return false;
+}
+/* park yeri tümüyle park-uygun bölgede mi (çekirdek/koridor/duvar/dış değil) — ekleme/önizleme denetimi */
 function bayAreaOk(b){
   if(!plan) return false;
   const a=(b.ang||0)*Math.PI/180, c=Math.cos(a), s=Math.sin(a), cx=b.x+b.w/2, cy=b.y+b.h/2;
@@ -884,17 +913,61 @@ function bayAreaOk(b){
       const col=Math.floor((wx-plan.minX)/M), row=Math.floor((wy-plan.minY)/M);
       if(row<0||col<0||row>=plan.rows||col>=plan.cols) return false;
       const j=row*plan.cols+col;
-      if(!plan.inside[j]||plan.cm[j]<0||plan.regions[plan.cm[j]].type!=='otopark') return false;
+      if(!plan.inside[j]||plan.cm[j]<0||!bayPlaceableType(plan.regions[plan.cm[j]].type)) return false;
     }
   return true;
 }
-/* imleç altında eklenebilecek boş park yeri (yöne göre yatay/dikey) | null */
+/* I4 (UI-İPUCU-2): iki park dikdörtgeni (ang derece) çakışıyor mu — SAT (ayrık-eksen). skip=
+   kendi index'i (taşımada). Yeni ekleme mevcut park yerlerinin ÜSTÜNE düşmesin. */
+function bayCorners(b){
+  const a=(b.ang||0)*Math.PI/180, c=Math.cos(a), s=Math.sin(a), cx=b.x+b.w/2, cy=b.y+b.h/2, hw=b.w/2, hh=b.h/2;
+  return [[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([dx,dy])=>({x:cx+dx*c-dy*s, y:cy+dx*s+dy*c}));
+}
+function polyOverlapSAT(A,B){
+  const axes=[];
+  [A,B].forEach(P=>{ for(let i=0;i<4;i++){ const p=P[i], q=P[(i+1)%4]; axes.push({x:-(q.y-p.y), y:q.x-p.x}); } });
+  for(const ax of axes){
+    let aMin=Infinity,aMax=-Infinity,bMin=Infinity,bMax=-Infinity;
+    A.forEach(p=>{ const d=p.x*ax.x+p.y*ax.y; if(d<aMin)aMin=d; if(d>aMax)aMax=d; });
+    B.forEach(p=>{ const d=p.x*ax.x+p.y*ax.y; if(d<bMin)bMin=d; if(d>bMax)bMax=d; });
+    if(aMax<bMin+1e-6 || bMax<aMin+1e-6) return false; // ayrık eksen bulundu → çakışma yok
+  }
+  return true;
+}
+function bayOverlapsExisting(b, skip){
+  if(!plan||!plan.parking||!plan.parking.bays) return false;
+  const A=bayCorners(b);
+  const bays=plan.parking.bays;
+  for(let i=0;i<bays.length;i++){ if(i===skip) continue;
+    if(polyOverlapSAT(A, bayCorners(bays[i]))) return true; }
+  return false;
+}
+/* imleç altında eklenebilecek park yeri önizlemesi (yöne göre yatay/dikey).
+   invalid: park-uygun alan dışında ya da mevcut bir park yeriyle çakışıyor → KIRMIZI hayalet,
+   eklemede reddedilir (mobilya geçersiz-bırakma deseniyle tutarlı). Alanın tümüyle dışındaysa
+   (bina dışı/çekirdek) hiç gösterilmez (null); yalnız "yaklaştı ama geçersiz" durumunda kırmızı. */
 function parkGhostAt(sx,sy){
   if(!plan||!plan.parking) return null;
-  const vert=!!plan.parking.vertical;
+  // U3: R ile çevirme aktifse (parkGhostVert!==null) o yönü kullan; yoksa çubuk yönü.
+  const vert = (parkGhostVert!=null)? parkGhostVert : !!plan.parking.vertical;
   const w=(vert?REG.parkBayLen:REG.parkBayWid), h=(vert?REG.parkBayWid:REG.parkBayLen);
   const b={x:snapG(S2Wx(sx)-w/2), y:snapG(S2Wy(sy)-h/2), w, h, ang:0};
-  return bayAreaOk(b)? b : null;
+  const areaOk=bayAreaOk(b);
+  if(!areaOk){
+    // I4: park alanına DEĞİYOR ama tam oturmuyor → kırmızı uyarı hayaleti; tam dışıysa gizle
+    return bayTouchesPark(b)? {...b, invalid:true} : null;
+  }
+  if(bayOverlapsExisting(b, -1)) return {...b, invalid:true}; // I4: mevcut park üstüne
+  return b;
+}
+/* park yerinin merkezi park-uygun bir bölgeye düşüyor mu (kırmızı uyarıyı yalnız park
+   alanına yakınken göster; bina dışı/çekirdek boşluğunda hiç hayalet çıkmasın) */
+function bayTouchesPark(b){
+  const cx=b.x+b.w/2, cy=b.y+b.h/2;
+  const col=Math.floor((cx-plan.minX)/M), row=Math.floor((cy-plan.minY)/M);
+  if(row<0||col<0||row>=plan.rows||col>=plan.cols) return false;
+  const j=row*plan.cols+col;
+  return plan.inside[j] && plan.cm[j]>=0 && bayPlaceableType(plan.regions[plan.cm[j]].type);
 }
 function parkEditRefresh(){ if(!plan||!plan.parking) return;
   plan.parking.manual=true; runChecks(); render();
@@ -905,7 +978,7 @@ function setParkOrient(o){
   pushEdit({type:'park', prev:parkSnapshot()}); // yön/sıfırla da geri alınabilir olsun
   const np=parkingForPlan(plan, o==='auto'?undefined:(o==='v'));
   np.orient=o; np.manual=false; plan.parking=np;
-  hoverBay=null; parkGhost=null;
+  hoverBay=null; parkGhost=null; parkGhostVert=null; // U3: çubuk yönü seçildi → R override'ı sıfırla
   runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
   showParkBar();
 }
@@ -925,27 +998,33 @@ function updateParkBtn(){
 /* B2: mod rozeti — aktif mod adı + tek satır ipucu (emoji YOK; ikon inline SVG).
    Varsayılan modlar (draw/pan) sade kalsın diye rozet gizlenir; park kendi çubuğunu gösterir. */
 const MODE_BADGE={
-  parcel:  {ic:'parcel',    name:'Parsel',  hint:'Kenarlara tıklayarak arsa sınırını çiz; kapatmak için başa dön'},
-  balkon:  {ic:'balcony',   name:'Balkon',  hint:'Dış duvara tıkla-ekle; tutamaçlardan boyutlandır'},
-  avlu:    {ic:'avlu',      name:'Avlu',    hint:'Boşlukta sürükle: yeni avlu · gövde: taşı · kenar/köşe: boyutlandır · sağ tık: sil'},
-  door:    {ic:'door',      name:'Kapı',    hint:'Kapıyı sürükleyerek komşu duvara taşı'},
-  window:  {ic:'window',    name:'Pencere', hint:'Cepheye çift-tık ekle · sürükle-taşı · çift-tık sil · seçince genişlik/yükseklik/parapet ayarla'},
-  struct:  {ic:'structure', name:'Yapı',    hint:'Çekirdek ve bina köşe tutamaçlarından boyutlandır'},
-  roomdraw:{ic:'roomdraw',  name:'Oda Çiz', hint:'Kapalı poligon çizerek yeni oda oluştur'},
-  site:    {ic:'blok',      name:'Site',    hint:'Blokları sürükleyerek yerleştir'}
+  draw:    {ic:'draw',      name:'Çiz',     key:'D', hint:'Tıkla: köşe ekle · çift-tık ya da ilk köşeye tık: sınırı kapat · Space: geçici kaydır'},
+  parcel:  {ic:'parcel',    name:'Parsel',  key:'P', hint:'Tıkla: köşe ekle · ilk köşeye tık: kapat · Geri Al: son köşeyi sil'},
+  balkon:  {ic:'balcony',   name:'Balkon',  key:'B', hint:'Dış duvara tıkla: balkon ekle · tutamaçtan boyutlandır · sağ tık ya da Del: sil'},
+  avlu:    {ic:'avlu',      name:'Avlu',    key:'A', hint:'Boşlukta sürükle: yeni avlu · gövde: taşı · kenar/köşe: boyutlandır · sağ tık: sil'},
+  door:    {ic:'door',      name:'Kapı',    key:'K', hint:'Kapıyı sürükle: komşu duvara taşı · çift-tık: kapı ekle/sil'},
+  window:  {ic:'window',    name:'Pencere', key:'W', hint:'Cepheye çift-tık: pencere ekle · sürükle: taşı · çift-tık: sil · seç: genişlik/yükseklik/parapet ayarla'},
+  struct:  {ic:'structure', name:'Yapı',    key:'Y', hint:'Çekirdek ve bina köşe tutamaçlarından sürükleyerek boyutlandır'},
+  roomdraw:{ic:'roomdraw',  name:'Oda Çiz', key:'O', hint:'Daire üstüne kapalı poligon çiz: yeni oda · çift-tık ya da ilk köşe: kapat · Esc: iptal'},
+  site:    {ic:'blok',      name:'Site',    key:'S', hint:'Blokları sürükleyerek yerleştir'}
+  /* NOT: park modunun kendi alt çubuğu (#parkBar) var — "R=yatay/dikey döndür" orada; rozet
+     eklenirse çubukla üst üste biner (mevcut tasarım kararı), bu yüzden bilinçle dışarıda. */
 };
 function updateModeBadge(m){
-  const bg=document.getElementById('modeBadge'); if(!bg) return;
+  const bg=document.getElementById('modeBadge'); if(!bg||!bg.querySelector) return; // test/DOM-stub ortamı: atla
   const info=MODE_BADGE[m];
   if(!info){ bg.style.display='none'; return; }
-  bg.querySelector('.mbName').innerHTML=(typeof icon==='function'?icon(info.ic):'')+'<span>'+info.name+'</span>';
-  bg.querySelector('.mbHint').textContent=info.hint;
+  const nm=bg.querySelector('.mbName'), hn=bg.querySelector('.mbHint'); if(!nm||!hn) return;
+  /* I5b: araç adının yanında KLAVYE KISAYOLU — "Çiz (D)" formatı; ipucu satırı aracın kullanımı. */
+  const nameHtml=info.name+(info.key?' <span class="mbKey">('+info.key+')</span>':'');
+  nm.innerHTML=(typeof icon==='function'?icon(info.ic):'')+'<span>'+nameHtml+'</span>';
+  hn.textContent=info.hint;
   bg.style.display='flex';
   /* villa/site sekmeleri ya da park çubuğu görünüyorsa rozeti bir satır aşağı it */
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
   for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tWin','window'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
@@ -976,6 +1055,28 @@ function syncToolbarOverflow(){
   // ilk ölçüm layout'tan önce olabilir → bir tur sonra tekrar dene
   if(typeof requestAnimationFrame==='function') requestAnimationFrame(syncToolbarOverflow);
 }
+/* I5a (UI-İPUCU-2): TOOLBAR HOVER TOOLTIP kök nedeni — #toolbar overflow-y:auto (kısa viewport'ta
+   kaydırma) + overflow-x:hidden, CSS'te ::after tooltip'i left:calc(100%+10px) ile rayın SAĞINA
+   koyuyordu ama overflow-kutusu onu KIRPIYORDU (hiç görünmüyordu). Çözüm: CSS ::after yerine
+   body'ye eklenen TEK paylaşımlı tooltip'i JS ile konumla → kırpma kutusundan kaçar, her
+   viewport'ta çalışır. Görsel dil aynen: rayın sağında, koyu balon, "Çiz (D)" formatı. */
+(function(){
+  const tb=document.getElementById('toolbar'); if(!tb||!tb.addEventListener) return;
+  let tip=null;
+  const ensureTip=()=>{ if(tip) return tip;
+    tip=document.createElement('div'); tip.id='tbTip'; document.body.appendChild(tip); return tip; };
+  const show=btn=>{ const txt=btn.getAttribute('data-tip'); if(!txt) return;
+    const t=ensureTip(); t.textContent=txt;
+    const r=btn.getBoundingClientRect();
+    t.style.left=(r.right+10)+'px'; t.style.top=(r.top+r.height/2)+'px';
+    t.classList.add('show'); };
+  const hide=()=>{ if(tip) tip.classList.remove('show'); };
+  tb.addEventListener('mouseover',e=>{ const b=e.target.closest&&e.target.closest('button[data-tip]'); if(b) show(b); });
+  tb.addEventListener('mouseout',e=>{ const b=e.target.closest&&e.target.closest('button[data-tip]');
+    if(b && !(e.relatedTarget && b.contains(e.relatedTarget))) hide(); });
+  tb.addEventListener('mouseleave',hide);
+  tb.addEventListener('scroll',hide,{passive:true});
+})();
 /* onboarding ("Nasıl kullanılır?") kutusu kaldırıldı (kullanıcı isteği). */
 document.getElementById('tDraw').onclick=()=>setMode('draw');
 document.getElementById('tParcel').onclick=()=>setMode('parcel');
@@ -1026,6 +1127,17 @@ document.getElementById('tStruct').onclick=()=>setMode('struct');
 document.getElementById('tPark').onclick=()=>setMode('park');
 { const sb=document.getElementById('tSite'); if(sb) sb.onclick=()=>{ if(siteOn()) setMode(mode==='site'?'draw':'site'); }; }
 document.getElementById('tPan').onclick=()=>setMode('pan');
+/* U2: 3B GİRİŞ KAPISI — konut-DIŞI kat (ticari/otopark/sığınak) için 3B henüz yok.
+   view3d.js t3d'ye kendi 'open' handler'ını bağlar (bu ajanın dokunamadığı dosya). Burada
+   CAPTURE fazında yakalayıp konut-dışı katta nazik bilgi ver + view3d'nin generic
+   "yerleşim oluşturun" hatasını engelle (stopImmediatePropagation). Konut/villa: hiç dokunma. */
+{ const t3=document.getElementById('t3d');
+  if(t3) t3.addEventListener('click',e=>{
+    if(typeof usageEnabled==='function' && usageEnabled() && typeof katKullanim!=='undefined' && katKullanim!=='konut'){
+      e.stopImmediatePropagation(); e.preventDefault();
+      roomDrawToast('Ticari alan, otopark ve sığınak katları için şimdilik 2B kat planı çizilebiliyor. 3B gezinti ve render bu alanlara sonraki güncellemelerle geliyor.', 5200);
+    }
+  }, true); }
 /* park düzeni çubuğu: yön + sıfırla */
 if(typeof document.querySelectorAll==='function')
   document.querySelectorAll('#parkBar button[data-orient]').forEach(b=>b.onclick=()=>setParkOrient(b.dataset.orient));

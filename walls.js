@@ -96,11 +96,27 @@ function computeWallRuns(){
   const unitOf=new Map();
   p.unitObjs.forEach((u,k)=>u.rooms.forEach(g=>unitOf.set(g.id,k)));
   const FIXED=t=>t==='merdiven'||t==='yangin'||t==='asansor'||t==='teknik'; // çekirdek/kaçış/şaft sabit
+  // Konut-DIŞI kat (sığınak/otopark/ticari): daireye bağlı oda yoktur (unitObjs boş) → normal
+  // "en az bir taraf daire odası" kuralı hiçbir duvarı sürüklenebilir kılmaz. Bu katlarda
+  // çekirdek DIŞINDAKİ bölge sınırları (sığınak↔otopark, sığınak↔koridor, dükkân↔dükkân…)
+  // düzenlenebilsin. Konut katı byte-aynı kalır (orada unitOf dolu → aynı yola girer). */
+  const nonKonut = !!(p.katKullanim && p.katKullanim!=='konut');
   const eligible=(a,b)=>{
     if(FIXED(p.regions[a].type)||FIXED(p.regions[b].type)) return false;
     const ka=unitOf.get(a), kb=unitOf.get(b);
-    // aynı daire iç duvarı VEYA daire dış sınırı (komşu daire / ortak hol) — ikisi de sürüklenebilir
-    return ka!==undefined || kb!==undefined; // en az bir taraf daire odası olmalı (hol-hol değil)
+    if(ka!==undefined || kb!==undefined) return true; // en az bir taraf daire odası (konut yolu)
+    if(nonKonut){
+      /* I1 (UI-İPUCU-2): sığınak yalnız otoparkla EK bir yönde komşu — diğer sınırları bina
+         cephesi + APARTMAN HOLÜ (koridor) idi. Koridor sınırı da kilitliyken sığınak TEK
+         yönde (yalnız otopark duvarında) büyüyüp küçülüyordu ("tek yöne büyütebiliyoruz").
+         Konut-dışı katta koridor = bodrum sirkülasyon holü; sığınak/otopark bu hole karşı da
+         itilebilmeli. İKİ koridor arası (hol-hol) hâlâ kilitli. moveWallStep'in canAbsorb
+         guard'ı koridoru asla YUTMAZ → hol tümüyle silinemez, yalnız sınırı kayar. */
+      const ta=p.regions[a].type, tb=p.regions[b].type;
+      if(ta==='koridor' && tb==='koridor') return false; // hol-hol: sınır belirsiz, düzenlenmez
+      return true;                                        // sığınak↔otopark, sığınak↔koridor, dükkân↔hol…
+    }
+    return false; // hol-hol (konut) düzenlenmez
   };
   const isExt=(a,b)=>unitOf.get(a)!==unitOf.get(b); // farklı daire ya da hol sınırı = dış duvar
   const hMap=new Map(), vMap=new Map();

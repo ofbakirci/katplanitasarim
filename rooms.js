@@ -168,6 +168,15 @@ function newRegRuntime(name,type){ const g={id:plan.regions.length,name,type,uni
 function isCommonOrphan(g){
   return !!(g && g.cells.length && (g.unit==null||g.unit<0) && g.type!=='koridor' && !isStructReg(g));
 }
+/* I3 (UI-İPUCU-2): sığınak KATINDA son sığınak bölgesi "komşulara dağıtıp sil" ile silinirse
+   generate() spec'ten yeniden ürettiği için geri geliyordu → tutarsızlık. Karar: sığınak katının
+   SON sığınak bölgesi silinemez (kat kullanımı Bina sekmesinden değiştirilerek kaldırılır).
+   Birden fazla sığınak bölgesi varsa (bölünmüş) tek tek silme serbest. Konut/otopark: dokunmaz. */
+function isLastSiginakOnSiginakFloor(g){
+  const p=plan; if(!p||!g||g.type!=='siginak' || p.katKullanim!=='siginak') return false;
+  const sgCount=p.regions.filter(o=>o.type==='siginak'&&o.cells&&o.cells.length).length;
+  return sgCount<=1;   // silinecek olan tek/son sığınak
+}
 /* hücreleri apartman holüne (koridor) kat — hol çekirdeğe ulaşır */
 function commonAreaToCorridor(g){
   const p=plan; if(!isCommonOrphan(g)) return false;
@@ -812,9 +821,12 @@ svg.addEventListener('contextmenu',e=>{
           hoverWall=null; hoverRoomId=null; plan.wallRuns=computeWallRuns(); runChecks(); buildUnitTable(); render(); hideRoomMenu(); }
         else failO(err); };
       const hasKor=plan.regions.some(o=>o.type==='koridor'&&o.cells.length);
+      const lastSg=isLastSiginakOnSiginakFloor(g);   // I3: son sığınak → silme kilitli
       let html=`<div class="mh">${escapeHtml(g.name)} · ${fmt(g.area)} m²</div><hr>`;
       if(hasKor) html+=`<div class="mi" data-otokor="1">Apartman holüne kat (çekirdek erişimi aç)</div>`;
-      html+=`<div class="mi del" data-odis="1">Komşulara dağıtıp sil</div>`
+      html+=(lastSg
+          ? `<div class="mi dis" data-lastsg="1" title="Bu katın kullanımı sığınak — son sığınak bölgesi silinemez">Sığınak silinemez</div>`
+          : `<div class="mi del" data-odis="1">Komşulara dağıtıp sil</div>`)
           + `<hr><div class="mh">Yapı elemanı ekle (tıkladığınız yere)</div>`
           + `<div class="mi" data-saddt="merdiven">+ Merdiven</div>`
           + `<div class="mi" data-saddt="asansor">+ Asansör</div>`
@@ -823,6 +835,9 @@ svg.addEventListener('contextmenu',e=>{
       roomMenu.innerHTML=html; placeO();
       const ok=roomMenu.querySelector('.mi[data-otokor]'); if(ok) ok.onclick=()=>doO(()=>commonAreaToCorridor(g),'Apartman holü bulunamadı.');
       const od=roomMenu.querySelector('.mi[data-odis]'); if(od) od.onclick=()=>doO(()=>dissolveCommonArea(g),'Dağıtılacak komşu bulunamadı.');
+      const lsg=roomMenu.querySelector('.mi[data-lastsg]'); if(lsg) lsg.onclick=()=>{   // I3: son sığınak → nazik bilgi
+        if(typeof roomDrawToast==='function') roomDrawToast('Bu katın kullanımı sığınak — son sığınak bölgesi silinemez. Kat kullanımını Bina sekmesinden değiştirebilirsiniz.', 5200);
+        hideRoomMenu(); };
       roomMenu.querySelectorAll('.mi[data-saddt]').forEach(mi=>mi.onclick=()=>{
         if(doAddStruct(mi.dataset.saddt, sx, sy)) hideRoomMenu();
         else failO('Eklenemedi (bina dışına düştü).'); });

@@ -500,8 +500,10 @@ function renderPlan(){
     });
     if(mode==='park' && parkGhost){
       const b=parkGhost;
+      // I4: geçersiz hayalet (mevcut park üstüne / alan-dışı) KIRMIZI — mobilya geçersiz-bırakma deseniyle tutarlı
+      const col=b.invalid? '#c0392b' : '#2e7d32';
       const r=el('rect',{x:W2Sx(b.x),y:W2Sy(b.y),width:b.w*pxPerM,height:b.h*pxPerM,
-        fill:'#2e7d32','fill-opacity':0.18,stroke:'#2e7d32','stroke-width':lw*1.6,'stroke-dasharray':(pxPerM*0.3)+' '+(pxPerM*0.25)});
+        fill:col,'fill-opacity':b.invalid?0.22:0.18,stroke:col,'stroke-width':lw*1.6,'stroke-dasharray':(pxPerM*0.3)+' '+(pxPerM*0.25)});
       if(b.ang){ const cx=W2Sx(b.x+b.w/2), cy=W2Sy(b.y+b.h/2); r.setAttribute('transform',`rotate(${b.ang} ${cx} ${cy})`); }
       pg.appendChild(r);
     }
