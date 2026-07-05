@@ -40,6 +40,17 @@
   /* Sidebar */
   aside{width:320px; background:var(--panel); border-right:1px solid var(--line); display:flex; flex-direction:column; min-height:0;}
   aside .scroll{flex:1; overflow-y:auto; padding:14px;}
+  /* ---- Sol panel sekmeleri (SUNUM-4B) ---- */
+  #panelTabs{display:flex; gap:2px; flex-shrink:0; padding:8px 10px 0; border-bottom:1px solid var(--line); background:var(--panel);}
+  #panelTabs .ptab{flex:1; border:0; background:transparent; padding:8px 6px 9px; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; line-height:1.2; border-radius:var(--r-md) var(--r-md) 0 0; border-bottom:2px solid transparent; margin-bottom:-1px;}
+  #panelTabs .ptab:hover{color:var(--ink);}
+  #panelTabs .ptab.active{color:var(--acc); border-bottom-color:var(--acc);}
+  #panelTabs .ptab:focus-visible{outline:none; box-shadow:var(--ring); border-radius:var(--r-sm);}
+  .tabPane{display:none;}
+  .tabPane.active{display:block;}
+  /* ---- Sabit alt bölüm: Yerleşimi Oluştur + mevzuat özeti (her sekmede görünür) ---- */
+  #panelFooter{flex-shrink:0; padding:12px 14px; border-top:1px solid var(--line); background:var(--panel); box-shadow:0 -2px 8px rgba(28,26,22,.05);}
+  #panelFooter #checks{margin-top:9px;}
   .sec{margin-bottom:18px;}
   .sec h2{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-bottom:8px;}
   .row{display:flex; gap:8px; align-items:center; margin-bottom:8px;}

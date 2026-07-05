@@ -20,7 +20,13 @@
 <main>
 <aside>
   <button id="asideClose" title="Paneli kapat">×</button>
+  <div id="panelTabs" role="tablist" aria-label="Panel bölümleri">
+    <button type="button" class="ptab active" data-tab="bina" role="tab" aria-selected="true">Bina</button>
+    <button type="button" class="ptab pro-only" data-tab="parsel" role="tab" aria-selected="false">Parsel/İmar</button>
+    <button type="button" class="ptab" data-tab="daireler" role="tab" aria-selected="false">Daireler</button>
+  </div>
   <div class="scroll">
+    <div class="tabPane active" data-pane="bina" role="tabpanel">
     <div class="sec">
       <h2>Bina Bilgileri</h2>
       <div class="row"><label>Bina tipi</label>
@@ -34,6 +40,15 @@
       <div class="row"><label>Koridor yönü</label>
         <select id="koridorYon"><option value="oto">Otomatik</option><option value="yatay">Yatay</option><option value="dikey">Dikey</option></select>
       </div>
+      <div class="row pro-only" id="katKullanimRow" style="display:none"><label>Bu katın kullanımı</label>
+        <select id="katKullanim">
+          <option value="konut">Konut</option>
+          <option value="ticari">Ticari (dükkân)</option>
+          <option value="otopark">Otopark</option>
+          <option value="siginak">Sığınak</option>
+        </select>
+      </div>
+      <div id="katKullanimHint" class="pro-only" style="display:none; font-size:11px; color:#9c8e76; line-height:1.35; margin:2px 0 8px"></div>
       <details id="wtSec" class="wt-sec pro-only">
         <summary>Duvar kalınlıkları <small>(mevzuat min.)</small></summary>
         <div class="row"><label>Dış duvar (m)</label><input type="number" id="wtDis" step="0.05"></div>
@@ -42,7 +57,13 @@
         <div class="wt-hint">Mevzuat minimumunda başlar; yalnız <b>artırabilirsiniz</b>. Yalnız çizim/görünüm — oda alanlarını değiştirmez.</div>
       </details>
     </div>
-    <div class="sec pro-only" id="parselSec">
+    <div class="sec">
+      <h2>Lejant</h2>
+      <div class="legend" id="legend"></div>
+    </div>
+    </div>
+    <div class="tabPane pro-only" data-pane="parsel" role="tabpanel">
+    <div class="sec" id="parselSec">
       <h2>TKGM Parsel Sorgu</h2>
       <div class="ps-field">
         <label for="psInput">Koordinat veya Google Maps linki</label>
@@ -91,23 +112,15 @@
       </div>
       <div class="ps-hint">Google Maps’te noktaya <b>sağ tık → koordinatı kopyala</b> ya da bağlantıyı yapıştırın. Parselin <b>ada/parsel</b> no’su, alanı ve sınırı TKGM’den otomatik gelir, <b>arsa</b> olarak yüklenir. Parsel <b>otomatik eksene hizalanır</b> (eğikse düz oturur); gerekirse yukarıdan döndürün. Bina çizerken köşeler parsel/çekme çizgisine <b>yapışır</b>. Bahçe, TAKS ve çekme mesafeleri hesaplanır.</div>
     </div>
+    </div>
+    <div class="tabPane" data-pane="daireler" role="tabpanel">
     <div class="sec" id="unitSec">
       <h2 id="unitSecTitle">Daire Tipleri (kat başına)</h2>
-      <div class="row pro-only" id="katKullanimRow" style="display:none"><label>Bu katın kullanımı</label>
-        <select id="katKullanim">
-          <option value="konut">Konut</option>
-          <option value="ticari">Ticari (dükkân)</option>
-          <option value="otopark">Otopark</option>
-          <option value="siginak">Sığınak</option>
-        </select>
-      </div>
-      <div id="katKullanimHint" class="pro-only" style="display:none; font-size:11px; color:#9c8e76; line-height:1.35; margin:2px 0 8px"></div>
       <div id="unitList"></div>
       <button class="small" id="addUnit">+ Daire tipi ekle</button>
     </div>
     <div class="sec">
-      <button class="primary" id="genBtn" style="width:100%" disabled>Yerleşimi Oluştur</button>
-      <button class="small" id="structReset" style="width:100%; margin-top:6px; display:none" data-ic="clear">Yapı iskeletini sıfırla</button>
+      <button class="small" id="structReset" style="width:100%; display:none" data-ic="clear">Yapı iskeletini sıfırla</button>
       <button class="small" id="floorCopyBtn" style="width:100%; margin-top:6px; display:none" data-ic="copy">Bu kat düzenini kopyala</button>
       <div id="floorPastePanel" style="display:none; margin-top:6px; border:1px solid #e6dfce; border-radius:8px; padding:8px 9px; background:#fbf8f1">
         <div id="floorPasteHead" style="font-size:12px; color:#6b5e4d; line-height:1.35; margin-bottom:7px"></div>
@@ -136,14 +149,11 @@
         </div>
       </details>
     </div>
-    <div class="sec">
-      <h2>Mevzuat Kontrolü</h2>
-      <div id="checks"><div class="chk info"><span class="ic" data-ic="info"></span><span>Önce bir bina sınırı çizin, daire tiplerini girin ve “Yerleşimi Oluştur”a basın.</span></div></div>
     </div>
-    <div class="sec">
-      <h2>Lejant</h2>
-      <div class="legend" id="legend"></div>
-    </div>
+  </div>
+  <div id="panelFooter">
+    <button class="primary" id="genBtn" style="width:100%" disabled>Yerleşimi Oluştur</button>
+    <div id="checks"><div class="chk info"><span class="ic" data-ic="info"></span><span>Önce bir bina sınırı çizin, daire tiplerini girin ve “Yerleşimi Oluştur”a basın.</span></div></div>
   </div>
 </aside>
 <div id="canvasWrap">

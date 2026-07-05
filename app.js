@@ -852,3 +852,46 @@ function resetCuts(){ customCutsZ=null; editHistory=editHistory.filter(e=>e.type
 /* ================= lejant ================= */
 (function(){ const lg=document.getElementById('legend');
   for(const t in COLORS){ const s=document.createElement('span'); s.innerHTML=`<i style="background:${COLORS[t]}"></i>${TYPE_TR[t]}`; lg.appendChild(s);} })();
+
+/* ================= sol panel sekmeleri (SUNUM-4B) =================
+   Bina · Parsel/İmar · Daireler. Sekme değişimi SADECE display — form state'e
+   dokunmaz. Aktif sekme oturum içinde bellekte tutulur (sayfa yenilemede Bina'ya
+   düşer, bilinçli). Basit modda Parsel/İmar sekmesi .pro-only ile gizli; aktif
+   sekme gizli kalırsa Bina'ya düşülür. showPanelTab(name) global olarak açılır ki
+   bir kontrolü odağa alan akışlar (ör. TKGM) önce hedef sekmeyi gösterebilsin. */
+(function(){
+  if(typeof document==='undefined' || typeof document.getElementById!=='function'
+     || typeof document.querySelectorAll!=='function') return;   // test/Node stub (DOM yok) → atla
+  const strip=document.getElementById('panelTabs');
+  if(!strip || typeof strip.querySelectorAll!=='function') return;
+  const tabs=Array.prototype.slice.call(strip.querySelectorAll('.ptab'));
+  const panes=Array.prototype.slice.call(document.querySelectorAll('.tabPane'));
+  let active='bina';
+  function paneOf(name){ return panes.find(p=>p.getAttribute('data-pane')===name); }
+  function tabOf(name){ return tabs.find(t=>t.getAttribute('data-tab')===name); }
+  function tabHidden(t){ // Basit modda .pro-only sekme gizli sayılır
+    return !t || (t.offsetParent===null && getComputedStyle(t).display==='none');
+  }
+  function show(name){
+    let t=tabOf(name);
+    if(tabHidden(t)) name='bina';               // gizli sekme → Bina'ya düş
+    active=name;
+    tabs.forEach(tb=>{ const on=tb.getAttribute('data-tab')===name;
+      tb.classList.toggle('active', on); tb.setAttribute('aria-selected', on?'true':'false'); });
+    panes.forEach(p=>p.classList.toggle('active', p.getAttribute('data-pane')===name));
+  }
+  tabs.forEach(t=>t.addEventListener('click',()=>show(t.getAttribute('data-tab'))));
+  // Mod değişiminde (Basit↔Pro) aktif sekmeyi koru; gizli kaldıysa Bina'ya düş.
+  // boot.js body.mode-* sınıfını değiştirir → gözlemle.
+  if(typeof MutationObserver==='function'){
+    let raf=null;
+    const mo=new MutationObserver(()=>{ if(raf) return;
+      raf=(window.requestAnimationFrame||setTimeout)(()=>{ raf=null; show(active); },0); });
+    mo.observe(document.body,{attributes:true, attributeFilter:['class']});
+  }
+  // Emniyet: mod düğmelerine de bağlan (MutationObserver yoksa/ertelenirse).
+  ['modeBasic','modePro'].forEach(id=>{ const b=document.getElementById(id);
+    if(b) b.addEventListener('click',()=>{ setTimeout(()=>show(active),0); }); });
+  window.showPanelTab=show;
+  show('bina');
+})();
