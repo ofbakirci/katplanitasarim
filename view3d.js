@@ -1080,17 +1080,30 @@
     // C1-3 / C3-5: KAPALI kanat malzemeleri — KAPILAR mobilya dolaplarından BARİZ ayrışsın diye KOYU tonda +
     //   belirgin (koyu, kalın) kasa çerçevesi. Dolaplar açık ahşap (FMAT.wood/panel) → kapı koyu = render'da
     //   nano girdisinde ikisi net farklı okunur. iç kapı = koyu ceviz, bina girişi (ext) = daha da koyu.
-    const matLeaf=new THREE.MeshStandardMaterial({color:0x5a3d26,roughness:0.55,metalness:0.06});   // iç kanat: koyu ceviz (C3-5)
+    const matLeaf=new THREE.MeshStandardMaterial({color:0x5a3d26,roughness:0.55,metalness:0.06});   // iç oda kanadı: koyu ceviz (C3-5)
     const matLeafExt=new THREE.MeshStandardMaterial({color:0x3d2817,roughness:0.5,metalness:0.10});  // bina girişi: en koyu
     const matJamb=new THREE.MeshStandardMaterial({color:0x2e2016,roughness:0.6,metalness:0.05});      // çerçeve/kasa: KOYU vurgu (C3-5)
     const matHandle=new THREE.MeshStandardMaterial({color:0xc8c8cc,roughness:0.3,metalness:0.7});     // kol: parlak metal (kontrast)
+    // KAPI-3B görsel farklılaşması (TR apartman gerçekçiliği):
+    //   DAİRE GİRİŞ = çelik kapı hissi (koyu antrasit, ağır kasa, göbek/kol) · MERDİVEN/YANGIN =
+    //   gri metal yangın kapısı (RAL7035/7040, panik-bar çubuğu, üst dar cam) · ASANSÖR = fırçalanmış
+    //   metal çift sürgü kapak (ortadan bölünmüş iki panel, kasasız/dar kasa).
+    const matSteelLeaf=new THREE.MeshStandardMaterial({color:0x33363b,roughness:0.42,metalness:0.32}); // daire girişi: çelik antrasit
+    const matSteelJamb=new THREE.MeshStandardMaterial({color:0x26282c,roughness:0.5,metalness:0.28});  // daire girişi kasası (ağır)
+    const matFireLeaf=new THREE.MeshStandardMaterial({color:0x8f9296,roughness:0.6,metalness:0.4});    // yangın kapısı: gri metal (RAL7035)
+    const matFireJamb=new THREE.MeshStandardMaterial({color:0x6f7276,roughness:0.62,metalness:0.4});   // yangın kapısı kasası
+    const matPanic=new THREE.MeshStandardMaterial({color:0xb9bcc0,roughness:0.35,metalness:0.6});      // panik-bar / kol: açık metal
+    const matElevMetal=new THREE.MeshStandardMaterial({color:0xa9adb2,roughness:0.28,metalness:0.72}); // asansör: fırçalanmış metal panel
+    const matElevJamb=new THREE.MeshStandardMaterial({color:0x8c9095,roughness:0.4,metalness:0.6});    // asansör dar kasa
     const matCeil=new THREE.MeshStandardMaterial({color:0xf3efe6,roughness:0.96,metalness:0,side:THREE.DoubleSide}); // C3-4: tavan = mat açık ton
 
     // kapı boşlukları (metre uzayı): map.doors px → px2m. Oda kenarlarıyla AYNI doğrultudadır.
-    // kind: 'ext'=bina girişi, 'unit'=daire girişi, 'inner'/'extra'=iç kapı (kanat tonu için taşınır).
+    // kind (io.js SEMANTİK enum): 'entry'=bina girişi, 'unit_entry'=daire girişi, 'room'=iç oda kapısı,
+    //   'stair'/'fire_stair'=merdiven/yangın, 'elevator'=asansör (kanat tonu için taşınır).
+    //   blocked:true (çekirdek kapıları) → KAPI-3B: boşluk oyulur AMA collider DOLU kalır (FPV'de girilemez).
     const doorSegs=(map.doors||[]).map(function(d){
       const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
-      return {ax:a[0],az:a[1],bx:b[0],bz:b[1],kind:d.kind};
+      return {ax:a[0],az:a[1],bx:b[0],bz:b[1],kind:d.kind,blocked:!!d.blocked};
     });
     // pencere açıklıkları (metre uzayı): map.windows px → px2m. Kapı boşluğu oymanın ikizi;
     // parapet altı + lento üstü duvar korunur, boşlukta saydam cam + ince kasa.
@@ -1259,35 +1272,81 @@
     }
     // küçük yardımcı: geometri+material+konum → mesh (buildWindowUnit tekrarını azaltır)
     function posBox(geo,mat,x,y,z){ var m=new THREE.Mesh(geo,mat); m.position.set(x,y,z); return m; }
-    // C1-3: kapı boşluğuna KAPALI kanat kur (mesh grubu). mx,mz=boşluk ortası, gw=genişlik, ang=duvar açısı,
-    //   kind=kapı türü (ext=bina girişi koyu ton). abartısız: kanat paneli + iki dikey kasa + kol nub'ı.
+    // C1-3 / KAPI-3B: kapı boşluğuna KAPALI kanat kur (mesh grubu). mx,mz=boşluk ortası, gw=genişlik,
+    //   ang=duvar açısı, kind=SEMANTİK kapı türü (io.js DOOR_KIND enum'ı):
+    //     'unit_entry' = daire girişi (çelik kapı) · 'entry' = bina girişi (en koyu ahşap) ·
+    //     'stair'/'fire_stair' = yangın merdiveni kapısı (gri metal + panik-bar + cam gözetleme) ·
+    //     'elevator' = asansör çift sürgü metalik kapak · diğer ('room') = iç oda ahşap kanadı.
     //   Kanat boşluktan hafif dar (kasa payı) + duvar ekseninde ince → kapı "kapalı" okunur, gerçek geometri.
     function addDoorLeaf(mx,mz,gw,ang,kind,parent){
       if(gw<0.3) return;                                   // çok dar → kanat koyma (ıslak dolap-kapısı gibi)
       const grp=new THREE.Group(); grp.position.set(mx,0,mz); grp.rotation.y=ang;
-      const isExt=(kind==='ext');
-      const leafMat=isExt?matLeafExt:matLeaf;
-      const jw=0.08;                                       // C3-5: kasa (jamb) genişliği — daha belirgin çerçeve
-      const lw=Math.max(0.2,gw-2*jw);                      // kanat net genişliği (kasa payı düşülür)
-      const lt=0.045;                                      // kanat kalınlığı (ince panel)
       const jt=Math.max(0.24,WALL_T+0.04);                 // kasa derinliği — duvarı sarar
+      const lt=0.045;                                      // kanat kalınlığı (ince panel)
+      // --- ASANSÖR: fırçalanmış metal ÇİFT SÜRGÜ kapak (ortadan bölünmüş iki panel) + dar kasa ---
+      if(kind==='elevator'){
+        const jw=0.05;                                     // dar/kasasız his (ince çerçeve)
+        const lw=Math.max(0.2,gw-2*jw), half=lw/2;
+        for(const sgn of [-1,1]){                          // iki panel, ortadan hafif ayrık (sürgü izi)
+          const pan=new THREE.Mesh(new THREE.BoxGeometry(half-0.012,DOOR_H*0.98,lt),matElevMetal);
+          pan.position.set(sgn*(half/2+0.006),DOOR_H*0.98/2,0); pan.castShadow=true; grp.add(pan);
+        }
+        const seam=new THREE.Mesh(new THREE.BoxGeometry(0.02,DOOR_H*0.98,lt+0.014),matElevJamb); // orta sürgü derzi
+        seam.position.set(0,DOOR_H*0.98/2,0); grp.add(seam);
+        for(const sgn of [-1,1]){                          // ince yan kasa
+          const jm=new THREE.Mesh(new THREE.BoxGeometry(jw,DOOR_H,jt),matElevJamb);
+          jm.position.set(sgn*(lw/2+jw/2),DOOR_H/2,0); jm.castShadow=true; grp.add(jm);
+        }
+        const head=new THREE.Mesh(new THREE.BoxGeometry(gw,0.06,jt),matElevJamb);
+        head.position.set(0,DOOR_H+0.03,0); head.castShadow=true; grp.add(head);
+        grp.userData.isLeaf=true; grp.scale.y=roofOn?1:WALL_LOW; parent.add(grp); return;
+      }
+      // --- MERDİVEN / YANGIN: gri metal yangın kapısı + panik-bar + üst dar cam gözetleme ---
+      if(kind==='stair'||kind==='fire_stair'){
+        const jw=0.09, lw=Math.max(0.2,gw-2*jw);
+        const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,DOOR_H*0.98,lt),matFireLeaf);
+        leaf.position.set(0,DOOR_H*0.98/2,0); leaf.castShadow=true; grp.add(leaf);
+        // üst dar cam gözetleme penceresi (wired glass) — kapının üst kısmında
+        const vp=new THREE.Mesh(new THREE.BoxGeometry(Math.min(0.25,lw*0.35),0.5,lt+0.02),matGlass);
+        vp.position.set(0,DOOR_H*0.74,0); grp.add(vp);
+        // PANİK-BAR: yatay çubuk, kanat ortasında (göbek hizası), destek nub'larıyla
+        const bar=new THREE.Mesh(new THREE.BoxGeometry(lw*0.78,0.055,0.05),matPanic);
+        bar.position.set(0,1.02,lt/2+0.035); bar.castShadow=true; grp.add(bar);
+        for(const sgn of [-1,1]){ const nub=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.09,0.04),matPanic);
+          nub.position.set(sgn*lw*0.30,1.02,lt/2+0.018); grp.add(nub); }
+        for(const sgn of [-1,1]){                          // gri metal kasa (belirgin)
+          const jm=new THREE.Mesh(new THREE.BoxGeometry(jw,DOOR_H,jt),matFireJamb);
+          jm.position.set(sgn*(lw/2+jw/2),DOOR_H/2,0); jm.castShadow=true; grp.add(jm);
+        }
+        const head=new THREE.Mesh(new THREE.BoxGeometry(gw,jw,jt),matFireJamb);
+        head.position.set(0,DOOR_H+jw/2-0.01,0); head.castShadow=true; grp.add(head);
+        grp.userData.isLeaf=true; grp.scale.y=roofOn?1:WALL_LOW; parent.add(grp); return;
+      }
+      // --- DAİRE GİRİŞİ (unit_entry) = çelik kapı · BİNA GİRİŞİ (entry) = en koyu ahşap · diğer = oda ahşap ---
+      const isUnit=(kind==='unit_entry'), isExt=(kind==='entry');
+      const leafMat=isUnit?matSteelLeaf:(isExt?matLeafExt:matLeaf);
+      const jambMat=isUnit?matSteelJamb:matJamb;
+      const jw=isUnit?0.10:0.08;                           // daire girişi: daha belirgin/ağır kasa
+      const lw=Math.max(0.2,gw-2*jw);
       const leaf=new THREE.Mesh(new THREE.BoxGeometry(lw,DOOR_H*0.98,lt),leafMat);
       leaf.position.set(0,DOOR_H*0.98/2,0); leaf.castShadow=true; grp.add(leaf);
-      // C3-5: kapı panelinde iki yatay kayıt (lambri) çizgisi — kanat "kapı" okunur (dolap raflarından farklı yön)
-      for(const fy of [DOOR_H*0.34, DOOR_H*0.66]){
-        const rail=new THREE.Mesh(new THREE.BoxGeometry(lw*0.9,0.04,lt+0.012),matJamb);
-        rail.position.set(0,fy,0); grp.add(rail);
+      if(isUnit){ // çelik kapı göbek panosu (hafif kabartma dikdörtgen) — minimal detay
+        const pnl=new THREE.Mesh(new THREE.BoxGeometry(lw*0.7,DOOR_H*0.6,lt+0.01),matSteelJamb);
+        pnl.position.set(0,DOOR_H*0.5,0); grp.add(pnl);
+      } else { // C3-5: ahşap kanatta iki yatay kayıt (lambri) çizgisi — dolap raflarından farklı yön
+        for(const fy of [DOOR_H*0.34, DOOR_H*0.66]){
+          const rail=new THREE.Mesh(new THREE.BoxGeometry(lw*0.9,0.04,lt+0.012),matJamb);
+          rail.position.set(0,fy,0); grp.add(rail);
+        }
       }
-      // iki dikey kasa (kapı çerçevesi) — duvar kalınlığını kapsar, kanattan belirgin kalın/koyu
-      for(const sgn of [-1,1]){
-        const jm=new THREE.Mesh(new THREE.BoxGeometry(jw,DOOR_H,jt),matJamb);
+      for(const sgn of [-1,1]){                            // iki dikey kasa
+        const jm=new THREE.Mesh(new THREE.BoxGeometry(jw,DOOR_H,jt),jambMat);
         jm.position.set(sgn*(lw/2+jw/2),DOOR_H/2,0); jm.castShadow=true; grp.add(jm);
       }
-      // C3-5: üst kasa (lento çerçevesi) — kapı tam bir dikdörtgen çerçeve olarak okunur
-      const head=new THREE.Mesh(new THREE.BoxGeometry(gw,jw,jt),matJamb);
+      const head=new THREE.Mesh(new THREE.BoxGeometry(gw,jw,jt),jambMat);
       head.position.set(0,DOOR_H+jw/2-0.01,0); head.castShadow=true; grp.add(head);
-      // kol imasi — kanadın bir yüzünde küçük çıkıntı (menteşe karşı-kenarına yakın), göz hizasında
-      const hnd=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.12,0.05),matHandle);
+      // kol imasi — çelik kapıda daha büyük tutamak, ahşapta küçük çıkıntı
+      const hnd=new THREE.Mesh(new THREE.BoxGeometry(isUnit?0.05:0.035,isUnit?0.16:0.12,0.05),matHandle);
       hnd.position.set(lw*0.36,1.05,lt/2+0.025); hnd.castShadow=true; grp.add(hnd);
       grp.userData.isLeaf=true;                            // applyRoof: duvarlarla aynı oranda kısalt/geri-al
       grp.scale.y=roofOn?1:WALL_LOW;                       // build anındaki çatı durumuna uy (duvar segseti gibi)
@@ -1328,7 +1387,7 @@
         const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
         if(e0>0.2||e1>0.2) return;                          // kapı bu duvar doğrultusunda değil (uzaklık toleransı)
         const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
-        if(g1-g0>0.1) gaps.push([g0,g1,d.kind]);            // duvarla örtüşen kapı boşluğu (+kind = kanat tonu)
+        if(g1-g0>0.1) gaps.push([g0,g1,d.kind,d.blocked]);  // duvarla örtüşen kapı boşluğu (+kind = kanat tonu, +blocked = collider dolu)
       });
       winSegs.forEach(function(d){
         const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
@@ -1387,6 +1446,10 @@
         //   OTOMATİK girer. SPAN mantığına DOKUNMAZ (mx/mz/gw/ang yalnız OKUNUR). Kanat DOOR_H yüksekliğinde;
         //   dollhouse (roof-off) modunda duvarlarla aynı oranda kısalsın diye isLeaf tag'i (applyRoof ölçekler).
         addDoorLeaf(mx,mz,gw,ang,g[2],walls);
+        // KAPI-3B / K3: ÇEKİRDEK kapısı (blocked=merdiven/asansör/yangın) → boşluk GÖRSEL olarak oyuldu
+        //   (kanat + eşik + lento var) AMA collider DOLU kalır: FPV'de içeri girilemez. Tam-yükseklik,
+        //   tam-kalınlık görünmez çarpışma kutusu boşluğu kapatır (oda/daire kapıları geçilebilir kalır).
+        if(g[3]) addCollider(mx,mz,gw,WALL_T,ang);
       });
     }
 

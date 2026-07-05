@@ -696,11 +696,17 @@ function buildFloorplanMap(opt){
   common.forEach(o=>{ if(MS[o.id]) o.materials={ floor:MS[o.id].floor||null, wall:MS[o.id].wall||null }; });
   // kapılar: gerçek kapı boşlukları (3B görünüm + AI besleme); oda poligonlarıyla AYNI px uzayı.
   // span = exportWallBoundaryPNG ile birebir (orta e+0.45, genişlik doorWidthM: bina1.5/daire1.0/oda0.9/ıslak0.8).
+  // KAPI-3B: dışa dönük SEMANTİK kind enum'ı (ADDITIVE) — iç motor kind'ından türer:
+  //   unit→unit_entry (daire girişi) · inner→room (daire içi oda) · ext/extra→entry/room · stair/fire_stair/elevator aynen.
+  //   blocked:true → 3B'de KAPALI kanat + DOLU collider (içeri girilemez: merdiven/asansör/yangın).
+  const DOOR_KIND={ unit:'unit_entry', inner:'room', ext:'entry', extra:'room',
+                    stair:'stair', fire_stair:'fire_stair', elevator:'elevator' };
   const doors=(typeof computeDoors==='function'?computeDoors():[])
     .filter(d=>d&&d.status==='ok'&&d.e)
     .map(d=>{ const e=d.e, Wd=doorWidthM(d), c0=0.45-Wd/2, c1=0.45+Wd/2;
       const a=fr.px(e.h?e.x+c0:e.x, e.h?e.y:e.y+c0), b=fr.px(e.h?e.x+c1:e.x, e.h?e.y:e.y+c1);
-      return { kind:d.kind, orient:e.h?'h':'v', width_m:+Wd.toFixed(2),
+      const kind=DOOR_KIND[d.kind]||'room', blocked=(kind==='stair'||kind==='fire_stair'||kind==='elevator');
+      return { kind, orient:e.h?'h':'v', width_m:+Wd.toFixed(2), blocked,
                p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; });
   // pencereler: cephe pencere açıklıkları (3B + AI besleme; doors[] şemasının ikizi, ADDITIVE — mevcut alanlar değişmez).
   // span = pencere merkezinden ±genişlik/2 (kenar boyu, dünya→px). height_m + sill_m 3B'yi besler (tam boy → sill 0, full:true).

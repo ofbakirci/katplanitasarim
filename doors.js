@@ -29,6 +29,8 @@ function pickDoorEdge(list){
 function doorWidthM(dr){
   if(!dr) return 0.9;
   if(dr.kind==='unit') return 1.0;                                     // daire (bağımsız bölüm) girişi
+  if(dr.kind==='stair'||dr.kind==='fire_stair') return 1.0;            // merdiven / yangın kaçış kapısı (kaçış std ~1,0 m)
+  if(dr.kind==='elevator') return 0.9;                                 // asansör kapısı
   if(dr.kind==='ext')  return /^gh/.test(dr.key||'') ? 1.5 : 1.0;      // gh = bina ana girişi (150), gd = dükkân (100)
   if(dr.kind==='extra') return dr.ext ? 1.0 : 0.9;                     // elle eklenen: dış giriş 1.0 / iç kapı 0.9
   const t=dr.reg&&dr.reg.type;
@@ -43,6 +45,7 @@ function doorWallType(dr){
   if(dr.kind==='ext')   return 'dis';                                  // bina ana girişi / dükkân (dış cephe)
   if(dr.kind==='extra') return dr.ext ? 'dis' : 'icBolme';            // elle: dış giriş / iç kapı
   if(dr.kind==='unit')  return 'daireArasi';                          // daire (bağımsız bölüm) girişi = hol sınırı
+  if(dr.kind==='stair'||dr.kind==='fire_stair'||dr.kind==='elevator') return 'cekirdek'; // çekirdek perde duvarı
   return 'icBolme';                                                    // inner: daire içi oda kapısı
 }
 function computeDoors(){
@@ -123,6 +126,41 @@ function computeDoors(){
     p.regions.forEach(g=>{ if(!g.cells.length) return;
       if(g.type==='koridor')      extDoor(g,'gh'+g.id);   // BİNA GİRİŞİ (apartman holü)
       else if(g.type==='dukkan')  extDoor(g,'gd'+g.id);   // dükkân girişi (vitrin cephesi)
+    });
+  }
+  /* ÇEKİRDEK KAPILARI (KAPI-3B) — merdiven / yangın merdiveni / asansör bölgesinden ortak
+     dolaşıma (apartman holü/koridor, yoksa herhangi bir komşu iç bölge) 1 kapı. Kaçış merdiveni
+     ~1,0 m (yangın kaçış standardı), asansör ~0,9 m (doorWidthM kind'a göre verir). Konum: ortak
+     duvarın uygun segmentinin ORTASI (pickDoorEdge iskeleti). 3B'de bu kapılar KAPALI kanat +
+     DOLU collider olarak sürülür (içeri girilemez); 2B'de mevcut kapı diliyle boşluk çizilir.
+     doorHidden ile gizlenebilir. edges her zaman komşu koridor(lar); koridor yoksa çekirdek-dışı
+     herhangi bir iç bölgeye (fixOrphans sonrası nadir) düşülür. */
+  {
+    const CORE_KIND={merdiven:'stair', yangin:'fire_stair', asansor:'elevator'};
+    const isCoreType=t=>t==='merdiven'||t==='yangin'||t==='asansor';
+    p.regions.forEach(g=>{
+      if(!g.cells.length) return;
+      const ck=CORE_KIND[g.type]; if(!ck) return;
+      // aday kenarlar: bu çekirdeğin, KORİDOR komşusuna değen kenarları (öncelik);
+      // koridor yoksa çekirdek-DIŞI herhangi bir iç bölgeye değen kenarlar.
+      const corEdges=[], anyEdges=[];
+      const pushEdge=(arr,x,y,h)=>arr.push({x,y,h});
+      const nbType=v=>(v>=0&&p.regions[v])?p.regions[v].type:null;
+      const nbOk=v=>v>=0 && v!==g.id && p.regions[v] && !isCoreType(p.regions[v].type); // çekirdek-dışı iç bölge
+      g.cells.forEach(i=>{ const r=(i/p.cols)|0,c=i%p.cols;
+        const N=[[id(r-1,c),p.minX+c*M,p.minY+r*M,1],
+                 [id(r+1,c),p.minX+c*M,p.minY+(r+1)*M,1],
+                 [id(r,c-1),p.minX+c*M,p.minY+r*M,0],
+                 [id(r,c+1),p.minX+(c+1)*M,p.minY+r*M,0]];
+        N.forEach(([v,x,y,h])=>{ if(nbType(v)==='koridor') pushEdge(corEdges,x,y,h);
+                                 else if(nbOk(v)) pushEdge(anyEdges,x,y,h); });
+      });
+      const edges = corEdges.length? corEdges : anyEdges;
+      const key='c'+g.id;
+      if(!edges.length){ out.push({key, e:null, edges, kind:ck, reg:g, status:'none'}); return; }
+      if(doorHidden[key]){ out.push({key, e:null, edges, kind:ck, reg:g, status:'hidden'}); return; }
+      const e=resolve(key, edges);
+      if(e) out.push({key, e, edges, kind:ck, reg:g, status:'ok'});
     });
   }
   /* çift tıkla eklenen kapılar — iç kapı: kenar iki farklı iç bölgeyi ayırıyorsa;
