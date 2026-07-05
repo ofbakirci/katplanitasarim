@@ -20,6 +20,65 @@
   //   (açık kitaplıkta rafların arasından duvar görünür = "sırt yok" algısı + z-fight). Yeni varsayılan
   //   gap = duvar-iç-yüzü + 2 cm nefes → arka panel net serbest, duvar sızmaz.
   const WALL_CLR = WALL_T/2 + 0.02;
+
+  /* ===== SUNUM-4C — UI PALETİ (tek kaynak) =====
+     3B overlay'in TÜM krom renkleri/token'ları burada. Dağınık literal'ler bu objeden okur.
+     "AYNI MARKANIN KOYUSU": adım-1 tasarım token'larının (styles.css) koyu-zemin uyarlaması —
+       vurgu = --acc-on-dark terrakota (#DB8A5E, eski bronz #c9a16b emekli), panel = sıcak siyah
+       (#211E1B ailesi, eski mor-gri #22222x yerine), durum renkleri --ok/--bad ailesinin koyusu.
+     AÇIK TEMA GEÇİŞİ: yarın "açık panel" istenirse SADECE bu obje değişir; gövde/CSS bu objeden
+       türetildiği için başka dosya/satır dokunulmaz. Örnek açık-tema değerleri altta yorumlu.
+     Not: mesh MALZEME renkleri (matWall/FMAT/zemin) sahne fiziği — UI kromu DEĞİL, buraya alınmadı. */
+  const UIPAL = {
+    // — vurgu (terrakota ailesi, koyu-zemin) —
+    acc:'#DB8A5E',            // --acc-on-dark: ana vurgu (aktif rail, primer buton zemini, slider)
+    accHover:'#E39C74',       // vurgunun açık türevi (hover)
+    onAcc:'#241a12',          // vurgu üstü metin (koyu terrakota-siyah, okunur kontrast)
+    accSoft:'rgba(219,138,94,.55)',   // vurgu yumuşak kenarlık (hover ipucu)
+    // — durum renkleri (adım-1 --ok/--bad koyu-zemin uyarlaması) —
+    ok:'#5FA36E',             // --ok #4C8C5A ailesinin koyu-zemin tonu (onay/yeşil)
+    onOk:'#0f1a12',
+    bad:'#C0492B',            // --bad ailesi (sil/tehlike)
+    onBad:'#f4e3de',
+    active:'#D9793B',         // aktif-eylem turuncu (terrakotaya yaklaştırıldı, eski #e0843a)
+    // — mürekkep / metin —
+    ink:'#ECE7DF',            // ana açık metin (panel üstü)
+    inkDim:'#D8CFC2',         // ikincil metin
+    inkAcc:'#E7C7A8',         // rail/pegman ikon tonu (sıcak açık terrakota)
+    // — panel zeminleri (sıcak siyah — #211E1B ailesi) —
+    panel:'rgba(33,30,27,.95)',       // ana panel/rail/çekmece zemini
+    panelSolid:'#211E1B',
+    dock:'rgba(30,27,24,.96)',        // alt dock (biraz daha opak)
+    bar:'rgba(30,27,24,.97)',         // yüzen mini çubuk
+    chip:'#2b2723',                   // dock içi çip/buton zemini
+    chip2:'#332e28',                  // dock içi ikincil buton (biraz açık)
+    field:'#282420',                  // textarea/input zemini
+    fieldBd:'#443d35',                // input kenarlığı
+    // — çizgiler / cam üstü ince kenar —
+    line:'rgba(255,255,255,.10)',
+    lineSoft:'rgba(255,255,255,.14)',
+    hoverFill:'rgba(255,255,255,.08)',
+    scene:'#171512',                  // sahne (WebGL clear dışı overlay) arka planı — sıcak koyu
+    // — token skalası (adım-1 --r-*) —
+    rXl:'16px', rLg:'12px', rMd:'8px', rSm:'6px', r9:'9px', r10:'10px', r7:'7px', r14:'14px',
+    // — gölge (hafifletildi: 0 14px 40px .5 → 0 10px 32px .35) —
+    shadow:'0 10px 32px rgba(0,0,0,.35)',
+    shadowSm:'0 8px 22px rgba(0,0,0,.30)',
+    shadowLb:'0 20px 60px rgba(0,0,0,.5)',
+    // — blur (8-9px → 4-5px) —
+    blur:'blur(5px)', blurSm:'blur(4px)'
+    /* ——— AÇIK TEMA ÖRNEĞİ (yorumlu — yarın açık panel istenirse UIPAL'i bununla değiştir) ———
+    acc:'#B35A2E', accHover:'#9A4A22', onAcc:'#ffffff', accSoft:'rgba(179,90,46,.45)',
+    ok:'#4C8C5A', onOk:'#ffffff', bad:'#C0492B', onBad:'#ffffff', active:'#B35A2E',
+    ink:'#26231F', inkDim:'#5b544a', inkAcc:'#8a5230',
+    panel:'rgba(255,255,255,.96)', panelSolid:'#FFFFFF', dock:'rgba(255,255,255,.97)',
+    bar:'rgba(255,255,255,.98)', chip:'#F0E9DF', chip2:'#E7DECF', field:'#FFFFFF', fieldBd:'#D8D2C8',
+    line:'rgba(38,35,31,.12)', lineSoft:'rgba(38,35,31,.18)', hoverFill:'rgba(38,35,31,.06)',
+    scene:'#EDE9E1', rXl:'16px', rLg:'12px', rMd:'8px', rSm:'6px', r9:'9px', r10:'10px', r7:'7px', r14:'14px',
+    shadow:'0 8px 26px rgba(28,26,22,.12)', shadowSm:'0 6px 18px rgba(28,26,22,.10)', shadowLb:'0 18px 50px rgba(28,26,22,.22)',
+    blur:'blur(5px)', blurSm:'blur(4px)' */
+  };
+
   let overlay, host, status, scene, cam, renderer, controls, raf, roofOn=false, lblOn=true;
   let threeLoading=null, built=false, zoomEl=null, zoomActive=false;
   // ── kamera-koyma modu (adım 4): raycaster ile zemine tıkla → kamera; çıktı plan-px uzayında ──
@@ -84,6 +143,10 @@
   // furnMode/furnAction/pendingFurnType = Faz 2 (manuel düzenleyici). spacePan = Space basılı tut → sol-sürükle kaydırır (2B editördeki gibi).
   let furnList=[], activeFurnIdx=-1, furnMode=false, furnAction='move', pendingFurnType='sofa_3', spacePan=false;
   let furnUIEnabled=false, lastFurnHint='';   // furnUIEnabled = "Mobilya" rail grubu görünür (open/openCompare açar)
+  // SUNUM-4C T2: Katmanlar çekmecesi görünürlük toggle'ları (yalnız GÖRÜNÜM — veri SİLİNMEZ).
+  //   furnVisible=false → __furnitureGroup gizlenir (mobilya korunur). paintDisabled=true → boyalı oda
+  //   malzemeleri geçici nötrlenir (materialOverrides dokunulmaz; roomMatKey null döndürerek matWall/zemine düşer).
+  let furnVisible=true, paintDisabled=false;
   // ── B2 (3B-UX-B2): mobilya PALETİ alt dock (kamera dock ikizi) + HAYALET yerleştirme ──
   // furnDockCat: paletin açık kategori sekmesi (FURN_PALETTE indexi). furnGhost: kuşbakışı-kilitli
   //   yerleştirme hayaleti {type, mesh, pos, rot, valid} — imleci izler, tık=bırak, Esc/sağ-tık=vazgeç.
@@ -164,6 +227,9 @@
     download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
     close:'<path d="M18 6 6 18M6 6l12 12"/>',
     fit:'<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
+    cube:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/>',   // İZOMETRİK preset ikonu
+    topdown:'<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/>',   // ÜSTTEN (kuşbakışı plan) ikonu
+    persp:'<path d="M4 5l16-2v18L4 19z"/><path d="M4 5v14M20 3v18"/><path d="M4 12h16"/>',   // PERSPEKTİF ikonu
     zoom:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="1"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>',
     move:'<path d="M5 9 2 12l3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/>',
@@ -188,7 +254,7 @@
   //   Sözleşme (KORUNUR): w/d ORANI FURN_DIM'den gelir (parametrik, gliften bağımsız), ön-yön çizgisi
   //   (+Z/alt kenar) kalır, box 28×28, tek tema rengi (#c9a16b + turuncu ön-yön vurgusu), EMOJİ YOK,
   //   ince stroke/yuvarlak köşe, 3-6 çizgi (ikon, illüstrasyon değil). Bilinmeyen tip → düz kutu+ön-yön (fallback, DEĞİŞMEDİ).
-  const FURN_THUMB_STROKE='#c9a16b', FURN_THUMB_FILL='rgba(201,161,107,.28)', FURN_THUMB_ACCENT='#e0843a';
+  const FURN_THUMB_STROKE=UIPAL.acc, FURN_THUMB_FILL='rgba(219,138,94,.28)', FURN_THUMB_ACCENT=UIPAL.active;
   // ortak gövde+ön-yön çizgisi (her glif bunun üstüne ince detay ekler)
   function ftBody(x,y,bw,bd,rx){
     return '<rect x="'+x+'" y="'+y+'" width="'+bw+'" height="'+bd+'" rx="'+(rx==null?1.5:rx)+'" fill="'+FURN_THUMB_FILL+'" stroke="'+FURN_THUMB_STROKE+'" stroke-width="1.2"/>';
@@ -218,7 +284,7 @@
     _bed: function(x,y,bw,bd,pillows){
       let s='';
       const pw=bw/(pillows+ (pillows-1)*0.18 +0.36), gap=pw*0.18, py=y+bd*0.10, ph=bd*0.16;
-      for(let i=0;i<pillows;i++){ const px=x+bw*0.18+i*(pw+gap); s+=ftRect(px,py,pw,ph,1.4,'rgba(201,161,107,.18)'); }
+      for(let i=0;i<pillows;i++){ const px=x+bw*0.18+i*(pw+gap); s+=ftRect(px,py,pw,ph,1.4,'rgba(219,138,94,.18)'); }
       s+=ftLine(x+2,y+bd*0.62,x+bw-2,y+bd*0.62,1);                // battaniye katlama çizgisi
       return s;
     }
@@ -300,29 +366,31 @@
 
   // çekmece içeriği — grup başına kontroller (data-* öznitelikleri var olan delege handler'a gider)
   function groupHTML(g){
-    if(g==='view') return '<div class="v3dgh">Görünüm</div>'+
-      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
-        '<button data-v3d="iso" class="v3db">İzometrik</button>'+
-        '<button data-v3d="top" class="v3db">Üstten</button>'+
-        '<button data-v3d="persp" class="v3db">Perspektif</button>'+
-        '<button data-v3d="fit" class="v3db v3dgreen">'+ic('fit',13)+'Sığdır</button>'+
-      '</div>';   // A2: zoom slider çekmeceden ÇIKARILDI → sağ-altta HEP görünen dikey overlay (#v3dZoomBar)
-    if(g==='layers') return '<div class="v3dgh">Katman</div>'+
+    // SUNUM-4C T2: "Görünüm" çekmecesi kaldırıldı — bakış preset'leri (İzo/Üst/Persp/Sığdır) orbit küresi
+    //   yanındaki #v3dViewCol ikon sütununa taşındı. Bu grubun katman-benzeri işlevleri (mobilya/malzeme
+    //   görünürlüğü) Katmanlar çekmecesine yeni toggle olarak eklendi.
+    if(g==='layers') return '<div class="v3dgh">Katmanlar</div>'+
       '<label class="v3dchk"><input type="checkbox" data-v3d="roof"'+(roofOn?' checked':'')+'> Duvarlar tam yükseklik</label>'+
-      '<label class="v3dchk"><input type="checkbox" data-v3d="lbl"'+(lblOn?' checked':'')+'> Oda etiketleri</label>';
+      '<label class="v3dchk"><input type="checkbox" data-v3d="lbl"'+(lblOn?' checked':'')+'> Oda etiketleri</label>'+
+      // T2: yeni toggle'lar — mobilya grubunu göster/gizle · atanan malzeme boyamasını geçici kapat (atama SİLİNMEZ)
+      '<label class="v3dchk"><input type="checkbox" data-v3d="furnvis"'+(furnVisible?' checked':'')+'> Mobilya</label>'+
+      '<label class="v3dchk"><input type="checkbox" data-v3d="paintvis"'+(!paintDisabled?' checked':'')+'> Malzeme boyaması</label>';
     if(g==='export') return '<div class="v3dgh">İndir</div>'+
-      '<button data-v3d="png" class="v3db" style="width:100%">'+ic('download',13)+'PNG indir (EN)</button>'+
-      '<div class="v3dnote">Etiketler İngilizce — AI 3D render için.</div>';
+      '<button data-v3d="viewpng" class="v3db" style="width:100%">'+ic('download',13)+'Görüntüyü indir (PNG)</button>'+
+      '<div class="v3dnote">O anki 3B görünümü olduğu gibi kaydeder (1920 px). AI render değil.</div>';
     // B1-R: Kamera/Mobilya araçları alt DOCK'ta (#v3dCamDock / #v3dFurnDock). Rail ikonu grup kilidini + dock'u
     //   DOĞRUDAN açar; çekmecede ARTIK yönlendirme notu YOK (emekli). Drawer bu gruplarda boş → renderDrawer gizler.
     if(g==='camera'||g==='furniture'||g==='material') return '';   // araçlar alt DOCK'ta → çekmece boş
     return '';
   }
   function railGroups(){
-    const gs=[{k:'view',i:'view',t:'Görünüm'},{k:'layers',i:'layers',t:'Katman'}];
+    // SUNUM-4C T2: ana dock sırası = Katmanlar → Malzeme → Mobilya → İndir (kullanıcı talimatı).
+    //   "Görünüm" çekmecesi dock'tan KALKTI (bakış preset'leri orbit küresi yanına taşındı, #v3dViewCol).
+    //   Kamera (adım 4) Malzeme'den önce; Gezinti (FPV) İndir'in hemen öncesinde kalır.
+    const gs=[{k:'layers',i:'layers',t:'Katmanlar'}];
     if(camUIEnabled) gs.push({k:'camera',i:'camera',t:'Kamera'});
-    if(furnUIEnabled) gs.push({k:'furniture',i:'sofa',t:'Mobilya'});
     if(matUIEnabled) gs.push({k:'material',i:'swatch',t:'Malzeme'});
+    if(furnUIEnabled) gs.push({k:'furniture',i:'sofa',t:'Mobilya'});
     gs.push({k:'walk',i:'walk',t:'Gezinti (masaüstü)'});   // W1: WASD first-person POV — pointer-lock, göz hizası 1.6m
     gs.push({k:'export',i:'download',t:'İndir'});
     return gs;
@@ -340,7 +408,10 @@
     // B1-R: kamera/mobilya/malzeme grubunda çekmece BOŞ (araçlar alt dock'ta) → çekmeceyi gizle, dock'u aç.
     if(!activeGroup || activeGroup==='camera' || activeGroup==='furniture' || activeGroup==='material'){ d.style.display='none'; d.innerHTML=''; }
     else { d.style.display='block'; d.innerHTML=groupHTML(activeGroup); }
+    // SUNUM-4C T3: kamera dock YALNIZ 'camera' grubunda görünür. Kamera modundan kamera ikonuyla çıkınca
+    //   (setGroup 'camera'→null, camUIEnabled hâlâ true) eskiden dock AÇIK kalıyordu (else yoktu). Şimdi kapat.
     if(activeGroup==='camera'){ renderCamDock(); }
+    else { const cd=overlay.querySelector('#v3dCamDock'); if(cd){ cd.style.display='none'; cd.innerHTML=''; } }
     // B2-1: mobilya dock yalnız mobilya grubunda görünür (kamera dock deseni); başka grupta gizle.
     if(activeGroup==='furniture'){
       renderFurnDock();
@@ -381,32 +452,32 @@
   let pegGhostGroup=null;                           // sahnedeki bırakma-halkası grubu (yeşil/kırmızı)
   function pegmanWidgetHTML(){
     return '<button id="v3dPegman" title="Sürükleyip bırak: o noktada gez · tık: varsayılan gezinti" '+
-      'style="width:44px;height:52px;border:0;border-radius:12px;background:rgba(34,34,40,.94);color:#c9b79a;cursor:grab;'+
-      'display:flex;align-items:center;justify-content:center;backdrop-filter:blur(7px);touch-action:none;flex:none;padding:0">'+
+      'style="width:44px;height:52px;border:0;border-radius:'+UIPAL.rLg+';background:'+UIPAL.panel+';color:'+UIPAL.inkAcc+';cursor:grab;'+
+      'display:flex;align-items:center;justify-content:center;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+';touch-action:none;flex:none;padding:0">'+
       ic('pegman',30)+'</button>';
   }
   const ORB_R=27;                                   // küre yarıçapı (px, viewBox 0..64)
   function orbWidgetHTML(){
     // dış kompas chip'leri (K yukarı, D sağ, G aşağı, B sol) + merkez sürükle alanı + Üst/İzo mini butonlar
     return '<div id="v3dOrb" title="Sürükle: görüşü çevir · nokta: hazır açı" '+
-      'style="position:relative;width:78px;background:rgba(34,34,40,.94);border-radius:14px;padding:9px 8px 8px;backdrop-filter:blur(7px);display:flex;flex-direction:column;align-items:center;gap:6px">'+
+      'style="position:relative;width:78px;background:'+UIPAL.panel+';border-radius:'+UIPAL.r14+';padding:9px 8px 8px;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+';display:flex;flex-direction:column;align-items:center;gap:6px">'+
       '<svg id="v3dOrbSvg" viewBox="0 0 64 64" style="width:62px;height:62px;display:block;cursor:grab;touch-action:none">'+
         // küre gövdesi (radyal gradyan hissi) + boylam/enlem yayları
         '<defs><radialGradient id="v3dOrbG" cx="38%" cy="34%" r="70%">'+
-          '<stop offset="0%" stop-color="#4a4a55"/><stop offset="62%" stop-color="#33333c"/><stop offset="100%" stop-color="#24242b"/>'+
+          '<stop offset="0%" stop-color="#4a423a"/><stop offset="62%" stop-color="#332e28"/><stop offset="100%" stop-color="#221f1b"/>'+   // T1: sıcak siyah gradyan (mor-gri emekli)
         '</radialGradient></defs>'+
-        '<circle cx="32" cy="32" r="'+ORB_R+'" fill="url(#v3dOrbG)" stroke="rgba(255,255,255,.16)" stroke-width="1"/>'+
-        '<ellipse cx="32" cy="32" rx="'+ORB_R+'" ry="10" fill="none" stroke="rgba(255,255,255,.13)" stroke-width="1"/>'+
-        '<line x1="32" y1="'+(32-ORB_R)+'" x2="32" y2="'+(32+ORB_R)+'" stroke="rgba(255,255,255,.10)" stroke-width="1"/>'+
-        '<line x1="'+(32-ORB_R)+'" y1="32" x2="'+(32+ORB_R)+'" y2="32" stroke="rgba(255,255,255,.10)" stroke-width="1"/>'+
+        '<circle cx="32" cy="32" r="'+ORB_R+'" fill="url(#v3dOrbG)" stroke="'+UIPAL.lineSoft+'" stroke-width="1"/>'+
+        '<ellipse cx="32" cy="32" rx="'+ORB_R+'" ry="10" fill="none" stroke="'+UIPAL.line+'" stroke-width="1"/>'+
+        '<line x1="32" y1="'+(32-ORB_R)+'" x2="32" y2="'+(32+ORB_R)+'" stroke="'+UIPAL.line+'" stroke-width="1"/>'+
+        '<line x1="'+(32-ORB_R)+'" y1="32" x2="'+(32+ORB_R)+'" y2="32" stroke="'+UIPAL.line+'" stroke-width="1"/>'+
         // yön harfleri (kompas): K üst, D sağ, G alt, B sol — EMOJİ YOK, düz metin
-        '<text data-orbpreset="N" x="32" y="9"  text-anchor="middle" font-size="7.5" font-weight="700" fill="#c9b79a" style="cursor:pointer">K</text>'+
-        '<text data-orbpreset="E" x="60" y="35" text-anchor="middle" font-size="7.5" font-weight="700" fill="#c9b79a" style="cursor:pointer">D</text>'+
-        '<text data-orbpreset="S" x="32" y="61" text-anchor="middle" font-size="7.5" font-weight="700" fill="#c9b79a" style="cursor:pointer">G</text>'+
-        '<text data-orbpreset="W" x="4"  y="35" text-anchor="middle" font-size="7.5" font-weight="700" fill="#c9b79a" style="cursor:pointer">B</text>'+
+        '<text data-orbpreset="N" x="32" y="9"  text-anchor="middle" font-size="7.5" font-weight="700" fill="'+UIPAL.inkAcc+'" style="cursor:pointer">K</text>'+
+        '<text data-orbpreset="E" x="60" y="35" text-anchor="middle" font-size="7.5" font-weight="700" fill="'+UIPAL.inkAcc+'" style="cursor:pointer">D</text>'+
+        '<text data-orbpreset="S" x="32" y="61" text-anchor="middle" font-size="7.5" font-weight="700" fill="'+UIPAL.inkAcc+'" style="cursor:pointer">G</text>'+
+        '<text data-orbpreset="W" x="4"  y="35" text-anchor="middle" font-size="7.5" font-weight="700" fill="'+UIPAL.inkAcc+'" style="cursor:pointer">B</text>'+
         // mevcut açı göstergesi (yön çizgisi + uç nokta) — updateOrb ile döner
-        '<line id="v3dOrbNeedle" x1="32" y1="32" x2="32" y2="12" stroke="#c9a16b" stroke-width="2" stroke-linecap="round"/>'+
-        '<circle id="v3dOrbDot" cx="32" cy="12" r="3.4" fill="#e0843a" stroke="#1a1a1f" stroke-width="1"/>'+
+        '<line id="v3dOrbNeedle" x1="32" y1="32" x2="32" y2="12" stroke="'+UIPAL.acc+'" stroke-width="2" stroke-linecap="round"/>'+
+        '<circle id="v3dOrbDot" cx="32" cy="12" r="3.4" fill="'+UIPAL.active+'" stroke="'+UIPAL.onAcc+'" stroke-width="1"/>'+
       '</svg>'+
       '<div style="display:flex;gap:4px;width:100%">'+
         '<button data-orbpreset="top" class="v3dorbb" title="Üstten (kuşbakışı)">Üst</button>'+
@@ -559,14 +630,14 @@
     if(overlay) return;
     overlay=document.createElement('div');
     overlay.id='view3dOverlay';
-    overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:#15151a;display:none;';
+    overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:'+UIPAL.scene+';display:none;';
     overlay.innerHTML =
       '<div id="v3dHost" style="position:absolute;inset:0"></div>'+
       '<div id="v3dDock" style="position:absolute;top:12px;right:12px;display:flex;align-items:flex-start;gap:8px;z-index:3">'+
-        '<div id="v3dDrawer" style="background:rgba(34,34,40,.94);color:#e8e6e0;font:13px/1.45 system-ui,sans-serif;padding:13px 15px;border-radius:12px;width:250px;max-height:calc(100vh - 24px);overflow:auto;backdrop-filter:blur(7px);display:none"></div>'+
-        '<div id="v3dRail" style="background:rgba(34,34,40,.94);border-radius:12px;padding:6px;display:flex;flex-direction:column;gap:5px;backdrop-filter:blur(7px)"></div>'+
+        '<div id="v3dDrawer" style="background:'+UIPAL.panel+';color:'+UIPAL.ink+';font:13px/1.45 system-ui,sans-serif;padding:13px 15px;border-radius:'+UIPAL.rLg+';width:250px;max-height:calc(100vh - 24px);overflow:auto;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+';display:none"></div>'+
+        '<div id="v3dRail" style="background:'+UIPAL.panel+';border-radius:'+UIPAL.rLg+';padding:6px;display:flex;flex-direction:column;gap:5px;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'"></div>'+
       '</div>'+
-      '<div id="v3dStatus" style="position:absolute;left:12px;bottom:12px;color:#e8e6e0;opacity:.6;font:10.5px system-ui;background:rgba(34,34,40,.6);padding:4px 9px;border-radius:7px"></div>'+
+      '<div id="v3dStatus" style="position:absolute;left:12px;bottom:12px;color:'+UIPAL.ink+';opacity:.6;font:10.5px system-ui;background:'+UIPAL.panel+';padding:4px 9px;border-radius:'+UIPAL.r7+'"></div>'+
       // A2: HER görünümde görünen dikey zoom overlay (2B editör sağ-alt kontrolünün 3B ikizi). ＋ / dikey slider / −
       // A4: üstünde kuşbakışı KİLİT düğmesi (kamera/mobilya grubunda görünür). EMOJİ YOK — inline SVG.
       // R7: ORBIT KÜRESİ zoom slider'ın HEMEN SOLUNA, bitişik, aynı küme. Kolon yerine YATAY satır:
@@ -579,12 +650,20 @@
         // B1-1: YÖN KÜRESİ (viewcube) — üstünde sürükle=orbit (NAV hassasiyeti), hazır görüş noktaları (Üst/İzo/K-G-D-B).
         //   Kilitliyken İzo/yön seçmek kilidi açar ("dikine kaldım" çözümü). DOM/SVG — three.js sahne-içi küp DEĞİL.
         orbWidgetHTML()+
+        // SUNUM-4C T2: BAKIŞ preset'leri (İzo/Üst/Persp) + Sığdır orbit küresinin YANINA — "Görünüm" çekmecesi
+        //   dock'tan kalktı, bu işlevler nav kümesine (orbit+zoom+pegman) katıldı. İkon-sütun (etiket tooltip'te).
+        '<div id="v3dViewCol" style="display:flex;flex-direction:column;align-items:center;gap:5px;background:'+UIPAL.panel+';padding:6px;border-radius:'+UIPAL.rLg+';backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'">'+
+          '<button data-v3d="iso" class="v3dvb" title="İzometrik">'+ic('cube',18)+'</button>'+
+          '<button data-v3d="top" class="v3dvb" title="Üstten (kuşbakışı)">'+ic('topdown',18)+'</button>'+
+          '<button data-v3d="persp" class="v3dvb" title="Perspektif">'+ic('persp',18)+'</button>'+
+          '<button data-v3d="fit" class="v3dvb v3dvbfit" title="Sığdır">'+ic('fit',18)+'</button>'+
+        '</div>'+
         '<div style="display:flex;flex-direction:column;align-items:center;gap:8px">'+
-          '<button id="v3dLockBtn" title="Kuşbakışı kilidi" style="display:none;width:38px;height:38px;border:0;border-radius:10px;background:rgba(34,34,40,.94);color:#c9b79a;cursor:pointer;align-items:center;justify-content:center;backdrop-filter:blur(7px)"></button>'+
-          '<div id="v3dZoomBar" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(34,34,40,.94);padding:8px 6px;border-radius:12px;backdrop-filter:blur(7px)">'+
-            '<button data-zoom="in" title="Yakınlaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('plus',15)+'</button>'+
-            '<input type="range" id="v3dZoom" min="0" max="1000" value="600" title="Yakınlaştırma" style="writing-mode:vertical-lr;direction:rtl;-webkit-appearance:slider-vertical;width:22px;height:130px;accent-color:#c9a16b;cursor:pointer">'+
-            '<button data-zoom="out" title="Uzaklaştır" style="width:28px;height:28px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('minus',15)+'</button>'+
+          '<button id="v3dLockBtn" title="Kuşbakışı kilidi" style="display:none;width:38px;height:38px;border:0;border-radius:'+UIPAL.r10+';background:'+UIPAL.panel+';color:'+UIPAL.inkAcc+';cursor:pointer;align-items:center;justify-content:center;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'"></button>'+
+          '<div id="v3dZoomBar" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:'+UIPAL.panel+';padding:8px 6px;border-radius:'+UIPAL.rLg+';backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'">'+
+            '<button data-zoom="in" title="Yakınlaştır" style="width:28px;height:28px;border:0;border-radius:'+UIPAL.rMd+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('plus',15)+'</button>'+
+            '<input type="range" id="v3dZoom" min="0" max="1000" value="600" title="Yakınlaştırma" style="writing-mode:vertical-lr;direction:rtl;-webkit-appearance:slider-vertical;width:22px;height:130px;accent-color:'+UIPAL.acc+';cursor:pointer">'+
+            '<button data-zoom="out" title="Uzaklaştır" style="width:28px;height:28px;border:0;border-radius:'+UIPAL.rMd+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('minus',15)+'</button>'+
           '</div>'+
         '</div>'+
       '</div>'+
@@ -595,7 +674,7 @@
       // M2: MALZEME DOCK — malzeme grubuna girince alt kenara yaslanır (renderMatDock kurar). Mobilya dock ikizi.
       '<div id="v3dMatDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>'+
       // B2-3: seçili mobilyanın yanında YÜZEN mini araç çubuğu (döndür/çoğalt/odakla/sil). loop'ta konumlanır.
-      '<div id="v3dFurnBar" style="position:absolute;z-index:6;display:none;gap:4px;background:rgba(28,28,34,.96);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:5px;box-shadow:0 8px 26px rgba(0,0,0,.5);backdrop-filter:blur(8px)">'+
+      '<div id="v3dFurnBar" style="position:absolute;z-index:6;display:none;gap:4px;background:'+UIPAL.bar+';border:1px solid '+UIPAL.lineSoft+';border-radius:'+UIPAL.r10+';padding:5px;box-shadow:'+UIPAL.shadow+';backdrop-filter:'+UIPAL.blurSm+'">'+
         '<button data-furnrot="-90" class="v3dfb" title="Sola 90°">'+ic('rotccw',15)+'</button>'+
         '<button data-furnrot="90" class="v3dfb" title="Sağa 90°">'+ic('rotcw',15)+'</button>'+
         '<button data-v3d="furndup" class="v3dfb" title="Çoğalt (Ctrl+D)">'+ic('copy',15)+'</button>'+
@@ -603,7 +682,7 @@
         '<button data-v3d="furndel" class="v3dfb v3dfbdanger" title="Sil (Del)">'+ic('trash',15)+'</button>'+
       '</div>'+
       // KAMERA-S S4: seçili kameranın yanında YÜZEN mini araç çubuğu (mobilya #v3dFurnBar ikizi). loop'ta konumlanır.
-      '<div id="v3dCamBar" style="position:absolute;z-index:6;display:none;gap:4px;background:rgba(28,28,34,.96);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:5px;box-shadow:0 8px 26px rgba(0,0,0,.5);backdrop-filter:blur(8px)">'+
+      '<div id="v3dCamBar" style="position:absolute;z-index:6;display:none;gap:4px;background:'+UIPAL.bar+';border:1px solid '+UIPAL.lineSoft+';border-radius:'+UIPAL.r10+';padding:5px;box-shadow:'+UIPAL.shadow+';backdrop-filter:'+UIPAL.blurSm+'">'+
         '<button data-v3d="cambaraim" class="v3dfb" title="Yön — koni ucunu sürükle ya da zemine tıkla">'+ic('target',15)+'</button>'+
         '<button data-v3d="camfocus" class="v3dfb" title="Odakla (F)">'+ic('fit',15)+'</button>'+
         '<button data-v3d="cambarpip" class="v3dfb" title="Önizlemeyi aç/kapa">'+ic('camera',15)+'</button>'+
@@ -613,12 +692,12 @@
       //   İçindeki görüntü loop()'ta scissor'lı İKİNCİ render pass ile çizilir (DOM canvas değil — aynı renderer).
       //   Başlıkta "Kx görüşü" + büyüt/kapat. Bu görüntü = B/img2img yolunda render'a giden referansın TA KENDİSİ.
       // container background ŞEFFAF (interior = canvas'ın göründüğü delik); yalnız header opak. border/gölge çerçeveyi çizer.
-      '<div id="v3dPip" style="position:absolute;left:14px;bottom:60px;z-index:5;display:none;width:'+PIP_W+'px;background:transparent;border:1px solid rgba(255,255,255,.16);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.55);overflow:hidden;font:11px/1.3 system-ui,sans-serif;color:#e8e6e0">'+
-        '<div id="v3dPipHead" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 6px 5px 9px;background:rgba(20,20,26,.94);backdrop-filter:blur(6px)">'+
+      '<div id="v3dPip" style="position:absolute;left:14px;bottom:60px;z-index:5;display:none;width:'+PIP_W+'px;background:transparent;border:1px solid '+UIPAL.lineSoft+';border-radius:'+UIPAL.r10+';box-shadow:'+UIPAL.shadow+';overflow:hidden;font:11px/1.3 system-ui,sans-serif;color:'+UIPAL.ink+'">'+
+        '<div id="v3dPipHead" style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 6px 5px 9px;background:'+UIPAL.dock+';backdrop-filter:'+UIPAL.blurSm+'">'+
           '<span id="v3dPipTitle" style="font-weight:700;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Kamera görüşü</span>'+
           '<span style="display:flex;gap:3px;flex:none">'+
-            '<button data-v3d="pipbig" id="v3dPipBig" title="Büyüt / küçült" style="width:22px;height:22px;border:0;border-radius:6px;background:rgba(255,255,255,.10);color:#f0e6d6;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('fit',13)+'</button>'+
-            '<button data-v3d="pipclose" title="Önizlemeyi kapat" style="width:22px;height:22px;border:0;border-radius:6px;background:rgba(255,255,255,.10);color:#f0d8d8;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('close',13)+'</button>'+
+            '<button data-v3d="pipbig" id="v3dPipBig" title="Büyüt / küçült" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('fit',13)+'</button>'+
+            '<button data-v3d="pipclose" title="Önizlemeyi kapat" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.onBad+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('close',13)+'</button>'+
           '</span>'+
         '</div>'+
         // gövde: ŞEFFAF pencere (16:9) — arkasındaki WebGL canvas'a scissor pass ile o kamera görüntüsü çizilir.
@@ -628,115 +707,120 @@
       // R8: WASD MİNİMAP — gezinti sırasında sol-altta kuşbakışı (ortho tepe kamera, sabit çerçeve, plan tamamı) +
       //   oyuncu konum/yön OKU (SVG overlay). Gövde ŞEFFAF (PiP deseni) → loop scissor-pass o bölgeye ortho-top çizer.
       //   Yalnız gezintide görünür (enter/exit toggle). pointer-events:none = tıklama alta geçer.
-      '<div id="v3dMiniMap" style="position:absolute;left:14px;bottom:14px;z-index:8;display:none;width:'+MINI_W+'px;height:'+MINI_H+'px;background:rgba(20,20,26,.55);border:1px solid rgba(255,255,255,.18);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.5);overflow:hidden;pointer-events:none">'+
+      '<div id="v3dMiniMap" style="position:absolute;left:14px;bottom:14px;z-index:8;display:none;width:'+MINI_W+'px;height:'+MINI_H+'px;background:rgba(30,27,24,.55);border:1px solid '+UIPAL.lineSoft+';border-radius:'+UIPAL.r10+';box-shadow:'+UIPAL.shadow+';overflow:hidden;pointer-events:none">'+
         '<div id="v3dMiniBody" style="position:absolute;inset:0;background:transparent"></div>'+
         '<svg id="v3dMiniMarker" viewBox="0 0 '+MINI_W+' '+MINI_H+'" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></svg>'+
       '</div>';
     document.body.appendChild(overlay);
     // buton stilleri
     const st=document.createElement('style');
+    // SUNUM-4C: TÜM krom stilleri UIPAL'den türer (tek kaynak → açık tema = tek obje değişimi).
+    const U=UIPAL;
     st.textContent=
-      '.v3db{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:#c9a16b;color:#1a1a1f;border:0;padding:6px 10px;border-radius:7px;font-weight:600;cursor:pointer;font-size:11.5px;font-family:inherit}'+
+      '.v3db{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:'+U.acc+';color:'+U.onAcc+';border:0;padding:6px 10px;border-radius:'+U.r7+';font-weight:600;cursor:pointer;font-size:11.5px;font-family:inherit}'+
       '.v3db:hover{filter:brightness(1.08)}'+
-      '.v3dgreen{background:#7bbf8a;color:#13201a}.v3dgray{background:#3a3a44;color:#e8e6e0}.v3ddanger{background:#5a3a3a;color:#f0d8d8;flex:none;padding:6px 8px}'+
-      '.v3dgh{font-size:12px;font-weight:700;letter-spacing:.04em;color:#c9a16b;text-transform:uppercase;margin-bottom:10px}'+
+      '.v3dgreen{background:'+U.ok+';color:'+U.onOk+'}.v3dgray{background:'+U.chip2+';color:'+U.ink+'}.v3ddanger{background:'+U.bad+';color:'+U.onBad+';flex:none;padding:6px 8px}'+
+      '.v3dgh{font-size:12px;font-weight:700;letter-spacing:.06em;color:'+U.inkDim+';text-transform:uppercase;margin-bottom:10px}'+   // T1: etiket tipografisi adım-1 .sec h2 dili (muted ink + .06em)
       '.v3dlbl{font-size:10.5px;opacity:.7;margin:8px 0 4px}.v3dnote{font-size:10px;opacity:.78;line-height:1.4}'+
-      '.v3dchk{display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:8px;cursor:pointer}'+
-      '.v3drailb{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:0;border-radius:9px;background:transparent;color:#c9b79a;cursor:pointer}'+
-      '.v3drailb:hover{background:rgba(255,255,255,.08);color:#f0e6d6}.v3drailb.on{background:#c9a16b;color:#1a1a1f}'+
-      '.v3drailx{color:#cf9b9b}.v3drailx:hover{background:rgba(200,90,90,.22);color:#f0d8d8}'+
-      '.v3draild{height:1px;background:rgba(255,255,255,.15);margin:3px 4px}'+
-      '.v3dorbb{flex:1;background:rgba(255,255,255,.08);color:#f0e6d6;border:0;border-radius:7px;padding:4px 0;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}'+
-      '.v3dorbb:hover{background:#c9a16b;color:#1a1a1f}'+
+      '.v3dchk{display:flex;align-items:center;gap:6px;font-size:11.5px;margin-top:8px;cursor:pointer}.v3dchk input{accent-color:'+U.acc+'}'+
+      // SUNUM-4C T2: orbit küresi yanı BAKIŞ preset düğmeleri (İzo/Üst/Persp/Sığdır)
+      '.v3dvb{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:0;border-radius:'+U.rMd+';background:'+U.hoverFill+';color:'+U.inkAcc+';cursor:pointer;padding:0}'+
+      '.v3dvb:hover{background:'+U.acc+';color:'+U.onAcc+'}.v3dvbfit{color:'+U.ok+'}.v3dvbfit:hover{background:'+U.ok+';color:'+U.onOk+'}'+
+      '.v3drailb{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:0;border-radius:'+U.r9+';background:transparent;color:'+U.inkAcc+';cursor:pointer}'+
+      '.v3drailb:hover{background:'+U.hoverFill+';color:'+U.ink+'}.v3drailb.on{background:'+U.acc+';color:'+U.onAcc+'}'+
+      '.v3drailx{color:'+U.bad+'}.v3drailx:hover{background:rgba(192,73,43,.22);color:'+U.onBad+'}'+
+      '.v3draild{height:1px;background:'+U.line+';margin:3px 4px}'+
+      '.v3dorbb{flex:1;background:'+U.hoverFill+';color:'+U.inkDim+';border:0;border-radius:'+U.r7+';padding:4px 0;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit}'+
+      '.v3dorbb:hover{background:'+U.acc+';color:'+U.onAcc+'}'+
       // B1-R kamera dock — KOMPAKT: kapalıyken tek yatay bar (~56px), özet çipe tıkla → detay katmanı açılır (~+100px)
-      '#v3dCamDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:7px 10px;display:flex;flex-direction:column;gap:0;font:12px/1.4 system-ui,sans-serif}'+
+      '#v3dCamDock .dk{background:'+U.dock+';color:'+U.ink+';border:1px solid '+U.line+';border-radius:'+U.r14+';box-shadow:'+U.shadow+';backdrop-filter:'+U.blur+';padding:7px 10px;display:flex;flex-direction:column;gap:0;font:12px/1.4 system-ui,sans-serif}'+
       '#v3dCamDock .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:min(92vw,860px)}'+
-      '#v3dCamDock .sep{width:1px;background:rgba(255,255,255,.10);align-self:stretch;margin:1px 1px}'+
-      '#v3dCamDock .lbl{font-size:9px;letter-spacing:.05em;text-transform:uppercase;opacity:.6;font-weight:700;margin-bottom:2px}'+
+      '#v3dCamDock .sep{width:1px;background:'+U.line+';align-self:stretch;margin:1px 1px}'+
+      '#v3dCamDock .lbl{font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;font-weight:700;margin-bottom:2px}'+
       '#v3dCamDock .row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}'+
       '#v3dCamDock .strip{display:flex;gap:5px;flex-wrap:wrap;max-width:340px}'+
-      '#v3dCamDock .seg button{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
+      '#v3dCamDock .seg button{background:'+U.chip2+';color:'+U.ink+';border:0;border-radius:'+U.r7+';padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
       '#v3dCamDock .seg button:hover{filter:brightness(1.12)}'+
-      '#v3dCamDock .seg button.on{background:#c9a16b;color:#1a1a1f}'+
-      '#v3dCamDock .seg button.green.on{background:#7bbf8a;color:#13201a}'+
+      '#v3dCamDock .seg button.on{background:'+U.acc+';color:'+U.onAcc+'}'+
+      '#v3dCamDock .seg button.green.on{background:'+U.ok+';color:'+U.onOk+'}'+
       // ikon eylem düğmeleri (Yön/Taşı/Odakla/Sil) — kompakt kare
-      '#v3dCamDock .ib{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:#33333c;color:#e8e6e0;border:0;border-radius:8px;cursor:pointer;font-family:inherit;padding:0}'+
-      '#v3dCamDock .ib:hover{filter:brightness(1.15)}#v3dCamDock .ib.on{background:#e0843a;color:#1a1a1f}#v3dCamDock .ib.danger{background:#5a3a3a;color:#f0d8d8}'+
+      '#v3dCamDock .ib{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:'+U.chip2+';color:'+U.ink+';border:0;border-radius:'+U.rMd+';cursor:pointer;font-family:inherit;padding:0}'+
+      '#v3dCamDock .ib:hover{filter:brightness(1.15)}#v3dCamDock .ib.on{background:'+U.active+';color:'+U.onAcc+'}#v3dCamDock .ib.danger{background:'+U.bad+';color:'+U.onBad+'}'+
       // seçili kamera ÖZET çipi — tıkla → detay aç/kapa
-      '#v3dCamDock .sum{display:inline-flex;align-items:center;gap:6px;background:#2c2c33;border:1px solid rgba(255,255,255,.12);color:#e8e6e0;border-radius:9px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}'+
-      '#v3dCamDock .sum:hover{border-color:rgba(201,161,107,.6)}#v3dCamDock .dk.detopen .sum{background:#c9a16b;color:#1a1a1f;border-color:#c9a16b}'+
+      '#v3dCamDock .sum{display:inline-flex;align-items:center;gap:6px;background:'+U.chip+';border:1px solid '+U.lineSoft+';color:'+U.ink+';border-radius:'+U.r9+';padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}'+
+      '#v3dCamDock .sum:hover{border-color:'+U.accSoft+'}#v3dCamDock .dk.detopen .sum{background:'+U.acc+';color:'+U.onAcc+';border-color:'+U.acc+'}'+
       '#v3dCamDock .sum .caret{opacity:.7;font-size:9px}'+
-      '#v3dCamDock input[type=range]{accent-color:#c9a16b;cursor:pointer;height:18px}'+
+      '#v3dCamDock input[type=range]{accent-color:'+U.acc+';cursor:pointer;height:18px}'+
       '#v3dCamDock .val{font-size:10.5px;opacity:.8;min-width:44px;text-align:right;font-variant-numeric:tabular-nums}'+
-      '#v3dCamDock .more{background:none;border:0;color:#c9a16b;font-size:10.5px;font-weight:700;cursor:pointer;padding:2px 0;font-family:inherit;text-align:left}'+
+      '#v3dCamDock .more{background:none;border:0;color:'+U.acc+';font-size:10.5px;font-weight:700;cursor:pointer;padding:2px 0;font-family:inherit;text-align:left}'+
       // detay katmanı — kapalı varsayılan; özet çipe tıkla → açılır. Kompakt satırlar (yatay grup).
-      '#v3dCamDock .det{display:none;gap:14px;align-items:flex-start;flex-wrap:wrap;border-top:1px solid rgba(255,255,255,.09);margin-top:8px;padding-top:9px}'+
+      '#v3dCamDock .det{display:none;gap:14px;align-items:flex-start;flex-wrap:wrap;border-top:1px solid '+U.line+';margin-top:8px;padding-top:9px}'+
       '#v3dCamDock .dk.detopen .det{display:flex}'+
       '#v3dCamDock .dcol{display:flex;flex-direction:column;gap:5px;min-width:0}'+
       '#v3dCamDock .adv{display:none;flex-direction:column;gap:6px}'+
       '#v3dCamDock .dk.advopen .adv{display:flex}'+
-      '#v3dCamDock textarea{width:230px;max-width:40vw;box-sizing:border-box;background:#26262c;color:#e8e6e0;border:1px solid #3a3a44;border-radius:6px;font:11px/1.45 system-ui;padding:6px;resize:vertical}'+
-      '#v3dCamDock img.snap{width:180px;max-width:34vw;display:block;border-radius:6px;border:1px solid #3a3a44;background:#111;cursor:pointer}'+
+      '#v3dCamDock textarea{width:230px;max-width:40vw;box-sizing:border-box;background:'+U.field+';color:'+U.ink+';border:1px solid '+U.fieldBd+';border-radius:'+U.rSm+';font:11px/1.45 system-ui;padding:6px;resize:vertical}'+
+      '#v3dCamDock img.snap{width:180px;max-width:34vw;display:block;border-radius:'+U.rSm+';border:1px solid '+U.fieldBd+';background:#111;cursor:pointer}'+
       // B2-1 mobilya dock (kamera dock görsel dilini paylaşır)
       // U4: .dk KATLANMAZ (nowrap) → dock TEK satır kolon = SABİT yükseklik; taşarsa yatay kaydırır (dikey büyümez)
-      '#v3dFurnDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:nowrap;max-width:calc(100vw - 28px);overflow-x:auto;font:12px/1.4 system-ui,sans-serif}'+
+      '#v3dFurnDock .dk{background:'+U.dock+';color:'+U.ink+';border:1px solid '+U.line+';border-radius:'+U.rXl+';box-shadow:'+U.shadow+';backdrop-filter:'+U.blur+';padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:nowrap;max-width:calc(100vw - 28px);overflow-x:auto;font:12px/1.4 system-ui,sans-serif}'+
       '#v3dFurnDock .col{display:flex;flex-direction:column;gap:7px;min-width:0}'+
-      '#v3dFurnDock .sep{width:1px;background:rgba(255,255,255,.10);align-self:stretch}'+
-      '#v3dFurnDock .lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;opacity:.62;font-weight:700;margin-bottom:1px}'+
+      '#v3dFurnDock .sep{width:1px;background:'+U.line+';align-self:stretch}'+
+      '#v3dFurnDock .lbl{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.62;font-weight:700;margin-bottom:1px}'+
       '#v3dFurnDock .row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}'+
-      '#v3dFurnDock .seg button{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
+      '#v3dFurnDock .seg button{background:'+U.chip2+';color:'+U.ink+';border:0;border-radius:'+U.r7+';padding:5px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}'+
       '#v3dFurnDock .seg button:hover{filter:brightness(1.12)}'+
-      '#v3dFurnDock .seg button.on{background:#c9a16b;color:#1a1a1f}'+
+      '#v3dFurnDock .seg button.on{background:'+U.acc+';color:'+U.onAcc+'}'+
       // R4: KATEGORİ = ÇİP SARMASI (hepsi görünür, SCROLL YOK) → yatay kaydırma kaldırıldı.
       '#v3dFurnDock .cats{display:flex;gap:4px;flex-wrap:wrap;max-width:118px}'+
-      '#v3dFurnDock .cat{background:#33333c;color:#c9b79a;border:0;border-radius:7px;padding:5px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex:0 0 auto}'+
-      '#v3dFurnDock .cat:hover{filter:brightness(1.15)}#v3dFurnDock .cat.on{background:#c9a16b;color:#1a1a1f}'+
+      '#v3dFurnDock .cat{background:'+U.chip2+';color:'+U.inkAcc+';border:0;border-radius:'+U.r7+';padding:5px 8px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex:0 0 auto}'+
+      '#v3dFurnDock .cat:hover{filter:brightness(1.15)}#v3dFurnDock .cat.on{background:'+U.acc+';color:'+U.onAcc+'}'+
       // R4: PARÇA ızgarası SABİT 2 SATIR × 6 SÜTUN, SCROLL YOK. Thumb küçültüldü → en kalabalık kategori (12 parça)
       //   iki satıra sığar; dock yüksekliği HİÇBİR durumda değişmez (2-satır alanı sabit rezerve).
       '#v3dFurnDock .palwrap{position:relative;flex:none;width:302px}'+
       '#v3dFurnDock .palgrid{display:grid;grid-template-columns:repeat(6,46px);grid-template-rows:repeat(2,auto);grid-auto-flow:row;gap:4px;padding:0 2px;overflow:visible}'+
-      '#v3dFurnDock .pit{display:flex;flex-direction:column;align-items:center;gap:1px;background:#2c2c33;border:1px solid transparent;border-radius:8px;padding:3px 2px;cursor:pointer;font-family:inherit;width:46px}'+
-      '#v3dFurnDock .pit:hover{background:#3a3a44;border-color:rgba(201,161,107,.5)}'+
-      '#v3dFurnDock .pit.on{border-color:#7bbf8a;background:#33403a}'+
+      '#v3dFurnDock .pit{display:flex;flex-direction:column;align-items:center;gap:1px;background:'+U.chip+';border:1px solid transparent;border-radius:'+U.rMd+';padding:3px 2px;cursor:pointer;font-family:inherit;width:46px}'+
+      '#v3dFurnDock .pit:hover{background:'+U.chip2+';border-color:'+U.accSoft+'}'+
+      '#v3dFurnDock .pit.on{border-color:'+U.ok+';background:rgba(95,163,110,.18)}'+
       '#v3dFurnDock .pit svg{width:22px;height:22px}'+
       // Demo-sweep pürüz (b): "Üçlü Kan…"/"Makyaj M…" gibi tek-satır kesilmiş etiketler okunmuyordu. title
       //   tooltip zaten vardı (tam adı hover'da gösterir); ayrıca etiket 2 SATIRA izin verilir + font küçültüldü
       //   (8px→7px) — SABİT yükseklik (2×line-height) rezerve edilir ki palet ızgarası (2 satır×6 sütun) BOZULMASIN.
-      '#v3dFurnDock .pit .pn{font-size:7px;line-height:1.15;color:#d8d2c6;text-align:center;max-width:44px;'+
+      '#v3dFurnDock .pit .pn{font-size:7px;line-height:1.15;color:'+U.inkDim+';text-align:center;max-width:44px;'+
       'display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;'+
       'height:2.3em;word-break:break-word}'+
       // R5: KONTRAST FIX — global label{background:#fbfaf7} sızıntısı 'Render\'a mobilya ekle' metnini görünmez yapıyordu
       //   (bg ~beyaz + color ~beyaz). Dock arka planında açık metin + saydam arka planı zorla.
-      '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:#e8e6e0;border:0;padding:0;box-shadow:none}'+
-      '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:#7bbf8a;cursor:pointer}'+
+      '#v3dFurnDock .chk{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;color:'+U.ink+';border:0;padding:0;box-shadow:none}'+
+      '#v3dFurnDock .chk input{width:15px;height:15px;accent-color:'+U.ok+';cursor:pointer}'+
       // R3: MALZEME DOCK — kamera dock kadar mütevazı: TEK yatay satır, SABİT yükseklik, sarma YOK (görünümü kapatmaz).
-      '#v3dMatDock .dk{background:rgba(28,28,34,.95);color:#e8e6e0;border:1px solid rgba(255,255,255,.09);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.5);backdrop-filter:blur(9px);padding:7px 10px;display:flex;gap:10px;align-items:center;flex-wrap:nowrap;max-width:min(94vw,880px);font:12px/1.4 system-ui,sans-serif}'+
+      '#v3dMatDock .dk{background:'+U.dock+';color:'+U.ink+';border:1px solid '+U.line+';border-radius:'+U.r14+';box-shadow:'+U.shadow+';backdrop-filter:'+U.blur+';padding:7px 10px;display:flex;gap:10px;align-items:center;flex-wrap:nowrap;max-width:min(94vw,880px);font:12px/1.4 system-ui,sans-serif}'+
       '#v3dMatDock .grp{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}'+
-      '#v3dMatDock .sep{width:1px;height:26px;background:rgba(255,255,255,.1);flex:none}'+
-      '#v3dMatDock .lbl{font-size:9px;letter-spacing:.05em;text-transform:uppercase;opacity:.6;font-weight:700;flex:none}'+
+      '#v3dMatDock .sep{width:1px;height:26px;background:'+U.line+';flex:none}'+
+      '#v3dMatDock .lbl{font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;font-weight:700;flex:none}'+
       '#v3dMatDock .sws{display:flex;gap:4px;flex-wrap:nowrap}'+
-      '#v3dMatDock .sw{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:#2c2c33;border:1px solid transparent;border-radius:7px;padding:0;cursor:pointer;font-family:inherit;flex:none}'+
-      '#v3dMatDock .sw:hover{border-color:rgba(201,161,107,.6)}'+
-      '#v3dMatDock .sw.on{border-color:#7bbf8a}'+
+      '#v3dMatDock .sw{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:'+U.chip+';border:1px solid transparent;border-radius:'+U.r7+';padding:0;cursor:pointer;font-family:inherit;flex:none}'+
+      '#v3dMatDock .sw:hover{border-color:'+U.accSoft+'}'+
+      '#v3dMatDock .sw.on{border-color:'+U.ok+'}'+
       '#v3dMatDock .sw .chip{width:20px;height:20px;border-radius:4px;border:1px solid rgba(0,0,0,.25)}'+
-      '#v3dMatDock .roomtag{background:#c9a16b;color:#1a1a1f;border-radius:7px;padding:3px 8px;font-weight:700;font-size:11px;white-space:nowrap;flex:none}'+
+      '#v3dMatDock .roomtag{background:'+U.acc+';color:'+U.onAcc+';border-radius:'+U.r7+';padding:3px 8px;font-weight:700;font-size:11px;white-space:nowrap;flex:none}'+
       '#v3dMatDock .wet{opacity:.7;font-size:9.5px;flex:none}'+
-      '#v3dMatDock .reset{background:#33333c;color:#e8e6e0;border:0;border-radius:7px;padding:5px 9px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}'+
+      '#v3dMatDock .reset{background:'+U.chip2+';color:'+U.ink+';border:0;border-radius:'+U.r7+';padding:5px 9px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}'+
       '#v3dMatDock .reset:hover{filter:brightness(1.15)}'+
       '#v3dMatDock .hint{font-size:10.5px;opacity:.72;white-space:nowrap;flex:none}'+
       // B2-3 yüzen mini araç çubuğu
-      '.v3dfb{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:8px;background:#33333c;color:#e8e6e0;cursor:pointer;padding:0}'+
-      '.v3dfb:hover{background:#c9a16b;color:#1a1a1f}.v3dfbdanger{background:#5a3a3a;color:#f0d8d8}.v3dfbdanger:hover{background:#7a3a3a;color:#fff}'+
+      '.v3dfb{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:'+U.rMd+';background:'+U.chip2+';color:'+U.ink+';cursor:pointer;padding:0}'+
+      '.v3dfb:hover{background:'+U.acc+';color:'+U.onAcc+'}.v3dfbdanger{background:'+U.bad+';color:'+U.onBad+'}.v3dfbdanger:hover{filter:brightness(1.12)}'+
       // boyalı plan = sol-üstte küçük lightbox küçük-resmi (tıkla→büyüt); slider/split KALDIRILDI (mesh tam genişlik)
-      '#v3dCompareThumb{position:absolute;left:14px;top:14px;z-index:6;width:190px;max-width:38%;background:rgba(24,22,28,.94);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:8px;box-shadow:0 12px 32px rgba(0,0,0,.5);cursor:zoom-in;transition:transform .12s,box-shadow .12s}'+
-      '#v3dCompareThumb:hover{transform:translateY(-1px);box-shadow:0 16px 40px rgba(0,0,0,.62)}'+
-      '#v3dCompareThumb #v3dRefImg{display:block;width:100%;border-radius:8px;background:#0e0c0a}'+
-      '#v3dCompareThumb .v3dcap{display:flex;align-items:center;justify-content:space-between;gap:6px;color:#e8e6e0;font:11px/1.3 system-ui;margin:6px 2px 1px}'+
+      '#v3dCompareThumb{position:absolute;left:14px;top:14px;z-index:6;width:190px;max-width:38%;background:'+U.dock+';border:1px solid '+U.lineSoft+';border-radius:'+U.rLg+';padding:8px;box-shadow:'+U.shadow+';cursor:zoom-in;transition:transform .12s,box-shadow .12s}'+
+      '#v3dCompareThumb:hover{transform:translateY(-1px);box-shadow:'+U.shadowLb+'}'+
+      '#v3dCompareThumb #v3dRefImg{display:block;width:100%;border-radius:'+U.rMd+';background:#0e0c0a}'+
+      '#v3dCompareThumb .v3dcap{display:flex;align-items:center;justify-content:space-between;gap:6px;color:'+U.ink+';font:11px/1.3 system-ui;margin:6px 2px 1px}'+
       '#v3dCompareThumb .v3dcap .exp{display:inline-flex;align-items:center;gap:3px;opacity:.72}'+
       '#v3dCompareLB{position:absolute;inset:0;z-index:40;background:rgba(8,7,10,.9);display:none;align-items:center;justify-content:center;cursor:zoom-out;padding:30px}'+
-      '#v3dCompareLB img{max-width:94%;max-height:94%;object-fit:contain;border-radius:10px;box-shadow:0 24px 70px rgba(0,0,0,.6)}'+
-      '#v3dAngleWarn{margin-top:8px;background:rgba(192,73,43,.96);color:#fff;border-radius:8px;padding:8px 9px;font:11px/1.35 system-ui;display:none}'+
-      '#v3dAngleWarn button{margin-top:7px;background:#fff;color:#7a2c18;border:0;border-radius:6px;padding:6px 9px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}';
+      '#v3dCompareLB img{max-width:94%;max-height:94%;object-fit:contain;border-radius:'+U.r10+';box-shadow:'+U.shadowLb+'}'+
+      '#v3dAngleWarn{margin-top:8px;background:'+U.bad+';color:'+U.onBad+';border-radius:'+U.rMd+';padding:8px 9px;font:11px/1.35 system-ui;display:none}'+
+      '#v3dAngleWarn button{margin-top:7px;background:'+U.ink+';color:'+U.bad+';border:0;border-radius:'+U.rSm+';padding:6px 9px;font-weight:700;font-size:11px;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}';
     document.head.appendChild(st);
     host=overlay.querySelector('#v3dHost');
     status=overlay.querySelector('#v3dStatus');
@@ -783,8 +867,11 @@
       else if(a==='pipclose') closePip();                    // B1-R (R2): PiP kapat (yeni kamera seçince geri gelir)
       else if(a==='cambaraim'){ if(activeCamIdx>=0) setPlaceAction('aim'); }   // KAMERA-S S4: çubuk Yön = zemine-tıkla nişan moduna geç (koni ucu sürüklemenin alternatifi)
       else if(a==='cambarpip'){ if(pipClosed) openPipForSelection(); else closePip(); }   // KAMERA-S S4: PiP aç-kapa
+      else if(a==='viewpng') snapViewPNG();                  // SUNUM-4C T2: İndir = o anki 3B görünümü olduğu gibi PNG (1920px), AI değil
       else if(a==='roof'){ roofOn=t.checked; applyRoof(); }
       else if(a==='lbl'){ lblOn=t.checked; if(scene&&scene.__labels) scene.__labels.visible=lblOn; }
+      else if(a==='furnvis'){ furnVisible=t.checked; if(scene&&scene.__furnitureGroup) scene.__furnitureGroup.visible=furnVisible; }   // T2: mobilya grubunu göster/gizle (veri korunur)
+      else if(a==='paintvis'){ paintDisabled=!t.checked; rebuildKeepView(); }   // T2: malzeme boyamasını geçici kapat/aç (materialOverrides dokunulmaz)
       else if(a==='walksound'){ walkSoundOn=!walkSoundOn; ensureWalkAudio(); const h=overlay.querySelector('#v3dWalkHint'); if(h) h.innerHTML=walkHintHTML(); }
     });
     // A2: persistent zoom bar bir kez bağlanır (çekmeceden bağımsız, HER görünümde açık)
@@ -966,7 +1053,7 @@
     const labels=new THREE.Group(); labels.position.set(-cx,0,-cz); labels.visible=lblOn; scene.add(labels); scene.__labels=labels;
     // mobilya grubu — zemin/duvar gibi -cx,-cz ofsetli (pos MUTLAK metre). __floorGroup'a KOYMA:
     // o grup kamera-yerleştirme raycast'i; mobilya oraya girerse kullanıcı "kanepenin üstüne kamera" koyar.
-    const furn=new THREE.Group(); furn.position.set(-cx,0,-cz); scene.add(furn); scene.__furnitureGroup=furn;
+    const furn=new THREE.Group(); furn.position.set(-cx,0,-cz); furn.visible=furnVisible; scene.add(furn); scene.__furnitureGroup=furn;   // T2: Katmanlar "Mobilya" toggle rebuild sonrası korunur
     // C3-4: TAVAN grubu — oda poligonlarını duvar üstü yüksekliğinde örten mat açık düzlem. VARSAYILAN GİZLİ;
     //   yalnız kamera bakış pass'lerinde (snapCameraDataURL + PiP) açılır → iso/ana dollhouse AÇIK ÇATI kalır.
     const ceil=new THREE.Group(); ceil.position.set(-cx,0,-cz); ceil.visible=false; scene.add(ceil); scene.__ceiling=ceil;
@@ -1402,8 +1489,8 @@
     if(!inGroup) return;
     b.innerHTML=ic(topLocked?'lock':'lockopen',18);
     b.title=topLocked?'Kuşbakışı kilitli — aç (serbest döndür)':'Serbest — kuşbakışına kilitle';
-    b.style.background=topLocked?'#c9a16b':'rgba(34,34,40,.94)';
-    b.style.color=topLocked?'#1a1a1f':'#c9b79a';
+    b.style.background=topLocked?UIPAL.acc:UIPAL.panel;
+    b.style.color=topLocked?UIPAL.onAcc:UIPAL.inkAcc;
   }
   // kuşbakışına kilitle: mevcut serbest açıyı sakla → üst açıya yumuşak tween + döndürme kapat (pan+zoom serbest).
   function enterTopLock(saveFree){
@@ -1444,6 +1531,32 @@
     const a=document.createElement('a'); a.download='floor-plan-3d.png'; a.href=renderer.domElement.toDataURL('image/png'); a.click();
     labs.forEach(function(s){ if(s.userData&&s.userData.tr) setLabelText(s,s.userData.tr); });
     renderer.render(scene,cam); }
+
+  // SUNUM-4C T2: "İndir" = o anki 3B görünümü OLDUĞU GİBİ PNG olarak kaydet (AI/EN etiket DEĞİL).
+  //   Mevcut kamera açısı/çatı/mobilya/etiket durumu neyse o. En-boy oranı KORUNUR, genişlik 1920 hedef.
+  //   renderer preserveDrawingBuffer:true → toDataURL güvenli; yine de temiz kare için anlık yüksek-çöz. pass.
+  function snapViewPNG(){
+    if(!renderer||!scene||!cam) return;
+    const savedSize=renderer.getSize(new THREE.Vector2());
+    if(savedSize.x<1||savedSize.y<1){ setHint('Görüntü alınamadı (görünüm gizli).'); return; }   // viewport 0×0 → reddet
+    const savAspect=cam.aspect, savPR=renderer.getPixelRatio();
+    const TARGET_W=1920, ar=savedSize.x/savedSize.y, H=Math.max(1,Math.round(TARGET_W/ar));
+    _snapBusy=true;
+    let url=null;
+    try{
+      renderer.setPixelRatio(1); renderer.setSize(TARGET_W,H,false);   // updateStyle=false → canvas CSS bozulmaz
+      cam.aspect=TARGET_W/H; cam.updateProjectionMatrix();
+      renderer.render(scene,cam);
+      url=renderer.domElement.toDataURL('image/png');
+    } finally {
+      renderer.setPixelRatio(savPR); renderer.setSize(savedSize.x,savedSize.y,false);
+      cam.aspect=savAspect; cam.updateProjectionMatrix();
+      renderer.render(scene,cam);
+      _snapBusy=false;
+    }
+    if(url){ const a=document.createElement('a'); a.download='kpta-3b-goruntu.png'; a.href=url; a.click();
+      setHint('3B görüntü indirildi ('+TARGET_W+'×'+H+').'); }
+  }
 
   // ── Mesken köprüsü: kilitli açıyı oku/uygula + o açıdan PNG dataURL (indirmeden) ──
   // snap() ile aynı kare: EN etiketle render et → dataURL döndür → ekran TR'sini geri koy.
@@ -1649,8 +1762,8 @@
     // yön oku: walkYaw (0=-Z=yukarı, +X saat yönü). SVG'de yukarı=-Y. Üçgeni yaw kadar döndür.
     const deg=walkYaw*180/Math.PI;
     svg.innerHTML='<g transform="translate('+mx.toFixed(1)+','+mz.toFixed(1)+') rotate('+deg.toFixed(1)+')">'+
-      '<circle r="7" fill="rgba(224,132,58,.25)"/>'+
-      '<path d="M0,-7 L4.5,5 L0,2.5 L-4.5,5 Z" fill="#e0843a" stroke="#1a1a1f" stroke-width="0.6"/></g>';
+      '<circle r="7" fill="rgba(217,121,59,.25)"/>'+
+      '<path d="M0,-7 L4.5,5 L0,2.5 L-4.5,5 Z" fill="'+UIPAL.active+'" stroke="'+UIPAL.onAcc+'" stroke-width="0.6"/></g>';
   }
   // PiP boyutu (kapalı/büyük). body yüksekliği 16:9 sabit.
   function applyPipSize(){ const pipEl=overlay&&overlay.querySelector('#v3dPip'), body=overlay&&overlay.querySelector('#v3dPipBody');
@@ -1787,9 +1900,9 @@
      Giriş: Pointer Lock + WASD yürü + fare bak (yaw/pitch). Çarpışma: RAYCAST (duvar+pencere-cam bloklar,
      kapı kanadı GEÇİLİR) + mobilya ayak-izi bloğu. Tavan AÇIK, etiket/gizmo/dock gizli (C3-4 deseni). */
   function walkHintHTML(){
-    return 'WASD yürü · Fare bak · Shift koş · Space: zıpla · <b style="color:#e0843a">C: bu açıda kamera</b> · Esc çık'+
-      ' · <button data-v3d="walksound" style="pointer-events:auto;background:transparent;border:1px solid rgba(255,255,255,.3);'+
-      'color:#e8e6e0;border-radius:6px;padding:2px 8px;font:11px/1.3 system-ui,sans-serif;cursor:pointer;font-family:inherit">'+
+    return 'WASD yürü · Fare bak · Shift koş · Space: zıpla · <b style="color:'+UIPAL.active+'">C: bu açıda kamera</b> · Esc çık'+
+      ' · <button data-v3d="walksound" style="pointer-events:auto;background:transparent;border:1px solid '+UIPAL.lineSoft+';'+
+      'color:'+UIPAL.ink+';border-radius:'+UIPAL.rSm+';padding:2px 8px;font:11px/1.3 system-ui,sans-serif;cursor:pointer;font-family:inherit">'+
       'Ses: '+(walkSoundOn?'Açık':'Kapalı')+'</button>';   // adım sesi aç/kapa (oturum içi hatırlanır)
   }
   function ensureWalkHint(){
@@ -1798,8 +1911,8 @@
     if(!el){
       el=document.createElement('div'); el.id='v3dWalkHint';
       el.style.cssText='position:absolute;left:50%;bottom:18px;transform:translateX(-50%);z-index:8;display:none;'+
-        'background:rgba(20,20,26,.82);color:#e8e6e0;font:12px/1.3 system-ui,sans-serif;padding:7px 14px;'+
-        'border-radius:9px;backdrop-filter:blur(6px);pointer-events:none;white-space:nowrap';
+        'background:'+UIPAL.dock+';color:'+UIPAL.ink+';font:12px/1.3 system-ui,sans-serif;padding:7px 14px;'+
+        'border-radius:'+UIPAL.r9+';backdrop-filter:'+UIPAL.blurSm+';pointer-events:none;white-space:nowrap';
       overlay.appendChild(el);
     }
     el.innerHTML=walkHintHTML();
@@ -1814,8 +1927,8 @@
       b=document.createElement('button'); b.id='v3dWalkCamBtn'; b.type='button';
       b.title='Bu açıda kamera yerleştir (C)';
       b.style.cssText='position:absolute;left:50%;bottom:52px;transform:translateX(-50%);z-index:9;display:none;'+
-        'background:#e0843a;color:#1a1a1f;font:12px/1 system-ui,sans-serif;font-weight:700;padding:8px 14px;border:0;'+
-        'border-radius:9px;box-shadow:0 8px 22px rgba(0,0,0,.45);cursor:pointer;pointer-events:auto;white-space:nowrap';
+        'background:'+UIPAL.active+';color:'+UIPAL.onAcc+';font:12px/1 system-ui,sans-serif;font-weight:700;padding:8px 14px;border:0;'+
+        'border-radius:'+UIPAL.r9+';box-shadow:'+UIPAL.shadowSm+';cursor:pointer;pointer-events:auto;white-space:nowrap';
       b.textContent='Bu açıda kamera (C)';
       b.addEventListener('click', function(ev){ ev.preventDefault(); addWalkCamera(); });
       overlay.appendChild(b);
@@ -2232,7 +2345,7 @@
     renderCamGizmos();                                      // gizmo grubu tazele (gezintide gizli; çıkışta görünür)
     // overlay onayı (gezinti kesilmez): kısa "Kx eklendi · toplam N"
     const hint=overlay&&overlay.querySelector('#v3dWalkHint');
-    if(hint){ const base=walkHintHTML(); hint.innerHTML='<b style="color:#e0843a">K'+camList.length+' eklendi · toplam '+camList.length+'</b> &nbsp; '+base;
+    if(hint){ const base=walkHintHTML(); hint.innerHTML='<b style="color:'+UIPAL.active+'">K'+camList.length+' eklendi · toplam '+camList.length+'</b> &nbsp; '+base;
       if(walkCamMsgT) clearTimeout(walkCamMsgT); walkCamMsgT=setTimeout(function(){ const h=overlay&&overlay.querySelector('#v3dWalkHint'); if(h&&walkOn) h.innerHTML=walkHintHTML(); }, 2200); }
   }
 
@@ -2927,7 +3040,7 @@
     const wasLockGroup=(activeGroup==='camera'||activeGroup==='furniture');
     camUIEnabled=!!on;
     if(camUIEnabled){ activeGroup='camera'; pipClosed=false; applyPipSize(); }  // adım 4 → kamera dock açık; B1-R PiP kapalı-işaretini sıfırla
-    else { if(activeGroup===null||activeGroup==='camera') activeGroup='view'; setPlaceMode(false); pipClosed=true; }  // R2: kamera UI kapanınca PiP gizle
+    else { if(activeGroup===null||activeGroup==='camera') activeGroup='layers'; setPlaceMode(false); pipClosed=true; }  // R2: kamera UI kapanınca PiP gizle (T2: 'view' grubu emekli → Katmanlar'a düş)
     // A4: kamera grubuna giriş → varsayılan kuşbakışı kilidi (setGroup dışı yol; setCamUI doğrudan activeGroup set eder)
     const inLockGroup=(activeGroup==='camera'||activeGroup==='furniture');
     if(inLockGroup && !wasLockGroup) enterTopLock(true);
@@ -3052,13 +3165,13 @@
     camList.forEach(function(c,i){ const on=(i===activeCamIdx);
       h+='<span data-camsel="'+i+'" title="Kamera '+(i+1)+' — seç" '+
         'style="position:relative;display:inline-flex;align-items:center;gap:3px;cursor:pointer;'+
-        'background:'+(on?'#e0843a':'#3a3a44')+';color:'+(on?'#1a1a1f':'#e8e6e0')+';'+
-        'border-radius:7px;padding:4px 6px 4px 7px;font-size:11px;font-weight:700">'+
+        'background:'+(on?UIPAL.active:UIPAL.chip2)+';color:'+(on?UIPAL.onAcc:UIPAL.ink)+';'+
+        'border-radius:'+UIPAL.r7+';padding:4px 6px 4px 7px;font-size:11px;font-weight:700">'+
         ic('camera',12)+(i+1)+
         (on?'<b data-camdesel="1" title="Seçimi bırak" style="cursor:pointer;font-weight:700;opacity:.75;padding:0 1px 0 3px">×</b>':'')+'</span>';
     });
     h+='<span data-camact="add" title="Yeni kamera ekle" style="display:inline-flex;align-items:center;cursor:pointer;'+
-      'border:1.5px dashed rgba(255,255,255,.35);color:#c9a16b;border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700">'+ic('plus',13)+'</span>';
+      'border:1.5px dashed '+UIPAL.accSoft+';color:'+UIPAL.acc+';border-radius:'+UIPAL.r7+';padding:4px 8px;font-size:11px;font-weight:700">'+ic('plus',13)+'</span>';
     return h;
   }
   // seçili kameranın ÖZET metni: "K2 · Göz 1.60m · 24mm · Gece"
@@ -3130,14 +3243,14 @@
           '<div class="lbl">Render yöntemi</div>'+
           '<div class="row seg" id="v3dMRow"><button data-cammethod="prompt" class="v3dm" title="Metin prompt → nano">Prompt</button><button data-cammethod="snapshot" class="v3dm" title="Bu açının görseli → nano">Görsel</button><button data-cammethod="both" class="v3dm" title="İkisini de üret">İkisi</button></div>'+
           '<div id="v3dCamPromptWrap">'+
-            '<div class="lbl" style="display:flex;justify-content:space-between;align-items:center">Render prompt\'u <span data-v3d="camprompreset" style="cursor:pointer;color:#c9a16b;font-weight:600;font-size:9.5px;text-transform:none">otomatiğe sıfırla</span></div>'+
+            '<div class="lbl" style="display:flex;justify-content:space-between;align-items:center">Render prompt\'u <span data-v3d="camprompreset" style="cursor:pointer;color:'+UIPAL.acc+';font-weight:600;font-size:9.5px;text-transform:none">otomatiğe sıfırla</span></div>'+
             '<textarea id="v3dCamPrompt" rows="4" placeholder="Kamera seç → otomatik prompt"></textarea>'+
           '</div>'+
           '<div id="v3dCamSnapWrap">'+
             '<div class="lbl">Kendi-açı görsel (opsiyon 2)</div>'+
             '<img id="v3dCamSnap" class="snap" alt="kameranın kendi açısı">'+
           '</div>'+
-          '<button data-v3d="camclear" class="seg" style="margin-top:4px"><span style="background:#33333c;color:#e8e6e0;border-radius:7px;padding:5px 9px;font-size:11px;font-weight:600;display:inline-block">Tüm kameraları temizle</span></button>'+
+          '<button data-v3d="camclear" class="seg" style="margin-top:4px"><span style="background:'+UIPAL.chip2+';color:'+UIPAL.ink+';border-radius:'+UIPAL.r7+';padding:5px 9px;font-size:11px;font-weight:600;display:inline-block">Tüm kameraları temizle</span></button>'+
         '</div>'+
       '</div>'+
     '</div>';
@@ -3308,6 +3421,7 @@
   }
   // oda için seçili malzeme (floor|wall) preset key'i — override YOKSA null (→ renk-kodlu varsayılan).
   function roomMatKey(roomId, slot){
+    if(paintDisabled) return null;   // T2: "Malzeme boyaması" katman-toggle kapalı → nötr matWall/zemin (atama korunur)
     const o=materialOverrides[roomId]; return (o && o[slot]) || null;
   }
 
@@ -3690,7 +3804,7 @@
   }
   function setFurnUI(on){
     furnUIEnabled=!!on;
-    if(!furnUIEnabled){ if(activeGroup==='furniture') activeGroup='view'; setFurnMode(false); }
+    if(!furnUIEnabled){ if(activeGroup==='furniture') activeGroup='layers'; setFurnMode(false); }
     else syncFurnModeToGroup();                                                           // grup 'furniture' ise düzenleme AÇIK, değilse KAPALI (B2)
     renderRail(); renderDrawer();
   }
@@ -3729,7 +3843,7 @@
     html+='<div class="col" style="max-width:190px">'+
       '<div class="lbl">Otomatik</div>'+
       '<div class="row seg">'+
-        '<button data-v3d="furnauto" class="green'+(furnList.length?' on':'')+'" style="background:#7bbf8a;color:#13201a">'+ic('bolt',12)+'Yeniden döşe</button>'+
+        '<button data-v3d="furnauto" class="green'+(furnList.length?' on':'')+'" style="background:'+UIPAL.ok+';color:'+UIPAL.onOk+'">'+ic('bolt',12)+'Yeniden döşe</button>'+
         '<button data-v3d="furnclear">Temizle</button>'+
       '</div>'+
       '<label class="chk" title="3B render (nano) mobilyalı mı boş mu olsun"><input type="checkbox" data-v3d="furnrender" id="v3dFurnRender" '+(furnList.length?'checked':'')+'>Render\'a mobilya ekle</label>'+
@@ -3754,7 +3868,7 @@
   function setMatHint(t){ lastMatHint=t||''; const h=overlay&&overlay.querySelector('#v3dMatHint'); if(h) h.textContent=lastMatHint; }
   function setMatUI(on){
     matUIEnabled=!!on;
-    if(!matUIEnabled){ if(activeGroup==='material') activeGroup='view'; matSelRoom=null; }
+    if(!matUIEnabled){ if(activeGroup==='material') activeGroup='layers'; matSelRoom=null; }
     renderRail(); renderDrawer();
   }
   // seçili oda → swatch uygula: yalnız O ODANIN zemin/duvar malzemesini değiştirir (M3), sahneyi tazeler (M4).
@@ -4651,8 +4765,10 @@
         renderer.setPixelRatio(Math.min(devicePixelRatio,2));
         renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
         host.appendChild(renderer.domElement);
-        scene=new THREE.Scene(); scene.background=new THREE.Color(0x15151a);
-        scene.fog=new THREE.Fog(0x15151a,60,150);
+        // SUNUM-4C T1: sahne arka planı/sis UIPAL.scene'den (sıcak koyu #171512). WebGL clear rengi = overlay bg ile aynı aile.
+        const _sceneHex=parseInt(UIPAL.scene.replace('#',''),16);
+        scene=new THREE.Scene(); scene.background=new THREE.Color(_sceneHex);
+        scene.fog=new THREE.Fog(_sceneHex,60,150);
         cam=new THREE.PerspectiveCamera(42, host.clientWidth/host.clientHeight, 0.1, 600);
         controls=attachOrbit(cam,renderer.domElement);
         attachPicker();                                    // kamera-koyma raycaster (placeMode iken aktif)
@@ -4786,8 +4902,12 @@
       renderPip();                                           // B1-R (R2): CANLI PiP — seçili kamera perspektifi (scissor pass, sadece kamera grubu+seçim varken)
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
       updateOrb();                                           // B1-1: yön küresi iğnesini mevcut azimuta döndür (hafif DOM yazımı)
-      if(furnMode && activeFurnIdx>=0 && !furnGhost) updateFurnBar();   // B2-3: yüzen mini araç çubuğunu seçili mobilyanın üstünde tut
-      if(camUIEnabled && activeGroup==='camera' && activeCamIdx>=0) updateCamBar();   // KAMERA-S S4: seçili kameranın yüzen mini çubuğu (mobilya ikizi)
+      // SUNUM-4C T4: yüzen çubuklar HER KARE koşulsuz güncellenir → "seçim yok → display:none" TEK MERKEZ
+      //   güvence (updateFurnBar/updateCamBar içindeki `show` testi). Eskiden çağrı `activeIdx>=0`
+      //   koşuluyla kapılıydı → deselect/boş-tık/Esc/silme/mod-değişimi yolları çubuğu güncellemeyip
+      //   ekranda işlevsiz asılı bırakıyordu (P3 FPV yolu çözülmüştü, deselect yolu sızıyordu).
+      updateFurnBar();
+      updateCamBar();
       if(zoomEl&&!zoomActive) zoomEl.value=distToSlider(controls.getDistance()); } }
 
   // dışa aç + buton bağla
