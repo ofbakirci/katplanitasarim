@@ -178,7 +178,8 @@
     copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',   // çoğalt
     sofa:'<path d="M5 11V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v4"/><path d="M3 13a2 2 0 0 1 4 0v3h10v-3a2 2 0 0 1 4 0v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',  // mobilya rail ikonu
     swatch:'<path d="M2 13a2 2 0 0 0 2 2h1M2 13V4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v9M2 13a9 9 0 0 0 9 9 9 9 0 0 0 9-9M11 13h9a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-1"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>',  // malzeme rail ikonu (renk paleti/swatch)
-    walk:'<circle cx="13" cy="4" r="2"/><path d="M13 6l-2.5 4 3 2 1 6M10.5 10 7 13M13.5 12l3.5 2M6 22l3-6M15 16l1.5 6"/>'  // gezinti rail ikonu (yürüyen kişi)
+    walk:'<circle cx="13" cy="4" r="2"/><path d="M13 6l-2.5 4 3 2 1 6M10.5 10 7 13M13.5 12l3.5 2M6 22l3-6M15 16l1.5 6"/>',  // gezinti rail ikonu (yürüyen kişi)
+    pegman:'<circle cx="12" cy="4.5" r="2.5"/><path d="M12 8a3 3 0 0 0-3 3v4h1.6l.5 5h1.8l.5-5H15v-4a3 3 0 0 0-3-3z"/>'   // PEGMAN — cepheden duran adam silueti (Street View pegman)
   };
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
@@ -373,6 +374,17 @@
   //   İç nokta = mevcut azimut (theta) göstergesi. Etrafında hazır görüş chip'leri: Üst / İzo / K-G-D-B.
   //   Kilitliyken İzo/yön chip'i seçmek kilidi AÇAR (kullanıcı "dikine kaldım" derdinin çözümü).
   // DOM/SVG → theta/phi eşleme (three.js sahne-içi küp DEĞİL — maliyet/karmaşıklık gereksiz).
+  // ── PEGMAN: sürükle-bırak FPV girişi (Google Street View adamcığı) ──────────────
+  //   Nav kümesinde küçük adamcık düğmesi. Basılı tut → sahneye sürükle → zeminde bırakma halkası (yeşil=geçerli,
+  //   kırmızı=oda dışı). Geçerli bırak → o noktada gezinti (enterWalk startPoint). Sürüklemeden tık → varsayılan gezinti.
+  let pegDrag=null;                                 // {startX,startY,moved} sürükleme durumu
+  let pegGhostGroup=null;                           // sahnedeki bırakma-halkası grubu (yeşil/kırmızı)
+  function pegmanWidgetHTML(){
+    return '<button id="v3dPegman" title="Sürükleyip bırak: o noktada gez · tık: varsayılan gezinti" '+
+      'style="width:44px;height:52px;border:0;border-radius:12px;background:rgba(34,34,40,.94);color:#c9b79a;cursor:grab;'+
+      'display:flex;align-items:center;justify-content:center;backdrop-filter:blur(7px);touch-action:none;flex:none;padding:0">'+
+      ic('pegman',30)+'</button>';
+  }
   const ORB_R=27;                                   // küre yarıçapı (px, viewBox 0..64)
   function orbWidgetHTML(){
     // dış kompas chip'leri (K yukarı, D sağ, G aşağı, B sol) + merkez sürükle alanı + Üst/İzo mini butonlar
@@ -461,6 +473,73 @@
     svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
   }
 
+  // PEGMAN: zeminde bırakma-halkası (camGhost halka deseni) — geçerli=yeşil, geçersiz=kırmızı. world x,z (scene-root).
+  function pegShowGhost(wx,wz,valid){
+    if(!scene) return;
+    if(!pegGhostGroup||!pegGhostGroup.parent){ pegGhostGroup=new THREE.Group(); scene.add(pegGhostGroup); }
+    while(pegGhostGroup.children.length){ const ch=pegGhostGroup.children[0];
+      if(ch.geometry) ch.geometry.dispose(); if(ch.material) ch.material.dispose(); pegGhostGroup.remove(ch); }
+    const col=valid?0x7bbf8a:0xd8574e;                              // yeşil / kırmızı
+    const ring=new THREE.Mesh(new THREE.RingGeometry(0.34,0.5,40),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.6,side:THREE.DoubleSide,depthWrite:false}));
+    ring.rotation.x=-Math.PI/2; ring.position.set(wx,0.03,wz); pegGhostGroup.add(ring);
+    const dot=new THREE.Mesh(new THREE.RingGeometry(0.0,0.12,20),   // merkez nokta (bırakma yeri)
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false}));
+    dot.rotation.x=-Math.PI/2; dot.position.set(wx,0.031,wz); pegGhostGroup.add(dot);
+    // dikey iğne — adamcığın "duracağı" yeri göz hizasına kadar işaretle (görünürlük)
+    const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,1.6,8),
+      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:0.5}));
+    pin.position.set(wx,0.8,wz); pegGhostGroup.add(pin);
+  }
+  function pegClearGhost(){
+    if(!pegGhostGroup) return;
+    while(pegGhostGroup.children.length){ const ch=pegGhostGroup.children[0];
+      if(ch.geometry) ch.geometry.dispose(); if(ch.material) ch.material.dispose(); pegGhostGroup.remove(ch); }
+    if(pegGhostGroup.parent) pegGhostGroup.parent.remove(pegGhostGroup);
+    pegGhostGroup=null;
+  }
+  // PEGMAN sürükle-bırak: adamcığa basılı tut → sahnede zemine sürükle (halka izler) → geçerli bırak = o noktada gez.
+  function wirePegman(){
+    const peg=overlay&&overlay.querySelector('#v3dPegman'); if(!peg) return;
+    let lastHit=null, lastValid=false;
+    peg.addEventListener('pointerdown',function(e){
+      if(e.button!==0) return;
+      if(walkOn) return;                                            // zaten gezintideyse yok say
+      pegDrag={startX:e.clientX,startY:e.clientY,moved:false};
+      lastHit=null; lastValid=false;
+      peg.style.cursor='grabbing';
+      try{ peg.setPointerCapture(e.pointerId); }catch(_){}
+      e.preventDefault(); e.stopPropagation();
+    });
+    peg.addEventListener('pointermove',function(e){
+      if(!pegDrag) return;
+      if(!pegDrag.moved && (Math.abs(e.clientX-pegDrag.startX)+Math.abs(e.clientY-pegDrag.startY))>4) pegDrag.moved=true;
+      if(!pegDrag.moved) return;
+      const hit=(renderer&&scene)?camGroundHit(e):null;            // pointer → zemin. hit.x/z = SCENE-ROOT dünya =
+      if(!hit){ lastHit=null; lastValid=false; pegClearGhost(); return; }   //   cam-uzayı (floorGroup -cx,-cz ofsetli → intersection zaten model-cx)
+      const valid=pegmanValidAt(hit.x, hit.z);                     // roomIdAtPoint cam-uzayı bekler (worldToPx cx'i geri ekler)
+      lastHit=hit; lastValid=valid;
+      pegShowGhost(hit.x, hit.z, valid);                           // halka scene-root grupta → ham hit x,z (ekstra ofset YOK)
+      if(status) status.textContent=valid?'Bırak → burada gez':'Oda dışı — geçersiz (kırmızı)';
+    });
+    const finish=function(e){
+      if(!pegDrag) return;
+      const moved=pegDrag.moved; pegDrag=null;
+      peg.style.cursor='grab';
+      try{ peg.releasePointerCapture(e.pointerId); }catch(_){}
+      pegClearGhost();
+      if(!moved){ toggleWalk(); return; }                          // sürüklemeden tık = varsayılan gezinti (eski buton)
+      if(lastHit && lastValid){                                    // geçerli bırakma → o noktada gezinti
+        // pointer-lock bırakma JESTİ tamamlandıktan SONRA istenir (enterWalk içindeki requestPointerLock)
+        console.log('[view3d pegman] drop → enterWalk start', [+lastHit.x.toFixed(2), +lastHit.z.toFixed(2)]);
+        toggleWalk({x:lastHit.x, z:lastHit.z});                    // hit.x/z zaten cam-uzayı (enterWalk cam.position ile aynı)
+      } else { if(status) status.textContent='Geçersiz bırakma — oda içine bırak'; }
+      lastHit=null; lastValid=false;
+    };
+    peg.addEventListener('pointerup',finish);
+    peg.addEventListener('pointercancel',finish);
+  }
+
   // A2: persistent zoom bar (sağ-alt). overlay kurulunca BİR KEZ bağlanır; her render'da yeniden değil.
   function wireZoom(){
     const el=overlay&&overlay.querySelector('#v3dZoom'); if(!el) return; zoomEl=el;
@@ -493,6 +572,10 @@
       // R7: ORBIT KÜRESİ zoom slider'ın HEMEN SOLUNA, bitişik, aynı küme. Kolon yerine YATAY satır:
       //   sol = küre widget'ı (sphere+Üst/İzo), sağ = zoom kümesi (kilit + zoom bar). İkisi alt hizalı.
       '<div id="v3dViewCtl" style="position:absolute;right:14px;bottom:14px;z-index:4;display:flex;flex-direction:row;align-items:flex-end;gap:8px">'+
+        // PEGMAN: Google Street View tarzı adamcık — sürükle-bırak FPV girişi. Küre widget'ının SOLUNA, aynı
+        //   nav kümesine oturur. Basılı tut + sahneye sürükle → zeminde yeşil bırakma halkası izler (geçersiz=kırmızı);
+        //   geçerli bırakma → o noktada gezinti. Tek tık (sürüklemeden) = varsayılan gezinti (eski buton davranışı).
+        pegmanWidgetHTML()+
         // B1-1: YÖN KÜRESİ (viewcube) — üstünde sürükle=orbit (NAV hassasiyeti), hazır görüş noktaları (Üst/İzo/K-G-D-B).
         //   Kilitliyken İzo/yön seçmek kilidi açar ("dikine kaldım" çözümü). DOM/SVG — three.js sahne-içi küp DEĞİL.
         orbWidgetHTML()+
@@ -706,7 +789,7 @@
     });
     // A2: persistent zoom bar bir kez bağlanır (çekmeceden bağımsız, HER görünümde açık)
     window.addEventListener('pointerup',function(){ zoomActive=false; });
-    wireZoom(); wireOrb();
+    wireZoom(); wireOrb(); wirePegman();
     const lb=overlay.querySelector('#v3dLockBtn'); if(lb) lb.addEventListener('click',toggleTopLock);
     renderRail(); renderDrawer();
   }
@@ -954,16 +1037,29 @@
       //   (fr/2=0.03m) oyuk dışında kalıyor, cam ise sill+fr'den başlıyordu → aradaki fr/2 bant NE cam NE kasa NE
       //   duvar = SİYAH BOŞLUK. Fix: alt kayıt tabanı sill'e (üst kayıt tepesi top'a) hizalı, we kadar duvara taşar.
       //   Hepsi AYNI sill/top/gw kaynağından türer (oyukla birebir): parapet 0..sill, lento top..WALL_H, cam sill+fr..top-fr.
-      var we=0.02;                                        // epsilon bindirme (kasa ↔ parapet/lento buluşma payı)
+      var we=0.02;                                        // epsilon bindirme YATAY (kasa ↔ yan wall-segment buluşma payı)
       // F3 (SUNUM-2A): oyuk DÖRT KENARDA da tam dolsun. Alt/üst kayıt J3'te çözülmüştü (we kadar parapet/lentoya
       //   gömülü). Yan kayıt'lar (jamb) EKSİKTİ: yüksekliği tam gh (sill..top) + dış yüzü tam gw/2'de FLUŞ kalıyordu
       //   → yan wall-segment/parapet/lento ile birleşme hattında NE cam NE kasa NE duvar = ince siyah şerit + bej
-      //   söve kalıntısı. Fix: yan kayıtları we kadar DIŞA (wall segmentine) + üst/altta we kadar UZAT (parapet/
+      //   söve kalıntısı. Fix: yan kayıtları we kadar DIŞA (wall segmentine) + üst/altta wd kadar UZAT (parapet/
       //   lentoya gömülü) → dört köşe de bindirmeli, boşluk kapanır. gw/sill/top AYNI oyuk kaynağından türer.
-      var jGh=gh+2*we;                                     // yan kayıt yüksekliği: alt+üstte we bindirme
-      var botRail=new THREE.Mesh(new THREE.BoxGeometry(gw+2*we,fr+we,ft),matFrame); botRail.position.set(0,sill+fr/2-we/2,0); grp.add(botRail);   // alt kayıt: taban sill'e (we parapete + yanda we wall'a gömülü)
-      var topRail=new THREE.Mesh(new THREE.BoxGeometry(gw+2*we,fr+we,ft),matFrame); topRail.position.set(0,top-fr/2+we/2,0); grp.add(topRail);   // üst kayıt: tepe top'a (we lentoya + yanda we wall'a gömülü)
-      [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr+we,jGh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2+we/2),sill+gh/2,0); grp.add(m); });   // iki yan kasa: dış yüz we kadar wall'a gömülü + yükseklik parapet/lentoya bindirir
+      // P2 (DÜŞEY BANT FIX): J3'ün we=0.02 alt-bindirmesi Q6 zemin-gömme (-0.02) ile TAM KANSELLENİYORDU →
+      //   parapet TEPESİ sill-0.02'ye düşünce alt kayıt tabanı (sill-we=sill-0.02) ile SIFIR ÖRTÜŞME → bıçak-sırtı
+      //   dikişte SİYAH bant (alt) + lento ile üst kayıt arasında bej/duvar bandı (grazing açı). Fix: düşey bindirmeyi
+      //   AYRI ve BÜYÜK tut (wd=0.08 > Q6 ofseti 0.02) → alt kayıt parapetin SOLİD gövdesine, üst kayıt lentonun
+      //   solid gövdesine gerçekten girer. Kutu derinliği ft tüm duvarı sardığı için düşey uzatma yalnız solid
+      //   duvarla örtüşür (görsel zarar yok). Tam-boy pencerede (parapet yok) alt uzatma zemine iner → clamp 0.
+      var wd=0.08;                                        // düşey bindirme (kasa ↔ parapet/lento SOLID buluşma; Q6 -0.02'yi güvenle aşar)
+      var botExtend=full?Math.min(wd,Math.max(0,sill)):wd;      // tam-boyda parapet yok → zemin altına inme (clamp)
+      var jGh=gh+wd+botExtend;                             // yan kayıt yüksekliği: altta botExtend + üstte wd bindirme
+      var jCy=sill+gh/2+(wd-botExtend)/2;                  // yan kayıt merkezi (asimetrik bindirme → merkez kayar)
+      // alt kayıt: TEPESİ cam altına (sill+fr) hizalı, TABANI sill-botExtend (parapet solidine gömülü) → siyah bant kapanır
+      var botH=fr+botExtend, botCy=(sill+fr+(sill-botExtend))/2;
+      var botRail=new THREE.Mesh(new THREE.BoxGeometry(gw+2*we,botH,ft),matFrame); botRail.position.set(0,botCy,0); grp.add(botRail);
+      // üst kayıt: TABANI cam üstüne (top-fr) hizalı, TEPESİ top+wd (lento solidine gömülü) → bej bant kapanır
+      var topH=fr+wd, topCy=((top-fr)+(top+wd))/2;
+      var topRail=new THREE.Mesh(new THREE.BoxGeometry(gw+2*we,topH,ft),matFrame); topRail.position.set(0,topCy,0); grp.add(topRail);
+      [-1,1].forEach(function(sgn){ var m=new THREE.Mesh(new THREE.BoxGeometry(fr+we,jGh,ft),matFrame); m.position.set(sgn*(gw/2-fr/2+we/2),jCy,0); grp.add(m); });   // iki yan kasa: dış yüz we kadar wall'a gömülü + yükseklik parapet/lentoya (wd/botExtend) bindirir
       // orta dikme(ler): dikey ince profil(ler) — çift/üçlü kanat görünümü (tam-boyda da devam)
       for(var mi=1;mi<=mull;mi++){ var mxp=-gw/2+mi*(gw/(mull+1));
         var dm=new THREE.Mesh(new THREE.BoxGeometry(fr,gh,ft),matFrame); dm.position.set(mxp,sill+gh/2,0); grp.add(dm); }
@@ -1648,7 +1744,10 @@
   //   (mevcut activeGroup renderDrawer ile geri gelir); burada sadece anlık gizleriz.
   function hideChromeForWalk(hide){
     if(!overlay) return;
-    ['#v3dDock','#v3dCamDock','#v3dFurnDock','#v3dMatDock','#v3dFurnBar','#v3dPip','#v3dCompareThumb','#v3dLockBtn','#v3dZoomBar','#v3dStatus','#v3dOrb']
+    // P3: FPV'ye girişte TÜM yüzen çubuklar gizlenir — #v3dCamBar EKSİKTİ (mobilya bar'ı gizli, kamera bar'ı
+    //   ekranın ortasında asılı kalıyordu; loop walk dalında erken return → updateCamBar çağrılmaz, display
+    //   son karedeki 'flex' takılı). Çıkışta visibility:'' → sonraki karede update* döngüsü doğru display'i kurar.
+    ['#v3dDock','#v3dCamDock','#v3dFurnDock','#v3dMatDock','#v3dFurnBar','#v3dCamBar','#v3dPip','#v3dCompareThumb','#v3dLockBtn','#v3dZoomBar','#v3dStatus','#v3dOrb','#v3dPegman']
       .forEach(function(sel){ const e=overlay.querySelector(sel); if(e) e.style.visibility=hide?'hidden':''; });
   }
   function walkIsCoarse(){
@@ -1658,6 +1757,55 @@
   // W1: gezinti başlangıç noktası — bina İÇİNDE mantıklı bir yer (yoksa orbit kamerası dışarıda/yukarıda
   //   kalır → siyah kadraj). Tercih: apartman holü / antre / en büyük ortak alan / merkeze en yakın oda.
   //   Dönüş: {x,z} DÜNYA uzayında (grup -cx,-cz ofsetli → oda px2m'den -cx,-cz çıkarılır). Yoksa null.
+  // W1/PEGMAN: spawn (wx,wz) DÜNYA uzayında bir mobilya AYAK-İZİNİN İÇİNE düşerse (görüş bloke), oda içinde
+  //   halka-tarama ile (artan yarıçap, 8 yön) mobilyasız en yakın açık noktaya kaydır. roomPolyM = oda
+  //   poligonu MODEL-metre uzayında (taşmayı sınırlar; null → sınırsız). Dönüş: kaydırılmış {x,z} (DÜNYA).
+  function spawnInFurnAt(mx,mz){                              // ayak-izi kontrolü MODEL uzayında (fp mutlak metre)
+    for(let i=0;i<furnList.length;i++){ const f=furnList[i]; if(!f||!f.pos) continue;
+      if(COLLISION_EXEMPT[f.type]) continue;                   // halı vb. → geçilir, sorun değil
+      let fp=f.__fp;
+      if(!fp){ const dm=FURN_DIM[f.type]||{w:0.5,d:0.5}, fw=(f.__w!=null?f.__w:dm.w), fd=(f.__d!=null?f.__d:dm.d);
+        fp=furnFootprintM(f.pos.x,f.pos.z,f.rot_deg||0,fw,fd); }
+      if(pointNearPoly(mx,mz,fp,WALK_BUFFER)) return true;
+    }
+    return false;
+  }
+  function nudgeSpawnOffFurniture(wx,wz,roomPolyM){
+    const cx=scene.__cx||0, cz=scene.__cz||0;
+    if(!spawnInFurnAt(wx+cx,wz+cz)) return {x:wx,z:wz};        // zaten açık
+    for(let ri=1;ri<=6;ri++){ const rad=ri*0.6;               // 0.6..3.6m halka
+      for(let k=0;k<8;k++){ const yaw=k*Math.PI/4;
+        const nx=wx+Math.sin(yaw)*rad, nz=wz-Math.cos(yaw)*rad;
+        if(spawnInFurnAt(nx+cx,nz+cz)) continue;               // yine mobilya içi → atla
+        if(roomPolyM && !pointInPolyM(nx+cx,nz+cz,roomPolyM)) continue;  // oda dışına taşma (model-metre)
+        return {x:nx,z:nz};
+      }
+    }
+    return {x:wx,z:wz};                                        // bulamadı → anchor'da bırak (geriye-uyum)
+  }
+  // W1/PEGMAN: (wx,wz)'den EN AÇIK GÖRÜŞ yönünü seç (8 yön collider probe + ikili arama). fallbackRoom verilirse
+  //   collider ölçülemediğinde oda içinde en uzak köşeye bakar. Dönüş: yaw (rad) ya da null.
+  function bestOpenViewYaw(wx,wz,fallbackRoom){
+    const cx=scene.__cx||0, cz=scene.__cz||0, map=scene&&scene.__map;
+    const MIN_OPEN=2.0, PROBE_DIST=6.0;
+    let bestYaw=null, bestOpen=-1;
+    for(let k=0;k<8;k++){ const yaw=k*Math.PI/4;
+      const dx=Math.sin(yaw), dz=-Math.cos(yaw);                          // walkStep ile aynı yaw→yön eşlemesi
+      let lo=0, hi=PROBE_DIST;
+      if(!walkAxisClear(wx,wz,dx,dz,hi)){                                  // tam mesafe açık değilse ikili aramayla sınırı bul
+        for(let it=0;it<6;it++){ const mid=(lo+hi)/2; if(walkAxisClear(wx,wz,dx,dz,mid)) lo=mid; else hi=mid; }
+      } else lo=hi;
+      if(lo>bestOpen){ bestOpen=lo; bestYaw=yaw; }
+    }
+    if(bestYaw!=null && bestOpen>0) return bestYaw;                       // en açık yön (2m'yi bulamasa da en iyisi)
+    void MIN_OPEN;
+    if(fallbackRoom && fallbackRoom.polygon_px && map){                   // collider ölçülemedi → en uzak köşeye bak
+      let far=null,fd=-1;
+      fallbackRoom.polygon_px.forEach(function(p){ const pm=px2m(map,p[0],p[1]); const dx=pm[0]-cx-wx, dz=pm[1]-cz-wz; const d=dx*dx+dz*dz; if(d>fd){ fd=d; far=[dx,dz]; } });
+      if(far){ const L=Math.hypot(far[0],far[1])||1; return Math.atan2(far[0]/L, -far[1]/L); }
+    }
+    return null;
+  }
   function walkSpawnPoint(){
     const map=scene&&scene.__map; if(!map) return null;
     const cx=scene.__cx||0, cz=scene.__cz||0;
@@ -1674,60 +1822,35 @@
     const la=best.label_anchor_px||best.centroid_px; if(!la) return null;
     const m=px2m(map,la[0],la[1]);
     let wx=m[0]-cx, wz=m[1]-cz;
-    // F1 (SUNUM-2A): mobilya artık pass-through → spawn noktası bir mobilya AYAK-İZİNİN İÇİNE düşerse
-    //   kullanıcı mobilyanın gövdesi içinde doğar (görüş bloke). Ayak-izi içindeyse spawn'ı oda içinde
-    //   halka-tarama ile (artan yarıçap, 8 yön) mobilyasız en yakın açık noktaya kaydır. Poligon içinde
-    //   kalmaya çalışır; bulamazsa anchor'da bırakır (geriye-uyum, en kötü halde eski davranış).
-    function spawnInFurn(mx,mz){
-      for(let i=0;i<furnList.length;i++){ const f=furnList[i]; if(!f||!f.pos) continue;
-        if(COLLISION_EXEMPT[f.type]) continue;                 // halı vb. → geçilir, sorun değil
-        let fp=f.__fp;
-        if(!fp){ const dm=FURN_DIM[f.type]||{w:0.5,d:0.5}, fw=(f.__w!=null?f.__w:dm.w), fd=(f.__d!=null?f.__d:dm.d);
-          fp=furnFootprintM(f.pos.x,f.pos.z,f.rot_deg||0,fw,fd); }
-        if(pointNearPoly(mx,mz,fp,WALK_BUFFER)) return true;
-      }
-      return false;
-    }
-    if(spawnInFurn(wx+cx,wz+cz)){                              // ayak-izi kontrolü MODEL uzayında (fp mutlak metre)
-      // oda poligonunu MODEL-metre uzayına çevir (pointInPolyM ile aynı uzay: mutlak metre)
-      const rpM=(best.polygon_px&&best.polygon_px.length>=3)
-        ? best.polygon_px.map(function(p){ return px2m(map,p[0],p[1]); }) : null;
-      let found=false;
-      for(let ri=1;ri<=6 && !found;ri++){ const rad=ri*0.6;   // 0.6..3.6m halka
-        for(let k=0;k<8 && !found;k++){ const yaw=k*Math.PI/4;
-          const nx=wx+Math.sin(yaw)*rad, nz=wz-Math.cos(yaw)*rad;
-          if(spawnInFurn(nx+cx,nz+cz)) continue;               // yine mobilya içi → atla
-          if(rpM && !pointInPolyM(nx+cx,nz+cz,rpM)) continue;  // oda dışına taşma (model-metre)
-          wx=nx; wz=nz; found=true;
-        }
-      }
-    }
-    // Demo-sweep pürüz (a): giriş karesi bazen duvara/dolaba burun mesafesinde açılıyordu (tek-köşe hedefi
-    //   yakın bir mobilyanın arkasında kalabiliyor). 8 yönde (45° adım) collider raycast at, en az ~2m açık
-    //   görüşü olan yönü seç (birden fazla varsa EN GENİŞİ); hiçbiri 2m'yi bulamazsa en açık olanı yine de al
-    //   (dar odada da bir yöne bakmak gerekir). walkAxisClear henüz collider kuramadıysa (sahne hazır değil)
-    //   eski "en uzak köşeye bak" yöntemine düş (geriye-uyum, ölçülemezken siyah kadraja düşmeyi önler).
-    const MIN_OPEN=2.0, PROBE_DIST=6.0;
-    let bestYaw=null, bestOpen=-1;
-    for(let k=0;k<8;k++){ const yaw=k*Math.PI/4;
-      const dx=Math.sin(yaw), dz=-Math.cos(yaw);                          // walkStep ile aynı yaw→yön eşlemesi
-      // ikili arama: PROBE_DIST'e kadar en uzak açık mesafeyi bul (walkAxisClear(dist) net/false döner, mesafe vermiyor)
-      let lo=0, hi=PROBE_DIST;
-      if(!walkAxisClear(wx,wz,dx,dz,hi)){                                  // tam mesafe açık değilse ikili aramayla sınırı bul
-        for(let it=0;it<6;it++){ const mid=(lo+hi)/2; if(walkAxisClear(wx,wz,dx,dz,mid)) lo=mid; else hi=mid; }
-      } else lo=hi;
-      if(lo>bestOpen){ bestOpen=lo; bestYaw=yaw; }
-    }
-    if(bestYaw!=null && bestOpen>=MIN_OPEN) return {x:wx,z:wz,room:best,yaw:bestYaw};
-    if(bestYaw!=null && bestOpen>0) return {x:wx,z:wz,room:best,yaw:bestYaw};   // hiçbiri 2m değil → yine de en açığı seç
-    // yedek: collider ölçülemedi → oda içinde en uzun eksene (en uzak köşeye) bak
-    let far=null,fd=-1;
-    best.polygon_px.forEach(function(p){ const pm=px2m(map,p[0],p[1]); const dx=pm[0]-cx-wx, dz=pm[1]-cz-wz; const d=dx*dx+dz*dz; if(d>fd){ fd=d; far=[dx,dz]; } });
-    let aimYaw=null;
-    if(far){ const L=Math.hypot(far[0],far[1])||1; aimYaw=Math.atan2(far[0]/L, -far[1]/L); }
+    // F1 (SUNUM-2A): mobilya artık pass-through → spawn noktası mobilya ayak-izinde ise oda içinde kaydır.
+    const rpM=(best.polygon_px&&best.polygon_px.length>=3)
+      ? best.polygon_px.map(function(p){ return px2m(map,p[0],p[1]); }) : null;
+    const nud=nudgeSpawnOffFurniture(wx,wz,rpM); wx=nud.x; wz=nud.z;
+    const aimYaw=bestOpenViewYaw(wx,wz,best);
     return {x:wx,z:wz,room:best,yaw:aimYaw};
   }
-  function toggleWalk(){
+  // PEGMAN: verilen DÜNYA noktasından (kullanıcı bıraktığı yer) gezinti başlangıcı türet. Mobilyadan kaydır +
+  //   bırakılan noktadan en açık görüş yönünü seç. Nokta oda içinde varsayılır (drop öncesi doğrulanır).
+  function walkSpawnAt(wx,wz){
+    const map=scene&&scene.__map; if(!map) return null;
+    const cx=scene.__cx||0, cz=scene.__cz||0;
+    const rid=roomIdAtPoint({x:wx,z:wz});                      // kaydırmayı bu odayla sınırla (varsa)
+    const room=rid?furnRoomById(rid):null;
+    const rpM=(room&&room.polygon_px&&room.polygon_px.length>=3)
+      ? room.polygon_px.map(function(p){ return px2m(map,p[0],p[1]); }) : null;
+    const nud=nudgeSpawnOffFurniture(wx,wz,rpM); const sx=nud.x, sz=nud.z;
+    const yaw=bestOpenViewYaw(sx,sz,room);
+    void cx; void cz;
+    return {x:sx,z:sz,room:room,yaw:yaw};
+  }
+  // PEGMAN: DÜNYA noktası gezinti için geçerli mi? — bir odanın İÇİNDE + çekirdek/depo DEĞİL.
+  function pegmanValidAt(wx,wz){
+    const rid=roomIdAtPoint({x:wx,z:wz}); if(!rid) return false;
+    const room=furnRoomById(rid); if(!room) return false;
+    if(/MERDİVEN|MERDIVEN|ASANSÖR|ASANSOR|ŞAFT|SAFT|DEPO/i.test(room.name||'')) return false;
+    return true;
+  }
+  function toggleWalk(startPoint){
     if(walkOn){ exitWalk(); return; }
     // W3 (dokunmatik): coarse-pointer'da pointer-lock + fare-bak yok → giriş yerine ipucu (mobil joystick SONRA)
     if(walkIsCoarse() || typeof (renderer&&renderer.domElement.requestPointerLock)!=='function'){
@@ -1735,9 +1858,11 @@
       const st=overlay&&overlay.querySelector('#v3dStatus'); if(st){ st.textContent='Gezinti masaüstünde kullanılabilir (klavye + fare)'; st.style.display='block'; }
       return;
     }
-    enterWalk();
+    enterWalk(startPoint);   // PEGMAN: startPoint verilirse o noktada başlar (yoksa varsayılan spawn)
   }
-  function enterWalk(){
+  // PEGMAN: startPoint={x,z} (DÜNYA) verilirse gezinti O NOKTADA başlar (Street View pegman bırakma). Parametresiz
+  //   çağrı (Gezinti butonu) ESKİ davranış — walkSpawnPoint ile en geniş odaya ışınlanır. İmza geriye-uyumlu.
+  function enterWalk(startPoint){
     if(walkOn || !cam || !controls || !renderer) return;
     if(compareMode){ /* akış içi: yine izin ver, ama açı-uyarısı gezinti sırasında saçmalar → gizle */ }
     walkSavedView=getView();
@@ -1748,9 +1873,13 @@
     walkYaw=Math.atan2(dir.x, -dir.z);                       // 0 = -Z'ye bakış
     walkPitch=0;                                             // göz hizası → düz karşıya bak (yukarı/aşağı fareyle)
     // bina İÇİNE ışınlan: orbit kamerası dışarıda/yukarıda → göz hizasına düşünce siyah kalırdı
-    const sp=walkSpawnPoint();
-    if(sp){ cam.position.set(sp.x, WALK_EYE, sp.z); if(sp.yaw!=null) walkYaw=sp.yaw; }   // en geniş odaya, açık görüş hattına bak
+    const sp=(startPoint && startPoint.x!=null && startPoint.z!=null)
+      ? walkSpawnAt(startPoint.x, startPoint.z)               // PEGMAN: bırakılan noktadan başla
+      : walkSpawnPoint();                                     // Gezinti butonu: en geniş oda (eski davranış)
+    if(sp){ cam.position.set(sp.x, WALK_EYE, sp.z); if(sp.yaw!=null) walkYaw=sp.yaw; }   // açık görüş hattına bak
+    else if(startPoint && startPoint.x!=null){ cam.position.set(startPoint.x, WALK_EYE, startPoint.z); }
     else { cam.position.y=WALK_EYE; }
+    if(startPoint) console.log('[view3d walk] spawn', [+cam.position.x.toFixed(2), +cam.position.z.toFixed(2)], 'yaw', +walkYaw.toFixed(2), '(pegman drop', [+startPoint.x.toFixed(2), +startPoint.z.toFixed(2)], ')');
     // chrome: tavan+çatı aç (iç mekan), etiket/gizmo/dock/koni gizle (snapCameraDataURL deseni)
     walkRoofSav=roofOn; walkGizSav=camGizmos?camGizmos.visible:true;
     const labels=scene&&scene.__labels; walkLblSav=labels?labels.visible:true;
