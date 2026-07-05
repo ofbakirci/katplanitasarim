@@ -195,7 +195,61 @@ const bathDoorOK = run(`(function(){
 })()`);
 ok(bathDoorOK === 0, 'küçük banyo: duş dahil hiçbir parça kapı geçişini kapatmamalı (W2), ihlal: ' + bathDoorOK);
 
+/* --- R2 (PENCERE-MODUL): BALKON CAM KAPISI ÖNÜ de boş kalmalı ---
+   Kök neden: furnDoorBlocked/furnAnalyzeRoom doorSpans yalnız map.doors[]'u tanıyordu; balkon cam kapısı
+   doors[]'ta YOK (map.balconies[].door_span_px'ten türer) → yerleştirici o açıklığı kapı saymıyordu →
+   (1) bağlı odada bistro/koltuk kapı önüne, (2) balkon tarafında set kapının hemen önüne konabiliyordu.
+   Fix: furnAnalyzeRoom balkon door_span_px'i doorsM'e katıyor → İKİ oda için de doorSpans üretilir.
+   Bu case: 20×12 apartman + alt cepheye balkon → oto-döşe sonrası HEM bağlı oda HEM sentetik balkon
+   odasında balkon kapı-önü DOOR_PASS derinliğince boş (furnDoorBlocked ikizi projeksiyonla denetlenir). */
+run(`
+  pts = [{x:0,y:0},{x:20,y:0},{x:20,y:12},{x:0,y:12}]; closed = true;
+  unitSpecs = [{oda:2,salon:1,ensuite:true,acik:false,adet:1}];
+  customCutsZ = null; unitLayout = {}; balconies = [];
+  doorOverrides = {}; extraDoors = []; doorHidden = {}; editHistory = [];
+  generate();
+  balconies = [{ ei:0, t0:6, t1:10, depth:1.5 }];
+  __BMAP = buildFloorplanMap();
+  __BROWS = window.View3D.furnishMapForTest(__BMAP);
+`);
+const balcCount = run(`(__BMAP.balconies||[]).length`);
+const balcHasSpan = run(`!!(__BMAP.balconies&&__BMAP.balconies[0]&&__BMAP.balconies[0].door_span_px&&__BMAP.balconies[0].door_span_px.length===2)`);
+ok(balcCount === 1, 'balkon senaryosu 1 balkon üretmeli, üretilen: ' + balcCount);
+ok(balcHasSpan, 'balkon kaydı door_span_px içermeli (io.js export)');
+
+// balkon kapı span'ı METRE — bağlı odanın VE sentetik balkon odasının edge'lerinde doorSpan olarak görünmeli
+const balcSpanSeen = run(`(function(){
+  var seen=0, rooms=[];
+  __BROWS.forEach(function(r){ rooms.push(r.room); });
+  window.View3D.balconyRoomsForTest().forEach(function(){});   // balkon odalarını cache'le
+  // bağlı oda + balkon odası: analyzeRoomForTest edge doorSpans'ında balkon açıklığı var mı
+  var all = [];
+  __BROWS.forEach(function(r){ all.push(r.room); });
+  all.forEach(function(room){
+    var an = window.View3D.analyzeRoomForTest(room, __BMAP); if(!an) return;
+    an.edges.forEach(function(e){ if(e.doorSpans && e.doorSpans.length) seen += e.doorSpans.length; });
+  });
+  return seen;
+})()`);
+ok(balcSpanSeen > 0, 'balkon dahil edge doorSpans üretilmeli (>0), üretilen: ' + balcSpanSeen);
+
+// oto-döşe: HİÇBİR parça (bağlı oda + balkon odası) balkon kapı-önü geçiş koridorunu kapatmamalı
+const balcDoorViol = run(`(function(){
+  var viol=0;
+  __BROWS.forEach(function(row){
+    var an=window.View3D.analyzeRoomForTest(row.room, __BMAP); if(!an) return;
+    row.furniture.forEach(function(f){ if(f.__exempt||!f.__fp) return;
+      an.edges.forEach(function(e){ var tMin=1e9,tMax=-1e9,perpMin=1e9;
+        f.__fp.forEach(function(p){ var dx=p[0]-e.a[0],dz=p[1]-e.a[1]; var t=dx*e.dir[0]+dz*e.dir[1], pp=Math.abs(dx*(-e.dir[1])+dz*e.dir[0]);
+          if(t<tMin)tMin=t; if(t>tMax)tMax=t; if(pp<perpMin)perpMin=pp; });
+        (e.doorSpans||[]).forEach(function(ds){ if(perpMin<=1.20 && tMax>ds[0]-0.35 && tMin<ds[1]+0.35) viol++; }); }); });
+  });
+  return viol;
+})()`);
+ok(balcDoorViol === 0, 'R2: hiçbir mobilya balkon kapısı dahil kapı geçişini kapatmamalı (ihlal: ' + balcDoorViol + ')');
+
 console.log('');
+console.log('  R2 balkon-kapı önü: balkon=' + balcCount + ' · edge-doorSpan=' + balcSpanSeen + ' · ihlal=' + balcDoorViol);
 console.log('  F6 etiketli hol/antre: darHOL→' + narrowHolN + ' · darANTRE→' + narrowAntreN + ' · genişHOL→' + wideHolN);
 console.log('  F5 küçük banyo (1,7×2,2): ' + JSON.stringify(bathFurn.types) + ' · kapı-ihlal ' + bathDoorOK);
 console.log('  kapı-önü denetim: ' + audit.doorChk + ' · ihlal ' + audit.doorViol);

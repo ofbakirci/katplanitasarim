@@ -1140,28 +1140,27 @@
       var top=Math.min(WALL_H, isFull?WALL_H:(params.top!=null?params.top:sill+1.4));  // lento alt yüzü
       var hasParapet=(!isFull && sill>0.04);
       var hasLintel=(WALL_H-top>0.04);
-      var fr=0.06;                                         // ince PVC profil kalınlığı (kanat/kasa)
-      var ft=Math.max(0.16,WALL_T+2*WIN_EPS);              // profil derinliği: WALL_T'yi WIN_EPS payıyla sarar (her açıdan okunur)
+      var fr=0.065;                                        // GÖRÜNÜR PVC profil kalınlığı — 4 kenarda EŞİT (TR PVC ~6-7cm)
+      // R2 (gizli gömme): KASA DERİNLİĞİ = WALL_T (duvar YÜZÜYLE FLUŞ, öne/arkaya TAŞMAZ). R1'de ft=WALL_T+2*WIN_EPS
+      //   idi → kasa iç yüze WIN_EPS ÇIKINTI yapıyordu; FPV/kamera açısında duvar yüzünün önünde "iç içe geçmiş"
+      //   algı + SEAL uzantıları o çıkıntı derinliğinde GÖRÜNÜR taşma (alt bandın kalınlığı, üst köşe çıkıntıları).
+      //   Fluş kasa (ft=WALL_T) hiçbir açıdan taşmaz; sızdırmazlık artık GİZLİ gömme ile (aşağı bak).
+      var ft=WALL_T;                                        // görünür kasa derinliği = duvar kalınlığı (fluş)
+      var ftSeal=Math.max(0.04,WALL_T-2*WIN_EPS);          // GİZLİ sızdırmazlık derinliği: İKİ yüzden de WIN_EPS içeride → dolgu onu sarar, hiç görünmez ama bakış hattını keser
       var EMB=-WIN_EPS;                                     // zemin-gömme (Q6): parapet/kasa tabanı zemine WIN_EPS gömülü → ışık sızıntısı yok
-      // --- 1) OPAK DOLGULAR (parapet altı + lento üstü) — TAM WALL_T, MERKEZDE (B1 dersi: yarım-kalınlık DIŞ
-      //     yarıyı boş bırakıyordu → pencere altında grazing siyah bant). Parapet TEPESİ sill'i WIN_EPS AŞAR
-      //     → oyuğun alt kotu sill'e kadar SOLİD dolar, kasa alt kaydı bu solide gömülür (S1 dersi: üç-yüzey
-      //     aynı-kot buluşması yok). Zemin-gömme (EMB) parapet TEPESİNİ ETKİLEMEZ (tepe = sill+WIN_EPS sabit).
-      // Parapet/lento dolgu DERİNLİĞİ = kasa derinliği (ft), tam-WALL_T DEĞİL. Kök neden (pencere-altı "boşluk"):
-      //   kasa ft (WALL_T+2*WIN_EPS) iç-cepheye WIN_EPS taşar; parapet yalnız WALL_T kalırsa iç yüzü kasadan
-      //   WIN_EPS GERİDE kalır → kasa alt kaydının iç-alt kenarı bir SAÇAK yapar, altında parapetin geri-çekik
-      //   yüzüne bakış hattı OYUĞA (siyah 23,21,18) çıkar = pencere altındaki ince siyah slit. Parapet/lento
-      //   derinliğini ft yapınca iç yüzler KASAYLA FLUŞ → saçak/geri-çekiklik yok, delik kapanır. ft>WALL_T zararsız
-      //   (pencere daima dış cephede; komşu yarı yok, dışa taşma dış duvarda görünmez, denizlik zaten dışta).
-      var fillT=Math.max(WALL_T,ft);
+      // --- 1) OPAK DOLGULAR (parapet altı + lento üstü) — TAM WALL_T, MERKEZDE, iki yüzü de duvarla FLUŞ.
+      //     Parapet TEPESİ sill'i WIN_EPS AŞAR → oyuğun alt kotu sill'e kadar SOLİD dolar. Kasa alt kaydının GİZLİ
+      //     sızdırmazlık dili (ftSeal, iki yüzden WIN_EPS içeride) bu SOLİD dolgunun İÇİNE gömülür → dolgu onu her
+      //     yüzden sarar, hiçbir açıdan görünmez; bakış hattı oyuğa (siyah 23,21,18) düşemez.
+      var fillT=WALL_T;                                     // dolgu = tam duvar kalınlığı, fluş (kasayla aynı düzlem)
       if(hasParapet){
-        var pTop=sill+WIN_EPS, pBot=EMB, pH=pTop-pBot;     // taban gömülü, tepe sill'i WIN_EPS aşar
+        var pTop=sill+WIN_EPS, pBot=EMB, pH=pTop-pBot;     // taban gömülü, tepe sill'i WIN_EPS aşar (glass altını örtmez)
         var pw=new THREE.Mesh(new THREE.BoxGeometry(gw,pH,fillT),wallMat);
         pw.position.set(mx,(roofOn?pH/2:pH/2*WALL_LOW)+pBot,mz); pw.rotation.y=ang;
         pw.scale.y=roofOn?1:WALL_LOW; pw.castShadow=true; pw.userData.isWin=true; walls.add(pw);
       }
       if(hasLintel){
-        var lBot=top-WIN_EPS, lH=WALL_H-lBot, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lH,fillT),wallMat);  // taban lento-altını WIN_EPS aşağı iner → kasa üst kaydı gömülür
+        var lBot=top-WIN_EPS, lH=WALL_H-lBot, lw=new THREE.Mesh(new THREE.BoxGeometry(gw,lH,fillT),wallMat);  // taban lento-altını WIN_EPS aşağı iner → kasa üst kaydı GİZLİ dili gömülür
         lw.position.set(mx,lBot+lH/2,mz); lw.rotation.y=ang; lw.scale.y=roofOn?1:WALL_LOW;
         lw.castShadow=true; lw.userData.isLeaf=true; lintels.add(lw);   // isLeaf: applyRoof lentoları duvarla aynı oranda ölçekler; lintels grubu roofOn'da görünür
       }
@@ -1176,25 +1175,42 @@
         var gl=new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.05,cellW),Math.max(0.1,gh-2*fr),0.03),matGlass);
         gl.position.set(gx,glassBot+gh/2,0); grp.add(gl);
       }
-      // KASA — 4 kayıt. KASA daima FRONTMOST yüzey (ft>fillT, iç-cepheye WIN_EPS çıkıntı). Çıkıntı, dolgu
-      //   (parapet/lento) ile buluşma HATTINDA bir SAÇAK yapar; saçağın altına/üstüne DÜZ ya da grazing bakışta
-      //   ışın oyuğa (siyah 23,21,18) girer = "pencere altları bir garip, boşluk". ÇÖZÜM: kasa alt/üst kaydını
-      //   dolgunun İÇİNE SEAL kadar UZAT (WIN_EPS değil — çıkıntının izdüşüm-erişimini güvenle aşan pay) → frontmost
-      //   kasa, saçak+junction'ı KAPATIR. PIKSEL KANITI: SEAL=WIN_EPS → düz bakışta 7px/sütun kalıntı; SEAL=3*WIN_EPS
-      //   → 0px (düz+grazing+aşağı hepsinde). Dolgunun içine gömülü kısım görünmez (kasa arkası duvar).
-      var SEAL=3*WIN_EPS;   // kasa↔dolgu SOLID buluşma payı (çıkıntı-saçağını örter; delik kapalı kalır)
-      //   ALT KAYIT: tabanı parapet solidine SEAL gömülü (tam-boyda zemine WIN_EPS); tepesi cam-altını (glassBot+fr) WIN_EPS aşar.
-      var botBase=isFull?Math.max(EMB,glassBot-WIN_EPS):(sill-SEAL);
-      var botTop=glassBot+fr+WIN_EPS, botH=botTop-botBase, botCy=(botTop+botBase)/2;
-      grp.add(posBox(new THREE.BoxGeometry(gw+2*WIN_EPS,botH,ft),matFrame,0,botCy,0));   // genişlik yan-söveye WIN_EPS taşar
-      //   ÜST KAYIT: tabanı cam-üstü (glassTop-fr); tepesi lento solidine SEAL gömülü → lento saçak-bandı kapanır.
-      var topBase=glassTop-fr, topTop=Math.min(WALL_H,top+SEAL), topH=topTop-topBase, topCy=(topTop+topBase)/2;
-      grp.add(posBox(new THREE.BoxGeometry(gw+2*WIN_EPS,topH,ft),matFrame,0,topCy,0));
-      //   YAN KAYIT (jamb) ×2: düşeyde alt-kayıt tabanından üst-kayıt tepesine (dört köşe bindirmeli); dış yüzü
-      //     yan wall-segmentine WIN_EPS gömülü (F3: yan birleşmede ne cam ne kasa ne duvar bandı kalmasın).
-      var jBot=botBase, jTop=topTop, jH=jTop-jBot, jCy=(jTop+jBot)/2;
-      [-1,1].forEach(function(sgn){ grp.add(posBox(new THREE.BoxGeometry(fr+WIN_EPS,jH,ft),matFrame,sgn*(gw/2-fr/2+WIN_EPS/2),jCy,0)); });
-      // orta dikme(ler): dikey ince profil(ler) — çift/üçlü kanat görünümü (tam-boyda da devam)
+      // KASA — 4 kayıt. R2 GİZLİ GÖMME: her kayıt İKİ parçadan oluşur:
+      //   (A) GÖRÜNÜR profil: oyuğun İÇİNDE, cam ile dolgu arasında, tam olarak `fr` kalın (4 kenarda EŞİT),
+      //       derinliği ft=WALL_T (duvar yüzüyle fluş, öne/arkaya TAŞMAZ). Bu tek başına, dolgu ile arasında
+      //       bıçak-sırtı (aynı-kot) buluşma bırakır → o dikişten oyuğa ince bakış hattı açılabilir.
+      //   (B) GİZLİ sızdırmazlık dili: aynı profilden dolgunun İÇİNE SEAL kadar uzanır AMA derinliği ftSeal
+      //       (=WALL_T-2*WIN_EPS) → iki yüzden de WIN_EPS içeride. Dolgu (tam WALL_T) onu HER yüzden sarar →
+      //       hiçbir açıdan görünmez, ama dikişi katı doldurur (bakış hattını keser). Görünür taşma YOK.
+      //   R1'de tek parça ft>WALL_T + SEAL öne taşıyordu → alt bant kalın, üst köşe çıkıntıları, duvar önü işgali.
+      var SEAL=2*WIN_EPS;   // GİZLİ dilin dolguya gömülme derinliği (görünmez, dikişi katı doldurur)
+      // yardımcı: görünür profil (fr kalın, ft derin, fluş) + gizli sızdırmazlık dili (ftSeal derin, dolguya gömülü)
+      function addFrameBand(w,cy,visH,sealBelow,sealAbove){
+        grp.add(posBox(new THREE.BoxGeometry(w,visH,ft),matFrame,0,cy,0));                 // (A) görünür — 4 kenarda eşit ince
+        if(sealBelow>0){ var b=cy-visH/2; grp.add(posBox(new THREE.BoxGeometry(w,sealBelow+WIN_EPS,ftSeal),matFrame,0,b-(sealBelow-WIN_EPS)/2,0)); }
+        if(sealAbove>0){ var t2=cy+visH/2; grp.add(posBox(new THREE.BoxGeometry(w,sealAbove+WIN_EPS,ftSeal),matFrame,0,t2+(sealAbove-WIN_EPS)/2,0)); }
+      }
+      //   ALT KAYIT: GÖRÜNÜR bandı sill (parapet üstü) ile cam-altı (glassBot+fr) arası — kalınlığı `fr`. GİZLİ dil
+      //     aşağı parapet solidine SEAL gömülü (tam-boyda zemine). Tam-boyda parapet yok → görünür bandı camdan fr aşağı.
+      //   Görünür bant tabanı sill'in fr KADAR ALTINA iner (parapet solidine gömülü, iç sill-tahtası okunur) → alt
+      //   kenarı katı içinde biter; sill kotundaki ince bakış-hattı çizgisi (parapet-tepesi ↔ kasa dikişi) KAPANIR.
+      var botVisBot=isFull?Math.max(EMB,glassBot-fr):(sill-fr), botVisTop=glassBot+fr;
+      var botVisH=Math.max(0.02,botVisTop-botVisBot), botCy=(botVisTop+botVisBot)/2;
+      addFrameBand(gw, botCy, botVisH, isFull?0:SEAL, 0);
+      //   ÜST KAYIT: GÖRÜNÜR bandı cam-üstü (glassTop-fr) ile top (lento altı) arası — kalınlığı `fr`. GİZLİ dil
+      //     yukarı lento solidine SEAL gömülü → lento dikiş-bandı kapanır.
+      var topVisBot=glassTop-fr, topVisTop=Math.min(WALL_H,top);
+      var topVisH=Math.max(0.02,topVisTop-topVisBot), topCy=(topVisTop+topVisBot)/2;
+      addFrameBand(gw, topCy, topVisH, 0, hasLintel?SEAL:0);
+      //   YAN KAYIT (jamb) ×2: GÖRÜNÜR düşey profil oyuk içinde (glassBot..glassTop), kalınlığı `fr`; dış yüzü oyuk
+      //     kenarında (gw/2-fr/2) → duvar-söve ile fluş, taşmaz. GİZLİ dil yana ftSeal derinlikte, yan duvar-
+      //     segmentine SEAL gömülü (F3: yan birleşmede boşluk kalmasın), iki yüzden içeride → görünmez.
+      var jH=Math.max(0.02,topVisTop-botVisBot), jCy=(topVisTop+botVisBot)/2;
+      [-1,1].forEach(function(sgn){
+        grp.add(posBox(new THREE.BoxGeometry(fr,jH,ft),matFrame,sgn*(gw/2-fr/2),jCy,0));                      // (A) görünür — oyuk kenarında, fluş
+        grp.add(posBox(new THREE.BoxGeometry(SEAL+WIN_EPS,jH,ftSeal),matFrame,sgn*(gw/2+(SEAL-WIN_EPS)/2),jCy,0)); // (B) gizli dil — yan duvara gömülü, iki yüzden içeride
+      });
+      // orta dikme(ler): dikey ince profil(ler) — çift/üçlü kanat görünümü (tam-boyda da devam); fluş (ft)
       for(var mi=1;mi<=mull;mi++){ var mxp=-gw/2+mi*(gw/(mull+1));
         grp.add(posBox(new THREE.BoxGeometry(fr,gh,ft),matFrame,mxp,glassBot+gh/2,0)); }
       // dış denizlik (çıkıntı) — yalnız normal pencerede (tam-boy/balkon camda yok); DIŞ tarafa (nIn tersi) taşar.
@@ -4111,6 +4127,13 @@
     const poly=furnRoomPolyM(room,map); if(!poly) return null;
     const allRooms=furnAllRooms(map);
     const doorsM=(map.doors||[]).map(function(d){ return { a:px2m(map,d.p0_px[0],d.p0_px[1]), b:px2m(map,d.p1_px[0],d.p1_px[1]) }; });
+    // BALKON CAM KAPISI da kapı-önü GEÇİŞ engeli üretmeli. map.balconies[].door_span_px = ODA↔BALKON açıklığı
+    //   (io.js export'undan; io.js'e DOKUNMA — burada tüketiyoruz). Bu span'ı doorsM'e katarak hem BALKONUN BAĞLI
+    //   OLDUĞU ODA (oda kenarında span → oto-döşe + furnDragValid kapı önünü boş bırakır) hem SENTETİK BALKON
+    //   ODASI (balkon kenarında AYNI span → bistro seti kapı önüne konmaz) tek mekanizmayla korunur. Balkon cam
+    //   kapısı geçilir (S3) ama mobilya-geçiş koridoru gerçek kapı gibi açık kalmalı.
+    (map.balconies||[]).forEach(function(bk){ if(bk&&bk.door_span_px&&bk.door_span_px.length===2){
+      doorsM.push({ a:px2m(map,bk.door_span_px[0][0],bk.door_span_px[0][1]), b:px2m(map,bk.door_span_px[1][0],bk.door_span_px[1][1]) }); } });
     // W3: pencere segmentleri (metre) — cephe pencere span'ları yüksek mobilya için yasak bölge kaynağı.
     const winsM=(map.windows||[]).map(function(d){ return { a:px2m(map,d.p0_px[0],d.p0_px[1]), b:px2m(map,d.p1_px[0],d.p1_px[1]), full:!!d.full }; });
     let minX=1e9,minZ=1e9,maxX=-1e9,maxZ=-1e9;

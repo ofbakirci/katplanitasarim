@@ -41,3 +41,23 @@ Hücre = alt/üst/yan boşluk px. 17 pencere × 4 FPV açı = 68 hücre + orbit 
 - Balkon cam kapısı: `walkClearForTest(bd.midX, bd.midZ+0.5, 0,-1, 1.2)` = TRUE (geçilir).
 - Pencere: aynı sorgu = FALSE (collider engeli).
 - Balkon korkuluğu (dış kenar): `walkClearForTest(bd.midX, bd.midZ-1.4, 0,-1, 0.5)` = FALSE (BLOCKED).
+
+## R2 NOTU (2026-07-05) — gizli gömme + görünür SEAL taşmaları düzeltmesi
+R1 (374cb42) alt/üst/yan boşluğu 0'a indirdi AMA kasa duvar yüzüne TAŞARAK yaptı (kullanıcı SS: kalın
+alt bant, üst köşe beyaz çıkıntı, oyuktan büyük kasa). R2 fix "gizli gömme":
+- `ft=WALL_T` (fluş; R1'de WALL_T+2·WIN_EPS öne taşıyordu). Kasa artık duvar yüzünden taşmaz.
+- Her kayıt İKİ parça: GÖRÜNÜR ince profil (oyuk içi, 4 kenarda eşit `fr=0.065`, ft fluş) + GİZLİ
+  sızdırmazlık dili (`ftSeal=WALL_T-2·WIN_EPS`, iki yüzden WIN_EPS içeride → dolgu sarar, görünmez).
+- `SEAL=2·WIN_EPS` (görünmez dil derinliğinde; R1'in 3·WIN_EPS'i görünür derinlikteydi → taşma).
+- Alt kayıt GÖRÜNÜR bandı `sill-fr`'e iner (parapet solidine gömülü sill-tahtası) → sill kotundaki
+  ince cavity çizgisi kapanır. (Kanıt: `botVisBot=sill` iken FPV'de y≈508'de ~340×7px `23,21,18` slit;
+  `sill-fr` iken 0.)
+
+### R2 tarama yöntemi (R1'den fark: silüet-halka, band DEĞİL)
+R1'in "merkez band" taraması cam-içi see-through + bina-kenarı void'i cavity sayıyordu (yanlış-pozitif).
+R2 taraması: FPV render'da BEYAZ PVC frame silüeti bbox'ını bul (`200<rgb<250`), sonra bbox'ın 4px DIŞ
+halkasında cavity `23,21,18` say. İç-cepheli 16 pencere × 3 açı (düz/grazeUp/aşağı) → **halka cavity=0**.
+KÖŞE pencereler (0,3,6,12,13): FPV gözü tek-dominant-normalle bina köşesi dışına düşer → void bbox'a
+karışır (harness sınırı, mesh kusuru değil; görsel doğrulandı). Merkez mullion dikey çizgisi = iki cam
+panel arası cam boşluğu (pencere camı, dikiş DEĞİL). Görsel kapı: içeriden FPV temiz + dışarıdan cephe
+pencereler fluş.
