@@ -34,6 +34,8 @@ const ICON_PATHS = {
   check:     '<path d="M20 6 9 17l-5-5"/>',
   cross:     '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   info:      '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  chevron:   '<path d="m6 9 6 6 6-6"/>',
+  close:     '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   /* kat kullanım tipleri */
   konut:     '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
   ticari:    '<path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/>',

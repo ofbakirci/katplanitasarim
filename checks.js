@@ -534,25 +534,96 @@ function collectChecks(){
   out.sort((a,b)=>ORD[a.s]-ORD[b.s]);
   return out;
 }
-function renderChecks(out){
-  const box=document.getElementById('checks'); box.innerHTML='';
+/* Tek denetim satırını (.chk) DOM öğesi olarak üretir. Tıklama (bölge/daire odağı)
+   ve B7 "Öneri" eylem köprüsü davranışları BURADA yaşar → hem panelde hem popup'ta
+   birebir aynı çalışır. (renderChecks/popup ortak tüketici.) */
+function buildCheckRow(o){
   const IC={ok:'check',bad:'cross',info:'info'};
-  out.forEach(o=>{ const d=document.createElement('div');
-    const clickable=o.reg!=null||o.unit!=null;
-    d.className='chk '+o.s+(clickable?' click':'');
-    const ic=document.createElement('span'); ic.className='ic'; ic.innerHTML=icon(IC[o.s]); d.appendChild(ic);
-    const msg=document.createElement('span'); msg.textContent=o.t; d.appendChild(msg);
-    if(o.reg!=null){ d.title='Plana odaklamak için tıklayın'; d.onclick=()=>focusRegion(o.reg); }
-    else if(o.unit!=null){ d.title='Daireye odaklamak için tıklayın'; d.onclick=()=>focusUnit(o.unit); }
-    /* B7: ihlalden eyleme köprü — odağa git + durum çubuğunda düzeltme önerisi (otomatik düzeltme YOK) */
-    if(o.s==='bad' && o.action && o.reg!=null){
-      const btn=document.createElement('button'); btn.className='chkAct'; btn.type='button';
-      btn.textContent='Öneri'; btn.title='Odağa git ve nasıl düzeltileceğini göster';
-      btn.onclick=ev=>{ ev.stopPropagation(); focusRegion(o.reg);
-        if(typeof setStatusHint==='function') setStatusHint(o.action.hint,'#b35a2e'); };
-      d.appendChild(btn);
-    }
-    box.appendChild(d); });
+  const d=document.createElement('div');
+  const clickable=o.reg!=null||o.unit!=null;
+  d.className='chk '+o.s+(clickable?' click':'');
+  const ic=document.createElement('span'); ic.className='ic'; ic.innerHTML=icon(IC[o.s]); d.appendChild(ic);
+  const msg=document.createElement('span'); msg.textContent=o.t; d.appendChild(msg);
+  if(o.reg!=null){ d.title='Plana odaklamak için tıklayın'; d.onclick=()=>{ closeChecksModal(); focusRegion(o.reg); }; }
+  else if(o.unit!=null){ d.title='Daireye odaklamak için tıklayın'; d.onclick=()=>{ closeChecksModal(); focusUnit(o.unit); }; }
+  /* B7: ihlalden eyleme köprü — odağa git + durum çubuğunda düzeltme önerisi (otomatik düzeltme YOK) */
+  if(o.s==='bad' && o.action && o.reg!=null){
+    const btn=document.createElement('button'); btn.className='chkAct'; btn.type='button';
+    btn.textContent='Öneri'; btn.title='Odağa git ve nasıl düzeltileceğini göster';
+    btn.onclick=ev=>{ ev.stopPropagation(); closeChecksModal(); focusRegion(o.reg);
+      if(typeof setStatusHint==='function') setStatusHint(o.action.hint,'#b35a2e'); };
+    d.appendChild(btn);
+  }
+  return d;
+}
+/* Katlanabilir popup bölümü. sev = 'bad'|'info'|'ok' (rozet rengi + varsayılan katlanma). */
+function buildCheckSection(label, sev, items, collapsed){
+  const sec=document.createElement('div'); sec.className='cmSec'+(collapsed?' collapsed':'');
+  const head=document.createElement('button'); head.type='button'; head.className='cmSecHead '+sev;
+  const caret=document.createElement('span'); caret.className='caret'; caret.innerHTML=icon('chevron'); head.appendChild(caret);
+  const lbl=document.createElement('span'); lbl.className='lbl'; lbl.textContent=label; head.appendChild(lbl);
+  const badge=document.createElement('span'); badge.className='badge'; badge.textContent=String(items.length); head.appendChild(badge);
+  head.setAttribute('aria-expanded', collapsed?'false':'true');
+  head.onclick=()=>{ const c=sec.classList.toggle('collapsed'); head.setAttribute('aria-expanded', c?'false':'true'); };
+  sec.appendChild(head);
+  const body=document.createElement('div'); body.className='cmSecBody';
+  items.forEach(o=>body.appendChild(buildCheckRow(o)));
+  sec.appendChild(body);
+  return sec;
+}
+function closeChecksModal(){
+  const m=document.getElementById('checksModal'); if(!m) return;
+  m.style.display='none'; m.setAttribute('aria-hidden','true');
+}
+function openChecksModal(){
+  const m=document.getElementById('checksModal'); if(!m) return;
+  m.style.display='flex'; m.setAttribute('aria-hidden','false');
+}
+/* Denetim çıktısını (1) panelde kompakt özete + (2) popup'ta severity-gruplu
+   katlanabilir bölümlere böler. Sıra: TAMAM en üstte (varsayılan katlı), SORUNLAR
+   (bad, açık), BİLGİ (info, açık) altta. Bölümleme CHECK_RULES `s` alanını okur. */
+function renderChecks(out){
+  const box=document.getElementById('checks'); if(!box) return;
+  const oks=out.filter(o=>o.s==='ok'), bads=out.filter(o=>o.s==='bad'), infos=out.filter(o=>o.s==='info');
+  /* — panel: kompakt özet — */
+  box.innerHTML='';
+  const sum=document.createElement('div'); sum.className='chkSummary';
+  const cnts=document.createElement('div'); cnts.className='cnts';
+  const mkCnt=(sev,icn,n,word)=>{ const c=document.createElement('span'); c.className='cnt '+sev+(n===0?' zero':'');
+    c.innerHTML=icon(icn); const t=document.createElement('span'); t.textContent=n+' '+word; c.appendChild(t); return c; };
+  cnts.appendChild(mkCnt('bad','cross',bads.length,'sorun'));
+  cnts.appendChild(mkCnt('info','info',infos.length,'bilgi'));
+  cnts.appendChild(mkCnt('ok','check',oks.length,'tamam'));
+  sum.appendChild(cnts);
+  const open=document.createElement('button'); open.type='button'; open.className='openBtn'; open.textContent='Aç';
+  open.onclick=openChecksModal; sum.appendChild(open);
+  box.appendChild(sum);
+  /* — popup gövdesi — */
+  const body=document.getElementById('cmBody');
+  if(body){
+    body.innerHTML='';
+    if(oks.length)   body.appendChild(buildCheckSection('Tamam',  'ok',   oks,   true));
+    if(bads.length)  body.appendChild(buildCheckSection('Sorunlar','bad', bads,  false));
+    if(infos.length) body.appendChild(buildCheckSection('Bilgi',  'info', infos, false));
+    if(!out.length){ const e=document.createElement('div'); e.className='chk info';
+      e.innerHTML='<span class="ic">'+icon('info')+'</span><span>Denetim satırı yok.</span>'; body.appendChild(e); }
+  }
+}
+/* Popup kapatma köprüleri: Esc + overlay-tıklama + kapat düğmesi. Bir kez bağlanır.
+   NOT: bazı test harness'leri yalın bir document stub'ı verir (addEventListener yok) →
+   tüm bağlamalar özellik-varlığına göre korunur (test ortamı zarar görmez). */
+function initChecksModal(){
+  if(typeof document==='undefined' || typeof document.getElementById!=='function') return;
+  const m=document.getElementById('checksModal'); if(!m || (m.dataset&&m.dataset.bound)) return;
+  if(m.dataset) m.dataset.bound='1';
+  const cls=document.getElementById('cmClose'); if(cls){ cls.innerHTML=icon('close'); cls.onclick=closeChecksModal; }
+  if(typeof m.addEventListener==='function') m.addEventListener('click', e=>{ if(e.target===m) closeChecksModal(); });
+  if(typeof document.addEventListener==='function')
+    document.addEventListener('keydown', e=>{ if(e.key==='Escape' && m.style.display!=='none') closeChecksModal(); });
+}
+if(typeof document!=='undefined' && typeof document.addEventListener==='function'){
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initChecksModal);
+  else initChecksModal();
 }
 function runChecks(){
   const out=collectChecks();

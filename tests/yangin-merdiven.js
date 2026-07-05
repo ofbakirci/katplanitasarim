@@ -28,13 +28,18 @@ function t(name, ok){ if(!ok) FAILS++; console.log((ok?' ✓ ':' ✗ FAIL ')+nam
 /* ---------- A) ENTEGRASYON (gerçek generate) ---------- */
 function run(label, kat, poly, specs){
   getEl('binaTipi').value='apartman'; getEl('katSayisi').value=String(kat); getEl('katYuk').value='2.9';
-  byId['checks']=stubEl('div'); global.__C={};
+  byId['checks']=stubEl('div'); byId['cmBody']=stubEl('div'); global.__C={};
   eval(appJs + `
 ;unitSpecs=${JSON.stringify(specs)};
 pts=${JSON.stringify(poly)}; closed=true; generate();
 const cn=t=>plan.regions.filter(g=>g.type===t&&g.cells.length).length;
 global.__C={ merdiven:cn('merdiven'), yangin:cn('yangin'), asansor:cn('asansor') };`);
-  const msgs=byId['checks'].children.map(d=>({cls:d.className, txt:nodeText(d)}));
+  /* SUNUM-1A: denetim satırları artık popup gövdesine (#cmBody) katlanabilir bölümler
+     içinde render ediliyor; her satırın .chk class'ı/metni değişmedi → derin ara. */
+  const rows=[]; (function walk(n){ if(!n) return;
+    if(typeof n.className==='string' && n.className.indexOf('chk')===0) rows.push(n);
+    (n.children||[]).forEach(walk); })(byId['cmBody']);
+  const msgs=rows.map(d=>({cls:d.className, txt:nodeText(d)}));
   console.log('--- '+label+' (kat '+kat+', binaYuk '+(kat*2.9).toFixed(1)+' m) → çekirdek '+JSON.stringify(global.__C)+' ---');
   return { c:global.__C,
            bad:s=>msgs.filter(m=>m.cls.includes('bad')&&m.txt.includes(s)).length,
