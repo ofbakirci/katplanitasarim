@@ -1,16 +1,40 @@
   :root{
-    --bg:#f5f3ee; --panel:#ffffff; --line:#d8d2c6; --ink:#2b2620; --muted:#8a8275;
-    --acc:#b35a2e; --ok:#2e7d4f; --bad:#c0392b; --info:#2563a8;
+    /* mevcut isimler — Faz 1-2 değer revizyonu (Claude Design 2026-07-05, isim SİLİNMEDİ) */
+    --bg:#F4F1EC; --panel:#FFFFFF; --line:#D8D2C8; --ink:#26231F; --muted:#7A736A;
+    --acc:#B35A2E; --ok:#4C8C5A; --bad:#C0492B; --info:#2E6E8E;
+    /* yeni: vurgu ailesi */
+    --acc-hover:#9A4A22; --acc-soft:#F0E2D8; --acc-on-dark:#DB8A5E;
+    /* yeni: durum yumuşak zeminleri */
+    --ok-soft:#E7F0E9; --bad-soft:#F9E7E2; --info-soft:#E7EEF3;
+    /* yeni: nötr ara yüzey */
+    --bg-2:#FBFAF7;
+    /* yeni: koyu chrome — 2B'de yalnız geçici katman (tooltip/toast/scrim) */
+    --chrome:#1C1C22; --scrim:rgba(21,21,26,.52);
+    /* yeni: radius */
+    --r-xl:16px; --r-lg:12px; --r-md:8px; --r-sm:6px; --r-pill:999px;
+    /* yeni: spacing */
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+    /* yeni: gölge merdiveni (sıcak siyah taban) */
+    --sh-card:0 1px 2px rgba(28,26,22,.06);
+    --sh-panel:0 4px 16px rgba(28,26,22,.10);
+    --sh-pop:0 10px 32px rgba(28,26,22,.16);
+    --sh-modal:0 20px 56px rgba(28,26,22,.30);
+    /* yeni: odak halkası (Faz 3 hazırlık) */
+    --ring:0 0 0 3px rgba(179,90,46,.22);
   }
+  /* TOOLBAR PİKSEL-DONMASI: sol ikon-rayı ve butonları görsel olarak DEĞİŞMEZ (sert kural).
+     :root token'ları revize edildiği için toolbar'ın referans aldığı token'ları eski (Faz-11)
+     literal değerlerine yerel olarak sabitle → tüm alt öğeler (button/tooltip) eski rengi çözer. */
+  #toolbar{ --ink:#2b2620; --line:#d8d2c6; --bg:#f5f3ee; --muted:#8a8275; }
   *{box-sizing:border-box; margin:0; padding:0;}
   body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--ink); height:100vh; display:flex; flex-direction:column; overflow:hidden;}
   header{display:flex; align-items:center; gap:14px; padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--line);}
   header h1{font-size:16px; font-weight:700;}
   header .sub{font-size:12px; color:var(--muted);}
   /* ---- Görünüm modu: Basit / Profesyonel ---- */
-  #modeSel{margin-left:auto; display:flex; gap:2px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:2px; flex-shrink:0;}
-  #modeSel button{border:0; background:transparent; padding:5px 11px; border-radius:6px; font-size:12px; font-weight:600; color:var(--muted); cursor:pointer; line-height:1.2;}
-  #modeSel button.active{background:#fff; color:var(--acc); box-shadow:0 1px 2px rgba(0,0,0,.12);}
+  #modeSel{margin-left:auto; display:flex; gap:2px; background:var(--bg); border:1px solid var(--line); border-radius:var(--r-md); padding:2px; flex-shrink:0;}
+  #modeSel button{border:0; background:transparent; padding:5px 11px; border-radius:var(--r-sm); font-size:12px; font-weight:600; color:var(--muted); cursor:pointer; line-height:1.2;}
+  #modeSel button.active{background:#fff; color:var(--acc); box-shadow:var(--sh-card);}
   body.mode-basic .pro-only{display:none !important;}
   main{flex:1; display:flex; min-height:0;}
   /* Sidebar */
@@ -30,28 +54,30 @@
   .wt-sec > summary:hover{color:var(--ink);}
   .wt-sec .row{margin-top:8px;}
   .wt-hint{font-size:11px; color:var(--muted); line-height:1.4; margin-top:2px;}
-  select,input[type=number]{padding:5px 7px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:#fff; color:var(--ink); width:90px;}
+  select,input[type=number]{padding:5px 7px; border:1px solid var(--line); border-radius:var(--r-sm); font-size:13px; background:#fff; color:var(--ink); width:90px;}
+  /* Faz 3 hazırlık: odak halkası — düşük risk (yeni :focus, toolbar dışı) */
+  select:focus,input[type=number]:focus,input[type=text]:focus{outline:none; border-color:var(--acc); box-shadow:var(--ring);}
   input[type=checkbox]{width:15px; height:15px; accent-color:var(--acc);}
   /* Stepper (custom +/- buttons) */
   input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none; margin:0;}
   input[type=number]{-moz-appearance:textfield;}
-  .stepper{display:inline-flex; align-items:stretch; border:1px solid var(--line); border-radius:8px; overflow:hidden; background:#fff; flex-shrink:0;}
-  .stepper button{width:32px; min-height:32px; padding:0; border:none; border-radius:0; background:#f3efe7; font-size:17px; font-weight:700; color:var(--acc); cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none;}
+  .stepper{display:inline-flex; align-items:stretch; border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden; background:#fff; flex-shrink:0;}
+  .stepper button{width:32px; min-height:32px; padding:0; border:none; border-radius:0; background:var(--bg-2); font-size:17px; font-weight:700; color:var(--acc); cursor:pointer; display:flex; align-items:center; justify-content:center; user-select:none;}
   .stepper button:hover{background:var(--acc); color:#fff; border:none;}
   .stepper button:active{filter:brightness(.92);}
   .stepper input[type=number]{border:none; border-radius:0; width:46px; padding:0; text-align:center; font-size:13px; font-weight:600;}
-  .stepper input[type=number]:focus{outline:none; background:#fdf8f0;}
+  .stepper input[type=number]:focus{outline:none; box-shadow:none; background:var(--acc-soft);}
   /* Toggle switch */
   .switch{position:relative; width:38px; height:22px; flex-shrink:0; cursor:pointer;}
   .switch input{position:absolute; inset:0; width:100%; height:100%; opacity:0; margin:0; cursor:pointer;}
-  .switch i{display:block; width:38px; height:22px; background:#ddd5c8; border-radius:11px; transition:background .15s; pointer-events:none;}
+  .switch i{display:block; width:38px; height:22px; background:#DDD5C8; border-radius:var(--r-pill); transition:background .15s; pointer-events:none;}
   .switch i::after{content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; background:#fff; border-radius:50%; transition:left .15s; box-shadow:0 1px 2px rgba(0,0,0,.25);}
   .switch input:checked + i{background:var(--acc);}
   .switch input:checked + i::after{left:18px;}
-  button{padding:7px 12px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:13px; cursor:pointer; color:var(--ink);}
+  button{padding:7px 12px; border:1px solid var(--line); border-radius:var(--r-sm); background:#fff; font-size:13px; cursor:pointer; color:var(--ink);}
   button:hover{border-color:var(--acc); color:var(--acc);}
   button.primary{background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600;}
-  button.primary:hover{filter:brightness(1.08); color:#fff;}
+  button.primary:hover{background:var(--acc-hover); border-color:var(--acc-hover); color:#fff;}
   button.primary:disabled{opacity:.45; cursor:not-allowed;}
   button.small{padding:3px 8px; font-size:12px;}
   /* TKGM Parsel Sorgu paneli */
@@ -79,7 +105,7 @@
   .ps-yol-sec b{color:#c0392b; font-weight:700;}
   .ps-yol-sec .ps-dim{color:var(--muted);}
   #parselSec .ps-draw-btn{width:100%; margin-top:8px; padding:7px 10px; border:1px solid var(--acc); border-radius:7px; background:var(--acc); color:#fff; font-size:12.5px; font-weight:600; cursor:pointer;}
-  #parselSec .ps-draw-btn:hover{background:#9c4d27; border-color:#9c4d27; color:#fff;}
+  #parselSec .ps-draw-btn:hover{background:var(--acc-hover); border-color:var(--acc-hover); color:#fff;}
   #parselSec .ps-draw-btn small{font-weight:400; opacity:.85;}
   /* İBB e-Plan imar durumu kartı */
   #parselSec .ps-imar{margin-top:9px; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:#faf8f3; font-size:12px; line-height:1.5;}
@@ -155,63 +181,63 @@
   #onbHead .oIc svg.ic{width:16px; height:16px;}
   .chk .ic{display:inline-flex; align-items:center; justify-content:center; width:14px;}
   .chk .ic svg{width:14px; height:14px;}
-  .unitCard{border:1px solid var(--line); border-radius:10px; padding:11px 12px; margin-bottom:10px; background:#fbfaf7; box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  .unitCard{border:1px solid var(--line); border-radius:var(--r-lg); padding:11px 12px; margin-bottom:10px; background:var(--bg-2); box-shadow:var(--sh-card);}
   .unitCard .head{display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; padding-bottom:7px; border-bottom:1px dashed var(--line);}
   .unitCard .tag{font-weight:700; font-size:13px; color:var(--acc);}
   .unitCard .frow{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:7px; font-size:13px;}
   .unitCard .frow:last-child{margin-bottom:0;}
   .unitCard .frow small{color:var(--muted); font-size:11px;}
-  .unitCard .del{color:var(--bad); border:none; background:none; font-size:18px; cursor:pointer; line-height:1; padding:2px 6px; border-radius:6px;}
-  .unitCard .del:hover{background:#fdf2f0; border:none;}
+  .unitCard .del{color:var(--bad); border:none; background:none; font-size:18px; cursor:pointer; line-height:1; padding:2px 6px; border-radius:var(--r-sm);}
+  .unitCard .del:hover{background:var(--bad-soft); border:none;}
   #addUnit{width:100%; border-style:dashed; padding:8px; color:var(--muted);}
   #addUnit:hover{color:var(--acc); border-color:var(--acc); border-style:dashed;}
   /* Checks */
   #checks{display:flex; flex-direction:column; gap:5px;}
-  .chk{display:flex; gap:7px; font-size:12px; line-height:1.45; padding:6px 8px; border-radius:6px; background:#fbfaf7; border:1px solid var(--line);}
+  .chk{display:flex; gap:7px; font-size:12px; line-height:1.45; padding:6px 8px; border-radius:var(--r-sm); background:var(--bg-2); border:1px solid var(--line);}
   .chk .ic{font-weight:700; flex-shrink:0;}
   .chk.ok .ic{color:var(--ok);} .chk.bad .ic{color:var(--bad);} .chk.info .ic{color:var(--info);}
-  .chk.bad{border-color:#e8b4ab; background:#fdf2f0;}
+  .chk.bad{border-color:#EBBFB4; background:var(--bad-soft);}
   /* Mevzuat özet satırı (panelde) + "Aç" düğmesi */
-  .chkSummary{display:flex; align-items:center; gap:9px; font-size:12px; padding:8px 9px; border-radius:8px; background:#fbfaf7; border:1px solid var(--line);}
+  .chkSummary{display:flex; align-items:center; gap:9px; font-size:12px; padding:8px 9px; border-radius:var(--r-md); background:var(--bg-2); border:1px solid var(--line);}
   .chkSummary .cnts{display:flex; align-items:center; gap:8px; flex:1; flex-wrap:wrap;}
   .chkSummary .cnt{display:inline-flex; align-items:center; gap:4px; font-weight:600;}
   .chkSummary .cnt svg{width:13px; height:13px;}
   .chkSummary .cnt.bad{color:var(--bad);} .chkSummary .cnt.info{color:var(--info);} .chkSummary .cnt.ok{color:var(--ok);}
   .chkSummary .cnt.zero{color:var(--muted); opacity:.7; font-weight:500;}
-  .chkSummary .openBtn{flex-shrink:0; padding:4px 12px; font-size:12px; font-weight:700; color:var(--acc); background:#fff; border:1px solid var(--line); border-radius:7px; cursor:pointer;}
-  .chkSummary .openBtn:hover{border-color:var(--acc); background:#fdf6f0;}
+  .chkSummary .openBtn{flex-shrink:0; padding:4px 12px; font-size:12px; font-weight:700; color:var(--acc); background:#fff; border:1px solid var(--line); border-radius:var(--r-sm); cursor:pointer;}
+  .chkSummary .openBtn:hover{border-color:var(--acc); background:var(--acc-soft);}
   /* Mevzuat popup */
-  #checksModal{position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; background:rgba(43,38,32,.42); padding:24px;}
-  #checksModalWin{background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 18px 50px rgba(0,0,0,.28); width:min(560px,100%); max-height:min(80vh,720px); display:flex; flex-direction:column; overflow:hidden;}
+  #checksModal{position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; background:var(--scrim); padding:24px;}
+  #checksModalWin{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-xl); box-shadow:var(--sh-modal); width:min(560px,100%); max-height:min(80vh,720px); display:flex; flex-direction:column; overflow:hidden;}
   #cmHead{display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line); flex-shrink:0;}
   #cmTitle{font-size:14px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); flex:1;}
-  #cmClose{width:28px; height:28px; padding:0; border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;}
+  #cmClose{width:28px; height:28px; padding:0; border:1px solid var(--line); border-radius:var(--r-sm); background:#fff; color:var(--muted); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;}
   #cmClose svg{width:15px; height:15px;}
-  #cmClose:hover{border-color:var(--acc); color:var(--acc); background:#fdf6f0;}
+  #cmClose:hover{border-color:var(--acc); color:var(--acc); background:var(--acc-soft);}
   /* F4 (SUNUM-2A): mevzuat popup SCROLLABLE. Flex zincirinde min-height:0 TUZAĞI — flex çocuğunun varsayılan
      min-height:auto içerik boyudur → overflow-y:auto tetiklenmez, uzun liste pencereyi taşırırdı. flex:1 1 auto ile
      kalan yüksekliği al + min-height:0 ile içerik altında büzülmeye izin ver → gövde kendi içinde kayar. */
   #cmBody{flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px 14px; display:flex; flex-direction:column; gap:10px;}
   /* Katlanabilir bölüm */
-  .cmSec{border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#fff;}
-  .cmSecHead{display:flex; align-items:center; gap:8px; width:100%; padding:9px 11px; border:0; background:#faf8f3; cursor:pointer; font-size:12.5px; font-weight:700; color:var(--ink); text-align:left; letter-spacing:.02em;}
-  .cmSecHead:hover{background:#f5f0e6;}
+  .cmSec{border:1px solid var(--line); border-radius:var(--r-md); overflow:hidden; background:#fff;}
+  .cmSecHead{display:flex; align-items:center; gap:8px; width:100%; padding:9px 11px; border:0; background:var(--bg-2); cursor:pointer; font-size:12.5px; font-weight:700; color:var(--ink); text-align:left; letter-spacing:.02em;}
+  .cmSecHead:hover{background:var(--acc-soft);}
   .cmSecHead .caret{display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; flex-shrink:0; color:var(--muted); transition:transform .15s ease;}
   .cmSecHead .caret svg{width:14px; height:14px;}
   .cmSec.collapsed .cmSecHead .caret{transform:rotate(-90deg);}
   .cmSecHead .lbl{flex:1;}
-  .cmSecHead .badge{flex-shrink:0; font-size:11px; font-weight:700; padding:1px 8px; border-radius:20px; background:var(--bg); color:var(--muted); min-width:20px; text-align:center;}
-  .cmSecHead.ok .badge{background:#e6f1ea; color:var(--ok);}
-  .cmSecHead.bad .badge{background:#fbe4df; color:var(--bad);}
-  .cmSecHead.info .badge{background:#e4eef8; color:var(--info);}
+  .cmSecHead .badge{flex-shrink:0; font-size:11px; font-weight:700; padding:1px 8px; border-radius:var(--r-pill); background:var(--bg); color:var(--muted); min-width:20px; text-align:center;}
+  .cmSecHead.ok .badge{background:var(--ok-soft); color:var(--ok);}
+  .cmSecHead.bad .badge{background:var(--bad-soft); color:var(--bad);}
+  .cmSecHead.info .badge{background:var(--info-soft); color:var(--info);}
   .cmSecBody{padding:8px 9px; display:flex; flex-direction:column; gap:5px; border-top:1px solid var(--line);}
   .cmSec.collapsed .cmSecBody{display:none;}
   /* Canvas area */
   #canvasWrap{flex:1; position:relative; min-width:0; background:#faf8f3;}
   /* serbest oda çizimi uyarı baloncuğu (roomDrawToast) */
   #drawToast{position:absolute; left:50%; bottom:24px; transform:translateX(-50%); z-index:40;
-    background:rgba(43,38,32,.92); color:#fff; font-size:13px; font-weight:600; padding:8px 14px;
-    border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.25); pointer-events:none;
+    background:var(--chrome); color:#EDEBE6; font-size:13px; font-weight:600; padding:8px 14px;
+    border-radius:var(--r-md); box-shadow:var(--sh-pop); pointer-events:none;
     opacity:0; transition:opacity .15s; white-space:nowrap;}
   #drawToast.show{opacity:1;}
   svg{display:block; width:100%; height:100%; cursor:crosshair;}
@@ -275,7 +301,7 @@
   #parkBar button.active{background:var(--ink); color:#fff; border-color:var(--ink);}
   #toolbar.collapsed .tbgrp,#toolbar.collapsed .tbsep{display:none;}
   #tbToggle{width:38px; height:26px; font-weight:700; color:var(--muted);}
-  #status{position:absolute; bottom:10px; left:10px; right:10px; display:flex; gap:16px; background:var(--panel); padding:6px 12px; border-radius:8px; border:1px solid var(--line); font-size:12px; color:var(--muted); pointer-events:none; width:max-content;}
+  #status{position:absolute; bottom:10px; left:10px; right:10px; display:flex; gap:16px; background:var(--panel); padding:6px 12px; border-radius:var(--r-md); border:1px solid var(--line); box-shadow:var(--sh-card); font-size:12px; color:var(--muted); pointer-events:none; width:max-content;}
   #status b{color:var(--ink);}
   #status #stHint{color:var(--acc); font-weight:600;}
   /* aktif mod rozeti (canvas üstü, toolbar hizası) — varsayılan draw/pan modunda gizli */
@@ -295,26 +321,26 @@
   .legend span{display:flex; align-items:center; gap:4px;}
   .legend i{width:11px; height:11px; border-radius:3px; display:inline-block; border:1px solid rgba(0,0,0,.15);}
   .chk.click{cursor:pointer;}
-  .chk.click:hover{border-color:var(--acc); background:#fdf6f0;}
+  .chk.click:hover{border-color:var(--acc); background:var(--acc-soft);}
   /* B7: denetim satırından eyleme köprü düğmesi (odağa git + öneri) */
   .chk .chkAct{margin-left:auto; flex-shrink:0; align-self:flex-start; padding:2px 8px; font-size:11px; font-weight:700;
     border:1px solid var(--bad); border-radius:5px; background:#fff; color:var(--bad); cursor:pointer; white-space:nowrap;}
   .chk .chkAct:hover{background:var(--bad); color:#fff;}
   /* yüzen daire tablosu */
   #unitTable{position:absolute; top:10px; right:10px; width:280px; max-height:calc(100% - 90px);
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    box-shadow:0 3px 12px rgba(0,0,0,.10); display:none; flex-direction:column; overflow:hidden; z-index:5;}
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg);
+    box-shadow:var(--sh-panel); display:none; flex-direction:column; overflow:hidden; z-index:5;}
   #utHead{display:flex; justify-content:space-between; align-items:center; padding:8px 11px;
-    background:#fbfaf7; border-bottom:1px solid var(--line); cursor:move; font-weight:700; font-size:13px; user-select:none;}
+    background:var(--bg-2); border-bottom:1px solid var(--line); cursor:move; font-weight:700; font-size:13px; user-select:none;}
   #utHead button{padding:0 8px; font-size:14px; line-height:1.5;}
   #utBody{overflow-y:auto; padding:7px 9px;}
   .utUnit{margin-bottom:9px;}
   .utUnit h3{font-size:12px; color:var(--acc); cursor:pointer; padding:3px 5px; border-radius:5px; margin:0;}
-  .utUnit h3:hover{background:#f6efe8;}
+  .utUnit h3:hover{background:var(--acc-soft);}
   .utT{width:100%; border-collapse:collapse; font-size:11.5px;}
   .utT td{padding:2.5px 4px; border-bottom:1px solid #f0ece2;}
   .utT tr{cursor:pointer;}
-  .utT tr:hover{background:#f6efe8;}
+  .utT tr:hover{background:var(--acc-soft);}
   .utT td.num{text-align:right; white-space:nowrap; color:var(--muted);}
   /* L1-A2: brüt alan ikincil değeri (net esas, brüt küçük/soluk alt-satır) */
   .brut{display:block; font-size:9.5px; font-weight:400; color:#a89a86; margin-top:1px;}
@@ -327,10 +353,10 @@
      bilinçli: menüleri örtmesin). DÜZELTME (LAYOUT ajanı): eski left:64px hâlâ 9px çakışıyordu — toolbar
      gerçek genişliği ~54px değil 63px (6+6 padding + 1+1 border + 38 buton); ölçülüp doğrulandı. */
   #histPanel{position:absolute; left:83px; bottom:48px; width:240px; max-height:calc(100% - 180px);
-    background:var(--panel); border:1px solid var(--line); border-radius:10px;
-    box-shadow:0 3px 12px rgba(0,0,0,.10); display:none; flex-direction:column; overflow:hidden; z-index:7;}
+    background:var(--panel); border:1px solid var(--line); border-radius:var(--r-lg);
+    box-shadow:var(--sh-panel); display:none; flex-direction:column; overflow:hidden; z-index:7;}
   #hpHead{display:flex; justify-content:space-between; align-items:center; padding:8px 11px;
-    background:#fbfaf7; border-bottom:1px solid var(--line); font-weight:700; font-size:13px; user-select:none;}
+    background:var(--bg-2); border-bottom:1px solid var(--line); font-weight:700; font-size:13px; user-select:none;}
   #hpHead button{padding:0 8px; font-size:14px; line-height:1.5;}
   #hpBody{overflow-y:auto; padding:5px 7px;}
   .histRow{padding:5px 9px; font-size:12px; cursor:pointer; border-radius:5px; white-space:nowrap;
@@ -344,10 +370,10 @@
   .histRow.empty:hover{background:none;}
   /* oda sağ tık menüsü */
   #roomMenu{position:absolute; display:none; z-index:9; background:var(--panel); border:1px solid var(--line);
-    border-radius:9px; box-shadow:0 4px 14px rgba(0,0,0,.13); font-size:12.5px; min-width:185px; padding:4px 0; user-select:none;}
+    border-radius:var(--r-md); box-shadow:var(--sh-pop); font-size:12.5px; min-width:185px; padding:4px 0; user-select:none;}
   #roomMenu .mh{padding:5px 12px 3px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap;}
   #roomMenu .mi{padding:6px 12px; cursor:pointer; white-space:nowrap;}
-  #roomMenu .mi:hover{background:#f6efe8; color:var(--acc);}
+  #roomMenu .mi:hover{background:var(--acc-soft); color:var(--acc);}
   #roomMenu .mi.del{color:var(--bad);}
   #roomMenu .mi.on{color:var(--acc); font-weight:600;}
   #roomMenu .mi.dis{color:var(--muted); cursor:not-allowed;}
@@ -356,7 +382,7 @@
   #roomMenu hr{border:none; border-top:1px solid var(--line); margin:4px 0;}
   /* pencere ayar paneli (seçili pencere: genişlik/yükseklik/parapet/tam boy) */
   #winPanel{position:absolute; right:14px; bottom:48px; z-index:9; background:var(--panel); border:1px solid var(--line);
-    border-radius:9px; box-shadow:0 4px 14px rgba(0,0,0,.13); font-size:12px; width:210px; padding:10px 12px; user-select:none;}
+    border-radius:var(--r-md); box-shadow:var(--sh-pop); font-size:12px; width:210px; padding:10px 12px; user-select:none;}
   #winPanel .wpH{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;}
   #winPanel .wpR{display:flex; align-items:center; gap:8px; margin:6px 0;}
   #winPanel .wpR label{flex:0 0 62px; color:var(--muted);}
