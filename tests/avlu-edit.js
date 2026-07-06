@@ -130,6 +130,82 @@ ok(bads.length && bads[0].reg!=null && !!bads[0].action, 'AV-3: satır reg (odak
 /* avlu koridora değmezse (guard'lı yol) bad üretmez — köşede küçük avlu */
 courtyards=[{poly:[{x:2,y:1},{x:4,y:1},{x:4,y:3},{x:2,y:3}]}]; resetCuts(); generate();
 ok(!runChecks().some(x=>x.s==='bad' && /koridoru bölmüş/i.test(x.t)), 'AV-3: koridora değmeyen avlu bad üretmez');
+
+/* ===== AV-4) AVLU-FARKINDA YERLEŞİM KALİTESİ (avlu-rework) =====
+   Merkezi avlulu apartmanda: (a) kopuk bölge 0, (b) avluya taşma 0 (avlu içi hücre bölgeye
+   atanmamış), (c) avlu-komşu yaşam alanı ≥1, (d) koridor payı makul. Metrik yardımcıları. */
+function avluMetrics(){
+  const p=plan, cols=p.cols, rows=p.rows;
+  let corridorCells=0, insideTot=0, discon=0, spill=0;
+  for(let i=0;i<p.inside.length;i++) if(p.inside[i]) insideTot++;
+  p.regions.forEach(g=>{
+    if(g.type==='koridor') corridorCells+=g.cells.length;
+    if(g.cells.length>=2 && g.type!=='koridor' && g.type!=='isiklik' && !regConnected(g)) discon++;
+  });
+  const neigh=new Set();
+  courtyards.forEach(av=>{ for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){
+    const cx=p.minX+(c+.5)*0.5, cy=p.minY+(r+.5)*0.5;
+    if(pip(cx,cy,av.poly)){ const i=r*cols+c; if(p.cm[i]>=0) spill++;
+      [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols)return;
+        const j=rr*cols+cc; if(p.inside[j]&&p.cm[j]>=0) neigh.add(p.cm[j]); }); } } });
+  const life=[...neigh].filter(id=>['salon','mutfak','yatak'].includes(p.regions[id]&&p.regions[id].type)).length;
+  return {corridorPct:corridorCells/insideTot*100, discon, spill, life,
+          neighTypes:[...neigh].map(id=>p.regions[id]&&p.regions[id].type)};
+}
+/* apartman 40×18, 4 daire, merkezi 10×6 avlu */
+unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:4}];
+pts=[{x:0,y:0},{x:40,y:0},{x:40,y:18},{x:0,y:18}]; closed=true;
+courtyards=[{poly:[{x:15,y:6},{x:25,y:6},{x:25,y:12},{x:15,y:12}]}]; editHistory=[]; redoHistory=[];
+resetCuts(); generate();
+const M4=avluMetrics();
+ok(M4.discon===0, 'AV-4a: avlulu apartmanda kopuk bölge 0 (discon='+M4.discon+')');
+ok(M4.spill===0, 'AV-4b: hiçbir oda avluya taşmadı (spill='+M4.spill+')');
+ok(M4.life>=1, 'AV-4c: avlu-komşu yaşam alanı ≥1 (life='+M4.life+' tipler='+M4.neighTypes.join(',')+')');
+ok(M4.corridorPct<20, 'AV-4d: koridor payı makul (<%20; '+M4.corridorPct.toFixed(1)+'%)');
+/* avlu bir salon/oda tipini courtyardLightsRoom ile de doğrula (avlu-cephe API) */
+const litRooms=plan.regions.filter(g=>g.cells.length && typeof courtyardLightsRoom==='function' && courtyardLightsRoom(g));
+ok(litRooms.length>=1, 'AV-4e: courtyardLightsRoom ≥1 oda avluya bakıyor der ('+litRooms.length+')');
+
+/* ===== AV-5) OTO-AVLU ÖNERİSİ (avlu-rework) ===== */
+/* sığ taban → öneri yok */
+courtyards=[]; pts=[{x:0,y:0},{x:40,y:0},{x:40,y:12},{x:0,y:12}]; closed=true; resetCuts(); generate();
+ok(suggestCourtyard()===null, 'AV-5: sığ taban avlu ÖNERMEZ');
+/* derin/karanlık taban → öneri var, aday geçerli (sınır içi + kısa kenar ≥ avluMinKisa) */
+unitSpecs=[{oda:3,salon:1,ensuite:true,acik:false,adet:3}];
+pts=[{x:0,y:0},{x:28,y:0},{x:28,y:28},{x:0,y:28}]; closed=true; courtyards=[]; resetCuts(); generate();
+const sug=suggestCourtyard();
+ok(sug!=null, 'AV-5: derin/karanlık taban avlu ÖNERİR');
+ok(sug && sug.poly.every(pt=>pip(pt.x,pt.y,pts)), 'AV-5: aday avlu bina sınırı içinde');
+ok(sug && Math.min(bboxOf(sug.poly).maxX-bboxOf(sug.poly).minX, bboxOf(sug.poly).maxY-bboxOf(sug.poly).minY)>=REG.avluMinKisa,
+   'AV-5: aday kısa kenar ≥ avluMinKisa');
+/* avlu zaten varken öneri yok */
+courtyards=[{poly:[{x:12,y:12},{x:16,y:12},{x:16,y:16},{x:12,y:16}]}]; resetCuts(); generate();
+ok(suggestCourtyard()===null, 'AV-5: avlu mevcutken öneri YOK');
+/* placeSuggestedCourtyard: öneriyi yerleştirme akışı. Guard koridoru bölerse REDDEDER
+   (avlu-farkında güvenlik) → placed=false, öneri söner, courtyards değişmez. Guard geçerse
+   yerleşir + geçmişe yazılır + undo edilebilir. İki yol da MEŞRU; sözleşmeyi test ederiz. */
+/* guard-güvenli vaka: tek daire/kat (koridor yok) → öneri her zaman yerleşir */
+getEl('katSayisi').value='6';
+unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:1}];
+pts=[{x:0,y:0},{x:26,y:0},{x:26,y:26},{x:0,y:26}]; closed=true; courtyards=[]; editHistory=[]; redoHistory=[];
+resetCuts(); generate();
+avluSuggestion=suggestCourtyard(); const sugPoly=avluSuggestion&&JSON.stringify(avluSuggestion.poly);
+ok(avluSuggestion!=null, 'AV-5: tek-daire derin tabanda avluSuggestion set edildi');
+const placed=placeSuggestedCourtyard();
+ok(placed===true, 'AV-5: guard-güvenli tabanda placeSuggestedCourtyard yerleştirdi');
+ok(courtyards.length===1 && JSON.stringify(courtyards[0].poly)===sugPoly, 'AV-5: yerleşen avlu = önerilen poligon');
+ok(avluSuggestion===null, 'AV-5: yerleştirmeden sonra öneri söndü');
+ok(editHistory.some(e=>e.type==='avlu'), 'AV-5: yerleştirme geçmişe yazıldı (undo edilebilir)');
+ok(undoEdit() && courtyards.length===0, 'AV-5: öneri-yerleştirme undo ile geri alındı');
+/* guard-reddi vakası: koridoru bölecek öneride placed=false + courtyards değişmez */
+unitSpecs=[{oda:3,salon:1,ensuite:true,acik:false,adet:3}];
+pts=[{x:0,y:0},{x:28,y:0},{x:28,y:28},{x:0,y:28}]; closed=true; courtyards=[]; editHistory=[]; redoHistory=[];
+resetCuts(); generate();
+avluSuggestion=suggestCourtyard();
+if(avluSuggestion){ const eh0=editHistory.length; const p2=placeSuggestedCourtyard();
+  ok(p2===true ? courtyards.length===1 : (courtyards.length===0 && editHistory.length===eh0),
+     'AV-5: guard sözleşmesi — geçerse yerleşir, reddederse courtyards+geçmiş dokunulmaz'); }
+else ok(true, 'AV-5: (bu tabanda öneri yok — sözleşme testi atlandı)');
 `);
 
 console.log((fail? '  '+fail+' BAŞARISIZ, ':'✓ ')+'tüm avlu düzenleme testleri '+(fail?'':'geçti ')+'('+pass+')');

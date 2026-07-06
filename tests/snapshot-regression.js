@@ -58,6 +58,13 @@ const SCENARIOS = [
   { id:'kat52-kucuk', binaTipi:'apartman', katSayisi:5, katYuk:2.9,
     pts:[[-8.048,4],[9.449,4],[9.049,-4],[-8.448,-4]],
     specs:[{oda:1,salon:1,ensuite:false,acik:false,adet:2}] },
+  // AVLU-REWORK (2026-07-06) — 9. senaryo, ADDITIVE: merkezi avlulu apartman. Diğer 8 senaryo
+  // courtyards içermez (taze vm → courtyards=[] varsayılan) → onlar BİREBİR korunur; bu senaryo
+  // avlu-farkında yerleşimi (footprint oyma + avlu-komşu cephe + koridor-sarma) DONDURUR.
+  { id:'avlu-apt-40x18', binaTipi:'apartman', katSayisi:6, katYuk:2.9,
+    pts:[[0,0],[40,0],[40,18],[0,18]],
+    specs:[{oda:2,salon:1,ensuite:true,acik:false,adet:4}],
+    courtyards:[[[15,6],[25,6],[25,12],[15,12]]] },
 ];
 
 function runScenario(sc){
@@ -78,9 +85,11 @@ function runScenario(sc){
   });
   ctx.__PTS = sc.pts.map(p=>({ x:p[0], y:p[1] }));
   ctx.__SPECS = sc.specs;
+  ctx.__COURTYARDS = (sc.courtyards||[]).map(poly=>({ poly:poly.map(p=>({ x:p[0], y:p[1] })) }));
   new vm.Script(`
     pts = __PTS; closed = true;
     unitSpecs = __SPECS.map(s=>({...s}));
+    courtyards = __COURTYARDS.map(av=>({poly:av.poly.map(p=>({...p}))}));
     customCutsZ = null; unitLayout = {}; balconies = [];
     doorOverrides = {}; extraDoors = []; doorHidden = {}; editHistory = [];
     if (typeof villaFloors !== 'undefined') villaFloors = null;

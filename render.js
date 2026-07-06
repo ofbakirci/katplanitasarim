@@ -371,6 +371,18 @@ function render(){
     if(courtyards) courtyards.forEach((av,idx)=>{ if(idx!==avluDragIdx) drawA(av,false); });   // sürüklenen avlu ghost olarak çizilir
     if(mode==='avlu'&&avluGhost) drawA(avluGhost,true);
   }
+  /* OTO-AVLU (avlu-rework): önerilen aday avlu — kesikli mavi kutu + "tıkla" ipucu (avlu modunda,
+     hiç avlu yokken, sürükleme yokken). Kabul edilirse normal avluya dönüşür (placeSuggestedCourtyard). */
+  if(mode==='avlu' && closed && !clean && avluSuggestion && !avluGhost && (!courtyards||!courtyards.length)){
+    const gs=el('g',{}); svg.appendChild(gs);
+    const poly=avluSuggestion.poly, bb=bboxOf(poly);
+    const d='M'+poly.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z';
+    gs.appendChild(el('path',{d,fill:'rgba(47,111,143,.08)',stroke:'#2f6f8f','stroke-width':1.4,'stroke-dasharray':'2 4','stroke-linecap':'round'}));
+    if(pxPerM>5){ const fs=Math.max(8,Math.min(12,pxPerM*0.55));
+      const t=el('text',{x:W2Sx((bb.minX+bb.maxX)/2),y:W2Sy((bb.minY+bb.maxY)/2),'text-anchor':'middle','dominant-baseline':'middle',
+        'font-size':fs,fill:'#2f6f8f','font-weight':'700','opacity':0.85});
+      t.textContent='avlu öner'; gs.appendChild(t); }
+  }
 
   /* balkonlar */
   if(closed && mode!=='site' && !clean && (balconies.length || (mode==='balkon'&&hoverBalk&&hoverBalk.ghost))){ /* balkon AI temiz modda çizilmez → kadraj kenar-maskesiyle birebir */

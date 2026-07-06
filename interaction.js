@@ -132,6 +132,7 @@ function avluPolyValid(poly){ return poly && poly.length>=4 && poly.every(p=>pip
 const avluCursor={n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize',body:'move'};
 /* avlu eklendi/silindi → footprint değişti: plan varsa yeniden üret, kat/blok anlık görüntüsünü tazele */
 function avluChanged(){
+  if(courtyards&&courtyards.length) avluSuggestion=null;   // OTO-AVLU: avlu var → öneri sönsün
   if(plan && closed){ try{ resetCuts(); generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
     catch(err){ console.error('avlu yeniden üretim:', err); } }
   else render();
@@ -153,6 +154,18 @@ function avluCommitGuard(prev){
   }
   if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true);
   return true;
+}
+/* OTO-AVLU (avlu-rework): önerilen avluyu yerleştir. Normal ekleme akışının aynısı
+   (pushEdit + avluCommitGuard) → undo/redo pürüzsüz, koridor-bölme guard'ı geçerli.
+   Guard reddederse öneri kaldırılır (kullanıcı elle daha uygun boşluk çizsin). */
+function placeSuggestedCourtyard(){
+  if(!avluSuggestion) return false;
+  const prev=courtyardsSnapshot();
+  courtyards.push({poly:avluSuggestion.poly.map(p=>({x:p.x,y:p.y}))});
+  avluSuggestion=null;
+  if(avluCommitGuard(prev)){ pushEdit({type:'avlu', prev}); return true; }
+  setStatusHint('Önerilen avlu bu planda koridoru bölüyor — kendin daha uygun bir boşluk çiz.','#b35a2e');
+  return false;
 }
 svg.addEventListener('mousemove',e=>{
   const r=svg.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
@@ -425,6 +438,10 @@ svg.addEventListener('mousedown',e=>{
   if(mode==='avlu'){
     if(e.button!==0 || !closed) return;
     const wx=S2Wx(sx), wy=S2Wy(sy);
+    /* OTO-AVLU (avlu-rework): önerilen boşluğa tıklama = tek-tık yerleştir (normal düzenlenebilir). */
+    if(avluSuggestion && !avluGhost && pip(wx,wy,avluSuggestion.poly)){
+      placeSuggestedCourtyard(); e.preventDefault(); return;
+    }
     const hh=hitAvluHandle(wx,wy);   // AV-2: mevcut avlu tutamağı → taşı/boyutlandır
     if(hh){
       avluDragIdx=hh.i;
@@ -1025,6 +1042,13 @@ function updateModeBadge(m){
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
 const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
+  /* OTO-AVLU (avlu-rework): avlu moduna girince derin/karanlık footprint için nazik öneri hesapla.
+     Dayatma YOK — statusHint + tıkla-yerleştir aday ghost; başka moda geçince temizlenir. */
+  avluSuggestion=null;
+  if(m==='avlu' && plan && closed && typeof suggestCourtyard==='function'){
+    try{ avluSuggestion=suggestCourtyard(); }catch(err){ avluSuggestion=null; }
+    if(avluSuggestion) setStatusHint('Bu taban derin/karanlık — orta bölge için avlu önerilir. Önerilen boşluğa tıkla ya da kendin sürükle.','#2f6f8f');
+  }
   for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tWin','window'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';

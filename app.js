@@ -34,6 +34,7 @@ let hoverBalk = null;         // balkon modu önizleme {ei,t0,t1,depth} | tutama
 let courtyards = [];          // iç avlular: {poly:[{x,y}...]} (dünya koord). generate() bunları footprint'ten oyar
 let avluGhost = null;         // avlu modunda sürüklenen yeni/taşınan avlu önizlemesi {poly:[...], invalid?} | null
 let avluDragIdx = -1;         // AV-2: taşınmakta/boyutlanmakta olan mevcut avlunun indeksi (render solid çizmez, ghost gösterir) | -1
+let avluSuggestion = null;    // OTO-AVLU (avlu-rework): derin/karanlık footprint aday avlu önerisi {poly,darkDist,cx,cy} | null — avlu moduna girince hesaplanır, kullanıcı 'Öner' ile yerleştirir
 let doorOverrides = {};       // elle kapı yeri: key -> {h,x,y}; geçersizleşirse otomatiğe düşer
 let extraDoors = [];          // çift tıkla eklenen kapılar: {h,x,y}
 let doorHidden = {};          // çift tıkla silinen otomatik kapılar: key -> true

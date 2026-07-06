@@ -12,6 +12,13 @@ const REG = {
   yanginYukseklik:21.5, kacisMesafe:30, siginakDaire:8, teknikOdaDaire:6,
   cikmaMax:1.5, balkonMinD:1.2, taksMax:0.4, yanBahce:3.0,
   avluMinKisa:1.5, avluIsikOran:0.25, // iç avlu: hava bacası asgari kısa kenar (m); ışık için önerilen ≥ bina yük. × oran
+  /* ── OTO-AVLU ÖNERİSİ (2026-07-06, avlu-rework) — additive; motor çıktısını DEĞİŞTİRMEZ ──
+     Yalnız avlu MODUNDA + hiç avlu yokken nazik statusHint/öneri tetiklemek için ölçüler.
+     "Karanlık" = bir iç hücrenin en yakın cepheye (dış kenar) manhattan mesafesi eşiği aşarsa.
+     Öneri = otomatik dayatma DEĞİL: kullanıcı 'Öner' aksiyonuyla yerleştirir, sonra düzenler. */
+  avluOneriDerinlik:7.0,   // en-derin iç hücrenin cepheye uzaklığı ≥ bu (m) → footprint karanlık merkezli
+  avluOneriAlan:150,       // öneri yalnız ≥ bu taban alanında (m²; küçük tabanda avlu israf) anlamlı
+  avluOneriKisa:3.0,       // önerilen aday avlunun kısa kenarı (m; avluMinKisa üstü, ışık-verimli)
   bloklarArasiMin:6.0, // site: iki blok arası şematik asgari mesafe (m; imar/yangın durumuna göre değişir)
   katOturumOran:0.7, // katları ayrı planlanan villada her kat oturumu ≥ zeminin %70'i
   parkBayLen:5.0, parkBayWid:2.5, parkAisle:5.0, // dik (90°) park yeri 2,5×5 m + manevra yolu 5 m (Otopark Yön.)

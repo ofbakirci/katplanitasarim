@@ -985,8 +985,17 @@ function generate(keepCuts){
     if(depth2<8||width2<8) return null; // sığ/dar villada tek yüklü T-plan daha doğru
     /* claimedArea: önceden sabitlenmiş merdiven (üst kat) — doluluk/kapasiteler tam alanla hesaplanır */
     const area=areaOfCells(cells) + (claimedArea||0);
-    /* taban dikdörtgenden çok sapıyorsa (L-villa) eski yol: bant varsayımı bozulur */
-    if(area/(depth2*width2)<0.85) return null;
+    /* taban dikdörtgenden çok sapıyorsa (L-villa) eski yol: bant varsayımı bozulur.
+       AVLU-REWORK (2026-07-06): iç PATIO tanımı gereği bbox'ta boşluk bırakır → ham doluluk
+       yanlışlıkla <0,85'e düşer ve villa güzel sofa düzeninden generic fallback'e düşerdi.
+       Patio hücreleri (bbox içi ama cells dışı ve bir avluya ait) denominatörden düşülür →
+       patio-farkında doluluk. Avlusuz villada 0 patio → davranış BİREBİR (baseline korunur). */
+    let patioCells=0;
+    if(avlus.length){ for(let r=r0;r<=r1;r++)for(let c=c0;c<=c1;c++){
+      const i=r*cols+c, cx=minX+(c+.5)*M, cy=minY+(r+.5)*M;
+      if(cm[i]===-1 && !inside[i] && avlus.some(av=>pip(cx,cy,av.poly))) patioCells++; } }
+    const bboxArea=(depth2*width2) - patioCells*M*M;
+    if(area/Math.max(1e-6,bboxArea)<0.85) return null;
     const unit={spec:u, rooms:[], antre:null};
     const sr0=r0+Math.round((r1-r0+1)/2)-1, sr1=sr0+2; // 1,5 m omurga (orta)
     const nBeds=Math.max(0,u.oda), hasEns=u.ensuite&&nBeds>0;

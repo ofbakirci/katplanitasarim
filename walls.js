@@ -275,6 +275,55 @@ function avluSplitsCorridor(){
   }
   return null;
 }
+/* AVLU-REWORK (2026-07-06) — AVLU-FARKINDA CEPHE: bir bölge (oda) hücrelerinden en az biri
+   bir AVLU hücresine komşuysa avluya bakar → doğal ışık/havalandırma alır (avluya bakan oda
+   kenarları cephe sayılır — mimari kural). Motor çıktısını DEĞİŞTİRMEZ; render/checks/3B
+   katmanları "bu oda karanlık mı?" derken avlu-cephesini de sayabilsin diye salt-okunur sorgu. */
+function courtyardLightsRoom(g){
+  if(!plan||!g||!g.cells||typeof courtyards==='undefined'||!courtyards||!courtyards.length) return false;
+  const p=plan;
+  const isAvluCell=(r,c)=>{ if(r<0||c<0||r>=p.rows||c>=p.cols) return false;
+    const cx=p.minX+(c+0.5)*M, cy=p.minY+(r+0.5)*M;
+    return !p.inside[r*p.cols+c] && courtyards.some(av=>pip(cx,cy,av.poly)); };
+  for(const i of g.cells){ const r=(i/p.cols)|0, c=i%p.cols;
+    if(isAvluCell(r-1,c)||isAvluCell(r+1,c)||isAvluCell(r,c-1)||isAvluCell(r,c+1)) return true; }
+  return false;
+}
+/* AVLU-REWORK (2026-07-06) — OTO-AVLU ÖNERİSİ: derin/karanlık footprint'te (iç hücrelerin
+   cepheye manhattan uzaklığı REG.avluOneriDerinlik'i aşarsa) kullanıcıya bir aday avlu
+   dikdörtgeni önerir. OTOMATİK DAYATMA YOK — yalnız hiç avlu yokken çağrılır, aday döndürür;
+   yerleştirme kullanıcı 'Öner' aksiyonuyla olur. Salt hesap: motor state'ini değiştirmez.
+   Döner: {poly:[4 köşe], darkDist:m, cx,cy} ya da null (footprint yeterince aydınlık/küçük). */
+function suggestCourtyard(){
+  if(!plan||!plan.inside||!closed) return null;
+  if(typeof courtyards!=='undefined' && courtyards && courtyards.length) return null; // zaten avlu var
+  const p=plan, cols=p.cols, rows=p.rows, N=cols*rows;
+  // taban alanı eşiği (küçük tabanda avlu israf)
+  let insideTot=0; for(let i=0;i<N;i++) if(p.inside[i]) insideTot++;
+  if(insideTot*M*M < (REG.avluOneriAlan||150)) return null;
+  // her iç hücrenin dış cepheye (dış kenar/!inside) manhattan uzaklığı — çok kaynaklı BFS
+  const dist=new Int32Array(N).fill(-1); const q=[];
+  for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){ const i=r*cols+c; if(!p.inside[i]) continue;
+    const edge=(r-1<0||!p.inside[i-cols])||(r+1>=rows||!p.inside[i+cols])
+             ||(c-1<0||!p.inside[i-1])||(c+1>=cols||!p.inside[i+1]);
+    if(edge){ dist[i]=0; q.push(i); } }
+  for(let h=0;h<q.length;h++){ const i=q[h], r=(i/cols)|0, c=i%cols;
+    [[r-1,c],[r+1,c],[r,c-1],[r,c+1]].forEach(([rr,cc])=>{ if(rr<0||cc<0||rr>=rows||cc>=cols) return;
+      const j=rr*cols+cc; if(p.inside[j]&&dist[j]<0){ dist[j]=dist[i]+1; q.push(j); } }); }
+  let best=-1, bi=-1; for(let i=0;i<N;i++) if(dist[i]>best){ best=dist[i]; bi=i; }
+  const darkDist=best*M;
+  if(darkDist < (REG.avluOneriDerinlik||7)) return null;   // footprint yeterince aydınlık
+  // aday avlu: en karanlık hücre merkezli, kısa kenar REG.avluOneriKisa, ızgaraya snap'li kare
+  const br=(bi/cols)|0, bc=bi%cols;
+  const cx=p.minX+(bc+0.5)*M, cy=p.minY+(br+0.5)*M;
+  const half=Math.max(REG.avluMinKisa, REG.avluOneriKisa||3)/2;
+  const snap=v=>Math.round(v/M)*M;
+  const poly=[{x:snap(cx-half),y:snap(cy-half)},{x:snap(cx+half),y:snap(cy-half)},
+              {x:snap(cx+half),y:snap(cy+half)},{x:snap(cx-half),y:snap(cy+half)}];
+  // aday tümüyle taban içinde olmalı (cepheye taşarsa öneri verme — kullanıcı elle çizsin)
+  if(!poly.every(pt=>pip(pt.x,pt.y,pts))) return null;
+  return {poly, darkDist, cx, cy};
+}
 /* ===== KOPUK BÖLGE ONARIMI (relayout / cut-drag / swap / yükleme sonrası) =====
    relayoutFootprint (daire takası, sınır relayout'u) tüketilmeyen "leftover" hücreleri
    tek "en büyük odaya" döküyor; çekirdek (merdiven/asansör) bina içine girinti yapınca
