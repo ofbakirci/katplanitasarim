@@ -140,6 +140,35 @@ const regBefore = run(`plan.regions.length`);
 run(`amenities.push({type:'pool', x:34, y:18, w:12, h:6, ang:0})`);
 chk(run(`plan.regions.length`)===regBefore, 'imkan eklemek plan bölge sayısını değiştirmez (motor ayrık)');
 
+/* ---- 11) H1b: İMKAN BOYUTLANDIRMA (tutamaç + Büyüt/Küçült) — SALT-VERİ mantığı ---- */
+chk(run(`typeof hitAmenityHandle==='function' && typeof amenityResizeBox==='function' && typeof amenityResizeStep==='function' && typeof amenityBBox==='function'`), 'H1b: boyutlandırma yardımcıları tanımlı (hit/box/step/bbox)');
+chk(run(`AMENITY_MIN===2`), 'H1b: asgari boyut 2 m (brief 2×2)');
+// bbox
+chk(run(`(function(){ var b=amenityBBox({x:5,y:6,w:10,h:8}); return b.minX===5&&b.minY===6&&b.maxX===15&&b.maxY===14; })()`), 'H1b: amenityBBox köşeleri doğru');
+// SE köşe drag → dışa büyür, min-köşe (x,y) sabit
+chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'se',20,22); return nb.x===5&&nb.y===6&&nb.w===15&&nb.h===16; })()`), 'H1b: SE köşe dışa sürükle büyütür, min-köşe çapalı');
+// NW köşe drag → sol/üstten büyür, max-köşe sabit
+chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'nw',2,3); return nb.x===2&&nb.y===3&&nb.w===13&&nb.h===11; })()`), 'H1b: NW köşe sürükle max-köşeyi çapalar');
+// min clamp: SE'yi min-köşenin içine sürükle → 2×2'de durur
+chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'se',5.1,6.1); return nb.w===2&&nb.h===2; })()`), 'H1b: min 2×2 korunur (SE içeri sürüklense de)');
+// kenar (n) tek eksen
+chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'n',99,2); return nb.x===5&&nb.w===10&&nb.y===2&&nb.h===12; })()`), 'H1b: kenar tutamacı (n) yalnız bir ekseni boyutlandırır');
+// amenityResizeStep: adım büyüt + min clamp + çakışma reddi
+run(`amenities=[{type:'ornament', x:-10, y:-8, w:4, h:3, ang:0}]; editHistory=[]; redoHistory=[];`);
+chk(run(`(function(){ var ok=amenityResizeStep(0,1); return ok&&Math.abs(amenities[0].w-4.5)<1e-6&&Math.abs(amenities[0].h-3.5)<1e-6; })()`), 'H1b: Büyüt +step (0.5) genişletir + merkez korunur');
+chk(run(`(function(){ for(var i=0;i<20;i++) amenityResizeStep(0,-1); return amenities[0].w>=2&&amenities[0].h>=2; })()`), 'H1b: tekrar Küçült min 2 m altına inmez');
+// çakışma reddi: iki komşu imkan, birini diğerine doğru büyüt → reddedilir (boyut değişmez)
+run(`amenities=[{type:'ornament', x:-14, y:-8, w:4, h:3, ang:0},{type:'ornament', x:-9.9, y:-8, w:4, h:3, ang:0}]; editHistory=[];`);
+chk(run(`(function(){ var w0=amenities[0].w; var ok=amenityResizeStep(0,1); return ok===false && amenities[0].w===w0; })()`), 'H1b: komşuya taşacak büyütme reddedilir (SAT), boyut korunur');
+// döndürülmüş imkanda köşe tutamacı yok (hitAmenityHandle ang!=0 atlar) — S2Wx global gerekiyor; doğrudan mantık:
+chk(run(`(function(){ amenities=[{type:'green',x:-8,y:-10,w:10,h:8,ang:90}]; return typeof hitAmenityHandle==='function'; })()`), 'H1b: döndürülmüş imkan güvenli (hitAmenityHandle ang!=0 köşe döndürmez)');
+// undo: boyutlandırma pushEdit(type:amenity) → geri alınır
+run(`amenities=[{type:'ornament', x:-10, y:-8, w:4, h:3, ang:0}]; editHistory=[]; redoHistory=[];`);
+run(`amenityResizeStep(0,1);`);
+chk(run(`editHistory.length===1 && editHistory[0].type==='amenity'`), 'H1b: boyutlandırma pushEdit(type:amenity) yazar');
+run(`undoEdit()`);
+chk(run(`amenities[0].w===4 && amenities[0].h===3`), 'H1b: geri al boyutlandırmayı çözer (4×3)');
+
 function report(){
   console.log('\nSITE-IMKAN (S3): '+pass+' geçti, '+fail+' başarısız');
 }

@@ -82,6 +82,24 @@ eval(src+`
   T('1. kat: hol → yangın merdiveni erişimi var', !cellsOf('yangin').length || adjacent('koridor','yangin'));
   T('1. kat: hol → asansör erişimi var', !cellsOf('asansor').length || adjacent('koridor','asansor'));
 
+  /* --- H3: konut-dışı katta 3B OTOMATİK DÜŞÜŞ karar-girdileri (view3d nonResidentialFallback bunları okur) ---
+     view3d closure'ı headless çağrılamaz; ama fallback'in dayandığı motor sözleşmesini burada doğrularız:
+     (a) ticari kat buildFloorplanMap → unitObjs boş = ESKİ generic hata koşulu (fallback bunu yakalar),
+     (b) usageOf/usageEnabled ilk KONUT katını bulur (zemin ticari → 1. kat konut hedefi),
+     (c) konut kata switchFloor sonrası buildFloorplanMap unit üretir (iç 3B açılabilir). */
+  switchFloor(zeminIdx());   // zemine (ticari) dön
+  T('H3(a): ticari aktif katta daire yok → generic-hata koşulu (fallback devrede)', plan.unitObjs.length===0);
+  T('H3(b): usageEnabled (apartman + katAyri) açık', usageEnabled()===true);
+  T('H3(b): aktif kat konut-DIŞI (ticari)', katKullanim!=='konut' && usageOf(zeminIdx())==='ticari');
+  // ilk zemin-üstü konut katı = fallback hedefi
+  const firstKonut=(function(){ for(let k=zeminIdx();k<totalFloors();k++) if(usageOf(k)==='konut') return k; return -1; })();
+  T('H3(b): ilk konut katı bulunur (hedef = 1. kat)', firstKonut===1);
+  T('H3(b): binada konut katı var (buildingHasUsage)', buildingHasUsage('konut')===true);
+  switchFloor(firstKonut);
+  T('H3(c): konut kata geçince daire üretilir (iç 3B açılabilir)', plan.unitObjs.length>=1 && katKullanim==='konut');
+  switchFloor(zeminIdx());   // Part B ticari zeminden bağımsız olsun diye eski duruma dön
+  T('H3: geri dönüşte aktif kat yine ticari (2B state bozulmadı)', activeFloor===zeminIdx() && katKullanim==='ticari');
+
   /* --- Part B: kat düzeni kopyala → uygula --- */
   switchFloor(2); switchFloor(1);                 // 1,2. kat ziyaret edildi; 1. kat aktif
   copyActiveFloorLayout();

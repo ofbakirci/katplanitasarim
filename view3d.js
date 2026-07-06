@@ -1882,6 +1882,15 @@
       return pts.map(function(p){ return [p.x,p.y]; }); } }catch(e){}
     return null;   // caller map-birleşimine düşer
   }
+  // H1: PARSEL sınırı (dünya metre) — global parcelPts. Dış zemin/bahçe düzlemi buna oturur (bina bbox'ına
+  //   değil): bahçedeki imkanlar parselin İÇİNDE kaldığından zeminin ÜSTÜNDE görünür (boşlukta taşmaz).
+  //   Yalnız kapalı + ≥3 köşeli parselde döner; yoksa null → caller bina bbox + pay güvenli-düşüşüne iner.
+  function extParcelOutline(){
+    try{ if(typeof parcelPts!=='undefined' && Array.isArray(parcelPts) && parcelPts.length>=3
+      && (typeof parcelClosed==='undefined'||parcelClosed)){
+      return parcelPts.map(function(p){ return [p.x,p.y]; }); } }catch(e){}
+    return null;
+  }
   // Avlu poligonları (dünya metre) — courtyards global. Kabukta DELİK olarak (döşeme + çatıda oyulur,
   //   cephe iç-avluya bakar). Yoksa boş.
   function extCourtyards(){
@@ -2240,11 +2249,24 @@
     // bina bbox (fit için) — kontur + kat yüksekliği
     let bmnx=1e9,bmnz=1e9,bmxx=-1e9,bmxz=-1e9;
     contour.forEach(function(m){ bmnx=Math.min(bmnx,m[0]); bmnz=Math.min(bmnz,m[1]); bmxx=Math.max(bmxx,m[0]); bmxz=Math.max(bmxz,m[1]); });
-    // ZEMİN DÜZLEMİ (parsel/bahçe) — bina bbox'ından geniş, y=0 hemen altında
-    const gpad=Math.max(6,(bmxx-bmnx)*0.6);
-    const gw=(bmxx-bmnx)+gpad*2, gd=(bmxz-bmnz)+gpad*2;
+    // ZEMİN DÜZLEMİ (parsel/bahçe) — H1: PARSEL varsa parselin bbox'ı (bahçedeki imkanlar parsel içinde
+    //   → zeminin ÜSTÜNDE, boşlukta taşmaz); yoksa eski davranış (bina bbox + geniş pay). y=0 hemen altında.
+    const parcelM=extParcelOutline();
+    let gcx,gcz,gw,gd;
+    if(parcelM){
+      let pmnx=1e9,pmnz=1e9,pmxx=-1e9,pmxz=-1e9;
+      parcelM.forEach(function(m){ pmnx=Math.min(pmnx,m[0]); pmnz=Math.min(pmnz,m[1]); pmxx=Math.max(pmxx,m[0]); pmxz=Math.max(pmxz,m[1]); });
+      const ppad=Math.max(1.5,(pmxx-pmnx)*0.06);   // parsel kenarına ince pay (görsel çerçeve; imkanlar parsel içinde)
+      gw=(pmxx-pmnx)+ppad*2; gd=(pmxz-pmnz)+ppad*2;
+      gcx=(pmnx+pmxx)/2; gcz=(pmnz+pmxz)/2;
+    } else {
+      const gpad=Math.max(6,(bmxx-bmnx)*0.6);
+      gw=(bmxx-bmnx)+gpad*2; gd=(bmxz-bmnz)+gpad*2;
+      gcx=(bmnx+bmxx)/2; gcz=(bmnz+bmxz)/2;
+    }
     const ground=new THREE.Mesh(new THREE.BoxGeometry(gw,0.1,gd),mats.ground);
-    ground.position.set((bmnx+bmxx)/2,-0.06,(bmnz+bmxz)/2); ground.receiveShadow=true; exteriorGroup.add(ground);
+    ground.position.set(gcx,-0.06,gcz); ground.receiveShadow=true; exteriorGroup.add(ground);
+    exteriorGroup.userData.groundFromParcel=!!parcelM;   // test/teşhis: zemin parselden mi türedi
     // S3: SİTE İMKANLARI — bahçe düzleminde hafif temsil (imkan başına ≤6 mesh hedefi)
     buildExtAmenities(exteriorGroup, mats);
     const PARAPET_H=0.9;
@@ -2508,8 +2530,10 @@
   function extEnsureGizmos(){ if(!extGizmos||!extGizmos.parent){ extGizmos=new THREE.Group(); if(scene) scene.add(extGizmos); } return extGizmos; }
   function extDisposeGizmoChildren(){ if(!extGizmos) return; while(extGizmos.children.length){ const ch=extGizmos.children[0]; disposeGizmo(ch); extGizmos.remove(ch); } }
   // dış gizmoları çiz — koni (bakış) + kamera modeli + seçili marker. İç renderCamGizmos ikizi (aynı yapıcılar).
+  let _extGizRaf=0;   // H2: coalesced gizmo yeniden-kurma kare id'si (aşağıdaki renderExtGizmosSoon ile paylaşılır)
   function renderExtGizmos(){
     if(!scene) return;
+    if(_extGizRaf){ if(typeof cancelAnimationFrame==='function') cancelAnimationFrame(_extGizRaf); _extGizRaf=0; }   // H2: bekleyen coalesced kareyi iptal et (senkron yol kazanır)
     const g=extEnsureGizmos();
     extDisposeGizmoChildren();
     if(!exteriorMode){ g.visible=false; return; }
@@ -2528,13 +2552,24 @@
       g.add(makeViewCone(gc,true));
     }
   }
+  // H2 (donma fix): hayalet/sürükleme sırasında gizmo yeniden-kurmayı KARE başına 1'e sıkıştır. Her mousemove
+  //   renderExtGizmos()'u çağırırsa (dispose + N drone koni/kamera mesh yeniden üret) yük birikir → donma.
+  //   Bu, birden çok mousemove'u tek animasyon karesinde birleştirir (görsel gecikme yok; loop zaten 60fps render eder).
+  function renderExtGizmosSoon(){
+    if(_extGizRaf) return;
+    if(typeof requestAnimationFrame!=='function'){ renderExtGizmos(); return; }
+    _extGizRaf=requestAnimationFrame(function(){ _extGizRaf=0; renderExtGizmos(); });
+  }
   // pointer → dış sahne: önce zemin (ground/roof) hit, yoksa drone yükseklik düzlemine düş → dünya {x,z}
-  function extGroundHit(ev){
+  //   H2 (donma fix): cheap=true iken (hayalet/sürükleme — HER mousemove) TÜM kabuğa (bin+ mesh: pencere/
+  //   balkon/duvar × kat × blok) rekürsif raycast YAPILMAZ; yalnız analitik zemin düzlemi kesişimi (O(1)).
+  //   Rekürsif kabuk raycast'ı yalnız NİHAİ tık'ta (cheap=false) — drone çatıya da konabilsin diye.
+  function extGroundHit(ev,cheap){
     if(!scene||!renderer) return null;
     const rect=renderer.domElement.getBoundingClientRect();
     const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
     if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
-    if(exteriorGroup){ const hits=raycaster.intersectObject(exteriorGroup,true); if(hits.length) return { x:hits[0].point.x, z:hits[0].point.z }; }
+    if(!cheap && exteriorGroup){ const hits=raycaster.intersectObject(exteriorGroup,true); if(hits.length) return { x:hits[0].point.x, z:hits[0].point.z }; }
     if(!camGroundPlane) camGroundPlane=new THREE.Plane(new THREE.Vector3(0,1,0), 0);
     const p=new THREE.Vector3(); if(!raycaster.ray.intersectPlane(camGroundPlane, p)) return null;
     return { x:p.x, z:p.z };
@@ -2557,9 +2592,9 @@
     renderExtGizmos(); renderExtDock();
     setHint&&setHint('Drone — binanın çevresinde bir NOKTAYA tıkla · Esc / sağ-tık vazgeç');
   }
-  function moveExtGhost(ev){ if(!extGhost) return; const hit=extGroundHit(ev); if(!hit) return;
+  function moveExtGhost(ev){ if(!extGhost) return; const hit=extGroundHit(ev,true); if(!hit) return;   // H2: cheap zemin-düzlemi hit
     extGhost.pos={ x:hit.x, y:extGhost.y, z:hit.z }; extGhost.target=extCenter();
-    renderExtGizmos(); }
+    renderExtGizmosSoon(); }   // H2: kare-başına 1 gizmo yeniden-kur (donma fix)
   function clickExtGhost(ev){ if(!extGhost) return; const hit=extGroundHit(ev); if(!hit) return;
     const c={ pos:{x:hit.x,y:extGhost.y,z:hit.z}, target:Object.assign({},extCenter()), lens:extGhost.lens||EXT_DRONE_LENS_DEF };
     extGhost=null; if(renderer) renderer.domElement.style.cursor='';
@@ -2571,10 +2606,10 @@
   // seçili drone gizmosu üstünde sol-drag → taşı (hedef bina merkezinde sabit kalır). İç beginCamDrag ikizi.
   function beginExtDrag(idx){ if(idx<0||idx>=extCams.length) return; extActive=idx; extDrag={idx:idx}; extPlaceAction='none';   // A4: doğrudan sürükle = taşı (arm gerekmez)
     if(controls) controls.enabled=false; renderExtGizmos(); renderExtDock(); }
-  function moveExtDrag(ev){ if(!extDrag) return; const hit=extGroundHit(ev); if(!hit) return;
+  function moveExtDrag(ev){ if(!extDrag) return; const hit=extGroundHit(ev,true); if(!hit) return;   // H2: cheap zemin-düzlemi hit
     const c=extCams[extDrag.idx]; if(!c) return; c.pos.x=hit.x; c.pos.z=hit.z;
     if(!c.aimed){ c.target=Object.assign({},extCenter()); }   // A4: aim edilmemiş drone taşınırken merkeze bakmaya devam eder
-    renderExtGizmos(); }
+    renderExtGizmosSoon(); }   // H2: kare-başına 1 gizmo yeniden-kur (donma fix)
   function endExtDrag(){ if(!extDrag) return; extDrag=null; if(controls) controls.enabled=true; renderExtGizmos(); }
   function selectExtCam(i){ extActive=(i>=0&&i<extCams.length)?i:-1; extPipClosed=false; extPlaceAction='none'; renderExtGizmos(); renderExtDock(); }
   function removeExtCam(i){ if(i<0||i>=extCams.length) return; extCams.splice(i,1);
@@ -4320,6 +4355,10 @@
           const hit=extGroundHit(e); if(hit){ if(extPlaceAction==='aim') extAimDroneTo(hit); else extMoveDroneTo(hit); }
           return;
         }
+        // H2 (deselect): drone SEÇİLİYKEN boş alana tık (drone gizmosu üstünde DEĞİL, nötr eylem) → seçimi bırak.
+        //   Kullanıcı "drone'u deselect edemiyorum" dedi. Drone üstüne tık = beginExtDrag (yukarıda pointerdown),
+        //   buraya düşmez; buraya yalnız BOŞ tık düşer → güvenli deselect (Esc'in tık karşılığı).
+        if(!moved && e.button===0 && extActive>=0 && extPlaceAction==='none'){ selectExtCam(-1); return; }
         return;
       }
       if(furnGhost){ if(!moved && e.button===0){ moveFurnGhost(e); dropFurnGhost(); } return; }   // hayalet: yerinde tık = bırak (sürükleyip orbit ettiyse bırakmaz)
@@ -6175,9 +6214,62 @@
 
   // ── açılış: boot (three.js + sahne) → full ya da yan-yana (compare) layout ──
   let compareMode=false, compareRefURL=null;   // adım 4 karşılaştırma: mesh tam genişlik + sol-üst boyalı-plan lightbox
+  let _bootWantExterior=false;   // H3: konutsuz binada boot → iç sahne yerine DIŞ (Bina) görünüme aç
+  let _h3RestoreFloor=-1;        // H3: konut-dışı kattan konut kata geçildiyse, 3B kapanınca dönülecek 2B kat
+  // H3 (kullanıcı kararı): aktif kat KONUT-DIŞI (ticari/otopark/sığınak) ise ESKİ generic "yerleşim oluşturun"
+  //   hatası YERİNE otomatik davran. Bu TÜM giriş yollarını kapsar (kabuk 3B butonu, prototip adım-2, kat-geçişi)
+  //   çünkü boot() hepsinin ortak kapısı. Dönüş: 'ok' (bu kat konut, olağan yol) · 'interior' (konut kata geçildi)
+  //   · 'exterior' (bina konutsuz → dış görünüm). Toast ile yönlendirir; engellemez. 2B aktif kat bozulmaz:
+  //   switchFloor 2B state'i kaydeder + iç sahne map'ini o kattan kurar; 3B kapanınca kullanıcı bıraktığı katta
+  //   kalır (kat sekmesi kaydedilen kata döner). Yalnız apartman + katları-ayrı akışında (usageEnabled) devrede.
+  function nonResidentialFallback(){
+    var toast=(typeof roomDrawToast==='function')?roomDrawToast:function(){};
+    var activeNonRes=false;
+    try{ activeNonRes=(typeof katKullanim!=='undefined' && katKullanim!=='konut'); }catch(e){ activeNonRes=false; }
+    if(!activeNonRes) return 'ok';                                   // aktif kat konut → olağan yol (villa/konut hiç dokunma)
+    // konut kat ara: katları-ayrı açıkken diğer katları tara (usageOf); ilk konut katına geç
+    var target=-1;
+    try{
+      if(typeof usageEnabled==='function' && usageEnabled() && typeof totalFloors==='function' && typeof usageOf==='function'){
+        var zi=(typeof zeminIdx==='function')?zeminIdx():0, tot=totalFloors();
+        // ÖNCELİK: zemin-üstü konut katları (görsel olarak "1. kat"); yoksa herhangi bir konut kat
+        for(var k=zi;k<tot;k++){ if(usageOf(k)==='konut'){ target=k; break; } }
+        if(target<0){ for(var j=0;j<tot;j++){ if(usageOf(j)==='konut'){ target=j; break; } } }
+      }
+    }catch(e){ target=-1; }
+    if(target>=0){
+      var from=-1; try{ from=(typeof activeFloor!=='undefined')?activeFloor:-1; }catch(e){ from=-1; }
+      try{ if(typeof switchFloor==='function') switchFloor(target); }catch(e){}
+      // 3B kapanınca kullanıcı bıraktığı (konut-dışı) 2B kata geri dönsün (state bozulmasın)
+      _h3RestoreFloor=(from>=0 && from!==target)? from : -1;
+      var fn=(typeof floorName==='function')?floorName(target):(target+'. kat');
+      toast('Zemin kat ticari — 3B iç mekân '+fn+' üzerinden açıldı. Ticari/otopark iç mekânı yakında.', 5200);
+      return 'interior';
+    }
+    // konut kat HİÇ yok → dış (Bina) görünüm
+    toast('Bu binada konut katı yok — 3B dış (bina) görünümü açıldı. Ticari/otopark iç mekânı yakında.', 5200);
+    return 'exterior';
+  }
+  // H3: konutsuz bina (dış-only) için minimal SENTETİK map — buildScene/buildExterior scene.__map ister.
+  //   pts (dünya metre) 1:1 px alınır (metersPerPixel=1, origin=0) → tek "oda" poligonu = bina konturu.
+  //   İç sahne bu tek kütleyi merkezler; hemen setExteriorMode(true) dış kabuğu pts'ten kurar (contour=pts).
+  function syntheticExteriorMap(){
+    var poly=null;
+    try{ if(typeof pts!=='undefined' && Array.isArray(pts) && pts.length>=3) poly=pts.map(function(p){ return [p.x,p.y]; }); }catch(e){}
+    if(!poly) return null;
+    return { scale:{ metersPerPixel:1, origin_px:[0,0] },
+             units:[{ id:'__ext', rooms:[{ id:'__extmass', type:'mass', polygon_px:poly }] }],
+             common_areas:[], doors:[], windows:[], __synthetic:true };
+  }
   function boot(){
     ensureOverlay();
-    const map = window.buildFloorplanMap && window.buildFloorplanMap();
+    _bootWantExterior=false;
+    var fb=nonResidentialFallback();            // H3: konut-dışı kat → otomatik yönlendir (generic hata YOK)
+    if(fb==='exterior') _bootWantExterior=true;
+    var map = window.buildFloorplanMap && window.buildFloorplanMap();
+    if((!map || !map.units || !map.units.length) && _bootWantExterior){
+      map = syntheticExteriorMap();             // H3: konutsuz bina → pts'ten minimal kabuk map'i (dış görünüm)
+    }
     if(!map || !map.units || !map.units.length){
       alert('Önce bir yerleşim oluşturun (oda/daire). 3B görünüm planı kullanır.'); return Promise.resolve(null);
     }
@@ -6203,6 +6295,7 @@
       resize();
       hydrateMaterials();                                    // M3: kalıcı store'dan malzeme seçimlerini yükle (save/load + 3B kapat-aç korunur)
       buildScene(map); built=true;
+      if(_bootWantExterior && !exteriorMode){ try{ setExteriorMode(true); }catch(e){} }   // H3: konutsuz bina → DIŞ (Bina) görünümle aç
       // host bazen boot anında daha boyutlanmamış olur → fitView aşırı yakın çerçeveler.
       // Bir sonraki karede (host kesin boyutlu) yeniden boyutlandır + sığdır (açıyı korur).
       requestAnimationFrame(function(){ resize(); if(!compareMode){ if(exteriorMode) fitExtView(); else fitView(); } });   // S1: dış moddaysak dış kadraj (iç fit dış kadrajı ezmesin)
@@ -6298,7 +6391,9 @@
     const fd=overlay&&overlay.querySelector('#v3dFurnDock'); if(fd) fd.style.display='none';
     const md=overlay&&overlay.querySelector('#v3dMatDock'); if(md) md.style.display='none';
     const fb=overlay&&overlay.querySelector('#v3dFurnBar'); if(fb) fb.style.display='none';
-    topLocked=false; freeSavedView=null; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); } }   // A4: kilit durumunu temizle
+    topLocked=false; freeSavedView=null; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); }   // A4: kilit durumunu temizle
+    if(_h3RestoreFloor>=0){ var rf=_h3RestoreFloor; _h3RestoreFloor=-1;   // H3: konut-dışı kata otomatik geçildiyse 2B'de o kata geri dön
+      try{ if(typeof switchFloor==='function') switchFloor(rf); }catch(e){} } }
   function resize(){ if(!renderer||overlay.style.display==='none') return;
     const w=host.clientWidth,h=host.clientHeight; renderer.setSize(w,h); if(cam){cam.aspect=w/h;cam.updateProjectionMatrix();}
     positionViewCtl(); }
@@ -6449,11 +6544,13 @@
       extCams.push({pos:{x:pos.x,y:clampDroneY(pos.y),z:pos.z},target:target||Object.assign({},extCenter()),lens:lens||EXT_DRONE_LENS_DEF});
       extActive=extCams.length-1; renderExtGizmos(); renderExtDock(); return extActive; },
     extStateForTest:function(){ return { mode:exteriorMode, droneCount:extCams.length, active:extActive, facade:extFacade,
-      placeActive:extPlaceActive, placeAction:extPlaceAction, hasGhost:!!extGhost, yRange:extDroneYRange() }; },
+      placeActive:extPlaceActive, placeAction:extPlaceAction, hasGhost:!!extGhost, yRange:extDroneYRange(),
+      orbitEnabled:(controls?controls.enabled:null), orbitNoRotate:(controls?!!controls.noRotate:null), hasDrag:!!extDrag }; },
     // CEPHE-2: dış kabuk ölçümü (perf + pencere raporu) — exteriorGroup.userData'dan.
     extShellStatsForTest:function(){ const u=exteriorGroup&&exteriorGroup.userData; if(!u) return null;
       return { buildMs:u.buildMs, meshCount:u.meshCount, protoWin:u.protoWin, fullBlocks:u.fullBlocks,
-        blockWins:u.blockWins, groundSeparate:!!u.groundSeparate, groundWin:u.groundWin }; },
+        blockWins:u.blockWins, groundSeparate:!!u.groundSeparate, groundWin:u.groundWin,
+        groundFromParcel:!!u.groundFromParcel }; },
     // A4 HEADLESS: drone yön/taşı paritesi (THREE'siz — extCams salt-veri). setExteriorCameras ile yükle, sonra:
     //   yaw = seçili drone'u döndür · aim = hedefe baktır · move = taşı · placeAction oku. Hedef bağımsızlaşır (aimed).
     extYawDroneForTest:function(deltaDeg){ extYawDrone(deltaDeg); return (extActive>=0?Object.assign({},extCams[extActive].target):null); },

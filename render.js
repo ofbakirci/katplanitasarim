@@ -300,6 +300,15 @@ function render(){
         if(a.ang) t.setAttribute('transform',`rotate(${a.ang} ${cx} ${cy})`);
         t.textContent=def.name; g.appendChild(t);
       }
+      /* H1b: hover'daki eksen-hizalı imkanda köşe/kenar BOYUT tutamaçları (avlu tutamaç dili). Döndürülmüşte yok. */
+      if(hov && !a.ang){
+        const x0=W2Sx(a.x), y0=W2Sy(a.y), x1=W2Sx(a.x+a.w), y1=W2Sy(a.y+a.h), mx=(x0+x1)/2, my=(y0+y1)/2;
+        const hs=Math.max(4,Math.min(7,pxPerM*0.28));
+        [[x0,y0],[x1,y0],[x1,y1],[x0,y1],[mx,y0],[mx,y1],[x0,my],[x1,my]].forEach(([hx,hy])=>{
+          g.appendChild(el('rect',{x:hx-hs, y:hy-hs, width:hs*2, height:hs*2, rx:2,
+            fill:'#fff', stroke:def.color, 'stroke-width':2}));
+        });
+      }
     };
     if(typeof amenities!=='undefined') amenities.forEach(drawAmenity);
     /* hayalet önizleme (yerleştirme) — park bay deseni: geçerli=yeşil kesikli, geçersiz=kırmızı */
