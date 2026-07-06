@@ -105,6 +105,14 @@
   .ps-msg.ps-info{background:#eef3fb; color:var(--info); border:1px solid #cdddf2;}
   .ps-msg .ps-dim{color:var(--muted); font-weight:400;}
   #parselSec #psCekme{width:80px;}
+  /* S4a: site özeti (Parsel/İmar panelinde) — kompakt etiket/değer satırları */
+  .site-sum{font-size:12px; color:var(--ink);}
+  .site-sum .ss-row{display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:5px 0; border-bottom:1px solid var(--line);}
+  .site-sum .ss-row:last-child{border-bottom:none;}
+  .site-sum .ss-l{color:var(--muted); font-weight:600; white-space:nowrap;}
+  .site-sum .ss-v{font-weight:600; text-align:right;}
+  .site-sum .ss-x{color:var(--muted); font-weight:400; font-size:11px;}
+  .site-sum .ss-note{margin-top:6px; font-size:11px; color:var(--muted); line-height:1.4;}
   #parselSec .ps-live{margin-top:7px; font-size:11.5px; color:var(--ink); line-height:1.55;}
   #parselSec .ps-live .ps-dim{color:var(--muted);}
   #parselSec .ps-live .ps-warn{color:var(--bad); font-weight:600;}
@@ -328,6 +336,10 @@
   #blockTabs button{border:1px solid transparent; border-radius:6px; background:transparent; padding:5px 10px; cursor:pointer; font:inherit; font-size:12px; color:var(--ink); white-space:nowrap;}
   #blockTabs button.active{background:#2f6f8f; color:#fff;}
   #blockTabs button.empty{color:var(--muted); font-style:italic;}
+  /* boş (sınırı çizilmemiş) blok kesikli çerçeveyle işaretlenir — aktifken de görünür (Item 1) */
+  #blockTabs button.empty{border:1px dashed #c79a5b;}
+  #blockTabs button.active.empty{background:#c79a5b; color:#fff; border-color:#a97c3d; font-style:normal;}
+  #blockTabs button .tag{margin-left:5px; font-size:10px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; opacity:.85; font-style:normal;}
   #blockTabs button.add{border:1px dashed var(--line); color:var(--muted);}
   #blockTabs button .x{margin-left:5px; opacity:.55; font-weight:700;}
   #blockTabs button .x:hover{opacity:1;}

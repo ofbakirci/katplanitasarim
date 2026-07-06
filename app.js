@@ -6,6 +6,7 @@ let pts = [];                 // poligon köşeleri (m)
 let roomPts = [];             // serbest oda çizimi (roomdraw modu): köşeler (m); kapanınca rasterize → yeni ODA
 let closed = false;
 let hoverP = null;
+let blockDrawBad = null;      // S4a: site modunda çizilen blok sınırı aday hâli çakışırsa {reason,name} (kırmızı hayalet) | null
 let plan = null;              // üretilen plan
 let customCutsZ = null; // bölge başına ayırıcı konumları
 let unitLayout = {};    // daire başına iç düzen tercihi: k → 'auto'|'flat'|'rail'
@@ -649,6 +650,84 @@ function otherBlockGhosts(){
     if(b && b.pts && b.pts.length>=3) out.push({name:blockName(i), pts:b.pts}); });
   return out;
 }
+/* ================= S4a: blok çakışma geometrisi =================
+   İki blok footprint'i AYNI parselde ALAN olarak üst üste binemez. YARATICI YORUM: yalnız
+   kenar/köşe teması (bitişik nizam — ortak duvar) YASAK DEĞİL; TR'de yaygın ve fiziksel olarak
+   geçerli. Bu yüzden overlap = "gerçek iç-alan örtüşmesi": (1) kenarların DÜZGÜN kesişimi
+   (kolineer/uç-nokta teması hariç) ya da (2) bir poligonun bir iç noktası ötekinin STRICT içinde.
+   Park/imkan SAT deseninin keyfi-poligon karşılığı; bloklar L/U taban olabilir → SAT değil. */
+/* İnclusive segment kesişimi (kolineer/uç-nokta teması DAHİL) — parsel-sınır taşma testi için */
+function segIntersects(p1,p2,p3,p4){
+  const d=(a,b,c)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+  const d1=d(p3,p4,p1), d2=d(p3,p4,p2), d3=d(p1,p2,p3), d4=d(p1,p2,p4);
+  if(((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0))) return true;
+  const onSeg=(a,b,c)=> Math.min(a.x,b.x)-1e-9<=c.x && c.x<=Math.max(a.x,b.x)+1e-9
+                      && Math.min(a.y,b.y)-1e-9<=c.y && c.y<=Math.max(a.y,b.y)+1e-9;
+  if(Math.abs(d1)<1e-9 && onSeg(p3,p4,p1)) return true;
+  if(Math.abs(d2)<1e-9 && onSeg(p3,p4,p2)) return true;
+  if(Math.abs(d3)<1e-9 && onSeg(p1,p2,p3)) return true;
+  if(Math.abs(d4)<1e-9 && onSeg(p1,p2,p4)) return true;
+  return false;
+}
+/* DÜZGÜN (proper) kesişim: iki segment gerçekten BİRBİRİNİN İÇİNDEN geçer; salt uç-nokta/kolineer
+   teması sayılmaz (bitişik duvarları örtüşme saymamak için). */
+function properSegCross(p1,p2,p3,p4){
+  const d=(a,b,c)=>(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+  const d1=d(p3,p4,p1), d2=d(p3,p4,p2), d3=d(p1,p2,p3), d4=d(p1,p2,p4);
+  return ((d1>1e-9&&d2<-1e-9)||(d1<-1e-9&&d2>1e-9)) && ((d3>1e-9&&d4<-1e-9)||(d3<-1e-9&&d4>1e-9));
+}
+/* poligon içinde bir İÇ nokta (kenar teması sayılmasın diye ağırlık merkezine yakın örnek) */
+function interiorSample(P){
+  let sx=0, sy=0; P.forEach(p=>{ sx+=p.x; sy+=p.y; }); const cx=sx/P.length, cy=sy/P.length;
+  if(pip(cx,cy,P)) return {x:cx,y:cy};
+  // dışbükey olmayan poligonda centroid dışarı düşebilir → üçgen ağırlık merkezlerinden birini dene
+  for(let i=1;i+1<P.length;i++){ const tx=(P[0].x+P[i].x+P[i+1].x)/3, ty=(P[0].y+P[i].y+P[i+1].y)/3;
+    if(pip(tx,ty,P)) return {x:tx,y:ty}; }
+  return {x:cx,y:cy};
+}
+/* A ve B kapalı poligonları ALAN olarak örtüşüyor mu (düzgün kesişim veya STRICT iç kapsama;
+   yalnız kenar/köşe teması FALSE) */
+function polysOverlap(A,B){
+  if(!A||!B||A.length<3||B.length<3) return false;
+  for(let i=0;i<A.length;i++){ const a1=A[i], a2=A[(i+1)%A.length];
+    for(let j=0;j<B.length;j++){ const b1=B[j], b2=B[(j+1)%B.length];
+      if(properSegCross(a1,a2,b1,b2)) return true; } }
+  // düzgün kesişim yok → biri diğerini içeriyor olabilir; İÇ örnek noktayla test (kenar teması eler)
+  const ia=interiorSample(A); if(pip(ia.x,ia.y,B)) return true;
+  const ib=interiorSample(B); if(pip(ib.x,ib.y,A)) return true;
+  return false;
+}
+/* Verilen aday sınır (candPts) site modunda başka bir blokla çakışıyor mu?
+   ignoreIdx = kendi blok index'i (düzenlenirken kendini sayma; -1 = yeni/aday).
+   Çakışan ilk bloğun adını döndürür (yoksa null). Site kapalıysa asla çakışmaz. */
+function blockCollisionName(candPts, ignoreIdx){
+  if(!siteOn() || !candPts || candPts.length<3) return null;
+  for(let i=0;i<blocks.length;i++){
+    if(i===ignoreIdx || i===activeBlock) continue;
+    const b=blocks[i];
+    if(b && b.pts && b.pts.length>=3 && polysOverlap(candPts, b.pts)) return blockName(i);
+  }
+  return null;
+}
+/* Aday sınır parsel DIŞINA taşıyor mu (parsel çizilmişse). Bir köşe parsel dışındaysa taşar. */
+function blockOutsideParcel(candPts){
+  if(!(parcelClosed && parcelPts.length>=3) || !candPts || candPts.length<3) return false;
+  for(const p of candPts){ if(!pip(p.x,p.y,parcelPts)) return true; }
+  // köşeler içeride ama bir kenar parsel sınırını kesiyorsa (parsel içbükeyse) yine taşar
+  for(let i=0;i<candPts.length;i++){ const a=candPts[i], b=candPts[(i+1)%candPts.length];
+    for(let j=0;j<parcelPts.length;j++){ const c=parcelPts[j], d=parcelPts[(j+1)%parcelPts.length];
+      if(segIntersects(a,b,c,d)) return true; } }
+  return false;
+}
+/* Aday çizilen (henüz kapanmamış) blok sınırının canlı geçerliliği — hayalet renk + statusHint için.
+   {ok, reason:'block'|'parcel'|null, name} döndürür. Yalnız site modunda anlamlı. */
+function blockDrawValidity(candPts){
+  if(!siteOn() || !candPts || candPts.length<3) return {ok:true, reason:null, name:null};
+  const nm=blockCollisionName(candPts, -1);
+  if(nm) return {ok:false, reason:'block', name:nm};
+  if(blockOutsideParcel(candPts)) return {ok:false, reason:'parcel', name:null};
+  return {ok:true, reason:null, name:null};
+}
 /* parseldeki tüm blokların toplam taban alanı (aktif blok canlı pts'ten) */
 function siteFootprintTotal(){
   if(!siteOn()) return closed? shoelace(pts):0;
@@ -741,22 +820,51 @@ function copyBlock(){
   try{ restoreState(copy, {keepBlocks:true}); }catch(err){ console.error('blok kopya:', err); }
   renderBlockTabs();
 }
+/* S4a: Pro panel (Parsel/İmar) kompakt site özeti — blok sayısı + Σ taban (TAKS oranı) +
+   Σ inşaat (KAKS oranı). checks.js ile AYNI kaynağı (siteFootprintTotal/siteGrossTotal) okur ama
+   ona DOKUNMAZ; salt bilgi satırı. Site kapalıysa gizlenir. render()'dan çağrılır. */
+function updateSiteSummary(){
+  const sec=document.getElementById('siteSummarySec'), box=document.getElementById('siteSummary');
+  if(!sec||!box) return;
+  if(!siteOn()){ sec.style.display='none'; return; }
+  sec.style.display='';
+  const n=blocks.length;
+  const drawn=blocks.filter((b,i)=> i===activeBlock? closed : (b&&b.pts&&b.pts.length>=3)).length;
+  const foot=siteFootprintTotal(), gross=siteGrossTotal();
+  const pa=(parcelClosed&&parcelPts.length>=3)? shoelace(parcelPts) : 0;
+  const imar=(typeof parcelImar!=='undefined')?parcelImar:null;
+  const row=(label,val,extra)=>`<div class="ss-row"><span class="ss-l">${label}</span><span class="ss-v">${val}${extra?' <span class="ss-x">'+extra+'</span>':''}</span></div>`;
+  let html=row('Blok', n+' adet', drawn<n?(drawn+' çizili · '+(n-drawn)+' boş'):'hepsi çizili');
+  html+=row('Σ Taban', fmt(foot)+' m²', pa? 'TAKS ≈ '+fmt(foot/pa)+(imar&&imar.maksTaks>0?' / '+fmt(imar.maksTaks):'') : '');
+  html+=row('Σ İnşaat', fmt(gross)+' m²', pa? 'KAKS ≈ '+fmt(gross/pa)+(imar&&imar.emsal>0?' / '+fmt(imar.emsal):'') : '');
+  if(pa) html+=row('Parsel', fmt(pa)+' m²', 'bahçe ≈ '+fmt(Math.max(0,pa-foot))+' m²');
+  else html+='<div class="ss-note">Parsel çizilmedi — TAKS/KAKS oranları için Parsel getirin ya da çizin.</div>';
+  box.innerHTML=html;
+}
 function renderBlockTabs(){
   const box=document.getElementById('blockTabs');
   if(!box) return;
   makeStripDraggable('blockTabs');   // "BLOK" grip'inden sürüklenebilir
   updateSiteBtn();
+  if(typeof updateSiteSummary==='function') updateSiteSummary();
   if(!siteOn()){ box.style.display='none'; positionOnb(); return; }
   box.style.display='flex'; box.innerHTML='';
   const lbl=document.createElement('span'); lbl.className='bl'; lbl.textContent='BLOK'; lbl.title='Sürükle: kutuyu taşı'; box.appendChild(lbl);
   blocks.forEach((b,k)=>{
     const btn=document.createElement('button');
-    const area=(k===activeBlock)? (closed?shoelace(pts):0) : (b&&b.pts&&b.pts.length>=3?shoelace(b.pts):0);
-    btn.innerHTML='Blok '+blockName(k)+(area>0?' · '+fmt(area)+' m²':'')
+    /* aktif blok canlı globallerden okunur; diğerleri anlık görüntüden. "boş" = sınır çizilmemiş
+       (aktifse pts kapanmamış / diğerse pts yok). Boş blok belirgin işaretlenir (Item 1). */
+    const isActive=k===activeBlock;
+    const area=isActive? (closed?shoelace(pts):0) : (b&&b.pts&&b.pts.length>=3?shoelace(b.pts):0);
+    const isEmpty = isActive? !closed : !(b&&b.pts&&b.pts.length>=3);
+    btn.innerHTML='Blok '+blockName(k)
+      +(area>0?' · '+fmt(area)+' m²':'')
+      +(isEmpty?' <span class="tag">boş</span>':'')
       +(blocks.length>1?'<span class="x" title="Bloğu sil" data-del="'+k+'">×</span>':'');
-    if(k===activeBlock) btn.className='active';
-    else if(!b||!b.plan) btn.className='empty';
-    btn.title=(b&&b.plan)?('Blok '+blockName(k)):'Henüz planlanmadı — geçince boş tuvalde sınırını çizin';
+    btn.className=(isActive?'active':'')+(isEmpty?' empty':'');
+    btn.title = isEmpty
+      ? (isActive?'Boş tuval — Blok '+blockName(k)+' sınırını çizin':'Henüz planlanmadı — geçince boş tuvalde sınırını çizin')
+      : 'Blok '+blockName(k)+(b&&b.plan?' (planlı)':' (sınır çizili, yerleşim bekliyor)');
     btn.addEventListener('click',ev=>{
       if(ev.target&&ev.target.dataset&&ev.target.dataset.del!==undefined){ ev.stopPropagation(); removeBlock(+ev.target.dataset.del); return; }
       switchBlock(k);
@@ -789,16 +897,26 @@ function switchBlock(k){
 }
 function addBlock(){
   if(!siteOn()) return;
-  if(mode==='site'&&typeof setMode==='function') setMode('draw');
   saveActiveBlock();
   blocks.push(null);
   activeBlock=blocks.length-1;
+  if(typeof setMode==='function') setMode('draw');   // yeni blok = boş tuval, otomatik ÇİZ moduna düş
   clearCanvasForNewBlock();
   renderBlockTabs();
+  /* S4a: keşfedilebilir çizim yönlendirmesi — yeni blok mevcut parseli devralır, hemen çizime hazır */
+  if(typeof setStatusHint==='function')
+    setStatusHint('Blok '+blockName(activeBlock)+' sınırını çizin — diğer bloklar soluk görünür. İlk köşeye tıklayarak kapatın.','#2f6f8f');
 }
 function removeBlock(k){
-  if(!siteOn()||blocks.length<=1) return;
-  if(typeof confirm==='function' && !confirm('Blok '+blockName(k)+' silinsin mi?')) return;
+  if(!siteOn()) return;
+  /* Son blok silinemez — site "en az bir blok" değişmezidir. Siteyi kapatmak için
+     "Site (çoklu blok)" düğmesini kapatın (o zaman aktif blok tek bina olarak kalır). */
+  if(blocks.length<=1){
+    if(typeof setStatusHint==='function')
+      setStatusHint('Son blok silinemez. Siteyi bitirmek için "Site (çoklu blok)" düğmesini kapatın — bu blok tek bina olarak kalır.','#b35a2e');
+    return;
+  }
+  if(typeof confirm==='function' && !confirm('Blok '+blockName(k)+' silinsin mi? (Bu işlem geri alınamaz.)')) return;
   if(k!==activeBlock) saveActiveBlock();
   blocks.splice(k,1);
   if(activeBlock>=blocks.length) activeBlock=blocks.length-1;
@@ -811,7 +929,7 @@ function removeBlock(k){
 /* boş blok için tuvali temizle: yalnız geometri sıfırlanır; bina tipi/kat ayarları VE
    site parseli (site-ortak) korunur */
 function clearCanvasForNewBlock(){
-  pts=[]; roomPts=[]; closed=false; plan=null;
+  pts=[]; roomPts=[]; closed=false; plan=null; blockDrawBad=null;
   balconies=[]; courtyards=[]; avluGhost=null; avluDragIdx=-1; editHistory=[]; resetCuts();
   doorOverrides={}; extraDoors=[]; doorHidden={}; windowOverrides={}; extraWindows=[]; windowHidden={};
   villaFloors=null; activeFloor=0; lockedCore=null;

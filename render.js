@@ -207,6 +207,8 @@ function render(){
   const r=exportView||svg.getBoundingClientRect();
   if(typeof edgeMaskMode!=='undefined' && (edgeMaskMode||(typeof wallBoundaryMode!=='undefined'&&wallBoundaryMode))){ drawWallEdgeMask(r); return; } // ControlNet kenar maskesi / şeffaf duvar sınırı: yalnız siyah duvarlar (wallBoundaryMode'da zemin yok); başka HİÇBİR şey çizme
   const clean = typeof aiCleanMode!=='undefined' && aiCleanMode; // AI temiz mod: gürültü katmanlarını (grid/parsel/balkon/düğüm/m²/ölçü/seçim) atla
+  /* S4a: site özeti canlı takip (yalnız ekran; dışa-aktarım/temiz modda değil) */
+  if(!exportView && !clean && typeof updateSiteSummary==='function') updateSiteSummary();
   /* ızgara (AI temiz modda çizilmez) */
   if(!clean){
     const g0=el('g',{}); svg.appendChild(g0);
@@ -493,13 +495,22 @@ function render(){
   const act=activePoly();
   if(hoverP && !act.cl && !clean && (mode==='draw'||mode==='parcel'||mode==='roomdraw')){
     const g=el('g',{}); svg.appendChild(g);
-    const col=mode==='parcel'?'#4a7c4a':mode==='roomdraw'?'#7a4fb3':'#b35a2e';
+    /* S4a: site modunda blok aday sınırı çakışıyorsa lastik-bant + kapatma işareti KIRMIZI
+       (park/mobilya geçersiz-hayalet deseniyle tutarlı) → çakışma anında görünür. */
+    const bad = mode==='draw' && typeof blockDrawBad!=='undefined' && blockDrawBad;
+    const col=bad?'#c0392b':mode==='parcel'?'#4a7c4a':mode==='roomdraw'?'#7a4fb3':'#b35a2e';
+    /* aday sınırın kapalı önizlemesi (site + ≥2 köşe): çakışmayı bölge olarak göster */
+    if(mode==='draw' && typeof siteOn==='function' && siteOn() && act.arr.length>=2 && !hoverP.closing){
+      const poly=act.arr.concat([{x:hoverP.x,y:hoverP.y}]);
+      g.appendChild(el('path',{d:'M'+poly.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z',
+        fill:bad?'rgba(192,57,43,.10)':'rgba(179,90,46,.06)', stroke:'none'}));
+    }
     const l=act.arr[act.arr.length-1];
     if(l){ g.appendChild(el('line',{x1:W2Sx(l.x),y1:W2Sy(l.y),x2:W2Sx(hoverP.x),y2:W2Sy(hoverP.y),stroke:col,'stroke-width':2,'stroke-dasharray':'6 4'}));
       const L=Math.hypot(hoverP.x-l.x,hoverP.y-l.y);
       const t=el('text',{x:W2Sx((l.x+hoverP.x)/2),y:W2Sy((l.y+hoverP.y)/2)-8,'text-anchor':'middle','font-size':12,fill:col,'font-weight':'700'});
       t.textContent=fmt(L)+' m'; g.appendChild(t); }
-    g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:hoverP.closing?'#2e7d4f':col,opacity:.8}));
+    g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:bad?'#c0392b':hoverP.closing?'#2e7d4f':col,opacity:.8}));
     if(hoverP.snapPS) g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:9,fill:'none',stroke:'#2563a8','stroke-width':2})); // parsele yapıştı
   }
   /* gerçek kuzey oku — parsel döndürülünce gerçek kuzeyi gösterir (ekran-sabit:

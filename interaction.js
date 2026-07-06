@@ -259,7 +259,21 @@ svg.addEventListener('mousemove',e=>{
     return;
   }
   if(spacePan){ syncPanCursor(); return; }   // space basılı: imleç grab kalsın, hover/işaretçi mantığı çalışmasın
-  if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)||(mode==='roomdraw'&&plan)){ hoverP=snapPoint(sx,sy); render(); }
+  if((mode==='draw'&&!closed)||(mode==='parcel'&&!parcelClosed)||(mode==='roomdraw'&&plan)){
+    hoverP=snapPoint(sx,sy);
+    /* S4a: bina çizerken (site modu) aday sınır [pts + hoverP] başka blokla/parselle çakışıyorsa
+       hayaleti kırmızıya çevir + uyar; kapatma bu adayla değil finishPoly'de reddedilir. */
+    if(mode==='draw' && !closed && typeof siteOn==='function' && siteOn() && typeof blockDrawValidity==='function'){
+      const cand = hoverP.closing ? pts.slice() : pts.concat([{x:hoverP.x, y:hoverP.y}]);
+      const v = cand.length>=3 ? blockDrawValidity(cand) : {ok:true};
+      blockDrawBad = v.ok ? null : {reason:v.reason, name:v.name};
+      if(!v.ok) setStatusHint(v.reason==='block'
+          ? 'Blok '+v.name+' ile çakışıyor — sınırı üstünden geçiremezsiniz.'
+          : 'Sınır parsel dışına taşıyor.', '#c0392b');
+      else if(pts.length) setStatusHint('Blok '+blockName(activeBlock)+' sınırını çizin — diğer bloklar soluk görünür.','#2f6f8f');
+    } else blockDrawBad=null;
+    render();
+  }
   else if(mode==='draw'&&closed&&!plan){   // P3: yerleşim öncesi kapalı bina → köşe/kenar tutamacı hover geri bildirimi
     const bh=hitBoundaryHandle(sx,sy);
     const nh=bh?{kind:'bvert',idx:bh.idx}:null;
@@ -609,6 +623,15 @@ function finishDrag(){
       }
     }
   } else if(dragging.type==='bvert' && plan){
+    /* S4a: düzenlenen blok sınırı da diğer bloklarla çakışamaz → çakışırsa köşeyi geri al + uyar */
+    if(typeof siteOn==='function' && siteOn() && typeof blockCollisionName==='function'){
+      const nm=blockCollisionName(pts, activeBlock);
+      if(nm){ pts=dragging.prevPts.map(p=>({...p}));
+        setStatusHint('Blok '+nm+' ile çakışıyor — köşe geri alındı.','#c0392b');
+        document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+        document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+        dragging=null; render(); return; }
+    }
     /* bina sınırı değişti → çekirdek kilitliyken yeniden diz (kata özel sınır) */
     pushEdit({type:'bound', prevPts:dragging.prevPts, prevCore:dragging.prevCore});
     try{ generate(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
@@ -616,6 +639,15 @@ function finishDrag(){
     document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
     document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   } else if(dragging.type==='bvert'){
+    /* S4a: yerleşim öncesi düzenlemede de çakışma engeli */
+    if(typeof siteOn==='function' && siteOn() && typeof blockCollisionName==='function'){
+      const nm=blockCollisionName(pts, activeBlock);
+      if(nm){ pts=dragging.prevPts.map(p=>({...p}));
+        setStatusHint('Blok '+nm+' ile çakışıyor — köşe geri alındı.','#c0392b');
+        document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+        document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+        dragging=null; render(); return; }
+    }
     /* P3: yerleşim ÖNCESİ (plan yok) sınır köşe düzenlemesi → yalnız pts geri-al (generate YOK) */
     if(JSON.stringify(dragging.prevPts)!==JSON.stringify(pts))
       pushEdit({type:'bounddraw', prevPts:dragging.prevPts});
@@ -909,11 +941,24 @@ svg.addEventListener('wheel',e=>{
 },{passive:false});
 function finishPoly(){
   if(pts.length<3) return;
-  closed=true; hoverP=null;
+  /* S4a: site modunda blok sınırı başka bir blokla çakışamaz (ya da parsel dışına taşamaz) →
+     kapatma reddedilir, son köşe geri alınabilsin diye çizim açık bırakılır. */
+  if(typeof siteOn==='function' && siteOn() && typeof blockDrawValidity==='function'){
+    const v=blockDrawValidity(pts);
+    if(!v.ok){
+      setStatusHint(v.reason==='block'
+        ? 'Blok '+v.name+' ile çakışıyor — sınırı başka bir bloğun üstünden geçiremezsiniz. Son köşeyi geri alıp yeniden çizin.'
+        : 'Sınır parsel dışına taşıyor — parsel içinde kalacak şekilde çizin.', '#c0392b');
+      render();
+      return;   // kapatma reddi: closed=false kalır, kullanıcı köşeyi düzeltir
+    }
+  }
+  closed=true; hoverP=null; blockDrawBad=null;
   document.getElementById('genBtn').disabled=false;
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   if(typeof updateAmenityBtn==='function') updateAmenityBtn();   // F1: bina sınırı kapanınca imkan düğmesi görünür (yerleşim beklemeden keşfedilebilir)
+  if(typeof siteOn==='function' && siteOn()) setStatusHint('Blok sınırı kapandı — "Yerleşimi Oluştur" ile daireleri yerleştirin.','#2f6f8f');
   render();
 }
 /* serbest oda çizimi: kısa uyarı baloncuğu (canvasWrap'a, ~1,6 sn) */
@@ -1176,7 +1221,7 @@ function updateModeBadge(m){
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; hoverAmenity=null; amenityGhost=null; amenityGhostVert=null; setStatusHint('');
+const setMode=m=>{ mode=m; hoverP=null; blockDrawBad=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; hoverAmenity=null; amenityGhost=null; amenityGhostVert=null; setStatusHint('');
   /* OTO-AVLU (avlu-rework): avlu moduna girince derin/karanlık footprint için nazik öneri hesapla.
      Dayatma YOK — statusHint + tıkla-yerleştir aday ghost; başka moda geçince temizlenir. */
   avluSuggestion=null;
