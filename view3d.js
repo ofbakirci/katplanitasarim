@@ -1165,32 +1165,39 @@
       if(nIn){ var _lzx=Math.sin(ang), _lzz=Math.cos(ang);
         zIn=((_lzx*nIn[0]+_lzz*nIn[1])>=0)?1:-1; }          // local +Z → dünya; iç normal o yöndeyse iç yüz +Z tarafında
       var REVEAL=Math.min(0.06, WALL_T*0.5-0.02);           // kasanın iç duvar yüzünden GERİ oturma (söve/reveal derinliği); WALL_T/2'yi geçmez
+      // R4-3 DIŞ-CEPHE FLUŞ: gerçek duvar KOŞUSU yarım-kalınlık (halfT=WALL_T/2+WALL_EPS) + iç tarafa ctrOff kaydırılmış
+      //   → İÇ yüz zIn*WALL_T/2'de (doğru), ama DIŞ cephe yüzü yalnız -zIn*WALL_EPS'te (merkeze çok yakın). Eski pencere
+      //   parçaları (kasa/parapet/lento) TAM-WALL_T merkezde → dış yüzleri -zIn*WALL_T/2'ye taşıyordu = cepheden ~WALL_T/2
+      //   fırlayan beyaz kasa + krem parapet bloğu (kullanıcı "dışardan çıkıntılı, olmaz"). ÇÖZÜM: pencere gövdesi de
+      //   duvar koşusunun BİREBİR kesitini alsın — kalınlık winT=halfT, local-Z merkezi zBody=zIn*ctrOff → iç yüz aynı
+      //   (içerden GÜZEL kalır), dış yüz cepheyle FLUŞ. Yalnız denizlik cepheden hafif (~3.5cm) çıkar (gerçekteki gibi).
+      var WALL_EPS=0.012;
+      var winHalfT=nIn?(WALL_T/2+WALL_EPS):WALL_T;          // pencere gövdesi kalınlığı = duvar koşusu (nIn'siz: tam WALL_T, sözleşme)
+      var winCtr=nIn?(WALL_T/4-WALL_EPS/2):0;               // gövde local-Z merkezi kaymasının BÜYÜKLÜĞÜ (iç tarafa)
+      var zBody=zIn?zIn*winCtr:0;                           // gövde (kasa/dolgu) local-Z merkezi (iç yüz WALL_T/2, dış yüz cephe)
+      var zFacade=zIn?-zIn*WALL_EPS:(-WALL_T/2);            // DIŞ cephe düzlemi local-Z (duvar koşusu dış yüzüyle aynı)
       // KASA + SÖVE CAP z GEOMETRİSİ (dikişsiz, see-through YOK): iç duvar yüzü = zIn*WALL_T/2. Söve cap iç yüzle
-      //   fluş, REVEAL derin (arka yüzü zIn*(WALL_T/2-REVEAL)). Kasa cap'in ARKA yüzünü WIN_EPS AŞARAK başlar
-      //   (front=zIn*(WALL_T/2-REVEAL+WIN_EPS)) ve dış cepheye kadar iner (back=-zIn*WALL_T/2) → cap↔kasa örtüşür,
-      //   ara boşluk (kara yarık) YOK; oyuk baştan sona sızdırmaz dolu.
+      //   fluş, REVEAL derin. Kasa cap arkasında dış cepheye (zFacade) kadar iner → cap↔kasa örtüşür, kara yarık YOK.
       var capFront=zIn?zIn*(WALL_T/2):0, capBack=zIn?zIn*(WALL_T/2-REVEAL):0;
-      var ftFrame=WALL_T;                                  // KASA TAM DERİN (±WALL_T/2, merkezde) → oyuk kenar-halkasını
-                                                           //   dış cepheye kadar SIZDIRMAZ kapatır (kara yarık İMKANSIZ).
-                                                           //   Görünür recess'i söve cap (önde, duvar-boyalı) verir; kasa cap'in
-                                                           //   arkasında kalır → içeriden "reveal → beyaz kasa → cam".
-      var zFrame=0;                                        // kasa local-Z merkezi = duvar merkezi (tam derin)
+      var ftFrame=winHalfT;                                // KASA duvar-koşusu DERİN (iç yüz WALL_T/2 ↔ dış yüz cephe) →
+                                                           //   oyuk kenar-halkasını cepheye kadar SIZDIRMAZ kapatır ama
+                                                           //   cepheden TAŞMAZ. Görünür recess'i söve cap (önde) verir.
+      var zFrame=zBody;                                     // kasa local-Z merkezi = duvar koşusu merkezi (fluş)
       var zCap=(capFront+capBack)/2;                        // söve cap local-Z merkezi (iç yüzle fluş, REVEAL derin)
       var zGlass=zIn?zIn*(WALL_T/2-REVEAL-0.05):0;          // cam local-Z: reveal cap arkasında (söve derinliğinin gerisinde)
       var EMB=-WIN_EPS;                                     // zemin-gömme (Q6): parapet/kasa tabanı zemine WIN_EPS gömülü → ışık sızıntısı yok
-      // --- 1) OPAK DOLGULAR (parapet altı + lento üstü) — TAM WALL_T, MERKEZDE, iki yüzü de duvarla FLUŞ.
-      //     Parapet TEPESİ sill'i WIN_EPS AŞAR → oyuğun alt kotu sill'e kadar SOLİD dolar. Kasa alt kaydının GİZLİ
-      //     sızdırmazlık dili (ftSeal, iki yüzden WIN_EPS içeride) bu SOLİD dolgunun İÇİNE gömülür → dolgu onu her
-      //     yüzden sarar, hiçbir açıdan görünmez; bakış hattı oyuğa (siyah 23,21,18) düşemez.
-      var fillT=WALL_T;                                     // dolgu = tam duvar kalınlığı, fluş (kasayla aynı düzlem)
+      // --- 1) OPAK DOLGULAR (parapet altı + lento üstü) — duvar KOŞUSU kesiti (winHalfT, zBody), iki yüzü de FLUŞ.
+      //     R4-3: eski TAM-WALL_T merkezde → dış cepheden taşan krem blok; artık duvar koşusuyla birebir (fluş).
+      var fillT=winHalfT;                                  // dolgu = duvar koşusu kalınlığı (fluş, kasayla aynı düzlem)
       // R3-1 ROOF-SCALE FIX: parapet/lento TABANDAN ölçeklenmeli (grp'teki kasa bandı gibi). Eski applyRoof
       //   isWin/isLeaf'e SADECE scale.y uyguluyordu, position.y'yi çatı geçişinde SIFIRLAMIYORDU → build (roofOn=
       //   false) WALL_LOW konumunda yapılan parapet, FPV'de (roofOn=true, scale→1) MERKEZDEN büyüyüp TEPESİ
       //   düşüyordu → kasa bandı ile parapet arasında "kara yarık" (dış cepheye bakış hattı). Çözüm: tabanı
       //   (__baseY) + tam yüksekliği (__h0) userData'da sakla, applyRoof TABANDAN yeniden konumlandırsın (aşağı bak).
+      var bodyOfx=nIn?nIn[0]*winCtr:0, bodyOfz=nIn?nIn[1]*winCtr:0;   // R4-3: dolgu/kasa gövdesini iç tarafa kaydır (dış yüz cephe ile fluş)
       function addRoofScaledFill(geoW,h0,baseY,mat,tag,parent){
         var f=roofOn?1:WALL_LOW, mesh=new THREE.Mesh(new THREE.BoxGeometry(geoW,h0,fillT),mat);
-        mesh.position.set(mx, baseY+h0*f/2, mz); mesh.rotation.y=ang; mesh.scale.y=f; mesh.castShadow=true;
+        mesh.position.set(mx+bodyOfx, baseY+h0*f/2, mz+bodyOfz); mesh.rotation.y=ang; mesh.scale.y=f; mesh.castShadow=true;
         mesh.userData[tag]=true; mesh.userData.__baseY=baseY; mesh.userData.__h0=h0; parent.add(mesh); return mesh;
       }
       if(hasParapet){
@@ -1255,11 +1262,17 @@
       // orta dikme(ler): dikey ince profil(ler) — çift/üçlü kanat görünümü; cam düzleminde (zGlass) ince
       for(var mi=1;mi<=mull;mi++){ var mxp=-gw/2+mi*(gw/(mull+1));
         grp.add(posBox(new THREE.BoxGeometry(fr,gh,0.04),matFrame,mxp,glassBot+gh/2,zGlass)); }
-      // dış denizlik (çıkıntı) — yalnız normal pencerede (tam-boy/balkon camda yok); DIŞ cepheye (nIn tersi) taşar.
+      // dış denizlik (çıkıntı) — yalnız normal pencerede (tam-boy/balkon camda yok). R4-3: kullanıcı DIŞ cephede
+      //   FLUŞ pencere istedi AMA "parapet biraz çıkıntı yapabilir gerçekteki gibi" dedi → denizlik cephe DÜZLEMİNDEN
+      //   (zFacade) yalnız ~3.5cm dışarı taşar (gerçek dış denizlik damlalığı). Eski değer WALL_T/2+0.05 duvar
+      //   koşusu inceldiğinden ~13cm fırlıyordu; artık cepheye oturur, zarif ince çıkıntı.
       if(!isFull && nIn){
-        var outLocalZ=zIn?-zIn:1;                                 // iç yüz zIn tarafında → dış cephe -zIn
-        var sd=new THREE.Mesh(new THREE.BoxGeometry(gw+0.10,0.04,0.18),matSill);
-        sd.position.set(0,sill-WIN_EPS,outLocalZ*(WALL_T/2+0.05)); grp.add(sd);   // denizlik dış cephe yüzünden hafif çıkıntı
+        var SILL_OUT=0.035, SILL_EMBED=0.03;                      // cepheden çıkıntı + cepheye gömme (dikiş kapatma)
+        var outDir=zIn?-zIn:1;                                     // dış cephe yönü (local-Z)
+        var sdDepth=SILL_EMBED+SILL_OUT;                           // arka kenar cepheye gömülü, ön kenar SILL_OUT dışarı
+        var sdCz=zFacade + outDir*(SILL_OUT-SILL_EMBED)/2;         // merkez: gömme..çıkıntı ortası
+        var sd=new THREE.Mesh(new THREE.BoxGeometry(gw+0.08,0.035,sdDepth),matSill);
+        sd.position.set(0,sill-WIN_EPS,sdCz); grp.add(sd);        // denizlik: cepheden zarif ~3.5cm damlalık
       }
       grp.userData.isWin=true; grp.scale.y=roofOn?1:WALL_LOW; walls.add(grp);
       // --- 3) EŞİK (yalnız balkon kapısı: "burada kapı var" sinyali; normal pencerede yok) ---
@@ -1406,20 +1419,10 @@
         addCollider(a[0]+ux*(s0+s1)/2, a[1]+uz*(s0+s1)/2, s1-s0, WALL_T, ang);   // W5: tam-kalınlık görünmez çarpışma kutusu (merkez hatta)
       }
       let s=0; gaps.forEach(function(g){ seg(s,g[0]); s=Math.max(s,g[1]); }); seg(s,len);
-      // R3-3 KÖŞE DOLGU PRİZMASI: yarım-kalınlık (U1) duvar kutuları köşede uç uca bitince oyuğun köşe karesi
-      //   dolmuyor + iç ofset yüzünden dış köşede açık uç yüzeyi/derz görünüyor ("kalınlık gözüküyor, tam
-      //   birleşmemiş"). Her kenarın BAŞ köşesine (a) tam-WALL_T dikdörtgen prizma koy → köşe karesi her açıdan
-      //   dolu; 90°-dışı/T-birleşim de kapanır (prizma vertex'te, açıdan bağımsız). Oda-başına kendi boyasıyla,
-      //   iç ofsetle → komşu odanın köşe prizmasıyla derz z-fight'ı en aza iner. Poligon döngüsü her vertex'i bir
-      //   kez BAŞ köşe olarak gördüğünden her köşe tam bir kez dolar.
-      (function(){
-        // Post vertex'te MERKEZLİ (ofsetsiz) → tam WALL_T her iki cepheye ulaşır, DIŞ köşede uç yüzeyi/derz kapanır.
-        //   Sadece nIn yönünde WALL_EPS mikro-ofset → paylaşılan köşede iki odanın prizması eş-düzlem z-fight yapmaz.
-        var pox=nIn?nIn[0]*WALL_EPS:0, poz=nIn?nIn[1]*WALL_EPS:0;
-        var cp=new THREE.Mesh(new THREE.BoxGeometry(WALL_T,WALL_H,WALL_T),wallMat);
-        cp.position.set(a[0]+pox, (roofOn?WALL_H/2:WALL_H*WALL_LOW/2)-0.02, a[1]+poz);
-        cp.scale.y=roofOn?1:WALL_LOW; cp.castShadow=true; cp.userData.isWallPost=true; walls.add(cp);   // isWallPost: köşe dolgusu (holeScan wall-run saymasın, çarpışma segment'lerden gelir)
-      })();
+      // R4-1: KÖŞE DOLGU PRİZMASI artık BURADA DEĞİL — oda döngüsünde addCornerPosts() üretir (prev+next kenar
+      //   iç-normalleriyle odanın KENDİ köşe çeyreğini yarım-kalınlıkta doldurur). Eski tam-WALL_T vertex-merkezli
+      //   prizma (R3-3) yarım-duvar yüzleriyle KOPLANAR z-fight (dama deseni) + iç ofsetsizlikten DIŞ cepheden
+      //   ~WALL_T/4 taşma + boyasız komşu prizması krem şerit üretiyordu → hepsi silindi.
       // pencere boşlukları → buildWindowUnit (TEK PARAMETRİK MODÜL): parapet dolgusu + lento dolgusu + kasa +
       //   cam + denizlik + collider HEPSİ modülün İÇİNDEN, AYNI kot zincirinden. Eski parça parça üretim
       //   (parapet/lento burada + kasa/cam addWindowGlass'ta + dağınık PARK_OVER/we/wd/railUp epsilonları) SİLİNDİ.
@@ -1452,6 +1455,27 @@
         if(g[3]) addCollider(mx,mz,gw,WALL_T,ang);
       });
     }
+    // R4-1: oda köşe dolgu prizmaları. Pm = oda poligonu (metre), edgeNIn[i] = kenar i'nin (Pm[i]→Pm[i+1]) odaya
+    //   bakan iç normali. Her vertex için önceki (edgeNIn[i-1]) + sonraki (edgeNIn[i]) kenarın iç normalinin
+    //   BİLEŞKESİ yönünde ctrOff kadar içeri kaydırılmış, kenar2 eksenine hizalı halfT×halfT×WALL_H kutu →
+    //   odanın köşe çeyreğini wall-run'la fluş doldurur (dış cepheden TAŞMAZ, komşu çeyreğine girmez).
+    function addCornerPosts(Pm, edgeNIn, wallMat){
+      const WALL_EPS=0.012, halfT=WALL_T/2+WALL_EPS, ctrOff=WALL_T/4-WALL_EPS/2, n=Pm.length;
+      for(let i=0;i<n;i++){
+        const V=Pm[i];
+        const nPrev=edgeNIn[(i-1+n)%n], nNext=edgeNIn[i];   // vertex'e komşu iki kenarın iç normalleri
+        // kutu ekseni: SONRAKİ kenar doğrultusu (Pm[i]→Pm[i+1]) — köşe çeyreği bu kenarın perpendikülerinde halfT
+        const B=Pm[(i+1)%n], edx=B[0]-V[0], edz=B[1]-V[1], el=Math.hypot(edx,edz)||1;
+        const ang=-Math.atan2(edz,edx);
+        // merkez: vertex + iki iç-normal yönünde ctrOff (bileşke) → çeyrek iç yüzü WALL_T/2 içeride, dış yüzü
+        //   WALL_EPS dışarıda (her iki kenar-run ile fluş). 90°-dışı köşede de yaklaşık doğru (küçük kutu).
+        const cx=V[0]+(nPrev[0]+nNext[0])*ctrOff, cz=V[1]+(nPrev[1]+nNext[1])*ctrOff;
+        const cp=new THREE.Mesh(new THREE.BoxGeometry(halfT,WALL_H,halfT),wallMat);
+        cp.position.set(cx,(roofOn?WALL_H/2:WALL_H*WALL_LOW/2)-0.02,cz);
+        cp.rotation.y=ang; cp.scale.y=roofOn?1:WALL_LOW; cp.castShadow=true;
+        cp.userData.isWallPost=true; walls.add(cp);   // holeScan wall-run saymaz; çarpışma segment collider'larından gelir
+      }
+    }
 
     rooms.forEach(function(o){
       // M4: SEÇİLİ zemin malzemesi varsa GERÇEK dokuyu göster; yoksa renk-kodlu (tip sinyali) — varsayılan sıfır değişim.
@@ -1472,14 +1496,25 @@
       // U1: oda poligonunu metreye çevir + kütle-merkezi (iç normal referansı) — her kenarın odaya BAKAN yönü
       const Pm=P.map(function(p){ return px2m(map,p[0],p[1]); });
       let ccx=0,ccz=0; Pm.forEach(function(p){ ccx+=p[0]; ccz+=p[1]; }); ccx/=Pm.length; ccz/=Pm.length;
+      // her kenarın odaya BAKAN iç normalini önceden hesapla (köşe prizması prev+next normali kullanır)
+      const edgeNIn=[];
       for(let i=0;i<Pm.length;i++){
         const A2=Pm[i], B2=Pm[(i+1)%Pm.length];
         const edx=B2[0]-A2[0], edz=B2[1]-A2[1], el=Math.hypot(edx,edz)||1;
-        // kenar normali (iki aday) → oda merkezine bakan işaret = iç normal (paylaşılan duvarda her oda kendi yarısına çeker)
         let nx=-edz/el, nz=edx/el; const mx2=(A2[0]+B2[0])/2, mz2=(A2[1]+B2[1])/2;
         if((ccx-mx2)*nx+(ccz-mz2)*nz<0){ nx=-nx; nz=-nz; }
-        wallEdge(A2, B2, oWallMat, [nx,nz]);
+        edgeNIn.push([nx,nz]);
       }
+      for(let i=0;i<Pm.length;i++){
+        wallEdge(Pm[i], Pm[(i+1)%Pm.length], oWallMat, edgeNIn[i]);
+      }
+      // R4-1 KÖŞE DOLGU PRİZMASI (oda-yerel, yarım-kalınlık, boyalı): her vertex'te önceki+sonraki kenarın iç
+      //   normalini kullanarak odanın KENDİ köşe çeyreğini doldur. Kutu, iki komşu yarım-duvarla (halfT, ctrOff
+      //   ile iç tarafa kaydırılmış) BİREBİR aynı kesiti kaplar → iç yüz WALL_T/2 içeride, dış yüz WALL_EPS
+      //   dışarıda (wall-run'la fluş). Böylece: (a) yüzler koplanar DEĞİL → dama/z-fight yok; (b) DIŞ cepheden
+      //   TAŞMAZ → krem/çıkıntı şerit yok; (c) oda kendi boyasını taşır → paylaşılan köşede her oda kendi
+      //   çeyreğinde, komşunun boyasız prizması sızmaz. WALL_H tam boy (holeScan wall-run saymaz).
+      addCornerPosts(Pm, edgeNIn, oWallMat);
       // etiket — pole-of-inaccessibility çapası (komşu odaya taşmaz); yoksa centroid'e düş
       let la=o.label_anchor_px||o.centroid_px;
       if(!la){ la=P.reduce(function(s,p){return [s[0]+p[0],s[1]+p[1]];},[0,0]).map(function(v){return v/P.length;}); }

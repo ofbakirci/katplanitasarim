@@ -24,8 +24,10 @@ function pickDoorEdge(list){
   best.forEach(e=>{ const d=Math.abs(dpos(e)-cmid); if(d<bd){bd=d;pick=e;} });
   return pick;
 }
-/* kapı boşluğu (net genişlik, m) — yönetmelik: bina ana giriş 1.5 / daire girişi 1.0 /
-   oda ve iç mekan 0.9 / ıslak hacim (banyo·wc) + balkon 0.8. Kapı orta-noktası her tipte e+0.45. */
+/* kapı boşluğu (net genişlik, m) — yönetmelik (Planlı Alanlar İmar Yönetmeliği MADDE 39, net/temiz
+   genişlik minimumları): bina giriş 1.5 / daire (bağımsız bölüm) girişi 1.0 / diğer mahal (oda) 0.9 /
+   balkon+tuvalet 0.8'e düşürülebilir. Kapı orta-noktası her tipte e+0.45.
+   R4-4: bu İSTENEN genişlik; segmente sığmıyorsa doorFitWidth() mevzuat minimumuna DARALTIR. */
 function doorWidthM(dr){
   if(!dr) return 0.9;
   if(dr.kind==='unit') return 1.0;                                     // daire (bağımsız bölüm) girişi
@@ -36,6 +38,63 @@ function doorWidthM(dr){
   const t=dr.reg&&dr.reg.type;
   if(t==='banyo'||t==='wc'||t==='balkon') return 0.8;                  // ıslak hacim + balkon
   return 0.9;                                                          // oda ve iç mekan kapısı
+}
+/* R4-4 MEVZUAT MİNİMUMU (net genişlik, m) — segmente sığmayan kapı buraya kadar DARALTILABİLİR.
+   Planlı Alanlar İmar Yönetmeliği MADDE 39: bina giriş net min 1.50, bağımsız bölüm (daire) girişi 1.00,
+   diğer mahal (oda) 0.90, balkon+tuvalet 0.80'e düşürülebilir. Kaçış/asansör kaçış std → daraltma yok.
+   Bu minimumun ALTINA inilmez (inilmesi gerekirse kapı O SEGMENTE konmaz). */
+function doorMinWidthM(dr){
+  if(!dr) return 0.9;
+  if(dr.kind==='unit') return 1.0;                                     // daire girişi net min 1.0 (m.39) → daraltma yok
+  if(dr.kind==='stair'||dr.kind==='fire_stair') return 1.0;            // kaçış → daraltma yok (std)
+  if(dr.kind==='elevator') return 0.9;                                 // asansör → sabit
+  if(dr.kind==='ext')  return /^gh/.test(dr.key||'') ? 1.5 : 1.0;      // bina ana giriş 1.5 (sabit), dükkân 1.0
+  if(dr.kind==='extra') return dr.ext ? 1.0 : 0.8;                     // dış giriş 1.0, iç kapı en dar 0.8
+  const t=dr.reg&&dr.reg.type;
+  if(t==='banyo'||t==='wc'||t==='balkon') return 0.8;                  // tuvalet/balkon m.39 ile 0.8'e düşürülebilir
+  return 0.8;                                                          // oda iç kapı: 0.9 istenir, dar segmentte 0.8'e kadar inilebilir
+}
+/* R4-4: kapı orta-noktasını içeren SÜREKLİ segment (colinear komşu aday kenarların şeridi) sınırları
+   [lo,hi] (kenar-ekseni boyunca dünya-metre). e = seçili kenar, edges = o kapının aday kenar listesi.
+   Kapı yatay (h=1) ise eksen = x, dikey (h=0) ise eksen = y. */
+function doorRunBounds(e, edges){
+  if(!e || !edges || !edges.length) return null;
+  const ax = e.h ? 'x' : 'y', off = e.h ? 'y' : 'x';   // eksen = duvar doğrultusu, off = diğer koord (aynı hatta olmalı)
+  const set = edges.filter(g=> g.h===e.h && Math.abs(g[off]-e[off])<1e-6).map(g=>g[ax]);
+  if(!set.length) return null;
+  const has = v => set.some(s=>Math.abs(s-v)<1e-6);
+  let lo=e[ax], hi=e[ax]+M;                              // kenar [ax, ax+M] genişliğinde tek hücre (M)
+  while(has(lo-M)) lo-=M;                                // e'yi içeren SÜREKLİ koşu: sola/sağa M adımlarla genişlet
+  while(has(hi)) hi+=M;                                  // hi = son ardışık kenarın sağ ucu
+  return { lo, hi };
+}
+/* R4-4: kapının bu segmentteki GERÇEK boşluk genişliği (doorFitSpan'dan türer). İstenen doorWidthM segmente
+   sığmıyorsa mevzuat minimumuna kadar DARALTIR (+gerekirse segmente kaydırır); min bile sığmıyorsa 0. */
+function doorFitWidth(dr){
+  const sp=doorFitSpan(dr); return sp ? +(sp.c1-sp.c0).toFixed(3) : 0;
+}
+/* R4-4: kapının bu segmentteki OTURAN boşluğunu (kenar-ekseni offset'i olarak {c0,c1}, e'ye göre) döndürür.
+   Adımlar: (1) istenen doorWidthM → e+0.45 ORTALI dene; segmente sığmıyorsa (2) segment İÇİNDE KAYDIR (aynı
+   genişlik, run.lo..run.hi arası); hâlâ sığmıyorsa (3) mevzuat minimumuna DARALT + kaydır; min bile run'a
+   sığmıyorsa null (→ kapı bu segmente konmaz). Kaydırma sayesinde tam-run kapı (ör. 1m koşuda 1m daire
+   girişi) DÜŞMEZ — yalnız segmenti gerçekten aşan (run'dan geniş) kapı daralır, min bile aşarsa düşer. */
+function doorFitSpan(dr){
+  if(!dr || !dr.e) return { c0:-0.45, c1:0.45 };            // segmentsiz eski davranış (0.9 varsayılan çevresinde)
+  const run=(dr.run)||doorRunBounds(dr.e, dr.edges);
+  const ax = dr.e.h ? dr.e.x : dr.e.y;                      // kenar başlangıcı (ekseni)
+  const want=doorWidthM(dr);
+  if(!run) return { c0:0.45-want/2, c1:0.45+want/2 };       // segment bilinmiyorsa daraltma/kaydırma yok (davranış korunur)
+  // Amaç: run'ı AŞAN (clipping) span'ı engellemek; run'a EŞİT/KÜÇÜK olan sığar. Kapı, run UÇLARINDAKİ dik
+  //   duvarlar arasına oturur (o duvarlar kasa/söve görevi görür) → tam-run kapı (1m koşuda 1m giriş) DÜŞMEZ.
+  const runLen=run.hi-run.lo;
+  function place(w){                                        // w run'a sığıyorsa e+0.45 ortalı, taşarsa segmente KAYDIR
+    if(w>runLen+1e-6) return null;                          // bu genişlik run'a hiç sığmaz (run'dan geniş)
+    let c=ax+0.45;                                          // istenen orta (doorMid ile aynı)
+    if(c-w/2 < run.lo) c=run.lo+w/2;                        // sol uçtan taşma → içeri kaydır
+    if(c+w/2 > run.hi) c=run.hi-w/2;                        // sağ uçtan taşma → içeri kaydır
+    return { c0:(c-w/2)-ax, c1:(c+w/2)-ax };                // e'ye göre offset
+  }
+  return place(want) || place(doorMinWidthM(dr)) || null;   // istenen → mevzuat min → yoksa null (düşür)
 }
 /* L1-A1: kapının oyduğu DUVARIN tipi (REG.duvar kalınlığı) — kapı boşluğu bandı bu
    kalınlıktan geniş çizilir ki kalınlaşan duvarı tam temizlesin. Kapı kind'ından türer

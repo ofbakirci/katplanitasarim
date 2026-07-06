@@ -37,6 +37,7 @@ const strictTests = [
   'tests/core-shadow.js',
   'tests/yangin-merdiven.js',
   'tests/zemin-giris.js',
+  'tests/kapi-sigma.js',
   'tests/core-resize.js',
   'tests/acik-mutfak.js',
   'tests/editor.js',

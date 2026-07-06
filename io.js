@@ -406,9 +406,10 @@ function buildDXF(){
   });
   /* 5) kapılar — computeDoors boşluğu (span exportWallBoundaryPNG ile birebir) */
   const doors=(typeof computeDoors==='function'?computeDoors():[]).filter(d=>d&&d.status==='ok'&&d.e);
-  doors.forEach(d=>{ const e=d.e, Wd=(typeof doorWidthM==='function')?doorWidthM(d):0.9;
-    if(e.h) line('A-DOOR', e.x+0.45-Wd/2, e.y, e.x+0.45+Wd/2, e.y);
-    else    line('A-DOOR', e.x, e.y+0.45-Wd/2, e.x, e.y+0.45+Wd/2); });
+  doors.forEach(d=>{ const e=d.e, sp=(typeof doorFitSpan==='function')?doorFitSpan(d):{c0:0.45-0.45,c1:0.45+0.45};
+    if(!sp) return;                                         // R4-4: segmente sığmadı → DXF boşluğu çizme
+    if(e.h) line('A-DOOR', e.x+sp.c0, e.y, e.x+sp.c1, e.y);
+    else    line('A-DOOR', e.x, e.y+sp.c0, e.x, e.y+sp.c1); });
   w(0,'ENDSEC'); w(0,'EOF');
   return T.join('\n')+'\n';
 }
@@ -469,7 +470,9 @@ function exportWallBoundaryPNG(){
       ctx.save(); ctx.scale(2,2); ctx.drawImage(img,0,0); ctx.restore();
       const kx=cv.width/f.W, ky=cv.height/f.H, ACR=0.4;   // kapı gap enine (m): iç duvardan (0.22) geniş, hücreden (0.5) dar
       ctx.globalCompositeOperation='destination-out'; ctx.fillStyle='#000';
-      doors.forEach(d=>{ const e=d.e, Wd=doorWidthM(d), c0=0.45-Wd/2, c1=0.45+Wd/2;   // boşluk = boyamayla aynı (bina 1.5/daire 1.0/oda 0.9/ıslak 0.8)
+      doors.forEach(d=>{ const e=d.e, sp=(typeof doorFitSpan==='function'?doorFitSpan(d):{c0:0.45-doorWidthM(d)/2,c1:0.45+doorWidthM(d)/2});   // R4-4: segmente sığan boşluk (dar segmentte daralır/kayar)
+        if(!sp) return;                                      // R4-4: sığmadı → boşluk oyma
+        const c0=sp.c0, c1=sp.c1;
         let mx0,my0,mx1,my1;
         if(e.h){ mx0=e.x+c0; mx1=e.x+c1; my0=e.y-ACR/2; my1=e.y+ACR/2; }
         else   { my0=e.y+c0; my1=e.y+c1; mx0=e.x-ACR/2; mx1=e.x+ACR/2; }
@@ -703,11 +706,16 @@ function buildFloorplanMap(opt){
                     stair:'stair', fire_stair:'fire_stair', elevator:'elevator' };
   const doors=(typeof computeDoors==='function'?computeDoors():[])
     .filter(d=>d&&d.status==='ok'&&d.e)
-    .map(d=>{ const e=d.e, Wd=doorWidthM(d), c0=0.45-Wd/2, c1=0.45+Wd/2;
+    // R4-4: width_m + span = segmente SIĞAN net genişlik (doorFitWidth): dar segmentte mevzuat minimumuna
+    //   daraltılır, min bile sığmazsa (Wd<=0) kapı export'tan ÇIKARILIR (3B kanat/kasa komşu duvara taşmaz).
+    .map(d=>{ const e=d.e, sp=(typeof doorFitSpan==='function'?doorFitSpan(d):{c0:0.45-doorWidthM(d)/2,c1:0.45+doorWidthM(d)/2});
+      if(!sp) return null;
+      const c0=sp.c0, c1=sp.c1, Wd=c1-c0;
       const a=fr.px(e.h?e.x+c0:e.x, e.h?e.y:e.y+c0), b=fr.px(e.h?e.x+c1:e.x, e.h?e.y:e.y+c1);
       const kind=DOOR_KIND[d.kind]||'room', blocked=(kind==='stair'||kind==='fire_stair'||kind==='elevator');
       return { kind, orient:e.h?'h':'v', width_m:+Wd.toFixed(2), blocked,
-               p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; });
+               p0_px:a, p1_px:b, p0_norm:fr.norm(a), p1_norm:fr.norm(b) }; })
+    .filter(Boolean);
   // pencereler: cephe pencere açıklıkları (3B + AI besleme; doors[] şemasının ikizi, ADDITIVE — mevcut alanlar değişmez).
   // span = pencere merkezinden ±genişlik/2 (kenar boyu, dünya→px). height_m + sill_m 3B'yi besler (tam boy → sill 0, full:true).
   const windows=(typeof computeWindows==='function'?computeWindows():[])

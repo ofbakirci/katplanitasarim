@@ -572,11 +572,12 @@ function renderPlan(){
     if(!clean){ const tgt = dr.kind==='unit' ? ((p.unitObjs[dr.k]&&p.unitObjs[dr.k].antre)?p.unitObjs[dr.k].antre.id:null)
                           : dr.kind==='inner' ? (dr.reg?dr.reg.id:null) : null;
       sw=drawSwing(e, Math.max(0.6,doorWidthM(dr)-0.1), tgt); }
-    const Wd=doorWidthM(dr);   // kapı boşluğu (m): bina 1.5 / daire 1.0 / oda 0.9 / ıslak+balkon 0.8 — orta-nokta e+0.45
+    const sp=(typeof doorFitSpan==='function'?doorFitSpan(dr):{c0:0.45-doorWidthM(dr)/2,c1:0.45+doorWidthM(dr)/2});   // R4-4: segmente sığan boşluk (dar segmentte daralır/kayar)
+    if(!sp) return;                                          // R4-4: mevzuat min bile segmente sığmadı → boşluğu çizme (clipping yerine boşluk yok)
     // boşluk çizgisi kalınlaşan duvardan GENİŞ olmalı (açıklık tam kapanmasın): L1-A1'de oyulan duvarın gerçek kalınlığına göre büyür.
     const gw=Math.max(clean?Math.max(3,pxPerM*0.3):(dr.kind==='unit'?Math.max(2,pxPerM*0.2):Math.max(1.5,pxPerM*0.12)), wallThickM(doorWallType(dr))*pxPerM+1.5);
-    if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+0.45-Wd/2),y1:W2Sy(e.y),x2:W2Sx(e.x+0.45+Wd/2),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':gw}));
-    else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+0.45-Wd/2),x2:W2Sx(e.x),y2:W2Sy(e.y+0.45+Wd/2),stroke:'#faf8f3','stroke-width':gw}));
+    if(e.h) g.appendChild(el('line',{x1:W2Sx(e.x+sp.c0),y1:W2Sy(e.y),x2:W2Sx(e.x+sp.c1),y2:W2Sy(e.y),stroke:'#faf8f3','stroke-width':gw}));
+    else    g.appendChild(el('line',{x1:W2Sx(e.x),y1:W2Sy(e.y+sp.c0),x2:W2Sx(e.x),y2:W2Sy(e.y+sp.c1),stroke:'#faf8f3','stroke-width':gw}));
     if(dr.kind==='unit'){
       if(!clean){ /* D1–D6 rozeti + tutamaç: AI temiz modda yok → kapı boşluğu açıkta kalır */
         let bx=e.h?W2Sx(e.x+0.45):W2Sx(e.x), by=e.h?W2Sy(e.y):W2Sy(e.y+0.45); const fs2=Math.max(8.5,Math.min(13,pxPerM*0.5));
