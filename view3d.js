@@ -89,6 +89,16 @@
   //     yeniden üretim YOK. İÇ hiçbir şey (bölme/kapı/mobilya/etiket) yaratılmaz. Draw-call bütçesi düşük.
   //   extSaved: iç sahne gruplarının exteriorMode öncesi görünürlükleri (geri yükleme için).
   let exteriorMode=false, exteriorGroup=null, extBox=null, extSaved=null;
+  // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ ──────────────────────────────
+  //   extCams: DIŞ moddaki drone kameraları — İÇ camList'ten TAMAMEN AYRI (exportCameras iç
+  //     sözleşmesi DEĞİŞMEZ). Her item {pos:{x,y,z}, target:{x,y,z}, lens} — DÜNYA metre (iç kamera
+  //     ile aynı konvansiyon). Yükseklik zemin+2m .. çatı+20m arası serbest (drone). Hedef default bina
+  //     merkezi. extActive = seçili drone index; extGizmos = dış sahne gizmo grubu (koni+model+marker).
+  //   extGhost: "Drone Ekle" hayalet akışı (iç camGhost ikizi ama tek-tık = kamera düşer, hedef bina
+  //     merkezi; yükseklik dock slider'ından). extDrag = seçili drone gizmosu sürükle-taşı.
+  //   extFacade: aktif cephe malzeme preset'i (neutral|plaster|brick|contemporary) — kabuk mats'ına
+  //     ANINDA yansır + dış render prompt'una malzeme sinyali olarak akar.
+  let extCams=[], extActive=-1, extGizmos=null, extGhost=null, extDrag=null, extPlaceActive=false, extFacade='neutral', extPipClosed=false;
   // ── kamera-koyma modu (adım 4): raycaster ile zemine tıkla → kamera; çıktı plan-px uzayında ──
   // camUIEnabled: kamera bölümü YALNIZ adım 4'te (openCompare) görünür — adım 2 (salt 3B izleme) ASLA göstermez.
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
@@ -724,6 +734,16 @@
       '<div id="v3dMiniMap" style="position:absolute;left:14px;bottom:14px;z-index:8;display:none;width:'+MINI_W+'px;height:'+MINI_H+'px;background:rgba(30,27,24,.55);border:1px solid '+UIPAL.lineSoft+';border-radius:'+UIPAL.r10+';box-shadow:'+UIPAL.shadow+';overflow:hidden;pointer-events:none">'+
         '<div id="v3dMiniBody" style="position:absolute;inset:0;background:transparent"></div>'+
         '<svg id="v3dMiniMarker" viewBox="0 0 '+MINI_W+' '+MINI_H+'" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></svg>'+
+      '</div>'+
+      // S2: DIŞ (DRONE) KAMERA DOCK — yalnız dış modda görünür (renderExtDock doldurur/gösterir). İç kamera dock ikizi ama AYRI.
+      '<div id="v3dExtDock" style="position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:5;display:none;max-width:calc(100vw - 28px)"></div>'+
+      // S2: DIŞ PiP — seçili drone perspektifi (dış sahne). İç v3dPip ikizi, scissor pass (renderExtPip).
+      '<div id="v3dExtPip" style="position:absolute;left:14px;bottom:60px;z-index:5;display:none;width:'+PIP_W+'px;background:transparent;border:1px solid '+UIPAL.lineSoft+';border-radius:'+UIPAL.r10+';box-shadow:'+UIPAL.shadow+';overflow:hidden;font:11px/1.3 system-ui,sans-serif;color:'+UIPAL.ink+'">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 6px 5px 9px;background:'+UIPAL.dock+';backdrop-filter:'+UIPAL.blurSm+'">'+
+          '<span style="font-weight:700;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Drone görüşü</span>'+
+          '<button data-v3d="extpipclose" title="Önizlemeyi kapat" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.onBad+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('close',13)+'</button>'+
+        '</div>'+
+        '<div id="v3dExtPipBody" style="width:100%;height:'+Math.round(PIP_W*9/16)+'px;background:transparent;pointer-events:none"></div>'+
       '</div>';
     document.body.appendChild(overlay);
     // buton stilleri
@@ -775,6 +795,22 @@
       '#v3dCamDock .dk.advopen .adv{display:flex}'+
       '#v3dCamDock textarea{width:230px;max-width:40vw;box-sizing:border-box;background:'+U.field+';color:'+U.ink+';border:1px solid '+U.fieldBd+';border-radius:'+U.rSm+';font:11px/1.45 system-ui;padding:6px;resize:vertical}'+
       '#v3dCamDock img.snap{width:180px;max-width:34vw;display:block;border-radius:'+U.rSm+';border:1px solid '+U.fieldBd+';background:#111;cursor:pointer}'+
+      // S2 DIŞ (drone) dock — kamera dock görsel dilini paylaşır (tek yatay bar, kompakt)
+      '#v3dExtDock .dk{background:'+U.dock+';color:'+U.ink+';border:1px solid '+U.line+';border-radius:'+U.r14+';box-shadow:'+U.shadow+';backdrop-filter:'+U.blur+';padding:9px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:min(94vw,900px);font:12px/1.4 system-ui,sans-serif}'+
+      '#v3dExtDock .sep{width:1px;background:'+U.line+';align-self:stretch;margin:1px 1px}'+
+      '#v3dExtDock .lbl{font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;font-weight:700;margin-bottom:2px}'+
+      '#v3dExtDock .col{display:flex;flex-direction:column;gap:4px;min-width:0}'+
+      '#v3dExtDock .row{display:flex;gap:5px;align-items:center;flex-wrap:wrap}'+
+      '#v3dExtDock button.pill{background:'+U.chip2+';color:'+U.ink+';border:0;border-radius:'+U.r7+';padding:6px 11px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit}'+
+      '#v3dExtDock button.pill:hover{filter:brightness(1.12)}#v3dExtDock button.pill.on{background:'+U.acc+';color:'+U.onAcc+'}'+
+      '#v3dExtDock button.cta{background:'+U.ok+';color:'+U.onOk+';border:0;border-radius:'+U.r7+';padding:7px 13px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit}'+
+      '#v3dExtDock button.cta:hover{filter:brightness(1.08)}#v3dExtDock button.cta:disabled{opacity:.45;cursor:default;filter:none}'+
+      '#v3dExtDock button.dngr{background:'+U.bad+';color:'+U.onBad+';border:0;border-radius:'+U.r7+';padding:6px 10px;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit}'+
+      '#v3dExtDock .chip{display:inline-flex;align-items:center;gap:5px;background:'+U.chip+';border:1px solid '+U.lineSoft+';color:'+U.ink+';border-radius:'+U.r9+';padding:4px 9px;font-size:11px;font-weight:600;cursor:pointer}'+
+      '#v3dExtDock .chip.on{background:'+U.acc+';color:'+U.onAcc+';border-color:'+U.acc+'}'+
+      '#v3dExtDock input[type=range]{accent-color:'+U.acc+';cursor:pointer;height:18px;width:120px}'+
+      '#v3dExtDock .val{font-size:10.5px;opacity:.8;min-width:52px;text-align:right;font-variant-numeric:tabular-nums}'+
+      '#v3dExtDock select{background:'+U.field+';color:'+U.ink+';border:1px solid '+U.fieldBd+';border-radius:'+U.rSm+';font:11.5px system-ui;padding:5px 7px}'+
       // B2-1 mobilya dock (kamera dock görsel dilini paylaşır)
       // U4: .dk KATLANMAZ (nowrap) → dock TEK satır kolon = SABİT yükseklik; taşarsa yatay kaydırır (dikey büyümez)
       '#v3dFurnDock .dk{background:'+U.dock+';color:'+U.ink+';border:1px solid '+U.line+';border-radius:'+U.rXl+';box-shadow:'+U.shadow+';backdrop-filter:'+U.blur+';padding:12px 14px;display:flex;gap:14px;align-items:stretch;flex-wrap:nowrap;max-width:calc(100vw - 28px);overflow-x:auto;font:12px/1.4 system-ui,sans-serif}'+
@@ -850,6 +886,9 @@
       const ctm=t.getAttribute&&t.getAttribute('data-camtime'); if(ctm){ setTimeOfDay(ctm, activeCamIdx>=0); return; }   // B1-4: kamera seçiliyse override, değilse global
       const ca=t.getAttribute&&t.getAttribute('data-camact'); if(ca){ if(ca==='add'){ startCamGhost(); return; } setPlaceAction(ca); return; }   // KAMERA-S S1: Ekle → hayalet akışı (canlı PiP nişan); aim/move eski zemine-tıkla yolu
       const cs=t.getAttribute&&t.getAttribute('data-camsel'); if(cs!=null&&cs!==''){ selectCam(+cs); return; }
+      const xs=t.getAttribute&&t.getAttribute('data-extsel'); if(xs!=null&&xs!==''){ selectExtCam(+xs); return; }   // S2: dış drone seç
+      const xl=t.getAttribute&&t.getAttribute('data-extlens'); if(xl){ setExtCamLens(+xl); return; }                  // S2: dış drone objektif
+      const xf=t.getAttribute&&t.getAttribute('data-facade'); if(xf){ applyFacadePreset(xf); renderExtDock(); return; } // S2: cephe preset (kabuğa ANINDA)
       const cdz=t.getAttribute&&t.getAttribute('data-camdesel'); if(cdz){ deselectCam(); return; }   // çip × = seçimi bırak (silmez)
       const fca=t.getAttribute&&t.getAttribute('data-furncat'); if(fca!=null&&fca!==''){ furnDockCat=+fca; renderFurnDock(); return; }   // B2-1: kategori sekmesi
       const fpk=t.getAttribute&&t.getAttribute('data-furnpick'); if(fpk){ startFurnGhost(fpk); return; }   // B2-1: palet parçası → hayalet yerleştirme
@@ -858,6 +897,10 @@
       const a=t.getAttribute&&t.getAttribute('data-v3d'); if(!a) return;
       if(a==='close') close();
       else if(a==='exterior') toggleExterior();                 // S1: iç kat görünümü ↔ bina dış kabuğu
+      else if(a==='extadd'){ if(extGhost) cancelExtGhost(); else startExtGhost(); }   // S2: Drone Ekle (hayalet akışı, toggle)
+      else if(a==='extdel'){ if(extActive>=0) removeExtCam(extActive); }              // S2: seçili drone sil
+      else if(a==='extrender'){ triggerExteriorRender(); }                            // S2: Dış Render CTA (onay-öncesi)
+      else if(a==='extpipclose'){ extPipClosed=true; const p=overlay.querySelector('#v3dExtPip'); if(p) p.style.display='none'; }  // S2: dış PiP kapat
       else if(a==='iso'||a==='top'||a==='persp'){ if(exteriorMode) setExtView(a); else setView(a); }
       else if(a==='fit'){ if(exteriorMode) fitExtView(); else fitView(); }
       else if(a==='png') snap();
@@ -1040,6 +1083,7 @@
     while(scene.children.length) scene.remove(scene.children[0]);
     camGizmos=null; pendingPos=null;                        // eski gizmo grubu sahneyle gitti (camList korunur)
     exteriorGroup=null; extBox=null;                        // S1: eski dış kabuk sahneyle gitti → dış moddaysak yeniden kurulur
+    extGizmos=null; extGhost=null; extDrag=null; extPlaceActive=false;   // S2: dış gizmo grubu sahneyle gitti (extCams korunur, yeniden çizilir)
     scene.add(new THREE.AmbientLight(0xfff0e0,0.38));   // kısık ambient → gölgeler belirgin
     const key=new THREE.DirectionalLight(0xffe2b8,1.45); key.position.set(16,34,12); key.castShadow=true;
     key.shadow.mapSize.set(2048,2048); key.shadow.bias=-0.0004; key.shadow.normalBias=0.05;   // Q1/Q6: normalBias → ince mobilya panelleri + duvar-zemin ekinde gölge-akne (moiré şerit) biter; sırt paneli net okunur
@@ -1753,6 +1797,36 @@
   //   malzeme → 15 katta bile düşük draw-call; kurulum <1sn hedefi.
   //   Not: TÜM görsel motor kaynağı KPTA view3d.js'te — mesken prototip'e npm run build ile OTOMATİK iner.
   const EXT_FLOOR_H_DEF = 2.9;   // varsayılan kat yüksekliği (katYuk input yoksa)
+  // ── S2: CEPHE MALZEME PRESETLERİ ──────────────────────────────────────────────────
+  //   İŞARETLİ YARATICI YORUM (kullanıcı "iki çeşit falan" dedi → 3 sunuyoruz, TR apartman gerçekçiliği).
+  //   Her preset: kabuk mats'ının renklerini (wall=cephe sıvası, slab=döşeme/parapet, frame=pencere kasası,
+  //   rail=balkon korkuluğu) DEĞİŞTİRİR (S1 malzeme paylaşımı bozulmaz — merge'li geometri malzeme-başına
+  //   gruplu, tek atama tüm kabuğa akar) + render prompt'una `promptSignal` olarak girer (RESTYLE = malzeme,
+  //   LOCK = geometri; C5-R dersi korunur). Varsayılan 'neutral' = bugünkü nötr kabuk (byte-aynı davranış).
+  const FACADE_PRESETS = [
+    { key:'neutral', name:'Nötr',
+      colors:{ wall:0xe6dfd0, slab:0xcfc8bc, frame:0xf4f4f2, rail:0x9a9a9e, sill:0xe0ded7 },
+      promptSignal:'neutral light beige plaster facade, white PVC window frames' },
+    { key:'plaster', name:'Açık Sıva + Koyu Bant',
+      colors:{ wall:0xeae4d8, slab:0x5a5652, frame:0x33312e, rail:0x6d6a66, sill:0x4a4744 },
+      promptSignal:'light off-white plaster walls with dark charcoal horizontal window bands and dark anthracite window frames, modern Turkish apartment facade' },
+    { key:'brick', name:'Tuğla Zemin + Sıva Üst',
+      colors:{ wall:0xe4dccb, slab:0x8f4b34, frame:0xefeae2, rail:0x8a8580, sill:0xd8d2c6 },
+      promptSignal:'clinker brick / red-brown brick cladding on the ground floor base, warm cream plaster on the upper floors, contemporary Turkish residential building' },
+    { key:'contemporary', name:'Çağdaş Gri + Ahşap Balkon',
+      colors:{ wall:0xbfc0bd, slab:0x7d7e7c, frame:0x3a3b3c, rail:0xa9784a, sill:0x9a9b98 },
+      promptSignal:'contemporary grey render facade with warm natural wood balcony accents and slim dark metal frames, high-end modern apartment' }
+  ];
+  function facadePreset(key){ for(let i=0;i<FACADE_PRESETS.length;i++){ if(FACADE_PRESETS[i].key===key) return FACADE_PRESETS[i]; } return FACADE_PRESETS[0]; }
+  // aktif preset'i kabuk mats'ına uygula (mats grubu geometri-birleştirmede malzeme-başına paylaşıldığı için
+  //   tek renk ataması tüm katlara + parapete + pencere kasalarına akar). Kabuk yoksa no-op (mod açılınca uygulanır).
+  function applyFacadePreset(key){
+    extFacade=facadePreset(key).key;
+    const mats=exteriorGroup&&exteriorGroup.userData&&exteriorGroup.userData.mats;
+    if(!mats) return;
+    const c=facadePreset(extFacade).colors;
+    ['wall','slab','frame','rail','sill'].forEach(function(k){ if(mats[k]&&c[k]!=null){ mats[k].color.setHex(c[k]); mats[k].needsUpdate=true; } });
+  }
   // katYuk (m) — global input; yoksa varsayılan
   function extFloorHeight(){
     try{ if(typeof document!=='undefined'){ const el=document.getElementById('katYuk'); if(el){ const v=parseFloat(el.value); if(v>0) return v; } } }catch(e){}
@@ -2022,6 +2096,7 @@
       ghost:new THREE.MeshStandardMaterial({color:0xb8b2a6,roughness:0.95,metalness:0,transparent:true,opacity:0.55})   // diğer bloklar sade kütle
     };
     exteriorGroup.userData.mats=mats;
+    if(extFacade!=='neutral') applyFacadePreset(extFacade);   // S2: aktif cephe preset'i (nötr dışıysa) kabuğa uygula
     const floorH=extFloorHeight();
     const fc=extFloorCount();
     // dış kontur (dünya metre) — pts varsa onu; yoksa map oda birleşim bbox'ına düş
@@ -2100,12 +2175,17 @@
       extSetDocks(false);
       updateExtBtn();
       fitExtView();
+      // S2: dış (drone) kamera dock'u + gizmoları göster (iç kamera akışına DOKUNMAZ)
+      renderExtGizmos(); renderExtDock();
     } else {
       if(exteriorGroup) exteriorGroup.visible=false;
       // iç sahne gruplarını geri getir
       if(extSaved){ Object.keys(extSaved.groups).forEach(function(k){ const g=scene[k]; if(g) g.visible=extSaved.groups[k]; });
         if(camGizmos && extSaved.camGiz!=null) camGizmos.visible=extSaved.camGiz; }
       exteriorMode=false;
+      // S2: dış-mod eklentilerini kapat (drone gizmo/hayalet/dock/PiP) — iç kamera dokunulmaz
+      cancelExtGhost(); extDrag=null; extPlaceActive=false;
+      if(extGizmos) extGizmos.visible=false;
       extSetDocks(true);
       updateExtBtn();
       fitView();
@@ -2123,6 +2203,8 @@
       ['v3dCamDock','v3dFurnDock','v3dMatDock','v3dFurnBar','v3dCamBar','v3dPip'].forEach(function(id){ const el=overlay.querySelector('#'+id); if(el) el.style.display='none'; });
       const dr=overlay.querySelector('#v3dDrawer'); if(dr) dr.style.display='none';
     } else {
+      // S2: iç moda dönüş → dış drone dock + PiP gizle
+      ['v3dExtDock','v3dExtPip'].forEach(function(id){ const el=overlay.querySelector('#'+id); if(el) el.style.display='none'; });
       renderRail(); renderDrawer();   // iç mod: mevcut aktif gruba göre dock/drawer'ı geri kur
     }
   }
@@ -2156,6 +2238,271 @@
     }
     controls.target.copy(ctr); cam.position.copy(ctr).addScaledVector(dir,d);
     cam.updateProjectionMatrix(); controls.sync&&controls.sync(); controls.update&&controls.update();
+  }
+
+  /* ═══ S2: DIŞ (DRONE) KAMERA SİSTEMİ ══════════════════════════════════════════════════
+     İç kamera akıcılık dilini (ekle/taşı/sil/PiP) DIŞ sahneye taşır ama İÇ camList'ten tamamen
+     ayrı (extCams). Drone = bina çevresinde yükseklik-ayarlı bir nokta, hedef default bina merkezi.
+     Snapshot dış sahneyi (exteriorGroup) render eder → dış render payload'u (B/img2img karşılığı).
+     TUZAK: dış mod çatısı KAPANMAZ (kabuk zaten dış cephe); snap disiplini iç camGizmos yerine
+     extGizmos gizler. extBox merkez/yükseklik bina bbox'ından gelir (fit ile aynı kaynak). */
+  const EXT_DRONE_Y_FLOOR = 2, EXT_DRONE_Y_ABOVE_ROOF = 20;   // drone yükseklik aralığı: zemin+2m .. çatı+20m
+  const EXT_DRONE_LENS_DEF = 24;
+  function extCenter(){ // bina merkezi (drone hedefi) — dünya metre; extBox merkez + orta yükseklik
+    if(extBox) return { x:extBox.cx, y:extBox.topY*0.45, z:extBox.cz };
+    return { x:0, y:4, z:0 };
+  }
+  function extDroneYRange(){ const topY=(extBox?extBox.topY:8); return { min:EXT_DRONE_Y_FLOOR, max:topY+EXT_DRONE_Y_ABOVE_ROOF }; }
+  function clampDroneY(y){ const r=extDroneYRange(); return Math.max(r.min,Math.min(r.max,y)); }
+  // varsayılan drone yerleşimi: binanın güneydoğu köşesinden dışarı, çatı yüksekliğinin ~0.7'sinde, merkeze bakar.
+  function extDefaultDronePos(){
+    const c=extCenter(), hx=(extBox?extBox.hx:8), hz=(extBox?extBox.hz:8), topY=(extBox?extBox.topY:8);
+    const off=Math.max(hx,hz)*1.4+6;
+    return { x:c.x+off, y:clampDroneY(topY*0.7+2), z:c.z+off };
+  }
+  function extEnsureGizmos(){ if(!extGizmos||!extGizmos.parent){ extGizmos=new THREE.Group(); if(scene) scene.add(extGizmos); } return extGizmos; }
+  function extDisposeGizmoChildren(){ if(!extGizmos) return; while(extGizmos.children.length){ const ch=extGizmos.children[0]; disposeGizmo(ch); extGizmos.remove(ch); } }
+  // dış gizmoları çiz — koni (bakış) + kamera modeli + seçili marker. İç renderCamGizmos ikizi (aynı yapıcılar).
+  function renderExtGizmos(){
+    if(!scene) return;
+    const g=extEnsureGizmos();
+    extDisposeGizmoChildren();
+    if(!exteriorMode){ g.visible=false; return; }
+    g.visible=true;
+    extCams.forEach(function(c,i){
+      const active=(i===extActive);
+      if(active) g.add(makeActiveMarker({pos:c.pos})); // zemin halkası (drone yüksek olsa da nereden baktığı okunur)
+      g.add(makeViewCone(c,active));
+      g.add(makeCameraMesh(c,active,i));
+    });
+    if(extGhost && extGhost.pos){
+      const s=new THREE.Mesh(new THREE.SphereGeometry(0.28,16,16),
+        new THREE.MeshBasicMaterial({color:0x7bbf8a,transparent:true,opacity:0.85}));
+      s.position.set(extGhost.pos.x,extGhost.pos.y,extGhost.pos.z); g.add(s);
+      const gc={ pos:extGhost.pos, target:extGhost.target||extCenter(), lens:extGhost.lens||EXT_DRONE_LENS_DEF };
+      g.add(makeViewCone(gc,true));
+    }
+  }
+  // pointer → dış sahne: önce zemin (ground/roof) hit, yoksa drone yükseklik düzlemine düş → dünya {x,z}
+  function extGroundHit(ev){
+    if(!scene||!renderer) return null;
+    const rect=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
+    if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
+    if(exteriorGroup){ const hits=raycaster.intersectObject(exteriorGroup,true); if(hits.length) return { x:hits[0].point.x, z:hits[0].point.z }; }
+    if(!camGroundPlane) camGroundPlane=new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+    const p=new THREE.Vector3(); if(!raycaster.ray.intersectPlane(camGroundPlane, p)) return null;
+    return { x:p.x, z:p.z };
+  }
+  function extPickIdx(ev){ if(!extGizmos) return -1;
+    const rect=renderer.domElement.getBoundingClientRect();
+    const nx=((ev.clientX-rect.left)/rect.width)*2-1, ny=-((ev.clientY-rect.top)/rect.height)*2+1;
+    if(!raycaster) raycaster=new THREE.Raycaster(); raycaster.setFromCamera({x:nx,y:ny}, cam);
+    const gh=raycaster.intersectObjects(extGizmos.children,true);
+    for(let i=0;i<gh.length;i++){ const idx=camIdxFromObj(gh[i].object); if(idx>=0) return idx; } return -1; }
+  // "Drone Ekle" → hayalet başlar; tek-tık = drone o noktaya (dock yüksekliğiyle) düşer, bina merkezine bakar.
+  function startExtGhost(){
+    if(!exteriorMode) return;
+    cancelExtGhost();
+    extActive=-1; extPlaceActive=true;
+    const y=clampDroneY((extBox?extBox.topY:8)*0.7+2);
+    extGhost={ pos:null, target:extCenter(), lens:EXT_DRONE_LENS_DEF, y:y };
+    extPipClosed=false;
+    if(renderer) renderer.domElement.style.cursor='copy';
+    renderExtGizmos(); renderExtDock();
+    setHint&&setHint('Drone — binanın çevresinde bir NOKTAYA tıkla · Esc / sağ-tık vazgeç');
+  }
+  function moveExtGhost(ev){ if(!extGhost) return; const hit=extGroundHit(ev); if(!hit) return;
+    extGhost.pos={ x:hit.x, y:extGhost.y, z:hit.z }; extGhost.target=extCenter();
+    renderExtGizmos(); }
+  function clickExtGhost(ev){ if(!extGhost) return; const hit=extGroundHit(ev); if(!hit) return;
+    const c={ pos:{x:hit.x,y:extGhost.y,z:hit.z}, target:Object.assign({},extCenter()), lens:extGhost.lens||EXT_DRONE_LENS_DEF };
+    extGhost=null; if(renderer) renderer.domElement.style.cursor='';
+    extCams.push(c); extActive=extCams.length-1; extPlaceActive=false;
+    renderExtGizmos(); renderExtDock(); extOpenPip();
+    setHint&&setHint('Drone '+extCams.length+' kondu · sürükle taşı · yükseklik/objektif dock\'ta'); }
+  function cancelExtGhost(){ if(!extGhost) return; extGhost=null; extPlaceActive=false;
+    if(renderer) renderer.domElement.style.cursor=''; renderExtGizmos(); renderExtDock(); }
+  // seçili drone gizmosu üstünde sol-drag → taşı (hedef bina merkezinde sabit kalır). İç beginCamDrag ikizi.
+  function beginExtDrag(idx){ if(idx<0||idx>=extCams.length) return; extActive=idx; extDrag={idx:idx};
+    if(controls) controls.enabled=false; renderExtGizmos(); renderExtDock(); }
+  function moveExtDrag(ev){ if(!extDrag) return; const hit=extGroundHit(ev); if(!hit) return;
+    const c=extCams[extDrag.idx]; if(!c) return; c.pos.x=hit.x; c.pos.z=hit.z; renderExtGizmos(); }
+  function endExtDrag(){ if(!extDrag) return; extDrag=null; if(controls) controls.enabled=true; renderExtGizmos(); }
+  function selectExtCam(i){ extActive=(i>=0&&i<extCams.length)?i:-1; extPipClosed=false; renderExtGizmos(); renderExtDock(); }
+  function removeExtCam(i){ if(i<0||i>=extCams.length) return; extCams.splice(i,1);
+    extActive=extCams.length?Math.min(i,extCams.length-1):-1; renderExtGizmos(); renderExtDock(); }
+  function setExtCamHeight(m){ if(extActive<0) return; const c=extCams[extActive]; c.pos.y=clampDroneY(+m); renderExtGizmos(); renderExtDock(); }
+  function setExtCamLens(l){ if(extActive<0) return; extCams[extActive].lens=+l; renderExtGizmos(); renderExtDock(); }
+  function extDroneHeightVal(c){ return c?c.pos.y:clampDroneY((extBox?extBox.topY:8)*0.7+2); }
+
+  // ── DIŞ RENDER PROMPT + PAYLOAD (headless test edilebilir) ──────────────────────────
+  //   Dış render = B/img2img yolunun DIŞ karşılığı: snapshot dış-cephe mesh PNG → LOCK geometri
+  //   (pencere/balkon düzeni, kütle) / RESTYLE malzeme (cephe preset sinyali). render-server 'exterior'
+  //   profili bu prompt'u kullanır. TR-apartman fotogerçekçiliği + drone perspektifi + gökyüzü/çevre bağlamı.
+  function extHeadingOf(c){ const dx=c.target.x-c.pos.x, dz=c.target.z-c.pos.z; const a=Math.atan2(dx,-dz)*180/Math.PI; return Math.round((a%360+360)%360); }
+  // gün-saati ışık ipucu (render-server TIME_HINT ile aynı anahtarlar; view3d yerel kopyası — server'a bağımlı değil)
+  const EXT_TIME_HINT={ midday:'soft natural daylight, gentle shadows', sunrise:'early morning sunrise light, long soft warm shadows',
+    golden:'golden hour, low warm sun, long shadows, rich amber light', night:'night time, warm interior lights glowing through the windows, dark blue evening sky' };
+  function timeHint(t){ return EXT_TIME_HINT[t]||EXT_TIME_HINT.midday; }
+  // saf metin prompt kurucu (server ile paylaşılan reçete; TEST bunu assert eder)
+  function buildExteriorPrompt(opt){
+    opt=opt||{};
+    const fp=facadePreset(opt.facade||extFacade);
+    const tod=opt.timeOfDay||timeOfDay;
+    const floors=(extBox&&extBox.floors)||(opt.floors||1);
+    return (
+      'Photorealistic architectural exterior photograph of a '+floors+'-storey residential apartment building, '+
+      'aerial drone perspective looking down at an angle toward the building, with sky and surrounding '+
+      'context (street, greenery, neighbouring buildings). '+
+      'Keep the building massing, floor count, and every window and balcony position EXACTLY as in the input '+
+      '3D model - do not move, add or remove any window, balcony or floor. '+
+      'Facade material: '+fp.promptSignal+'. '+
+      'Realistic materials and lighting, '+timeHint(tod)+'. '+
+      'High detail, professional real-estate photography, no people, no text.'
+    );
+  }
+  // bir drone → dış render/analiz objesi (dünya poz + heading + prompt + snapshot). exportExteriorCameras + payload paylaşır.
+  function extCamViewObj(c,i){
+    return { id:'ext'+(i+1), pos_m:{x:+c.pos.x.toFixed(3),y:+c.pos.y.toFixed(3),z:+c.pos.z.toFixed(3)},
+      target_m:{x:+c.target.x.toFixed(3),y:+c.target.y.toFixed(3),z:+c.target.z.toFixed(3)},
+      heading_deg:extHeadingOf(c), lens_mm:c.lens, fov_deg:lensToFov(c.lens),
+      facade:extFacade, floors:(extBox&&extBox.floors)||null };
+  }
+  // dış render payload'u (prototip → render-server POST /camera {profile:'exterior'}). snapshot = dış-sahne PNG.
+  function exportExteriorCameras(){
+    return extCams.map(function(c,i){ const out=extCamViewObj(c,i);
+      out.profile='exterior'; out.render_method='snapshot';
+      out.time_of_day=timeOfDay; out.facade_signal=facadePreset(extFacade).promptSignal;
+      out.prompt=buildExteriorPrompt({facade:extFacade});
+      out.snapshot=snapExtCameraDataURL(c);
+      return out; });
+  }
+  // DIŞ sahne 1440×810 snapshot — snapCameraDataURL disiplini (BİREBİR geri) ama exteriorGroup sahnesi,
+  //   çatı DOKUNULMAZ (kabuk dış cephe), İÇ gizmoları + DIŞ gizmoları gizlenir.
+  function snapExtCameraDataURL(which){
+    if(!renderer||!scene||!cam||!exteriorGroup) return null;
+    const c=(typeof which==='number')?extCams[which]:which;
+    if(!c||!c.pos||!c.target) return null;
+    const savedSize=renderer.getSize(new THREE.Vector2());
+    if(savedSize.x<1||savedSize.y<1) return null;              // viewport 0×0 → render çöker, reddet
+    const savedView=getView(), savAspect=cam.aspect, savPR=renderer.getPixelRatio();
+    const savExtGiz=extGizmos?extGizmos.visible:true, savCamGiz=camGizmos?camGizmos.visible:false;
+    let url=null;
+    _snapBusy=true;
+    try{
+      if(extGizmos) extGizmos.visible=false;                   // drone modelleri/koni kadrajda olmasın
+      if(camGizmos) camGizmos.visible=false;
+      renderer.setPixelRatio(1); renderer.setSize(1440,810,false);
+      cam.up.set(0,1,0);
+      cam.position.set(c.pos.x,c.pos.y,c.pos.z);
+      cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
+      cam.fov=lensToFov(c.lens); cam.aspect=16/9; cam.updateProjectionMatrix();
+      renderer.render(scene,cam);
+      url=renderer.domElement.toDataURL('image/png');
+    } finally {
+      renderer.setPixelRatio(savPR); renderer.setSize(savedSize.x,savedSize.y,false);
+      cam.aspect=savAspect;
+      if(extGizmos) extGizmos.visible=savExtGiz;
+      if(camGizmos) camGizmos.visible=savCamGiz;
+      if(savedView) restoreView(savedView); else cam.updateProjectionMatrix();
+      renderer.render(scene,cam);
+      _snapBusy=false;
+    }
+    return url;
+  }
+  // DIŞ PiP — iç renderPip disiplini ama exteriorGroup sahnesi (çatı dokunulmaz), extGizmos gizli.
+  function extPipSourceCam(){ if(extGhost && extGhost.pos) return { pos:extGhost.pos, target:extGhost.target||extCenter(), lens:extGhost.lens };
+    if(extActive>=0 && extActive<extCams.length) return extCams[extActive]; return null; }
+  function extShouldShowPip(){ return exteriorMode && !extPipClosed && !!extPipSourceCam(); }
+  function extOpenPip(){ extPipClosed=false; }
+  function renderExtPip(){
+    if(_snapBusy || !renderer || !scene || !cam) return;
+    const pipEl=overlay&&overlay.querySelector('#v3dExtPip');
+    const body=overlay&&overlay.querySelector('#v3dExtPipBody');
+    if(!pipEl||!body) return;
+    if(!extShouldShowPip()){ if(pipEl.style.display!=='none') pipEl.style.display='none'; return; }
+    pipEl.style.display='block';
+    const c=extPipSourceCam(); if(!c) return;
+    const canvas=renderer.domElement;
+    const cr=canvas.getBoundingClientRect(), br=body.getBoundingClientRect();
+    const w=Math.max(2,Math.round(br.width)), h=Math.max(2,Math.round(br.height));
+    const x=Math.round(br.left-cr.left), y=Math.round(cr.bottom-br.bottom);
+    if(w<2||h<2) return;
+    if(!pipCam) pipCam=new THREE.PerspectiveCamera(50,16/9,0.1,600);
+    const savExtGiz=extGizmos?extGizmos.visible:true;
+    const savVp=renderer.getViewport(new THREE.Vector4()), savSc=renderer.getScissor(new THREE.Vector4()), savScTest=renderer.getScissorTest();
+    try{
+      if(extGizmos) extGizmos.visible=false;
+      pipCam.up.set(0,1,0);
+      pipCam.position.set(c.pos.x,c.pos.y,c.pos.z);
+      pipCam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
+      pipCam.fov=lensToFov(c.lens); pipCam.aspect=w/h; pipCam.updateProjectionMatrix();
+      renderer.setViewport(x,y,w,h); renderer.setScissor(x,y,w,h); renderer.setScissorTest(true);
+      renderer.render(scene,pipCam);
+    } finally {
+      renderer.setScissorTest(savScTest);
+      renderer.setViewport(savVp.x,savVp.y,savVp.z,savVp.w);
+      renderer.setScissor(savSc.x,savSc.y,savSc.z,savSc.w);
+      if(extGizmos) extGizmos.visible=savExtGiz;
+    }
+  }
+  // DIŞ (drone) dock'u kur/tazele — yalnız dış modda görünür. İç kamera dock'una DOKUNMAZ.
+  //   Bölümler: Cephe preset seçici · Drone ekle/liste · seçili drone yükseklik+objektif · sil · Dış Render CTA.
+  function extEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+  function renderExtDock(){
+    if(!overlay) return;
+    const dock=overlay.querySelector('#v3dExtDock'); if(!dock) return;
+    if(!exteriorMode){ dock.style.display='none'; dock.innerHTML=''; return; }
+    dock.style.display='block';
+    const c=(extActive>=0&&extActive<extCams.length)?extCams[extActive]:null;
+    const r=extDroneYRange();
+    // cephe preset düğmeleri
+    const facadeBtns=FACADE_PRESETS.map(function(p){
+      return '<button class="chip'+(p.key===extFacade?' on':'')+'" data-v3d="extfacade" data-facade="'+p.key+'" title="'+extEsc(p.promptSignal)+'">'+extEsc(p.name)+'</button>'; }).join('');
+    // drone çipleri (seçim)
+    const camChips=extCams.length? extCams.map(function(cc,i){
+      return '<button class="chip'+(i===extActive?' on':'')+'" data-extsel="'+i+'">Drone '+(i+1)+'</button>'; }).join('') : '<span style="font-size:11px;opacity:.6">Henüz drone yok</span>';
+    // seçili drone kontrolleri (yükseklik + objektif + sil)
+    let selRow='';
+    if(c){
+      const yv=extDroneHeightVal(c);
+      selRow='<div class="sep"></div>'+
+        '<div class="col"><span class="lbl">Yükseklik</span>'+
+          '<div class="row"><input type="range" id="v3dExtH" min="'+r.min.toFixed(1)+'" max="'+r.max.toFixed(1)+'" step="0.5" value="'+yv.toFixed(1)+'"><span class="val" id="v3dExtHVal">'+yv.toFixed(1)+' m</span></div></div>'+
+        '<div class="col"><span class="lbl">Objektif</span>'+
+          '<div class="row">'+[16,24,35,50].map(function(l){ return '<button class="pill'+(c.lens===l?' on':'')+'" data-extlens="'+l+'">'+l+'mm</button>'; }).join('')+'</div></div>'+
+        '<div class="col"><span class="lbl">&nbsp;</span><button class="dngr" data-v3d="extdel">Sil</button></div>';
+    }
+    dock.innerHTML=
+      '<div class="dk">'+
+        '<div class="col"><span class="lbl">Cephe</span><div class="row">'+facadeBtns+'</div></div>'+
+        '<div class="sep"></div>'+
+        '<div class="col"><span class="lbl">Drone Kamera</span>'+
+          '<div class="row"><button class="pill'+(extPlaceActive?' on':'')+'" data-v3d="extadd">+ Drone Ekle</button>'+camChips+'</div></div>'+
+        selRow+
+        '<div class="sep"></div>'+
+        '<div class="col"><span class="lbl">&nbsp;</span>'+
+          '<button class="cta" data-v3d="extrender"'+(extCams.length?'':' disabled')+'>Dış Render'+(extCams.length?(' ('+extCams.length+')'):'')+'</button></div>'+
+      '</div>';
+    const hs=dock.querySelector('#v3dExtH');
+    if(hs){ hs.addEventListener('input',function(){ const v=parseFloat(hs.value); const lab=dock.querySelector('#v3dExtHVal'); if(lab) lab.textContent=v.toFixed(1)+' m'; setExtCamHeight(v); }); }
+  }
+  // "Dış Render" CTA → ÖDEME-ÖNCESİ SON ADIM: onay dialoğu. Onaylanırsa payload'u kurar ve dışarıya callback ile
+  //   verir (prototip render-server'a POST eder). BU FONKSİYON İSTEK ATMAZ — yalnız payload + onay.
+  //   extRenderConfirm dış çağrı (prototip) ile atanır; yoksa yerel confirm() fallback (standalone).
+  let extRenderConfirm=null;   // function(payload){ return Promise<bool> } — prototip atar (modal)
+  let extRenderSubmit=null;    // function(payload){} — onaydan sonra render-server'a POST (prototip atar)
+  function triggerExteriorRender(){
+    if(!extCams.length){ setHint&&setHint('Önce bir drone kamerası ekle.'); return Promise.resolve(false); }   // CTA yalnız dış modda görünür → mod guard'a gerek yok (headless payload da kurulabilir)
+    const payload={ profile:'exterior', style:extFacade, facade:extFacade, timeOfDay:timeOfDay,
+      count:extCams.length, cameras:exportExteriorCameras() };
+    const doSubmit=function(okFlag){ if(!okFlag) return false; if(typeof extRenderSubmit==='function'){ try{ extRenderSubmit(payload); }catch(e){} } return true; };
+    if(typeof extRenderConfirm==='function'){ return Promise.resolve(extRenderConfirm(payload)).then(doSubmit); }
+    // standalone fallback: tarayıcı confirm (prototip modal atamadıysa)
+    let okFlag=false;
+    try{ okFlag=(typeof confirm==='function') ? confirm('Dış render başlatılsın mı?\n\n'+payload.count+' drone kamerası, cephe: '+facadePreset(extFacade).name+'.\nBu işlem render kredisi harcar.') : true; }catch(e){ okFlag=true; }
+    return Promise.resolve(doSubmit(okFlag));
   }
   // PNG'yi İNGİLİZCE etiketle ver (AI 3D-render İngilizce sever; pipeline'ın geri kalanı da EN).
   // Etiketleri EN'e çevir → render → indir → ekrandaki TR'yi geri koy.
@@ -3543,10 +3890,16 @@
     const el=renderer.domElement; let sx=0,sy=0,moved=false;
     // B2-1: HAYALET aktifken sağ-tık = vazgeç (menü açma). contextmenu'yu da yut. KAMERA-S: camGhost da iptal.
     el.addEventListener('contextmenu',function(e){ if(furnGhost){ e.preventDefault(); cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); }
-      else if(camGhost){ e.preventDefault(); cancelCamGhost(); setHint('Kamera ekleme iptal'); } });
+      else if(camGhost){ e.preventDefault(); cancelCamGhost(); setHint('Kamera ekleme iptal'); }
+      else if(exteriorMode && extGhost){ e.preventDefault(); cancelExtGhost(); setHint('Drone ekleme iptal'); } });   // S2: dış hayalet sağ-tık iptal
     el.addEventListener('pointerdown',function(e){ sx=e.clientX; sy=e.clientY; moved=false;
       if(furnGhost){ if(e.button===2){ cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); } return; }   // hayalet: sürükleme başlatma (tık=bırak, pointerup'ta)
       if(camGhost){ if(e.button===2){ cancelCamGhost(); setHint('Kamera ekleme iptal'); } return; }        // KAMERA-S S1: hayalet tık=bırak (pointerup)
+      if(exteriorMode){   // S2: dış mod — hayalet tık=bırak (pointerup); seçili drone üstü sol-drag = taşı; boş = orbit
+        if(extGhost){ if(e.button===2){ cancelExtGhost(); setHint('Drone ekleme iptal'); } return; }
+        if(e.button===0 && !spacePan){ const xi=extPickIdx(e); if(xi>=0){ beginExtDrag(xi); return; } }
+        return;   // dış modda iç kamera/mobilya yolu yok
+      }
       // B2-2: SÜRÜKLE-vs-PAN — sol-drag MOBİLYANIN ÜSTÜNDE başlarsa taşı; BOŞ zeminde başlarsa PAN (orbit).
       //   Mobilya seçili olsa bile boş alan pan'dir. Hit-test önceliği: mobilya > zemin-pan.
       if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0){ beginFurnDrag(e, idx); return; } }
@@ -3556,6 +3909,12 @@
         const ci=camPickIdx(e); if(ci>=0){ beginCamDrag(e, ci); return; }        // S2: kamera üstü = doğrudan taşı
       } });
     el.addEventListener('pointermove',function(e){ if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>5) moved=true;
+      if(exteriorMode){   // S2: dış mod — hayalet imleç izle / drone sürükle / boş = grab imleci
+        if(extGhost){ moveExtGhost(e); return; }
+        if(extDrag){ moveExtDrag(e); return; }
+        if(!spacePan && e.buttons===0) el.style.cursor=(extPickIdx(e)>=0?'grab':'');
+        return;
+      }
       if(furnGhost){ moveFurnGhost(e); return; }
       if(furnDrag){ moveFurnDrag(e); return; }
       if(camGhost){ moveCamGhost(e); return; }              // KAMERA-S S1: hayalet imleci izler (pos ya da aim fazı)
@@ -3566,6 +3925,11 @@
         el.style.cursor=(camAimHandleHit(e)?'crosshair':(camPickIdx(e)>=0?'grab':''));
     });
     el.addEventListener('pointerup',function(e){ if(furnDrag){ endFurnDrag(); return; }
+      if(exteriorMode){   // S2: dış mod — drone sürükle bitir / hayalet yerinde tık = drone düşür
+        if(extDrag){ endExtDrag(); return; }
+        if(extGhost){ if(!moved && e.button===0){ moveExtGhost(e); clickExtGhost(e); } return; }
+        return;
+      }
       if(furnGhost){ if(!moved && e.button===0){ moveFurnGhost(e); dropFurnGhost(); } return; }   // hayalet: yerinde tık = bırak (sürükleyip orbit ettiyse bırakmaz)
       if(camGhost){ if(!moved && e.button===0){ moveCamGhost(e); clickCamGhost(e); } return; }    // KAMERA-S S1: yerinde tık = konum/yön düşür (sürükleyip orbit ettiyse yut)
       if(camAimDrag){ endCamAimDrag(); return; }             // S3
@@ -3582,6 +3946,12 @@
     window.addEventListener('keydown', function(e){
       if(e.key!=='Escape') return;
       if(overlay&&overlay.style.display==='none') return;
+      const t0=e.target, tag0=t0&&t0.tagName; if(t0&&(t0.isContentEditable||tag0==='INPUT'||tag0==='TEXTAREA'||tag0==='SELECT')) return;
+      if(exteriorMode){   // S2: dış modda Esc = drone hayaleti iptal ya da seçimi bırak
+        if(extGhost){ e.preventDefault(); cancelExtGhost(); setHint('Drone ekleme iptal'); }
+        else if(extActive>=0){ e.preventDefault(); selectExtCam(-1); }
+        return;
+      }
       if(!(camUIEnabled && activeGroup==='camera')) return;
       const t=e.target, tag=t&&t.tagName; if(t&&(t.isContentEditable||tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')) return;
       if(camGhost){ e.preventDefault(); cancelCamGhost(); setHint('Kamera ekleme iptal'); }
@@ -5560,7 +5930,7 @@
     if(overlay.style.display!=='none'&&controls){
       if(walkOn){ walkStep(); renderer.render(scene,cam); renderMiniMap(); return; }   // W1: gezinti kendi kamera durumunu sürer (orbit/PiP/koni pass ATLA); R8: minimap scissor-pass (ana pass'ten SONRA)
       controls.update(); renderer.render(scene,cam);
-      renderPip();                                           // B1-R (R2): CANLI PiP — seçili kamera perspektifi (scissor pass, sadece kamera grubu+seçim varken)
+      if(exteriorMode) renderExtPip(); else renderPip();     // S2: dış modda drone PiP; içte B1-R kamera PiP (scissor pass)
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
       updateOrb();                                           // B1-1: yön küresi iğnesini mevcut azimuta döndür (hafif DOM yazımı)
       // SUNUM-4C T4: yüzen çubuklar HER KARE koşulsuz güncellenir → "seçim yok → display:none" TEK MERKEZ
@@ -5648,7 +6018,29 @@
                hasCourtyardHole:extCourtyards().length>0, ghostBlocks:extGhostBlocks().length }; },
     extFloorCountForTest:function(){ return extFloorCount(); },
     // HEADLESS: THREE'siz dış-kabuk özeti (kat sayısı/kontur/cephe boşlukları/avlu/hayalet) — plan-verisinden.
-    extPlanSummaryForTest:function(map){ return extPlanSummary(map||(scene&&scene.__map)); } };
+    extPlanSummaryForTest:function(map){ return extPlanSummary(map||(scene&&scene.__map)); },
+    // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ (test + prototip) ──
+    //   İç kamera sözleşmesinden (exportCameras/getCameras) TAMAMEN AYRI — extCams kendi listesi.
+    getExteriorCameras:function(){ return extCams.map(function(c){ return {pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens}; }); },
+    setExteriorCameras:function(arr){ extCams=(arr||[]).map(function(c){ return {pos:{x:c.pos.x,y:clampDroneY(c.pos.y),z:c.pos.z},
+      target:Object.assign({x:0,y:0,z:0},c.target), lens:c.lens||EXT_DRONE_LENS_DEF}; });
+      extActive=extCams.length?0:-1; renderExtGizmos(); renderExtDock(); return extCams.length; },
+    exportExteriorCameras:exportExteriorCameras, clearExteriorCameras:function(){ extCams=[]; extActive=-1; extGhost=null; renderExtGizmos(); renderExtDock(); },
+    // cephe preset: oku/yaz/liste (prototip dock ile senkron). applyFacadePreset kabuğa ANINDA yansır.
+    getFacade:function(){ return extFacade; }, setFacade:function(k){ applyFacadePreset(k); renderExtDock(); return extFacade; },
+    facadePresets:function(){ return FACADE_PRESETS.map(function(p){ return {key:p.key,name:p.name,promptSignal:p.promptSignal}; }); },
+    // dış render prompt kurucu (HEADLESS — istek atmaz; render-server 'exterior' profili ile aynı reçete anahtar ifadeleri).
+    buildExteriorPrompt:buildExteriorPrompt,
+    // "Dış Render" onay-öncesi tetik + prototip callback atama (extRenderConfirm=modal, extRenderSubmit=POST).
+    triggerExteriorRender:triggerExteriorRender,
+    setExtRenderHandlers:function(confirmFn,submitFn){ extRenderConfirm=(typeof confirmFn==='function')?confirmFn:null; extRenderSubmit=(typeof submitFn==='function')?submitFn:null; },
+    // TEST: dış drone ekle/say/PiP-kaynağı (THREE gerekir → standalone/preview). Headless prompt/payload yolları THREE'siz.
+    extAddDroneForTest:function(pos,target,lens){ if(!exteriorMode) return -1;
+      extCams.push({pos:{x:pos.x,y:clampDroneY(pos.y),z:pos.z},target:target||Object.assign({},extCenter()),lens:lens||EXT_DRONE_LENS_DEF});
+      extActive=extCams.length-1; renderExtGizmos(); renderExtDock(); return extActive; },
+    extStateForTest:function(){ return { mode:exteriorMode, droneCount:extCams.length, active:extActive, facade:extFacade,
+      placeActive:extPlaceActive, hasGhost:!!extGhost, yRange:extDroneYRange() }; },
+    snapExtCameraDataURL:snapExtCameraDataURL };
   function bind(){
     const btn=document.getElementById('t3d');
     if(btn) btn.addEventListener('click', open);
