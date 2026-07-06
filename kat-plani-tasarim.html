@@ -40,6 +40,12 @@
       <div class="row"><label>Koridor yönü</label>
         <select id="koridorYon"><option value="oto">Otomatik</option><option value="yatay">Yatay</option><option value="dikey">Dikey</option></select>
       </div>
+      <!-- CEPHE-3: dış kabuk mimari tercihleri (3B görünüm/render'ı etkiler; plan üretimini DEĞİŞTİRMEZ) -->
+      <div class="row" id="cikmaRow" data-tip="Zemin-üstü katları cephe hattından öne taşır (3B kabukta çıkma)"><label>Çıkma (üst katlar öne)</label><span class="switch"><input type="checkbox" id="cikmaOn"><i></i></span></div>
+      <div class="row" id="cikmaDRow" data-tip="Çıkma derinliği (üst katların cepheden öne taşma payı)" style="display:none"><label>Çıkma derinliği (m)</label><input type="number" id="cikmaD" min="0.5" max="1.5" step="0.1" value="0.7"></div>
+      <div class="row" id="catiTipiRow" data-tip="Dış kabuk çatısı: düz teras (varsayılan) ya da dört yüzlü kırma çatı"><label>Çatı</label>
+        <select id="catiTipi"><option value="teras">Teras (düz)</option><option value="kirma">Kırma (kiremit)</option></select>
+      </div>
       <div class="row pro-only" id="katKullanimRow" style="display:none"><label>Bu katın kullanımı</label>
         <select id="katKullanim">
           <option value="konut">Konut</option>

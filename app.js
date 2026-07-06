@@ -52,6 +52,11 @@ let windowHidden = {};        // çift tıkla silinen otomatik pencere: key -> t
 let hoverWindow = null;       // pencere modunda imleç altındaki pencere kaydı
 let selWindow = null;         // pencere modunda seçili pencere key'i (genişlik/yükseklik/parapet ayar paneli) | null
 let koridorYon = 'oto';       // apartman koridor yönü: 'oto'|'yatay'|'dikey' (manuel override)
+/* CEPHE-3: dış kabuk mimari tercihleri — SALT 3B görünüm/render'ı etkiler; plan üretimini (oda/duvar/
+   çekirdek/mevzuat) DEĞİŞTİRMEZ. stateSnapshot.ui'ye eklenir → blok/kat başına taşınır (blocks[i].ui). */
+let cikmaOn = false;          // çıkma: zemin-üstü katlar cephe hattından öne taşar (view3d dış kabuk)
+let cikmaD = 0.7;             // çıkma derinliği (m) — REG.cikmaMax ile sınırlı
+let roofType = 'teras';       // dış kabuk çatısı: 'teras' (düz, varsayılan/bugünkü) | 'kirma' (dört yüzlü kiremit)
 let katKullanim = 'konut';    // AKTİF katın kullanım tipi (apartman + katları ayrı): 'konut'|'ticari'|'otopark'|'siginak'
 let blocks = null;            // site "çoklu blok": blok başına TAM durum anlık görüntüsü (stateSnapshot biçimi, kendi katlarını içerir) | null
 let activeBlock = 0;          // blocks aktifken düzenlenen blok indeksi (0 = Blok A)
@@ -156,6 +161,23 @@ document.getElementById('addUnit').addEventListener('click',()=>{
 });
 document.getElementById('binaTipi').addEventListener('change',()=>{ lockedCore=null; updateStructResetBtn(); renderUnits(); updateKatAyriUI(); resetCuts(); safeGen(); });
 document.getElementById('koridorYon').addEventListener('change',e=>{ koridorYon=e.target.value; resetCuts(); safeGen(); });
+/* CEPHE-3: çıkma / çatı tipi — dış kabuk (3B) tercihleri. generate() ÇAĞIRMAZLAR (plan üretimi
+   değişmez); yalnız globalleri günceller + açık dış kabuğu tazeler (View3D.refreshExterior). */
+function cikmaMaxD(){ return (typeof REG!=='undefined' && REG.cikmaMax) ? REG.cikmaMax : 1.5; }
+function syncCephe3UI(){
+  const on=document.getElementById('cikmaOn'), dRow=document.getElementById('cikmaDRow'),
+        dIn=document.getElementById('cikmaD'), rt=document.getElementById('catiTipi');
+  if(on) on.checked=!!cikmaOn;
+  if(dRow) dRow.style.display = cikmaOn ? '' : 'none';
+  if(dIn){ dIn.max=cikmaMaxD(); const v=Math.max(0.5,Math.min(cikmaMaxD(),+cikmaD||0.7)); cikmaD=v; dIn.value=v.toFixed(1); }
+  if(rt) rt.value=roofType;
+}
+function refreshExteriorShell(){ try{ if(window.View3D && typeof View3D.refreshExterior==='function') View3D.refreshExterior(); }catch(e){} }
+{ const on=document.getElementById('cikmaOn'); if(on) on.addEventListener('change',()=>{ cikmaOn=on.checked; syncCephe3UI(); refreshExteriorShell(); }); }
+{ const dIn=document.getElementById('cikmaD'); if(dIn){ makeStepper(dIn);
+  dIn.addEventListener('change',()=>{ let v=parseFloat(dIn.value); if(!isFinite(v)) v=0.7; v=Math.max(0.5,Math.min(cikmaMaxD(),v)); cikmaD=v; dIn.value=v.toFixed(1); refreshExteriorShell(); }); } }
+{ const rt=document.getElementById('catiTipi'); if(rt) rt.addEventListener('change',()=>{ roofType=(rt.value==='kirma'?'kirma':'teras'); refreshExteriorShell(); }); }
+syncCephe3UI();
 ['katSayisi','katYuk'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{ onFloorCountChange(); debSafeGen(); }));
 ['katSayisi','katYuk'].forEach(id=>makeStepper(document.getElementById(id)));
 /* Duvar kalınlığı UI (L1-A1): mevzuat minimumunda başlar, kullanıcı yalnız ARTIRABİLİR.

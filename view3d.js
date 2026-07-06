@@ -1943,6 +1943,52 @@
     try{ if(typeof document!=='undefined'){ const el=document.getElementById('katYuk'); if(el){ const v=parseFloat(el.value); if(v>0) return v; } } }catch(e){}
     return EXT_FLOOR_H_DEF;
   }
+  // ── CEPHE-3: DIŞ KABUK MİMARİ TERCİHLERİ (çıkma / çatı) ─────────────────────────────
+  //   Panel (app.js) globallerinden okunur: cikmaOn/cikmaD (Ç1), roofType (Ç3). blockShellParams
+  //   ile blok başına snapshot.ui'den de gelir (site: her blok kendi çıkma/çatı ayarını taşır).
+  //   HEADLESS güvenli (global yoksa varsayılan: çıkma kapalı, teras çatı = bugünkü kabuk).
+  const CIKMA_MAX = (typeof REG!=='undefined' && REG.cikmaMax) ? REG.cikmaMax : 1.5;
+  function extCikma(){   // {on, d} — 2B-aktif blok / tek bina için (canlı global)
+    let on=false, d=0.7;
+    try{ if(typeof cikmaOn!=='undefined') on=!!cikmaOn; }catch(e){}
+    try{ if(typeof cikmaD!=='undefined'){ const v=+cikmaD; if(isFinite(v)&&v>0) d=v; } }catch(e){}
+    d=Math.max(0.5,Math.min(CIKMA_MAX,d));
+    return { on:on, d:on?d:0 };
+  }
+  function extRoofType(){   // 'teras' | 'kirma' — 2B-aktif blok / tek bina
+    try{ if(typeof roofType!=='undefined' && roofType==='kirma') return 'kirma'; }catch(e){}
+    return 'teras';
+  }
+  // blok snapshot.ui'sinden çıkma/çatı (site: aktif-olmayan bloklar). Eski snapshot'ta yok → varsayılan.
+  function cikmaFromUI(ui){ if(!ui) return {on:false,d:0};
+    const on=(ui.cikmaOn==='1'||ui.cikmaOn===true); let d=parseFloat(ui.cikmaD); if(!(d>0)) d=0.7;
+    d=Math.max(0.5,Math.min(CIKMA_MAX,d)); return { on:on, d:on?d:0 }; }
+  function roofFromUI(ui){ return (ui && ui.roofType==='kirma')?'kirma':'teras'; }
+  // Bir metre-poligonu dış NORMALLERİ yönünde d kadar ofsetle (çıkma: üst katlar cepheden öne). Her dış
+  //   kenar kendi normali boyunca d kadar dışarı; komşu ofset kenarlar sonsuz-doğru KESİŞİMİNDE birleşir
+  //   (dışbükey köşe kapanır, içbükey köşede geri çekilir) → kapalı poligon. CCW/CW bağımsız (imzalı alanla
+  //   iç/dış yön belirlenir). Avlu delikleri TERS ofsetlenir (delik büyür → duvar öne gelir) — ayrı çağrı.
+  function offsetPolygon(poly, d, inward){
+    const n=poly.length; if(n<3||Math.abs(d)<1e-6) return poly.map(function(p){ return [p[0],p[1]]; });
+    // imzalı alan → yönelim; dış normal = kenar yönünü -90° döndür (CCW poligonda dışa bakar)
+    let area=0; for(let i=0;i<n;i++){ const a=poly[i], b=poly[(i+1)%n]; area+=a[0]*b[1]-b[0]*a[1]; }
+    const ccw=area>0; const sgn=(ccw?1:-1)*(inward?-1:1);
+    // her kenar için dışa ofsetlenmiş sonsuz doğru (nokta + yön); komşu doğruları kesiştir
+    const lines=[];
+    for(let i=0;i<n;i++){ const a=poly[i], b=poly[(i+1)%n];
+      let ex=b[0]-a[0], ez=b[1]-a[1]; const L=Math.hypot(ex,ez)||1; ex/=L; ez/=L;
+      const nx=ez*sgn, nz=-ex*sgn;   // dış normal (birim)
+      lines.push({ px:a[0]+nx*d, pz:a[1]+nz*d, dx:ex, dz:ez });
+    }
+    const out=[];
+    for(let i=0;i<n;i++){ const l0=lines[(i-1+n)%n], l1=lines[i];   // köşe i = önceki kenar ∩ bu kenar
+      const den=l0.dx*l1.dz-l0.dz*l1.dx;
+      if(Math.abs(den)<1e-9){ out.push([l1.px,l1.pz]); continue; }   // paralel (düz) → doğrudan
+      const t=((l1.px-l0.px)*l1.dz-(l1.pz-l0.pz)*l1.dx)/den;
+      out.push([l0.px+l0.dx*t, l0.pz+l0.dz*t]);
+    }
+    return out;
+  }
   // Bina kat yapısı: {above, below} = zemin-üstü (zemin dahil) ve bodrum kat sayıları. Bodrum GÖSTERİLMEZ.
   //   Öncelik: app globalleri (totalFloors/bodrumSayisi) → plan.kat → 1. Güvenli düşüşler (headless/test).
   function extFloorCount(){
@@ -2001,7 +2047,9 @@
     const bp=b&&b.pts; if(!(bp&&bp.length>=3)) return null;
     let fl=0, fh=0;
     if(b.ui){ fl=parseInt(b.ui.katSayisi)||0; fh=parseFloat(b.ui.katYuk)||0; }   // katSayisi = zemin-üstü kat
-    return { poly:bp.map(function(p){ return [p.x,p.y]; }), floors:fl||null, floorH:fh||null };
+    // CEPHE-3: blok kendi çıkma/çatı ayarını taşır (snapshot.ui'den; eski kayıtta yok → varsayılan)
+    return { poly:bp.map(function(p){ return [p.x,p.y]; }), floors:fl||null, floorH:fh||null,
+             cikma:cikmaFromUI(b.ui), roof:roofFromUI(b.ui) };
   }
   // Aktif-OLMAYAN blokları böl: hayalet (sade kütle) vs tam kabuk (F4 seçim/Tümü). extBlockView'e göre:
   //   null → hepsi hayalet (S1 varsayılan); <sayı> → yalnız o blok tam (aktif dâhil diğerleri hayalet);
@@ -2197,7 +2245,27 @@
   // TEK KAT-TİPİ CEPHE GRUBU: dış kontur duvarı (pencere/balkon dış görünümü). İç YOK.
   //   contourM = bina dış konturu (dünya metre, merkez-ofsetsiz — grup pozisyonu -cx,-cz taşır).
   //   Kat 0 tabanı y=0; grup klonlanınca dikey ofsetlenir. floorH = kat yüksekliği.
-  function buildExtFloorGroup(map, contourM, holesM, floorH, mats, showcase){
+  //   CEPHE-3 Ç1: edgeShift={d, base} verilirse (çıkma üst-kat proto'su) her pencere/balkon segmenti,
+  //     BASE (ofsetsiz) konturun ait olduğu kenarın dış normali boyunca d kadar dışa kaydırılır → segmentler
+  //     ofsetlenmiş kontur kenarlarına oturur (aksi halde ~d perpendikülermesafe > 0.35 eşiği → pencere kaybolur).
+  function shiftSegOut(seg, base, d){
+    if(!base||!(d>1e-6)) return seg;
+    // segment orta noktasının en yakın olduğu base kenarını bul → o kenarın dış normalini d kadar uygula
+    const mx=(seg.ax+seg.bx)/2, mz=(seg.az+seg.bz)/2;
+    let best=1e9, nx=0, nz=0;
+    // yönelim (dış normal işareti)
+    let area=0; for(let i=0;i<base.length;i++){ const a=base[i], b=base[(i+1)%base.length]; area+=a[0]*b[1]-b[0]*a[1]; }
+    const sgn=area>0?1:-1;
+    for(let i=0;i<base.length;i++){ const a=base[i], b=base[(i+1)%base.length];
+      let ex=b[0]-a[0], ez=b[1]-a[1]; const L=Math.hypot(ex,ez)||1; ex/=L; ez/=L;
+      const t=Math.max(0,Math.min(L,(mx-a[0])*ex+(mz-a[1])*ez));   // kenar üstündeki en yakın nokta
+      const px=a[0]+ex*t, pz=a[1]+ez*t; const dist=Math.hypot(mx-px,mz-pz);
+      if(dist<best){ best=dist; nx=ez*sgn; nz=-ex*sgn; }
+    }
+    return { ax:seg.ax+nx*d, az:seg.az+nz*d, bx:seg.bx+nx*d, bz:seg.bz+nz*d,
+             height:seg.height, sill:seg.sill, full:seg.full };
+  }
+  function buildExtFloorGroup(map, contourM, holesM, floorH, mats, showcase, edgeShift){
     const grp=new THREE.Group();
     const cont=contourM;
     const col=extCollector();   // S1 perf: aynı-malzeme parçalar tek mesh'te birleşir (draw-call bütçesi)
@@ -2209,14 +2277,17 @@
     //   Pencere/balkon boşluklarını map'ten (px2m ile dünya metre) her kenara projekte et.
     //   C2 VİTRİN (showcase): zemin ticari cephesinde pencereler VİTRİN'e yükseltilir — parapet 0.35'e iner (yer'e yakın
     //     tam-boy cam hissi), tepe kat yüksekliğine kadar. İşaretli yaratıcı karar (dükkân cephesi ≠ konut penceresi).
+    const _es=(edgeShift&&edgeShift.d>1e-6&&edgeShift.base)?edgeShift:null;   // Ç1: çıkma segment kaydırması
     const winSegs=(map.windows||[]).map(function(d){ const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
       const sill=d.full?0:(d.sill_m!=null?d.sill_m:0.9), height=d.height_m||1.4;
-      return showcase
+      const s = showcase
         ? {ax:a[0],az:a[1],bx:b[0],bz:b[1],height:Math.max(2.1,floorH-0.75),sill:0.35,full:false}   // vitrin: yer'e yakın tam-boy cam
-        : {ax:a[0],az:a[1],bx:b[0],bz:b[1],height,sill,full:!!d.full}; });
+        : {ax:a[0],az:a[1],bx:b[0],bz:b[1],height,sill,full:!!d.full};
+      return _es?shiftSegOut(s,_es.base,_es.d):s; });
     const balkSegs=(map.balconies||[]).filter(function(bk){ return bk&&bk.door_span_px&&bk.door_span_px.length===2; }).map(function(bk){
       const a=px2m(map,bk.door_span_px[0][0],bk.door_span_px[0][1]), b=px2m(map,bk.door_span_px[1][0],bk.door_span_px[1][1]);
-      return {ax:a[0],az:a[1],bx:b[0],bz:b[1]}; });
+      const s={ax:a[0],az:a[1],bx:b[0],bz:b[1]};
+      return _es?shiftSegOut(s,_es.base,_es.d):s; });
     const wallTopY=floorH;   // KABUK duvarı KAT YÜKSEKLİĞİ boyu — ardışık katların duvarları birleşir
                              //   (iç WALL_H=2.7 kullansaydık her katta floorH-2.7 yatay yarık kalırdı)
     let winCount=0, wallSegCount=0;
@@ -2290,6 +2361,148 @@
     grp.userData.extWinCount=winCount; grp.userData.extWallSegCount=wallSegCount;
     return grp;
   }
+  // ── CEPHE-3 GEOMETRİ YARDIMCILARI (çıkma soffit + kırma çatı + artikülasyon) ─────────
+  //   Hepsi exteriorGroup'a ekler + eklenen mesh sayısını döner (mesh bütçesi ölçümü). mats paylaşılır.
+  //   PARAPET_H buildExterior-yerel; bu yardımcılar kendi sabitlerini kullanır (bağımsız).
+  // Ç1 SOFFIT: çıkmanın altı — zemin kat tavanı (y=flH) hizasında, taban kontur ile üst (çıkmalı) kontur
+  //   arası KAPALI halka yüzeyi. baseCont poligonu upperCont deliğiyle extrude edilir (üst kontur taban
+  //   konturu kapsar → aradaki halka = çıkma alt yüzü). Avlu deliklerinde ters (üst kontur avluya daha çok
+  //   girer → orada da halka). Tek ince plaka (~4cm) → 1 mesh.
+  function buildSoffit(baseCont, baseHoles, upCont, upHoles, flH, mats){
+    try{
+      const shp=new THREE.Shape();
+      upCont.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });   // dış sınır = çıkmalı (büyük) kontur
+      const path=new THREE.Path();                                                        // delik = taban (küçük) kontur
+      baseCont.forEach(function(m,i){ i?path.lineTo(m[0],m[1]):path.moveTo(m[0],m[1]); }); shp.holes.push(path);
+      const sg=new THREE.ExtrudeGeometry(shp,{depth:0.05,bevelEnabled:false}); sg.rotateX(Math.PI/2);
+      const mesh=new THREE.Mesh(sg,mats.slab); mesh.position.y=flH; mesh.castShadow=true; mesh.receiveShadow=true;
+      exteriorGroup.add(mesh); return 1;
+    }catch(e){ return 0; }
+  }
+  // Ç3 KIRMA ÇATI: düz teras yerine dört-yüzlü kırma çatı. Footprint konveks/dikdörtgene yakınsa GERÇEK hip
+  //   (straight-skeleton yerine sağlam yaklaşım: bbox tabanlı hip — dört saçaklı eğim tepe sırtında buluşur).
+  //   L/karmaşık planda bbox-hip kabul edilebilir yaklaşım (çirkin taşma yok: saçak footprint bbox'ına + ~40cm
+  //   pay). İşaretli yaratıcı karar: motor keyfi poligon için straight-skeleton taşımaz (mesh bütçesi + kırılganlık);
+  //   dikdörtgen/konveks kütlelerde gerçekçi, L-planda temsili ama temiz kapatan bbox-hip → tek çatı kütlesi.
+  function buildHipRoof(cont, roofY, mats){
+    let added=0;
+    // footprint bbox + saçak payı
+    let mnx=1e9,mnz=1e9,mxx=-1e9,mxz=-1e9;
+    cont.forEach(function(m){ mnx=Math.min(mnx,m[0]); mnz=Math.min(mnz,m[1]); mxx=Math.max(mxx,m[0]); mxz=Math.max(mxz,m[1]); });
+    const EAVE=0.4;   // saçak payı ~40cm
+    const x0=mnx-EAVE, x1=mxx+EAVE, z0=mnz-EAVE, z1=mxz+EAVE;
+    const w=x1-x0, dpth=z1-z0, cxr=(x0+x1)/2, czr=(z0+z1)/2;
+    const short=Math.min(w,dpth);
+    const rise=Math.max(1.2, Math.min(2.6, short*0.32));   // çatı yüksekliği (eğim ~30-35°, mantıklı sınır)
+    const eaveY=roofY+0.05;   // saçak kotu (çatı düz çatı üstünden hafif yukarıda başlar)
+    const ridgeY=eaveY+rise;
+    // ince saçak bandı (çatı-cephe geçişi damla/drip profili) — footprint çevresi 'slab' ile bir bant
+    const pcol=extCollector();
+    for(let i=0;i<cont.length;i++){ const a=cont[i], b=cont[(i+1)%cont.length];
+      const dx=b[0]-a[0], dz=b[1]-a[1], el=Math.hypot(dx,dz); if(el<0.2) continue; const ang=-Math.atan2(dz,dx);
+      pcol.pushBox('slab', el+WALL_T, 0.12, WALL_T+2*EAVE, 0, roofY-0.06, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); }
+    added+=pcol.emit(exteriorGroup, mats) ? Object.keys(pcol.buckets).length : 0;
+    // hip mesh: 4 üçgen/yamuk yüz (ridge = uzun eksen boyunca). BufferGeometry (5 köşe: 4 saçak + ridge çizgisi)
+    const half=(w>=dpth);   // ridge uzun eksende
+    // ridge iki uç noktası (kısa eksende ortada, uzun eksende içeri EAVE+rise*0 çekik → hip)
+    let rlen=(half? w : dpth) - (half? dpth : w);   // ridge uzunluğu = uzun - kısa (hip ucu kısa/2 içeri)
+    if(rlen<0) rlen=0;
+    const tile=mats.tile||mats.slab;
+    const geo=new THREE.BufferGeometry();
+    // 4 saçak köşesi (eaveY) + 2 ridge köşesi (ridgeY)
+    const c=[[x0,eaveY,z0],[x1,eaveY,z0],[x1,eaveY,z1],[x0,eaveY,z1]];
+    let r0,r1;
+    if(half){ r0=[cxr-rlen/2,ridgeY,czr]; r1=[cxr+rlen/2,ridgeY,czr]; }
+    else { r0=[cxr,ridgeY,czr-rlen/2]; r1=[cxr,ridgeY,czr+rlen/2]; }
+    // yüzler (CCW dışa): iki üçgen hip ucu + iki yamuk uzun yüz (yamuk = 2 üçgen)
+    const V=[];
+    function tri(p,q,r){ V.push(p[0],p[1],p[2], q[0],q[1],q[2], r[0],r[1],r[2]); }
+    if(half){
+      // uzun yüzler: ön (z0) + arka (z1)
+      tri(c[0],c[1],r1); tri(c[0],r1,r0);   // ön (z0)
+      tri(c[3],r0,r1);  tri(c[3],r1,c[2]);  // arka (z1)
+      // hip uçları: sol (x0) + sağ (x1)
+      tri(c[0],r0,c[3]);                     // sol uç
+      tri(c[1],c[2],r1);                     // sağ uç
+    } else {
+      // uzun yüzler: sol (x0) + sağ (x1)
+      tri(c[0],r0,r1); tri(c[0],r1,c[1]);   // ? yön — düzelt: sol yüz x0 kenarı
+      tri(c[3],c[2],r1); tri(c[3],r1,r0);
+      tri(c[0],c[3],r0);                     // ön/arka hip uçları
+      tri(c[1],r1,c[2]);
+    }
+    const arr=new Float32Array(V); geo.setAttribute('position',new THREE.BufferAttribute(arr,3)); geo.computeVertexNormals();
+    const roof=new THREE.Mesh(geo,tile); roof.castShadow=true; roof.receiveShadow=true; roof.material.side=THREE.DoubleSide;
+    exteriorGroup.add(roof); added++;
+    return added;
+  }
+  // Ç2 ARTİKÜLASYON: kat silmeleri (her kat hizasında ince koyu bant) + (preset b/c) düşey bantlar.
+  //   Merge bütçesi içinde: TÜM bantlar tek 'artic' kovası → az mesh. Kat başına birkaç parça (yatay bant halkası
+  //   + birkaç düşey). Giriş nişi + saçak ayrı ele alınır (buildEntranceNiche / parapet harpuşta stackShell'de).
+  function buildArticulation(o){
+    const cont=o.upperCont||o.contM, floorsN=o.floorsN, flH=o.flH, mats=o.mats;
+    const col=extCollector();
+    let n=0;
+    // KAT SİLMESİ: her kat üst hizasında (y=f*flH) ince bant — cepheden 3-5cm çıkıntı, h≈10cm, cephe tonu koyusu.
+    //   Çıkma varsa üst katlar upperCont'ta → bandı orada çiz (zemin bandı taban konturunda ama basitlik için
+    //   üst kontur bandı yeterli görsel). Bant ring = kontur kenarları boyunca.
+    const BAND_H=0.10, BAND_OUT=0.04;
+    for(let f=1; f<floorsN; f++){   // kat çizgileri (zemin tabanı hariç; her kat DÖŞEMESİ hizası)
+      const y=f*flH;
+      for(let i=0;i<cont.length;i++){ const a=cont[i], b=cont[(i+1)%cont.length];
+        const dx=b[0]-a[0], dz=b[1]-a[1], el=Math.hypot(dx,dz); if(el<0.4) continue; const ang=-Math.atan2(dz,dx);
+        col.pushBox('artic', el, BAND_H, WALL_T+BAND_OUT, 0, y-BAND_H/2, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); n++; }
+    }
+    // DÜŞEY BANTLAR (preset b/c): pencere kolonları hizasında değil ama köşe-yakını düşey şeritler (hafif derinlik).
+    //   Nötr/sade preset → düşey bant YOK (isteğe göre nötr sade kalır). extFacade b/c ise köşelerde çıtalar.
+    const pk=(typeof extFacade!=='undefined')?extFacade:'neutral';
+    if(pk==='plaster' || pk==='brick' || pk==='contemporary'){
+      const H=floorsN*flH-0.2, PIL_W=0.18, PIL_OUT=0.05;
+      for(let i=0;i<cont.length;i++){ const a=cont[i];   // her köşede düşey çıta (köşe pilastr)
+        col.pushBox('artic', PIL_W, H, WALL_T+PIL_OUT, 0, 0.1+H/2, 0, a[0], a[1], 0); n++; }
+    }
+    if(!n) return 0;
+    // artikülasyon malzemesi: cephe (wall) tonunun koyusu — lazy oluştur, mats'a bağla (preset uygulaması akmasın diye ayrı)
+    if(!mats.artic){ const wc=(mats.wall&&mats.wall.color)?mats.wall.color.clone():new THREE.Color(0xd8d0c0);
+      wc.multiplyScalar(0.62); mats.artic=new THREE.MeshStandardMaterial({color:wc,roughness:0.9,metalness:0.02}); }
+    col.emit(exteriorGroup, mats);
+    return Object.keys(col.buckets).reduce(function(s,k){ return s+1; },0);   // ~1 mesh (tek 'artic' kovası)
+  }
+  // Ç2 GİRİŞ NİŞİ: bina giriş kapısı önünde saçaklı markiz/niş (zemin kat, dış kontur ilk uzun kenarı ortası).
+  //   map.doors 'entry' varsa oradan; yoksa dış konturun EN UZUN kenarı ortası. Küçük saçak plakası + iki konsol
+  //   + zemin kat cephesinde hafif niş çerçevesi. Birkaç mesh (tek çağrı, zemin katta).
+  function buildEntranceNiche(map, cont, flH, mats){
+    let ex=null, ez=null, ang=0, span=1.6;
+    try{
+      const dr=(map&&map.doors)||[];
+      const entry=dr.find&&dr.find(function(d){ return d && (d.kind==='entry'||d.type==='entry'||d.entry); });
+      if(entry && entry.p0_px && entry.p1_px && typeof px2m==='function' && scene&&scene.__map){
+        const a=px2m(scene.__map,entry.p0_px[0],entry.p0_px[1]), b=px2m(scene.__map,entry.p1_px[0],entry.p1_px[1]);
+        ex=(a[0]+b[0])/2; ez=(a[1]+b[1])/2; ang=-Math.atan2(b[1]-a[1],b[0]-a[0]); span=Math.max(1.2,Math.hypot(b[0]-a[0],b[1]-a[1]));
+      }
+    }catch(e){}
+    if(ex==null){ // güvenli düşüş: dış konturun EN UZUN kenarı ortası
+      let best=-1, bi=0; for(let i=0;i<cont.length;i++){ const a=cont[i], b=cont[(i+1)%cont.length];
+        const el=Math.hypot(b[0]-a[0],b[1]-a[1]); if(el>best){ best=el; bi=i; } }
+      const a=cont[bi], b=cont[(bi+1)%cont.length]; ex=(a[0]+b[0])/2; ez=(a[1]+b[1])/2; ang=-Math.atan2(b[1]-a[1],b[0]-a[0]);
+      span=Math.max(1.4,Math.min(2.4,best*0.25));
+    }
+    const col=extCollector();
+    const canopyY=Math.min(flH-0.35, 2.5), depth=1.0;   // markiz kotu ~2.5m (zemin kat lento altı)
+    // markiz DIŞA taşmalı: local +z yönünün kontur merkezinden UZAK olduğunu doğrula (değilse lz işaretini çevir).
+    //   pushBox local (0,0,lz) → dünya (ex + lz*sin(ang), ez + lz*cos(ang)) [rotY konvansiyonu]; merkezden uzağı seç.
+    let ccx=0,ccz=0; cont.forEach(function(p){ ccx+=p[0]; ccz+=p[1]; }); ccx/=cont.length; ccz/=cont.length;
+    const wxTest=ex+Math.sin(ang), wzTest=ez+Math.cos(ang);   // local +z birim ofsetin dünya yeri
+    const lz=(Math.hypot(wxTest-ccx,wzTest-ccz) >= Math.hypot(ex-ccx,ez-ccz)) ? 1 : -1;   // +z dışa mı?
+    // saçak plakası: dışa taşan ince plaka
+    col.pushBox('slab', span+0.6, 0.10, depth, 0, canopyY, lz*depth/2, ex, ez, ang);
+    // iki konsol/kiriş (saçak altı destekleri)
+    [-1,1].forEach(function(s){ col.pushBox('frame', 0.08, 0.5, depth, s*(span/2+0.1), canopyY-0.28, lz*depth/2, ex, ez, ang); });
+    // niş çerçevesi (kapı çevresi hafif söve) — zemin cephesinde ince çerçeve (cepheye hafif gömülü kaş)
+    col.pushBox('frame', span+0.3, 0.10, WALL_T*0.4, 0, canopyY+0.08, -lz*WALL_T*0.2, ex, ez, ang);   // üst kaş
+    col.emit(exteriorGroup, mats);
+    return 4;
+  }
   // BÜTÜN BİNAYI KUR (kabuk). Aktif floor map'inden tek cephe grubu üret → zemin-üstü katlar için klonla.
   //   Zemin katta bina giriş kapısı boşluğu (dış kontur ilk uzun kenarında). Çatı = düz teras + parapet.
   //   Avlu delikleri döşeme + çatıda. Site: aktif blok tam kabuk + diğer bloklar hayalet kütle.
@@ -2307,6 +2520,7 @@
       glass:new THREE.MeshStandardMaterial({color:0xbcd6e8,roughness:0.1,metalness:0.15,transparent:true,opacity:0.28,side:THREE.DoubleSide}),
       frame:new THREE.MeshStandardMaterial({color:0xf4f4f2,roughness:0.55,metalness:0.02}),  // beyaz PVC pencere kasası
       sill:new THREE.MeshStandardMaterial({color:0xe0ded7,roughness:0.75,metalness:0.03}),   // denizlik
+      tile:new THREE.MeshStandardMaterial({color:0xa6533a,roughness:0.85,metalness:0.02}),   // Ç3 kırma çatı kiremit (kızıl-kahve)
       ground:new THREE.MeshStandardMaterial({color:0x8d9b7e,roughness:1,metalness:0}),      // bahçe/parsel düzlemi (sade yeşil-gri)
       ghost:new THREE.MeshStandardMaterial({color:0xb8b2a6,roughness:0.95,metalness:0,transparent:true,opacity:0.55}),   // diğer bloklar sade kütle
       // S3 imkan malzemeleri (hafif dış temsil)
@@ -2358,26 +2572,47 @@
     //   Katları yığar (klon) + düz çatı + parapet. Dönüş: bu bloğun çatı üstü yüksekliği (topY).
     //   groundProto (C2): verilirse ZEMİN kat (f=0) bu ayrı cepheyle kurulur (zemin ticari → vitrin);
     //   zemin harici katlar faceProto klonu (kullanıcı kararı: "zemin hariç diğer katlar klon olsun yine").
-    function stackShell(contM, holesM, floorsN, flH, faceProto, groundProto){
+    //   shellOpt (CEPHE-3): { cikma:{on,d}, roof:'teras'|'kirma', upperProto, upperCont, upperHoles }
+    //     — cikma açıksa zemin-üstü katlar upperProto (dışa-ofset kontur cephesi) ile kurulur + soffit;
+    //       roof='kirma' → düz teras yerine kırma çatı (çatı çıkma hattını = üst konturu izler).
+    function stackShell(contM, holesM, floorsN, flH, faceProto, groundProto, shellOpt){
+      shellOpt=shellOpt||{};
+      const ck=shellOpt.cikma||{on:false,d:0}, cikmaOnB=!!ck.on && floorsN>1;
+      const upCont = cikmaOnB && shellOpt.upperCont ? shellOpt.upperCont : contM;   // üst katların (çıkmalı) konturu
+      const upHoles = cikmaOnB && shellOpt.upperHoles ? shellOpt.upperHoles : holesM;
+      const upProto = cikmaOnB && shellOpt.upperProto ? shellOpt.upperProto : faceProto;
       const stack=new THREE.Group(); exteriorGroup.add(stack);
-      let faceUsed=false;   // faceProto TEK örnek — ilk zemin-harici katta doğrudan kullan, sonrakiler klon
+      let faceUsed=false, upUsed=false;   // proto TEK örnek — ilk kullan, sonrakiler klon (base/upper ayrı)
       for(let f=0; f<floorsN; f++){
         let g;
-        if(f===0 && groundProto){ g=groundProto; }              // C2: zemin ayrı vitrin cephesi
-        else if(!faceUsed){ g=faceProto; faceUsed=true; }       // ilk normal kat = orijinal proto
-        else { g=faceProto.clone(); }                           // üst katlar = klon
+        if(f===0 && groundProto){ g=groundProto; }                          // C2: zemin ayrı vitrin cephesi
+        else if(f===0){ if(!faceUsed){ g=faceProto; faceUsed=true; } else g=faceProto.clone(); }  // zemin = taban kontur
+        else { if(!upUsed){ g=upProto; upUsed=true; } else g=upProto.clone(); }                    // üst katlar = (çıkmalı) kontur
         g.position.y=f*flH; stack.add(g);
         g.traverse(function(o){ if(o.isMesh) meshCount++; });
       }
+      // CEPHE-3 Ç1: SOFFIT — çıkmanın ALTI (kapalı yüzey; zemin kat tavanı hizasında, taban→üst kontur arası halka)
+      if(cikmaOnB){ meshCount+=buildSoffit(contM, holesM, upCont, upHoles, flH, mats); }
       const roofY=floorsN*flH;
-      const roofSlab=new THREE.Mesh(new THREE.ExtrudeGeometry(extShape(contM,holesM),{depth:0.15,bevelEnabled:false}),mats.slab);
-      roofSlab.geometry.rotateX(Math.PI/2); roofSlab.position.y=roofY; roofSlab.castShadow=true; roofSlab.receiveShadow=true; exteriorGroup.add(roofSlab); meshCount++;
-      const pcol=extCollector();
-      const rings=[contM].concat(holesM||[]);
-      rings.forEach(function(ringM){ for(let i=0;i<ringM.length;i++){ const a=ringM[i], b=ringM[(i+1)%ringM.length];
-        const dx=b[0]-a[0], dz=b[1]-a[1], el=Math.hypot(dx,dz); if(el<0.2) continue; const ang=-Math.atan2(dz,dx);
-        pcol.pushBox('wall', el+WALL_T, PARAPET_H, WALL_T, 0, roofY+PARAPET_H/2-0.02, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); } });   // taban çatıya 2cm gömülü (dikişsiz)
-      pcol.emit(exteriorGroup, mats);
+      const roofCont=cikmaOnB?upCont:contM, roofHoles=cikmaOnB?upHoles:holesM;   // çatı çıkma hattını izler
+      const artOpt={ floorsN:floorsN, flH:flH, contM:contM, upperCont:upCont, cikmaOnB:cikmaOnB, mats:mats };
+      if((shellOpt.roof||'teras')==='kirma'){
+        // Ç3: KIRMA ÇATI (düz teras + parapet yerine dört-yüzlü kiremit çatı)
+        meshCount+=buildHipRoof(roofCont, roofY, mats);
+      } else {
+        // TERAS (varsayılan/bugünkü davranış): düz çatı plakası + parapet ring
+        const roofSlab=new THREE.Mesh(new THREE.ExtrudeGeometry(extShape(roofCont,roofHoles),{depth:0.15,bevelEnabled:false}),mats.slab);
+        roofSlab.geometry.rotateX(Math.PI/2); roofSlab.position.y=roofY; roofSlab.castShadow=true; roofSlab.receiveShadow=true; exteriorGroup.add(roofSlab); meshCount++;
+        const pcol=extCollector();
+        const rings=[roofCont].concat(roofHoles||[]);
+        rings.forEach(function(ringM){ for(let i=0;i<ringM.length;i++){ const a=ringM[i], b=ringM[(i+1)%ringM.length];
+          const dx=b[0]-a[0], dz=b[1]-a[1], el=Math.hypot(dx,dz); if(el<0.2) continue; const ang=-Math.atan2(dz,dx);
+          pcol.pushBox('wall', el+WALL_T, PARAPET_H, WALL_T, 0, roofY+PARAPET_H/2-0.02, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang);      // parapet gövdesi
+          pcol.pushBox('slab', el+WALL_T+0.06, 0.06, WALL_T+0.08, 0, roofY+PARAPET_H, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); } });  // Ç2 harpuşta (parapet başlığı, hafif taşkın)
+        pcol.emit(exteriorGroup, mats);
+      }
+      // CEPHE-3 Ç2: ARTİKÜLASYON SETİ (kat silmeleri + düşey bantlar) — merge bütçesi içinde
+      meshCount+=buildArticulation(artOpt);
       return roofY+PARAPET_H+0.15;
     }
     // 1+2+3) 2B-AKTİF BLOK — F4: extActiveIsFull() ise TAM kabuk (map cephesi: pencere/balkon + çatı),
@@ -2410,9 +2645,23 @@
             groundProto=gGrp; groundWin=gGrp.userData.extWinCount||0; }
         }
       }catch(e){ groundProto=null; }
-      stackShell(contour, holes, fc.above, floorH, proto, groundProto);
+      // CEPHE-3: 2B-aktif blok çıkma/çatı tercihi (canlı global). Çıkma açık + 2+ kat → üst katlar için
+      //   dışa-ofset kontur + o kontura göre AYRI cephe proto'su (pencereler çıkma kenarına taşınır).
+      const ck=extCikma(), rf=extRoofType();
+      let shellOpt={ cikma:ck, roof:rf };
+      if(ck.on && fc.above>1){
+        const upCont=offsetPolygon(contour, ck.d, false);
+        const upHoles=holes.map(function(h){ return offsetPolygon(h, ck.d, true); });   // avlu deliği çıkmada büyür
+        shellOpt.upperCont=upCont; shellOpt.upperHoles=upHoles;
+        // Ç1: üst-kat cephesi ofset kontur üstünde; pencere/balkon segmentleri de dışa kaydırılır (edgeShift)
+        shellOpt.upperProto=buildExtFloorGroup(upperMap, upCont, upHoles, floorH, mats, false, {d:ck.d, base:contour});
+      }
+      stackShell(contour, holes, fc.above, floorH, proto, groundProto, shellOpt);
+      // Ç2: GİRİŞ NİŞİ — zemin kat giriş kapısı önünde saçaklı markiz (tek bina; niş taban konturunda)
+      meshCount+=buildEntranceNiche(map, contour, floorH, mats);
       exteriorGroup.userData.groundSeparate=!!groundProto;
       exteriorGroup.userData.groundWin=groundWin;
+      exteriorGroup.userData.cikmaOn=!!ck.on; exteriorGroup.userData.cikmaD=ck.on?ck.d:0; exteriorGroup.userData.roofType=rf;
     } else {
       // aktif blok hayalet: tek ekstrüzyon kütle (diğer hayalet bloklarla aynı dil)
       const shp=new THREE.Shape(); contour.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
@@ -2436,7 +2685,16 @@
         : [];
       const fProto=buildExtFloorGroup(fMap||{windows:[],balconies:[]}, fb.poly, fHoles, fFH, mats);
       fb.protoWin=fProto.userData.extWinCount||0;   // C1 ölçüm: bu blok cephesinde pencere sayısı
-      stackShell(fb.poly, fHoles, fFloors, fFH, fProto);
+      // CEPHE-3: her blok KENDİ çıkma/çatı ayarını taşır (blockShellParams snapshot.ui'den türetti)
+      const fck=fb.cikma||{on:false,d:0}, frf=fb.roof||'teras';
+      let fOpt={ cikma:fck, roof:frf };
+      if(fck.on && fFloors>1){
+        const fUp=offsetPolygon(fb.poly, fck.d, false);
+        const fUpH=fHoles.map(function(h){ return offsetPolygon(h, fck.d, true); });
+        fOpt.upperCont=fUp; fOpt.upperHoles=fUpH;
+        fOpt.upperProto=buildExtFloorGroup(fMap||{windows:[],balconies:[]}, fUp, fUpH, fFH, mats, false, {d:fck.d, base:fb.poly});
+      }
+      stackShell(fb.poly, fHoles, fFloors, fFH, fProto, null, fOpt);
     });
     others.ghosts.forEach(function(gb){ const gm=gb.poly; const shp=new THREE.Shape(); gm.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
       const massH=(gb.floors||fc.above)*(gb.floorH||floorH);
@@ -2813,7 +3071,13 @@
     } else {
       s+='A single residential apartment building with '+bl[0].floors+' floor'+(bl[0].floors===1?'':'s')+' above ground. ';
     }
-    s+='Flat terrace roofs. ';
+    // CEPHE-3: çatı olgusu — kırma çatı seçiliyse "hipped tile roof", değilse düz teras (bugünkü metin).
+    //   opt.roof (test) verilirse onu; yoksa canlı extRoofType() (headless güvenli). Kütle olgusu, LOCK değil.
+    const rf=(opt.roof==='kirma'||opt.roof==='hipped')?'kirma':(opt.roof==='teras'?'teras':extRoofType());
+    s+=(rf==='kirma')?'Hipped tile roofs. ':'Flat terrace roofs. ';
+    // CEPHE-3: çıkma olgusu — üst katlar öne taşıyorsa "projecting upper floors". opt.cikma (test) | canlı.
+    const ckOn=(opt.cikma!=null)?!!opt.cikma:extCikma().on;
+    if(ckOn) s+='The upper floors project outward over the ground floor. ';
     const fp=facadePreset(opt.facade||extFacade);
     s+='Facade: '+fp.promptSignal+'. ';
     // imkanlar (yalnız VAR olanlar; amenityTypesPresent katalog sırasıyla)
@@ -2829,6 +3093,13 @@
     if(hasCourt) s+='An internal courtyard. ';
     return s.trim();
   }
+  // Ç4: CEPHE-DETAY ZENGİNLEŞTİRME cümlesi (iç Zengin Sadakat camSnapshotPrompt deseninin DIŞ karşılığı).
+  //   massing'i (pencere/balkon/kat) DEĞİŞTİRMEYEN gerçekçi cephe detayı: söve/denizlik, korkuluk, doku/
+  //   eskime, çatı kenar/damla, gizli klima. render-server exteriorPrompt ile AYNI cümle (tek kaynak).
+  const EXT_FACADE_DETAIL_SENTENCE=
+    'Add realistic facade detailing that does not change the massing - window reveals and sills, balcony '+
+    'railings, subtle material texture and weathering, roof edge and drip details, discreet AC units - as '+
+    'long as no window, balcony or floor is moved, added or removed.';
   // saf metin prompt kurucu (server ile paylaşılan reçete; TEST bunu assert eder)
   //   opt.creative=true → YARATICI dış-render: sahne envanteri (A3) ÇAPA olarak girer + serbest peyzaj/çevre
   //   yorumu (LOCK gevşer). Varsayılan (faithful) → mevcut LOCK reçetesi + envanter bayrağı KAPALI.
@@ -2855,6 +3126,10 @@
       'context (street, greenery, neighbouring buildings). '+
       'Keep the building massing, floor count, and every window and balcony position EXACTLY as in the input '+
       '3D model - do not move, add or remove any window, balcony or floor. '+
+      // Ç4: CEPHE-DETAY ZENGİNLEŞTİRMESİ (Zengin Sadakat'in dış ikizi) — LOCK cümlesine DOKUNMADAN, AYRI cümle.
+      //   massing'i değiştirmeyen gerçekçi cephe detayı serbest bırakılır (pencere söve/denizlik, korkuluk, doku,
+      //   çatı kenar/damla, klima). C5-R dersi: LOCK/RESTYLE ayrımı korunur (hiçbir pencere/balkon/kat oynatılmaz).
+      EXT_FACADE_DETAIL_SENTENCE+' '+
       amenityPromptSignal(opt)+
       'Facade material: '+fp.promptSignal+'. '+
       'Realistic materials and lighting, '+timeHint(tod)+'. '+
@@ -6726,6 +7001,15 @@
       target:Object.assign({x:0,y:0,z:0},c.target), lens:c.lens||EXT_DRONE_LENS_DEF}; });
       extActive=extCams.length?0:-1; renderExtGizmos(); renderExtDock(); return extCams.length; },
     exportExteriorCameras:exportExteriorCameras, clearExteriorCameras:function(){ extCams=[]; extActive=-1; extGhost=null; renderExtGizmos(); renderExtDock(); },
+    // CEPHE-3: dış kabuk mimari tercihi (çıkma/çatı) değişti → dış moddaysa kabuğu YENİDEN kur (app.js panel çağırır).
+    //   İç moddaysa no-op (mod açılınca zaten yeni ayarla kurulur). Salt görünüm; plan/generate DEĞİŞMEZ.
+    refreshExterior:function(){ if(!exteriorMode||!scene) return false;
+      if(exteriorGroup){ scene.remove(exteriorGroup); exteriorGroup=null; }
+      buildExterior(); if(exteriorGroup){ exteriorGroup.visible=true; } fitExtView(); return true; },
+    // CEPHE-3 HEADLESS: çıkma ofset geometrisi + kabuk çıkma/çatı ölçümü (THREE'siz test edilebilir kısım).
+    offsetPolygonForTest:function(poly,d,inward){ return offsetPolygon(poly,d,inward); },
+    extCephe3ForTest:function(){ const u=exteriorGroup&&exteriorGroup.userData||{};
+      return { cikma:extCikma(), roof:extRoofType(), builtCikmaOn:!!u.cikmaOn, builtCikmaD:u.cikmaD||0, builtRoof:u.roofType||'teras' }; },
     // cephe preset: oku/yaz/liste (prototip dock ile senkron). applyFacadePreset kabuğa ANINDA yansır.
     getFacade:function(){ return extFacade; }, setFacade:function(k){ applyFacadePreset(k); renderExtDock(); return extFacade; },
     facadePresets:function(){ return FACADE_PRESETS.map(function(p){ return {key:p.key,name:p.name,promptSignal:p.promptSignal}; }); },

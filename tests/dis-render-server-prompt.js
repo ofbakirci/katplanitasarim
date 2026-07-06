@@ -38,7 +38,13 @@ if (!/do not (move|add or remove)/i.test(p)) fail('jenerik: pencere/balkon sadak
 if (!/brick/i.test(p)) fail('jenerik: cephe malzeme sinyali (brick) prompt\'a akmadı');
 if (!/golden/i.test(p)) fail('jenerik: gün saati (golden) akmadı');
 if (!/No people, no text/i.test(p)) fail('jenerik: "No people, no text" yok');
+/* CEPHE-3 Ç4: cephe-detay zenginleştirme cümlesi (LOCK cümlesine DOKUNMADAN, ayrı cümle) */
+if (!/realistic facade detailing that does not change the massing/i.test(p)) fail('Ç4: jenerik prompt cephe-detay cümlesi (facade detailing / massing) YOK');
+if (!/window reveals and sills/i.test(p)) fail('Ç4: söve/denizlik detayı yok');
+if (!/roof edge and drip details/i.test(p)) fail('Ç4: çatı kenar/damla detayı yok');
+if (!/discreet AC units/i.test(p)) fail('Ç4: gizli klima detayı yok');
 if (fails === 0) ok('jenerik dış render prompt: ' + p.slice(0, 90) + '…');
+if (/realistic facade detailing/i.test(p) && /EXACTLY/.test(p)) ok('Ç4: cephe-detay cümlesi LOCK ("EXACTLY") ile BİRLİKTE (LOCK bozulmadı)');
 
 /* ---- 2) userPrompt PASSTHROUGH — view3d buildExteriorPrompt tek kaynak olur ---- */
 const custom = 'Photorealistic aerial drone exterior of a 5-storey building, contemporary grey facade with wood balconies, no people, no text.';
