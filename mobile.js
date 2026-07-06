@@ -33,6 +33,7 @@ if(typeof MouseEvent!=='undefined'){
       const hA=(typeof hitAvluHandle==='function')? hitAvluHandle(S2Wx(sx),S2Wy(sy)) : null;
       grab = hA? true : !!(closed && pip(S2Wx(sx),S2Wy(sy),pts)); }
     else if(mode==='site'){ grab=(typeof hitBlock==='function' && hitBlock(S2Wx(sx),S2Wy(sy))>=0); }
+    else if(mode==='amenity'){ grab=(typeof hitAmenity==='function' && hitAmenity(sx,sy)!=null); }   // C4: mevcut imkanı sürükle (taşı); boşluk = dokunuş → ekle
     else if(mode==='door'){ grab=!!(plan&&hitDoor(sx,sy)); }
     else if(plan&&closed&&mode!=='parcel'){ grab=!!(hitCutHandle(sx,sy)||hitWallRun(sx,sy)); }
     if(grab){ synth('mousedown',t.clientX,t.clientY); T.drag=true; }

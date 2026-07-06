@@ -28,14 +28,36 @@ function _winRegAt(x,y){
   const i=r*p.cols+c; if(!p.inside[i]) return null;
   const id2=p.cm[i]; return id2>=0?(p.regions[id2]||null):null;
 }
-/* bir sınır kenarının (A→B) geometrisi: birim vektör u, iç normal n, uzunluk len */
-function winEdgeGeom(ei){
-  if(!pts||!pts.length) return null;
-  const A=pts[ei], B=pts[(ei+1)%pts.length];
+/* iki köşe A→B arasının kenar geometrisi: birim vektör u, İÇ normal n (odaya bakan taraf,
+   probe ile doğrulanır), uzunluk len. Hem bina sınırı hem AVLU poligonu kenarları için ortak. */
+function _edgeGeomOf(A,B){
+  if(!A||!B) return null;
   const dx=B.x-A.x, dy=B.y-A.y, len=Math.hypot(dx,dy); if(len<1e-6) return null;
   const ux=dx/len, uy=dy/len; let nx=-uy, ny=ux;
   if(!_winRegAt(A.x+dx*0.5+nx*0.35, A.y+dy*0.5+ny*0.35)){ nx=-nx; ny=-ny; }
   return {A,B,ux,uy,nx,ny,len};
+}
+/* bir sınır kenarının (A→B) geometrisi: birim vektör u, iç normal n, uzunluk len */
+function winEdgeGeom(ei){
+  if(!pts||!pts.length) return null;
+  return _edgeGeomOf(pts[ei], pts[(ei+1)%pts.length]);
+}
+/* C3 (AVLU PENCERELERİ): avluya bakan cephe kenarları da pencere-alabilir sayılır.
+   Her avlu poligonu bir "iç cephe halkası"dır — kenarları bina sınırı gibi ele alınır,
+   iç normal (probe ile) avlu boşluğundan ODAYA doğru döner. Avlu köşeleri bina ızgarasına
+   snap DEĞİL (kullanıcı serbest çizer) → kenar boyunca 0.35 m iç-probe ile yaşam-odası
+   komşuluğu aranır (bina sınırıyla BİREBİR mantık). Dönüş: [{avi, ei, g}] (g=_edgeGeomOf). */
+function _courtyardWinEdges(){
+  const out=[];
+  if(typeof courtyards==='undefined' || !courtyards || !courtyards.length) return out;
+  courtyards.forEach((av,avi)=>{
+    const poly=av&&av.poly; if(!poly||poly.length<3) return;
+    for(let ei=0; ei<poly.length; ei++){
+      const g=_edgeGeomOf(poly[ei], poly[(ei+1)%poly.length]);
+      if(g) out.push({avi, ei, g});
+    }
+  });
+  return out;
 }
 /* pencere merkezinin dünya-noktası + yön (h) kenar-boyu t'den türetilir.
    h: kenar yataya mı yakın (|ux|>|uy|) → yatay duvar (h:1), değilse dikey (h:0). */
@@ -95,30 +117,47 @@ function _subtractSpans(s,e,spans){
   }
   return parts;
 }
+/* tek bir kenar (g=_edgeGeomOf) boyunca yaşam-odası komşulu kesintisiz parçaları pencereye böler.
+   emit(rec) her aday pencereyi geri çağırır (rec = {t, segIdx, w, roomType, s, e2}). balkExclude =
+   bu kenardan çıkarılacak balkon span'leri (yalnız bina sınırında; avlu kenarında balkon yok → []). */
+function _scanEdgeForWindows(g, balkExclude, emit){
+  const P=REG.pencere, habit={salon:1,yatak:1,mutfak:1};
+  if(!g||g.len<1.6) return;
+  let segS=null, segR=null, segIdx=0;
+  const push=(s,e)=>{
+    const roomType=segR&&segR.type||null;
+    const parts=balkExclude&&balkExclude.length?_subtractSpans(s,e,balkExclude):[[s,e]];   // B2: balkonlu aralığı çıkar
+    for(const pr of parts){ const ps=pr[0], pe=pr[1], L=pe-ps; if(L<1.6) continue;
+      const w=Math.min(P.wMax,Math.max(P.wMin,L-0.6)), mid=(ps+pe)/2;
+      emit({t:mid, segIdx:segIdx++, w, roomType, s:mid-w/2, e2:mid+w/2}); }
+  };
+  const step=0.25;
+  for(let t=0;t<=g.len+1e-9;t+=step){
+    const rg=_winRegAt(g.A.x+g.ux*t+g.nx*0.35, g.A.y+g.uy*t+g.ny*0.35);
+    const ok=rg&&habit[rg.type];
+    if(ok&&rg===segR) continue;
+    if(segS!=null) push(segS,t); segS=ok?t:null; segR=ok?rg:null;
+  }
+  if(segS!=null) push(segS,g.len);
+}
 function autoWindows(){
   const out=[]; if(!plan||!pts||pts.length<3||!closed) return out;
-  const P=REG.pencere, habit={salon:1,yatak:1,mutfak:1};
+  // (1) BİNA SINIRI kenarları (frozen davranış — avlusuz plan BİREBİR eski).
   for(let ei=0; ei<pts.length; ei++){
     const g=winEdgeGeom(ei); if(!g||g.len<1.6) continue;
     const balkSpans=_balkSpansOnEdge(ei);   // B2: bu kenardaki balkon aralıkları (pencere dışlanır)
-    let segS=null, segR=null, segIdx=0;
-    // ham yaşam-odası segmentini balkon span'lerine böl → her kalan parça için bir pencere.
-    const push=(s,e)=>{
-      const roomType=segR&&segR.type||null;
-      const parts=balkSpans.length?_subtractSpans(s,e,balkSpans):[[s,e]];   // B2: balkonlu aralığı çıkar
-      for(const pr of parts){ const ps=pr[0], pe=pr[1], L=pe-ps; if(L<1.6) continue;
-        const w=Math.min(P.wMax,Math.max(P.wMin,L-0.6)), mid=(ps+pe)/2;
-        out.push({ei, t:mid, segIdx:segIdx++, w, roomType, s:mid-w/2, e2:mid+w/2}); }
-    };
-    const step=0.25;
-    for(let t=0;t<=g.len+1e-9;t+=step){
-      const rg=_winRegAt(g.A.x+g.ux*t+g.nx*0.35, g.A.y+g.uy*t+g.ny*0.35);
-      const ok=rg&&habit[rg.type];
-      if(ok&&rg===segR) continue;
-      if(segS!=null) push(segS,t); segS=ok?t:null; segR=ok?rg:null;
-    }
-    if(segS!=null) push(segS,g.len);
+    _scanEdgeForWindows(g, balkSpans, s=>out.push({ei, t:s.t, segIdx:s.segIdx, w:s.w, roomType:s.roomType, s:s.s, e2:s.e2}));
   }
+  // (2) C3 — AVLU kenarları: avluya bakan yaşam-odası cepheleri de pencere alır. Balkon dışlaması YOK
+  //     (avluda balkon üretilmez). Kayıt precomputed e{} + cyt marker taşır (winWorld yeniden çözmez).
+  _courtyardWinEdges().forEach(({avi, ei, g})=>{
+    _scanEdgeForWindows(g, null, s=>{
+      const wx=g.A.x+g.ux*s.t, wy=g.A.y+g.uy*s.t;
+      out.push({ cyt:true, avi, ei, t:s.t, segIdx:s.segIdx, w:s.w, roomType:s.roomType,
+        e:{x:wx, y:wy, h:Math.abs(g.ux)>=Math.abs(g.uy)?1:0, ax:g.A.x, ay:g.A.y, t:s.t,
+           ux:g.ux, uy:g.uy, nx:g.nx, ny:g.ny} });
+    });
+  });
   return out;
 }
 /* OTORİTE pencere listesi: auto set (hidden düşülmüş, override taşımalı) + extra.
@@ -126,6 +165,16 @@ function autoWindows(){
 function computeWindows(){
   const out=[]; if(!plan||!closed) return out;
   autoWindows().forEach(a=>{
+    if(a.cyt){   // C3: AVLU penceresi — ayrı key uzayı (cw<avi>_<ei>_<seg>); e{} önceden hesaplı.
+      const key='cw'+a.avi+'_'+a.ei+'_'+a.segIdx;
+      if(windowHidden[key]) return;
+      const ov=windowOverrides[key]||{};
+      const w=(ov.w!=null)?ov.w:a.w;
+      const rec={key, ei:a.ei, cyt:true, avi:a.avi, kind:'window', w, height:ov.height, sill:ov.sill,
+        full:!!ov.full, roomType:a.roomType, status:'ok', e:{...a.e}};
+      out.push(rec);
+      return;
+    }
     const key='w'+a.ei+'_'+a.segIdx;
     if(windowHidden[key]) return;
     const ov=windowOverrides[key]||{};

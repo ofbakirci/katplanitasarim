@@ -233,9 +233,9 @@ svg.addEventListener('mousemove',e=>{
         if(best){ doorOverrides[dragging.door.key]={h:best.h,x:best.x,y:best.y}; render(); }
       }
     }
-    if(dragging.type==='window'){
-      const near=winEdgeNear(S2Wx(sx),S2Wy(sy));
-      if(near){ const w=dragging.win;
+    if(dragging.type==='window' && !dragging.win.cyt){   // C3: AVLU penceresi avlu kenarına ÇAPALI → taşınmaz
+      const near=winEdgeNear(S2Wx(sx),S2Wy(sy));         //   (winEdgeNear yalnız bina sınırı pts'ini gezer; avlu ei uzayı ayrı).
+      if(near){ const w=dragging.win;                    //   Genişlik/yükseklik/parapet seçim paneliyle yine ayarlanır.
         if(w.kind==='window' && w.i!=null && extraWindows[w.i]){         // ekstra pencere
           extraWindows[w.i].ei=near.ei; extraWindows[w.i].t=near.t;
         } else {                                                         // otomatik pencere → override (ei+t taşı)
@@ -781,6 +781,23 @@ window.addEventListener('keydown',e=>{
     parkGhost = hoverBay==null? parkGhostAt(parkLastSx,parkLastSy) : null;
     svg.style.cursor = hoverBay!=null? 'pointer' : ((parkGhost&&!parkGhost.invalid)?'copy':'not-allowed'); }
   render();
+});
+/* CEPHE-2 C4: İMKAN yatay/dikey döndürme — masaüstü R + dokunmatik "Döndür" butonu ORTAK yolu.
+   Amenity bar placeholder'ı R diyordu ama handler yoktu (masaüstü açığı). Buton olayı (interaction.js
+   bind) ve R tuşu ikisi de bunu çağırır → dokunmatik parite (touch'ta R tuşu yok). */
+function toggleAmenityOrient(){
+  if(mode!=='amenity') return;
+  amenityGhostVert = !(amenityGhostVert!=null? amenityGhostVert : false);
+  if(amenityLastSx!=null){ hoverAmenity=hitAmenity(amenityLastSx,amenityLastSy);
+    amenityGhost = hoverAmenity==null? amenityGhostAt(amenityLastSx,amenityLastSy) : null; }
+  render();
+}
+window.addEventListener('keydown',e=>{
+  if(mode!=='amenity' || (e.key||'').toLowerCase()!=='r') return;
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  const t=e.target, tag=t&&t.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
+  e.preventDefault(); toggleAmenityOrient();
 });
 /* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
    pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.
@@ -1355,6 +1372,8 @@ if(typeof document.querySelectorAll==='function')
 /* S3: site imkanları çubuğu — tip seçimi (data-am) */
 if(typeof document.querySelectorAll==='function')
   document.querySelectorAll('#amenityBar button[data-am]').forEach(b=>b.onclick=()=>setAmenityType(b.dataset.am));
+/* C4: imkan Döndür butonu (dokunmatik parite — R tuşunun buton karşılığı) */
+{ const ar=document.getElementById('amenityRot'); if(ar) ar.onclick=()=>toggleAmenityOrient(); }
 document.getElementById('tUndo').onclick=()=>{
   if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
   if(undoEdit()) return; // önce elle duvar/ayırıcı/balkon düzenlemeleri

@@ -151,5 +151,87 @@ ok(s4.besideDoor>0, 'S4: GENIS balkonda kapı YANINDA pencere URETILIR ('+s4.bes
 ok(s4.narrowInBody===0, 'S4: DAR balkonda kapı yanı pencere YOK (min-genislik kapısı; '+s4.narrowInBody+')');
 ok(s4.restoredN===s4.beforeN, 'S4: balkon kaldırılınca pencere seti geri gelir ('+s4.restoredN+'='+s4.beforeN+')');
 
+/* 8) CEPHE-2 C3 — AVLU PENCERELERİ: avluya bakan yaşam-odası cepheleri de pencere alır.
+   Avlusuz plan BİREBİR eski (courtyard=0); avlulu planda cw<avi>_<ei>_<seg> key'li pencereler doğar,
+   export windows[]'e girer, generate() sıfırlar (auto set). */
+const c3 = run(`(function(){
+  // avlusuz referans
+  pts=[{x:0,y:0},{x:40,y:0},{x:40,y:18},{x:0,y:18}]; closed=true; courtyards=[];
+  unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:4}]; generate();
+  const baseN=computeWindows().length, baseCy=computeWindows().filter(w=>w.cyt).length;
+  // avlu ekle (snapshot 9. senaryoyla aynı merkez avlu)
+  courtyards=[{poly:[{x:15,y:6},{x:25,y:6},{x:25,y:12},{x:15,y:12}]}]; generate();
+  const ws=computeWindows(); const cy=ws.filter(w=>w.cyt);
+  const keyOk = cy.every(w=>/^cw\\d+_\\d+_\\d+$/.test(w.key));
+  const allOk = cy.every(w=>w.status==='ok'&&w.e && typeof w.e.x==='number');
+  const rtOk = cy.every(w=>['salon','yatak','mutfak'].indexOf(w.roomType)>=0);
+  // export'a girdi mi
+  const m=buildFloorplanMap(); const expN=m.windows.length;
+  // avlu penceresi width/parapet override (panel düzenlemesi) + gizle (çift-tık sil) çalışır mı
+  const k=cy[0].key;
+  windowOverrides[k]={w:2.5, full:true};
+  const editRec=computeWindows().find(w=>w.key===k);
+  const editW=editRec?winWidthM(editRec):0, editFull=editRec?editRec.full:false;
+  windowOverrides={}; windowHidden[k]=true;
+  const hiddenGone=!computeWindows().find(w=>w.key===k);
+  windowHidden={};
+  // generate() sıfırlar mı (override koy, üret, temizlensin)
+  windowOverrides[k]={w:2.5}; generate();
+  const afterGen=Object.keys(windowOverrides).length;
+  // avluyu kaldır → courtyard pencere 0 + boundary set baz sayıya döner
+  courtyards=[]; generate();
+  const backN=computeWindows().length, backCy=computeWindows().filter(w=>w.cyt).length;
+  return { baseN, baseCy, cyN:cy.length, keyOk, allOk, rtOk, expN, wsN:ws.length, afterGen, backN, backCy,
+    editW, editFull, hiddenGone };
+})()`);
+ok(Math.abs(c3.editW-2.5)<1e-6 && c3.editFull===true, 'C3: avlu penceresi width/full override (panel) uygulanır');
+ok(c3.hiddenGone, 'C3: avlu penceresi windowHidden ile silinir (çift-tık)');
+ok(c3.baseCy===0, 'C3: avlusuz planda avlu penceresi YOK (courtyard=0)');
+ok(c3.cyN>0, 'C3: avlulu planda avlu penceresi üretilir ('+c3.cyN+')');
+ok(c3.keyOk, 'C3: avlu penceresi key deseni cw<avi>_<ei>_<seg>');
+ok(c3.allOk, 'C3: her avlu penceresi status=ok + e{} (x/y çözülü)');
+ok(c3.rtOk, 'C3: avlu penceresi yaşam-odasına (salon/yatak/mutfak) komşu');
+ok(c3.expN===c3.wsN, 'C3: export windows[] avlu pencerelerini de içerir ('+c3.expN+'='+c3.wsN+')');
+ok(c3.afterGen===0, 'C3: generate() avlu penceresi override'+"'"+'unu da sıfırlar (auto set)');
+ok(c3.backCy===0 && c3.backN===c3.baseN, 'C3: avlu kaldırılınca avlu penceresi 0 + boundary set BİREBİR eski ('+c3.backN+'='+c3.baseN+')');
+
+/* 9) CEPHE-2 C1 — BLOK HARİTASI (yan-etkisiz): bir snapshot'tan tam buildFloorplanMap; canlı state BOZULMAZ. */
+const c1 = run(`(function(){
+  pts=[{x:0,y:0},{x:32,y:0},{x:32,y:16},{x:0,y:16}]; closed=true; courtyards=[];
+  unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:2},{oda:1,salon:1,ensuite:false,acik:true,adet:2}]; generate();
+  const snap=stateSnapshot(false);
+  const liveWin=computeWindows().length, livePtsX=pts[0].x, livePlanRows=plan.rows;
+  const bmap=(typeof blockFloorplanMap==='function')?blockFloorplanMap(snap):null;
+  const liveIntact = computeWindows().length===liveWin && pts[0].x===livePtsX && plan.rows===livePlanRows;
+  return { has:!!bmap, wins:bmap?bmap.windows.length:0, units:bmap?bmap.units.length:0,
+    doors:bmap?bmap.doors.length:0, liveIntact,
+    shape: bmap&&bmap.windows.length? (Array.isArray(bmap.windows[0].p0_px)&&typeof bmap.windows[0].width_m==='number') : false };
+})()`);
+ok(c1.has, 'C1: blockFloorplanMap snapshot'+"'"+'tan map üretir');
+ok(c1.wins>0 && c1.units===4, 'C1: blok map pencere ('+c1.wins+') + daire ('+c1.units+') taşır');
+ok(c1.shape, 'C1: blok map windows[] şeması (p0_px + width_m)');
+ok(c1.liveIntact, 'C1: blockFloorplanMap CANLI 2B state'+"'"+'i BOZMAZ (pencere/pts/plan aynı)');
+
+/* 10) CEPHE-2 C2 — ZEMİN cephe: groundFloorSnapshot katAyri + zemin ticari'de zemin snapshot'ını döndürür. */
+const c2 = run(`(function(){
+  const ka=document.getElementById('katAyri'); if(ka) ka.checked=true;
+  bodrumSayisi=0; villaOffset=0;
+  document.getElementById('katSayisi').value='3';
+  pts=[{x:0,y:0},{x:30,y:0},{x:30,y:14},{x:0,y:14}]; closed=true; courtyards=[];
+  unitSpecs=[{oda:2,salon:1,ensuite:true,acik:false,adet:2}]; generate();
+  const konut=stateSnapshot(true);
+  const ticari=JSON.parse(JSON.stringify(konut)); ticari.plan.katKullanim='ticari';
+  villaFloors=[ticari, stateSnapshot(true), stateSnapshot(true)]; activeFloor=1;   // aktif kat ZEMİN DEĞİL
+  const gf=(typeof groundFloorSnapshot==='function')?groundFloorSnapshot():null;
+  const gmap=(gf&&typeof blockFloorplanMap==='function')?blockFloorplanMap(gf.snap):null;
+  // temizle (diğer testlere sızmasın)
+  villaFloors=null; activeFloor=0; if(ka) ka.checked=false;
+  return { has:!!gf, usage:gf?gf.usage:null, isGround:gf?gf.isGround:null,
+    mapOk:!!gmap, mapWins:gmap?gmap.windows.length:0 };
+})()`);
+ok(c2.has && c2.isGround, 'C2: groundFloorSnapshot katAyri+aktif≠zemin'+"'"+'de zemin snapshot'+"'"+'ı döndürür');
+ok(c2.usage==='ticari', 'C2: zemin kat kullanımı (ticari) taşınır');
+ok(c2.mapOk && c2.mapWins>0, 'C2: zemin snapshot'+"'"+'tan cephe map'+"'"+'i üretilir ('+c2.mapWins+' pencere)');
+
 console.log('PENCERE: ' + pass + ' geçti, ' + fail + ' hata');
 if (fail) process.exit(1);

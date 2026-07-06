@@ -635,7 +635,10 @@ function closeFloorPaste(){ floorClip=null;
    globallerdedir; blok geçişinde aktif blok kaydedilip hedef blok geri kurulur — tıpkı
    kat sekmeleri gibi, ama bir üst seviyede. Blok adları konuma göre OTOMATİK: 0→A, 1→B,
    … (Z sonrası AA, AB…). Parsel site-ortaktır: yeni blok mevcut parseli devralır. */
-function siteOn(){ const cb=document.getElementById('siteMod'); return !!(blocks && cb && cb.checked); }
+/* CEPHE-2 C1: bir blok haritasını YALITILMIŞ hesaplarken (blockFloorplanMap) fpFraming/fpFrameBBox
+   site-modunu görmesin → kadraj o bloğun KENDİ pts'ine oturur (px2m dünya koordu doğru döner). */
+let __fpBlockIsolate = false;
+function siteOn(){ if(__fpBlockIsolate) return false; const cb=document.getElementById('siteMod'); return !!(blocks && cb && cb.checked); }
 function blockName(i){
   let s=''; i=Math.max(0,i|0);
   do{ s=String.fromCharCode(65+(i%26))+s; i=Math.floor(i/26)-1; }while(i>=0);
@@ -777,6 +780,108 @@ function siteBlocksData(){
   });
   return out;
 }
+/* ================= CEPHE-2 C1: BLOK HARİTASI (YALITILMIŞ, YAN-ETKİSİZ) =================
+   Bir blok anlık görüntüsünden (stateSnapshot biçimi: pts + plan + courtyards + balconies +
+   pencere/kapı override'ları) TAM buildFloorplanMap() üretir — DIŞ RENDER kabuğunda her bloğun
+   pencereli/balkonlu cephesi için (view3d extOtherBlocks). Canlı 2B state'i BOZMAZ: ilgili tüm
+   global'ler kaydedilir → blok verisi global'lere kurulur (restoreState plan-yeniden-kurma dalının
+   DOM'suz/render'sız ikizi) → buildFloorplanMap() → global'ler GERİ konur. DOM/geçmiş/undo'ya iz
+   bırakmaz. bsnap kendi pts/plan'ını taşımalı (aktif blok stateSnapshot(false) ile kaydedilmiş olur). */
+function blockFloorplanMap(bsnap){
+  if(!bsnap || !bsnap.plan || !bsnap.pts || bsnap.pts.length<3) return null;
+  const sp=bsnap.plan;
+  if(!sp.regions || !sp.units || !Array.isArray(sp.inside)) return null;
+  // --- canlı global'leri sakla ---
+  const SV={ plan, pts, closed, courtyards, balconies, unitSpecs, customCutsZ, unitLayout,
+    doorOverrides, extraDoors, doorHidden, windowOverrides, extraWindows, windowHidden,
+    parcelPts, parcelClosed, katKullanim, iso:__fpBlockIsolate };
+  let map=null;
+  try{
+    __fpBlockIsolate=true;                                 // fpFraming bloğun KENDİ pts'ine kadrajlasın
+    // --- blok girdilerini global'lere kur (restoreState girdileriyle aynı sıra) ---
+    pts=bsnap.pts.map(p=>({x:p.x,y:p.y})); closed=true;
+    courtyards=(bsnap.courtyards||[]).map(av=>({poly:(av.poly||[]).map(p=>({x:p.x,y:p.y}))}));
+    balconies=(bsnap.balconies||[]).map(b=>({...b}));
+    unitSpecs=(bsnap.specs||[]).map(s=>({...s}));
+    customCutsZ=bsnap.cuts||null; unitLayout=bsnap.unitLayout||{};
+    doorOverrides=(bsnap.doors&&bsnap.doors.ov)||{}; extraDoors=(bsnap.doors&&bsnap.doors.extra)||[]; doorHidden=(bsnap.doors&&bsnap.doors.hidden)||{};
+    windowOverrides=(bsnap.windows&&bsnap.windows.ov)||{}; extraWindows=(bsnap.windows&&bsnap.windows.extra)||[]; windowHidden=(bsnap.windows&&bsnap.windows.hidden)||{};
+    katKullanim=(sp.katKullanim)||'konut';
+    // --- plan nesnesini yeniden kur (io.js restoreState 251-268 ile birebir; DOM/render YOK) ---
+    const regions=sp.regions.map(g=>({id:g.id,name:g.name,type:g.type,unit:g.unit,cells:g.cells.slice(),ebHost:g.ebHost}));
+    const cm=new Int16Array(sp.rows*sp.cols); cm.fill(-1);
+    regions.forEach(g=>g.cells.forEach(i=>{ cm[i]=g.id; }));
+    const inside=Uint8Array.from(sp.inside);
+    const byId={}; regions.forEach(g=>{ byId[g.id]=g; });
+    const unitObjs=sp.units.map(u=>({spec:{...u.spec}, comb:!!u.comb,
+      antre:u.antre>=0?(byId[u.antre]||null):null, rooms:u.rooms.map(id=>byId[id]).filter(Boolean)}));
+    plan={regions, cm, inside, rows:sp.rows, cols:sp.cols, minX:sp.minX, minY:sp.minY,
+      corridorR0:sp.corridorR0, corridorR1:sp.corridorR1,
+      stairs:(sp.stairs||[]).map(s=>({...s})), unitObjs,
+      villa:!!sp.villa, kat:sp.kat, binaYuk:sp.binaYuk, perFloor:sp.perFloor,
+      nAsansor:sp.nAsansor, asansorYeri:sp.asansorYeri,
+      fireStairNeeded:sp.fireStairNeeded, teknikNeeded:sp.teknikNeeded,
+      katKullanim:sp.katKullanim||'konut', zoneUI:sp.zoneUI||[]};
+    if(typeof calcRegionMetrics==='function') regions.forEach(g=>calcRegionMetrics(g, plan.cols, plan.minX, plan.minY));
+    if(sp.parking) plan.parking=JSON.parse(JSON.stringify(sp.parking));
+    if(typeof computeWallRuns==='function') plan.wallRuns=computeWallRuns();
+    map=(typeof buildFloorplanMap==='function')?buildFloorplanMap():null;
+  }catch(err){ if(typeof console!=='undefined') console.error('blockFloorplanMap:', err); map=null; }
+  finally{
+    // --- canlı global'leri GERİ koy (2B state dokunulmadı) ---
+    plan=SV.plan; pts=SV.pts; closed=SV.closed; courtyards=SV.courtyards; balconies=SV.balconies;
+    unitSpecs=SV.unitSpecs; customCutsZ=SV.customCutsZ; unitLayout=SV.unitLayout;
+    doorOverrides=SV.doorOverrides; extraDoors=SV.extraDoors; doorHidden=SV.doorHidden;
+    windowOverrides=SV.windowOverrides; extraWindows=SV.extraWindows; windowHidden=SV.windowHidden;
+    parcelPts=SV.parcelPts; parcelClosed=SV.parcelClosed; katKullanim=SV.katKullanim; __fpBlockIsolate=SV.iso;
+  }
+  return map;
+}
+if(typeof window!=='undefined'){ window.blockFloorplanMap=blockFloorplanMap; }
+/* CEPHE-2 C2: ZEMİN TİCARİ AYRI CEPHE — katAyri açık apartmanda zemin katın KENDİ planından cephe
+   üretmek için, zemin katın anlık görüntüsünü (stateSnapshot biçimi) döndürür. Zemin kat AKTİF ise
+   canlı state'ten stateSnapshot(true) alınır (kat-içi, floors özyinelemesiz); değilse villaFloors[zeminIdx].
+   Dönüş {snap, usage, isGround} — usage zemin kat kullanımı ('ticari' → ayrı vitrin cephesi kararı).
+   Yalnız apartman + katAyri + ≥2 kat + zemin planı VAR iken anlamlı; aksi halde null. */
+function groundFloorSnapshot(){
+  try{
+    if(typeof floorsOn!=='function' || !floorsOn()) return null;
+    if(document.getElementById('binaTipi').value==='villa') return null;
+    const gi=zeminIdx();
+    let snap=null;
+    if(gi===activeFloor){ snap=(typeof stateSnapshot==='function')?stateSnapshot(true):null; }   // kat-içi anlık görüntü (bare=true → floors yok)
+    else { const f=villaFloors&&villaFloors[gi]; snap=f||null; }
+    if(!snap || !snap.plan || !snap.pts || snap.pts.length<3) return null;
+    const usage=(snap.plan.katKullanim)||'konut';
+    return { snap, usage, isGround:true };
+  }catch(err){ if(typeof console!=='undefined') console.error('groundFloorSnapshot:', err); return null; }
+}
+if(typeof window!=='undefined'){ window.groundFloorSnapshot=groundFloorSnapshot; }
+/* CEPHE-2 C2 (ek): ZEMİN katı AKTİF görüntülenirken (scene.__map = zemin/ticari) üst konut katları için
+   temsili bir ÜST (zemin-harici, tercihen konut) kat snapshot'ı. view3d dış kabukta zemin ticariyken üst
+   katları bunun cephesiyle kurar (aksi halde ticari vitrin TÜM katlara klonlanırdı). Bulunamazsa null →
+   view3d aktif map'e düşer (eski davranış). */
+function upperFloorSnapshot(){
+  try{
+    if(typeof floorsOn!=='function' || !floorsOn()) return null;
+    if(document.getElementById('binaTipi').value==='villa') return null;
+    const gi=zeminIdx(), total=totalFloors();
+    // önce zemin-üstü KONUT kat, yoksa herhangi zemin-üstü kat
+    let pick=-1, fallback=-1;
+    for(let k=gi+1;k<total;k++){
+      const f=(k===activeFloor)?null:(villaFloors&&villaFloors[k]);
+      const snap=(k===activeFloor)?((typeof stateSnapshot==='function')?stateSnapshot(true):null):f;
+      if(!snap||!snap.plan||!snap.pts||snap.pts.length<3) continue;
+      if(fallback<0) fallback=k;
+      if(((snap.plan.katKullanim)||'konut')==='konut'){ pick=k; break; }
+    }
+    const kk=(pick>=0)?pick:fallback; if(kk<0) return null;
+    const snap=(kk===activeFloor)?((typeof stateSnapshot==='function')?stateSnapshot(true):null):(villaFloors&&villaFloors[kk]);
+    if(!snap||!snap.plan||!snap.pts||snap.pts.length<3) return null;
+    return { snap, usage:(snap.plan.katKullanim)||'konut', floorIdx:kk };
+  }catch(err){ if(typeof console!=='undefined') console.error('upperFloorSnapshot:', err); return null; }
+}
+if(typeof window!=='undefined'){ window.upperFloorSnapshot=upperFloorSnapshot; }
 /* imleç altındaki blok indeksi (site modunda taşı/seç) */
 function hitBlock(wx,wy){
   const data=siteBlocksData();
