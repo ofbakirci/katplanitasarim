@@ -121,6 +121,11 @@
   //   Değerler render-server'daki TIME_OF_DAY anahtarlarıyla birebir: sunrise/midday/golden/night. midday = mevcut davranış (soft daylight).
   let timeOfDay='midday';
   let camGizmos=null, raycaster=null, pickerWired=false;
+  let _canvasDragProbe=null;   // K5: attachPicker içinde atanır — canvas sürükleme/capture teşhisi (preview + test)
+  // K4: KAMERA ÖNİZLEME — adım-2 (3B) içinde yerleştirilmiş kameralar/drone'lar SALT-GÖRÜNÜR (mesh+koni+hafif etiket).
+  //   Düzenleme YOK (o Kamera adımının işi); tık = "Kamera adımında düzenleyin" ipucu. Kat görünümü=iç kameralar,
+  //   Bina görünümü=drone'lar (setExteriorMode zaten iç camGizmos'u gizler → dış modda yalnız extGizmos görünür).
+  let camPreviewMode=false;
   // ── B1-R (R2): CANLI PiP kamera önizlemesi ──
   //   pipCam: PiP'e özel PerspectiveCamera (ana cam'e DOKUNMADAN kamera perspektifini çizer).
   //   pipClosed: kullanıcı × ile kapattı → seçili kamera olsa da gösterme (yeniden seçince/aç ile geri gelir).
@@ -572,6 +577,83 @@
       try{ svg.releasePointerCapture(e.pointerId); }catch(_){} };
     svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
   }
+
+  // ── K3: BAKIŞ-YÖNÜ KÜRESİ (drone + iç kamera ORTAK) ─────────────────────────────────────
+  //   Seçili drone/kameranın YÖNÜ için mini yön küresi (orbit-küresi B1-1 diliyle): sürükle = yaw (yatay) +
+  //   pitch (dikey). Tek bileşen, İKİ bağlam: ctx = { yaw(delta), pitch(abs), getYaw()→deg, getPitch()→deg,
+  //   pitchMin, pitchMax }. Mevcut Yön/Taşı + tekerlek-yaw KALIR (additive). PiP canlı takip eder (loop tazeler).
+  //   CAPTURE DİSİPLİNİ (K5 dersi): setPointerCapture svg'ye + pointerup/cancel/lostpointercapture'da release
+  //   → sürükleme dışarıda bırakılsa bile asılı kalmaz (yeni sızıntı EKLEMEZ). heading: 0=K(yukarı), saat yönü.
+  const DIRSPH_R=24;   // yön küresi yarıçapı (viewBox 0..60)
+  function dirSphereHTML(id){
+    const U=UIPAL;
+    return '<div class="v3ddirsph" id="'+id+'" title="Sürükle: bakış yönünü çevir (yatay=yön, dikey=eğim)" '+
+      'style="position:relative;display:flex;flex-direction:column;align-items:center;gap:3px">'+
+      '<svg id="'+id+'Svg" viewBox="0 0 60 60" style="width:56px;height:56px;display:block;cursor:grab;touch-action:none">'+
+        '<defs><radialGradient id="'+id+'G" cx="38%" cy="34%" r="72%">'+
+          '<stop offset="0%" stop-color="#4a423a"/><stop offset="62%" stop-color="#332e28"/><stop offset="100%" stop-color="#221f1b"/>'+
+        '</radialGradient></defs>'+
+        '<circle cx="30" cy="30" r="'+DIRSPH_R+'" fill="url(#'+id+'G)" stroke="'+U.lineSoft+'" stroke-width="1"/>'+
+        '<ellipse cx="30" cy="30" rx="'+DIRSPH_R+'" ry="9" fill="none" stroke="'+U.line+'" stroke-width="1"/>'+
+        '<line x1="30" y1="'+(30-DIRSPH_R)+'" x2="30" y2="'+(30+DIRSPH_R)+'" stroke="'+U.line+'" stroke-width="1"/>'+
+        '<line x1="'+(30-DIRSPH_R)+'" y1="30" x2="'+(30+DIRSPH_R)+'" y2="30" stroke="'+U.line+'" stroke-width="1"/>'+
+        // yön çizgisi + uç (updateDirSphere döndürür/dikeyde kaydırır)
+        '<line id="'+id+'Needle" x1="30" y1="30" x2="30" y2="10" stroke="'+U.acc+'" stroke-width="2" stroke-linecap="round"/>'+
+        '<circle id="'+id+'Dot" cx="30" cy="10" r="3.2" fill="'+U.active+'" stroke="'+U.onAcc+'" stroke-width="1"/>'+
+      '</svg>'+
+      '<span class="lbl" style="font-size:9px">Bakış Yönü</span>'+
+    '</div>';
+  }
+  // yön küresi iğnesini ctx.getYaw (heading, K=yukarı) + ctx.getPitch (eğim) ile güncelle. pitch iğne uzunluğunu
+  //   kısaltır (aşağı bakış = kısa iğne, kuşbakışına yaklaşır); dikey his verir.
+  function updateDirSphere(id, ctx){
+    if(!overlay||!ctx) return;
+    const svg=overlay.querySelector('#'+id+'Svg'); if(!svg) return;
+    const nd=svg.querySelector('#'+id+'Needle'), dt=svg.querySelector('#'+id+'Dot'); if(!nd||!dt) return;
+    const heading=(ctx.getYaw?ctx.getYaw():0)*Math.PI/180;
+    const pitch=(ctx.getPitch?ctx.getPitch():0);
+    const pMin=(ctx.pitchMin!=null?ctx.pitchMin:-85), pMax=(ctx.pitchMax!=null?ctx.pitchMax:85);
+    // pitch → iğne uzunluğu: ufuk(0)=tam, aşağı=kısa (kuşbakışına yaklaşır), yukarı=biraz uzun görünmesin (tam sınır)
+    const frac=Math.max(0.25,Math.min(1,1-(pMax-pitch)/(pMax-pMin)*0.0+ (pitch>=0?0: (pitch/pMin)*0.6) ));   // aşağı: 1→0.4
+    const down=Math.max(0,Math.min(1,pitch<0?(-pitch/Math.abs(pMin)):0));
+    const L=(DIRSPH_R-5)*(1-down*0.62);
+    const ex=30+Math.sin(heading)*L, ey=30-Math.cos(heading)*L;   // K(yukarı)=−cos, D(sağ)=+sin
+    nd.setAttribute('x2',ex.toFixed(1)); nd.setAttribute('y2',ey.toFixed(1));
+    dt.setAttribute('cx',ex.toFixed(1)); dt.setAttribute('cy',ey.toFixed(1));
+  }
+  // yön küresi sürüklemesini bağla. ctx yaw(delta)/pitch(abs)/getYaw/getPitch sağlar; drag Δx→yaw, Δy→pitch.
+  function wireDirSphere(id, ctx){
+    const svg=overlay&&overlay.querySelector('#'+id+'Svg'); if(!svg||!ctx) return;
+    let drag=null;
+    svg.addEventListener('pointerdown',function(e){
+      drag={ x:e.clientX, y:e.clientY, pitch:(ctx.getPitch?ctx.getPitch():0) }; svg.style.cursor='grabbing';
+      try{ svg.setPointerCapture(e.pointerId); }catch(_){}
+      e.preventDefault(); e.stopPropagation();
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!drag) return;
+      const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+      if(dx && ctx.yaw){ ctx.yaw(dx*0.9); }                        // yatay sürükle = yaw (0.9°/px)
+      if(dy && ctx.pitch){                                         // dikey sürükle = pitch (aşağı sürükle = aşağı bak)
+        const pMin=(ctx.pitchMin!=null?ctx.pitchMin:-85), pMax=(ctx.pitchMax!=null?ctx.pitchMax:85);
+        drag.pitch=Math.max(pMin,Math.min(pMax, drag.pitch - dy*0.7)); ctx.pitch(drag.pitch);
+      }
+      drag.x=e.clientX; drag.y=e.clientY; updateDirSphere(id,ctx);
+    });
+    const end=function(e){ if(!drag) return; drag=null; svg.style.cursor='grab';
+      try{ svg.releasePointerCapture(e&&e.pointerId); }catch(_){} };
+    svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end); svg.addEventListener('lostpointercapture',end);
+  }
+  // iç kamera bağlamı: seçili camList[activeCamIdx] için yaw/pitch köprüsü (yön küresi ORTAK sözleşmesi)
+  function camDirCtx(){ return {
+    getYaw:function(){ return (activeCamIdx>=0)?headingOf(camList[activeCamIdx]):0; },
+    getPitch:function(){ return (activeCamIdx>=0)?camTiltDeg(camList[activeCamIdx]):0; },
+    yaw:function(d){ yawCam(d); }, pitch:function(a){ setCamTilt(a); }, pitchMin:-85, pitchMax:85 }; }
+  // drone bağlamı: seçili extCams[extActive]
+  function droneDirCtx(){ return {
+    getYaw:function(){ return (extActive>=0)?extHeadingOf(extCams[extActive]):0; },
+    getPitch:function(){ return (extActive>=0)?extDroneTiltDeg(extCams[extActive]):0; },
+    yaw:function(d){ extYawDrone(d); }, pitch:function(a){ setExtDroneTilt(a); }, pitchMin:-89, pitchMax:30 }; }
 
   // PEGMAN: zeminde bırakma-halkası (camGhost halka deseni) — geçerli=yeşil, geçersiz=kırmızı. world x,z (scene-root).
   function pegShowGhost(wx,wz,valid){
@@ -2538,11 +2620,13 @@
     extDisposeGizmoChildren();
     if(!exteriorMode){ g.visible=false; return; }
     g.visible=true;
+    const preview=(camPreviewMode && !camUIEnabled && extPlaceActive===false && extActive<0);   // K4: adım-2 salt-görünür drone (seçim yok)
     extCams.forEach(function(c,i){
       const active=(i===extActive);
       if(active) g.add(makeActiveMarker({pos:c.pos})); // zemin halkası (drone yüksek olsa da nereden baktığı okunur)
       g.add(makeViewCone(c,active));
       g.add(makeCameraMesh(c,active,i));
+      if(preview){ const lb=makeLabel('Drone '+(i+1)); lb.position.set(c.pos.x,c.pos.y+0.6,c.pos.z); g.add(lb); }   // K4: hafif etiket
     });
     if(extGhost && extGhost.pos){
       const s=new THREE.Mesh(new THREE.SphereGeometry(0.28,16,16),
@@ -2634,6 +2718,19 @@
   function extAimDroneTo(hit){
     if(extActive<0||extActive>=extCams.length||!hit) return; const c=extCams[extActive];
     c.target={ x:hit.x, y:0.5, z:hit.z }; c.aimed=true; renderExtGizmos(); renderExtDock(); }
+  // K3: DRONE PITCH — iç camTiltDeg/applyCamAim ikizi (yön küresi dikey ekseni sürer). Drone yatay yönü + mesafeyi
+  //   koru, dikeyi tilt'ten türet (aşağı bakış negatif). Drone genelde aşağı bakar → geniş aralık (-89..30).
+  function extDroneTiltDeg(c){ if(!c||!c.target||!c.pos) return 0;
+    const dx=c.target.x-c.pos.x, dz=c.target.z-c.pos.z, dy=c.target.y-c.pos.y;
+    const horiz=Math.hypot(dx,dz); if(horiz<1e-4) return dy>=0?89:-89;
+    return Math.atan2(dy,horiz)*180/Math.PI; }
+  function setExtDroneTilt(deg){
+    if(extActive<0||extActive>=extCams.length) return; const c=extCams[extActive];
+    const dx=c.target.x-c.pos.x, dz=c.target.z-c.pos.z; let horiz=Math.hypot(dx,dz); if(horiz<0.5) horiz=1;
+    const ux=(Math.hypot(dx,dz)<1e-4?0:dx/Math.hypot(dx,dz)), uz=(Math.hypot(dx,dz)<1e-4?-1:dz/Math.hypot(dx,dz));
+    const t=Math.max(-89,Math.min(30,+deg))*Math.PI/180;
+    c.target={ x:c.pos.x+ux*horiz, y:c.pos.y+Math.tan(t)*horiz, z:c.pos.z+uz*horiz }; c.aimed=true;
+    renderExtGizmos(); renderExtDock(); }
   // seçili drone'u yeni zemin noktasına taşı (yükseklik korunur). İç 'move' scenePick ikizi.
   function extMoveDroneTo(hit){
     if(extActive<0||extActive>=extCams.length||!hit) return; const c=extCams[extActive];
@@ -2785,10 +2882,11 @@
   }
   // DIŞ sahne 1440×810 snapshot — snapCameraDataURL disiplini (BİREBİR geri) ama exteriorGroup sahnesi,
   //   çatı DOKUNULMAZ (kabuk dış cephe), İÇ gizmoları + DIŞ gizmoları gizlenir.
-  function snapExtCameraDataURL(which){
+  function snapExtCameraDataURL(which, opts){
     if(!renderer||!scene||!cam||!exteriorGroup) return null;
     const c=(typeof which==='number')?extCams[which]:which;
     if(!c||!c.pos||!c.target) return null;
+    const OW=(opts&&opts.w)||1440, OH=(opts&&opts.h)||810;     // K2: thumbnail boyutu (varsayılan tam 16:9)
     const savedSize=renderer.getSize(new THREE.Vector2());
     if(savedSize.x<1||savedSize.y<1) return null;              // viewport 0×0 → render çöker, reddet
     const savedView=getView(), savAspect=cam.aspect, savPR=renderer.getPixelRatio();
@@ -2798,11 +2896,11 @@
     try{
       if(extGizmos) extGizmos.visible=false;                   // drone modelleri/koni kadrajda olmasın
       if(camGizmos) camGizmos.visible=false;
-      renderer.setPixelRatio(1); renderer.setSize(1440,810,false);
+      renderer.setPixelRatio(1); renderer.setSize(OW,OH,false);
       cam.up.set(0,1,0);
       cam.position.set(c.pos.x,c.pos.y,c.pos.z);
       cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
-      cam.fov=lensToFov(c.lens); cam.aspect=16/9; cam.updateProjectionMatrix();
+      cam.fov=lensToFov(c.lens); cam.aspect=OW/OH; cam.updateProjectionMatrix();
       renderer.render(scene,cam);
       url=renderer.domElement.toDataURL('image/png');
     } finally {
@@ -2878,6 +2976,8 @@
             '<button class="pill'+(extPlaceAction==='aim'?' on':'')+'" data-extact="aim" title="Yön — zemine tıkla, drone oraya baksın (tekerlek de döndürür)">Yön</button>'+
             '<button class="pill'+(extPlaceAction==='move'?' on':'')+'" data-extact="move" title="Taşı — zemine tıkla, drone oraya taşınsın (sürükleyerek de taşınır)">Taşı</button>'+
           '</div></div>'+
+        '<div class="sep"></div>'+                                            // K3: bakış-yönü küresi (drone) — Yön/Taşı yanında
+        dirSphereHTML('v3dExtDirSph')+
         '<div class="col"><span class="lbl">Yükseklik</span>'+
           '<div class="row"><input type="range" id="v3dExtH" min="'+r.min.toFixed(1)+'" max="'+r.max.toFixed(1)+'" step="0.5" value="'+yv.toFixed(1)+'"><span class="val" id="v3dExtHVal">'+yv.toFixed(1)+' m</span></div></div>'+
         '<div class="col"><span class="lbl">Objektif</span>'+
@@ -2897,6 +2997,7 @@
       '</div>';
     const hs=dock.querySelector('#v3dExtH');
     if(hs){ hs.addEventListener('input',function(){ const v=parseFloat(hs.value); const lab=dock.querySelector('#v3dExtHVal'); if(lab) lab.textContent=v.toFixed(1)+' m'; setExtCamHeight(v); }); }
+    if(c){ wireDirSphere('v3dExtDirSph', droneDirCtx()); updateDirSphere('v3dExtDirSph', droneDirCtx()); }   // K3: drone yön küresi (seçili drone varsa)
   }
   // "Dış Render" CTA → ÖDEME-ÖNCESİ SON ADIM: onay dialoğu. Onaylanırsa payload'u kurar ve dışarıya callback ile
   //   verir (prototip render-server'a POST eder). BU FONKSİYON İSTEK ATMAZ — yalnız payload + onay.
@@ -3000,10 +3101,13 @@
   // farklı boyutta img2img girdisi üretiyordu (nano tutarsız). pixelRatio de kilitlenir yoksa
   // retina'da 2× buffer (2880×1620) çıkardı. Boyut/aspect/pixelRatio try/finally ile BİREBİR geri
   // yüklenir → ana render döngüsü ve kamera-yerleştirme worldToPx px_delta=0 değişmezi korunur.
-  function snapCameraDataURL(which){
+  // K2: opsiyonel opts={w,h} — küçük thumbnail üretmek için (varsayılan 1440×810 = mevcut davranış BİREBİR).
+  //   Kadraj galerisi kart görselleri KREDİSİZ yerel viewport thumbnail'i ister → snapCameraThumb bunu kullanır.
+  function snapCameraDataURL(which, opts){
     if(!renderer||!scene||!cam) return null;
     const c=(typeof which==='number')?camList[which]:which;
     if(!c||!c.pos||!c.target) return null;
+    const OW=(opts&&opts.w)||1440, OH=(opts&&opts.h)||810;     // K2: thumbnail boyutu (varsayılan tam 16:9)
     const savedSize=renderer.getSize(new THREE.Vector2());
     if(savedSize.x<1||savedSize.y<1) return null;              // viewport 0×0 (ekran-arası/gizli) → render çöker, reddet
     const savedView=getView();                                 // orbit açısı + fov (geri koymak için)
@@ -3018,11 +3122,11 @@
       if(labels) labels.visible=false;                         // 3B etiketler görünmesin
       if(!roofOn){ roofOn=true; applyRoof(); }                 // iç mekan: duvarlar tam-yükseklik → oda kapanır
       if(ceilG) ceilG.visible=true;                            // C3-4: iç mekan bakışı → tavan görünür
-      renderer.setPixelRatio(1); renderer.setSize(1440,810,false);  // sabit 16:9; updateStyle=false ŞART (canvas CSS bozulmasın)
+      renderer.setPixelRatio(1); renderer.setSize(OW,OH,false);  // sabit 16:9; updateStyle=false ŞART (canvas CSS bozulmasın)
       cam.up.set(0,1,0);
       cam.position.set(c.pos.x,c.pos.y,c.pos.z);
       cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
-      cam.fov=lensToFov(c.lens); cam.aspect=16/9; cam.updateProjectionMatrix();
+      cam.fov=lensToFov(c.lens); cam.aspect=OW/OH; cam.updateProjectionMatrix();
       renderer.render(scene,cam);
       url=renderer.domElement.toDataURL('image/png');
     } finally {
@@ -3855,7 +3959,19 @@
     if(!scene) return;
     const g=ensureGizmoGroup();
     while(g.children.length){ const ch=g.children[0]; disposeGizmo(ch); g.remove(ch); }
-    if(!camUIEnabled) return;                                       // gizmolar yalnız kamera adımında
+    // K4: adım-2 önizleme modunda gizmolar SALT-GÖRÜNÜR (mesh+koni+etiket, düzenleme yok). Dış modda iç kameralar
+    //   gizli (setExteriorMode camGizmos.visible=false) → önizleme yalnız Kat görünümünde iç kamerayı gösterir.
+    if(camPreviewMode && !camUIEnabled){
+      if(!exteriorMode){
+        camList.forEach(function(c,i){
+          g.add(makeViewCone(c,false));                             // pasif koni (soluk) — hangi yöne baktığı okunur
+          g.add(makeCameraMesh(c,false,i));                         // kamera modeli (camIdx taşır → tık ipucu)
+          const lb=makeLabel('Kamera '+(i+1)); lb.position.set(c.pos.x,(c.pos.y||1.6)+0.55,c.pos.z); g.add(lb);
+        });
+      }
+      return;                                                       // önizlemede aktif-marker/aim-handle/hayalet YOK (salt-görünür)
+    }
+    if(!camUIEnabled) return;                                       // gizmolar yalnız kamera adımında (ya da önizleme)
     camList.forEach(function(c,i){
       const active=(i===activeCamIdx);
       if(active) g.add(makeActiveMarker(c));                        // seçili işaretçi ÖNCE → kamera mesh'i üstte kalsın
@@ -4314,21 +4430,43 @@
     el.addEventListener('contextmenu',function(e){ if(furnGhost){ e.preventDefault(); cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); }
       else if(camGhost){ e.preventDefault(); cancelCamGhost(); setHint('Kamera ekleme iptal'); }
       else if(exteriorMode && extGhost){ e.preventDefault(); cancelExtGhost(); setHint('Drone ekleme iptal'); } });   // S2: dış hayalet sağ-tık iptal
+    // K5 (pointer-capture sızıntısı fix): tüm canvas SÜRÜKLEME yollarında (drone/kamera/koni-ucu/mobilya)
+    //   pointerdown'da canvas'a pointerId KİTLENİR → pointer canvas dışına çıksa/dışarıda bırakılsa bile
+    //   move/up canvas'a GARANTİ ulaşır → endXxxDrag hep koşar (controls.enabled geri açılır). Aksi hâlde
+    //   dışarıda bırakma → pointerup yakalanmaz → extDrag asılı + controls kilitli (fare orbit ölür; buton
+    //   çalışır; adım1→adım2 yeniden-kurunca düzelir imzası). captureCanvasPointer, herhangi bir begin*Drag
+    //   ATOMIK başladıysa capture alır; endAllCanvasDrag (aşağıda) tüm bitiş yollarında release + state reset.
+    let _capturedPid=null;
+    function captureCanvasPointer(e){ if(e==null||e.pointerId==null) return; _capturedPid=e.pointerId; try{ el.setPointerCapture(e.pointerId); }catch(_){} }
+    function releaseCanvasPointer(){ if(_capturedPid!=null){ try{ el.releasePointerCapture(_capturedPid); }catch(_){} _capturedPid=null; } }
+    // K5 SON KAPI: pointercancel / lostpointercapture (element remove/rebuild, sistem-jesti) → hiçbir up gelmez.
+    //   TÜM canvas sürükleme state'lerini zorla temizle + orbit'i geri aç. renderExtGizmosSoon'un rAF-yeniden-kurması
+    //   capture'lı DOM elemanını değil CANVAS'ı hedeflediğinden (gizmo=THREE mesh, DOM listener YOK) capture asılı kalmaz.
+    function forceEndCanvasDrag(){
+      if(extDrag){ extDrag=null; }
+      if(camDrag){ camDrag=null; }
+      if(camAimDrag){ camAimDrag=null; }
+      if(furnDrag){ furnDrag=null; }
+      if(controls) controls.enabled=(exteriorMode?(extPlaceAction==='none'):!placeMode);   // sürükleme dışı normal kilit durumu
+      if(renderer) renderer.domElement.style.cursor='';
+      if(exteriorMode){ renderExtGizmos(); } else { renderCamGizmos(); renderFurniture&&renderFurniture(); }
+      releaseCanvasPointer();
+    }
     el.addEventListener('pointerdown',function(e){ sx=e.clientX; sy=e.clientY; moved=false;
       if(furnGhost){ if(e.button===2){ cancelFurnGhost(); setFurnHint('Yerleştirme iptal'); } return; }   // hayalet: sürükleme başlatma (tık=bırak, pointerup'ta)
       if(camGhost){ if(e.button===2){ cancelCamGhost(); setHint('Kamera ekleme iptal'); } return; }        // KAMERA-S S1: hayalet tık=bırak (pointerup)
       if(exteriorMode){   // S2: dış mod — hayalet tık=bırak (pointerup); seçili drone üstü sol-drag = taşı; boş = orbit
         if(extGhost){ if(e.button===2){ cancelExtGhost(); setHint('Drone ekleme iptal'); } return; }
-        if(e.button===0 && !spacePan){ const xi=extPickIdx(e); if(xi>=0){ beginExtDrag(xi); return; } }
+        if(e.button===0 && !spacePan){ const xi=extPickIdx(e); if(xi>=0){ beginExtDrag(xi); captureCanvasPointer(e); return; } }   // K5: drone sürükle → canvas capture
         return;   // dış modda iç kamera/mobilya yolu yok
       }
       // B2-2: SÜRÜKLE-vs-PAN — sol-drag MOBİLYANIN ÜSTÜNDE başlarsa taşı; BOŞ zeminde başlarsa PAN (orbit).
       //   Mobilya seçili olsa bile boş alan pan'dir. Hit-test önceliği: mobilya > zemin-pan.
-      if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0){ beginFurnDrag(e, idx); return; } }
+      if(furnMode && e.button===0 && !spacePan){ const idx=furnPickIdx(e); if(idx>=0){ beginFurnDrag(e, idx); captureCanvasPointer(e); return; } }   // K5
       // KAMERA-S S2/S3: kamera modunda sol-drag — koni-ucu tutamacı > kamera gizmosu > boş zemin (pan).
       if(camUIEnabled && activeGroup==='camera' && e.button===0 && !spacePan){
-        if(camAimHandleHit(e)){ beginCamAimDrag(); return; }                     // S3: koni ucu = doğrudan nişan
-        const ci=camPickIdx(e); if(ci>=0){ beginCamDrag(e, ci); return; }        // S2: kamera üstü = doğrudan taşı
+        if(camAimHandleHit(e)){ beginCamAimDrag(); captureCanvasPointer(e); return; }                     // S3: koni ucu = doğrudan nişan (K5)
+        const ci=camPickIdx(e); if(ci>=0){ beginCamDrag(e, ci); captureCanvasPointer(e); return; }        // S2: kamera üstü = doğrudan taşı (K5)
       } });
     el.addEventListener('pointermove',function(e){ if(Math.abs(e.clientX-sx)+Math.abs(e.clientY-sy)>5) moved=true;
       if(exteriorMode){   // S2: dış mod — hayalet imleç izle / drone sürükle / boş = grab imleci
@@ -4346,7 +4484,14 @@
       else if(!spacePan && camUIEnabled && activeGroup==='camera' && e.buttons===0)               // S2/S3: kamera/koni-ucu üstü = grab imleci
         el.style.cursor=(camAimHandleHit(e)?'crosshair':(camPickIdx(e)>=0?'grab':''));
     });
-    el.addEventListener('pointerup',function(e){ if(furnDrag){ endFurnDrag(); return; }
+    el.addEventListener('pointerup',function(e){
+      if(_capturedPid!=null && (e.pointerId===_capturedPid)) releaseCanvasPointer();   // K5: sürükleme kilidini bırak (up geldi → capture görevini bitirdi)
+      // K4: adım-2 ÖNİZLEME — kamera/drone mesh'ine tık = düzenleme YOK, yalnız ipucu ("Kamera adımında düzenleyin").
+      if(camPreviewMode && !camUIEnabled && !moved && e.button===0){
+        if(exteriorMode){ if(extCams.length && extPickIdx(e)>=0){ setHint&&setHint('Drone yerleştirme/düzenleme Kamera adımında (adım 3)'); return; } }
+        else if(camList.length && camPickIdx(e)>=0){ setHint&&setHint('Kamera yerleştirme/düzenleme Kamera adımında (adım 3)'); return; }
+      }
+      if(furnDrag){ endFurnDrag(); return; }
       if(exteriorMode){   // S2: dış mod — drone sürükle bitir / hayalet yerinde tık = drone düşür
         if(extDrag){ endExtDrag(); return; }
         if(extGhost){ if(!moved && e.button===0){ moveExtGhost(e); clickExtGhost(e); } return; }
@@ -4366,6 +4511,14 @@
       if(camAimDrag){ endCamAimDrag(); return; }             // S3
       if(camDrag){ endCamDrag(); return; }                   // S2
       if(!spacePan && (camUIEnabled||furnMode||(activeGroup==='material'&&matUIEnabled))&&!moved&&e.button===0) scenePick(e); });   // Space'te tıklama seçmesin/koymasın (kaydırma kipi); malzeme modu = oda seç
+    // K5 SON KAPI: sürükleme ortasında pointerup HİÇ gelmezse (canvas dışında bırakma, sistem-jesti, element
+    //   yeniden-kurma) pointercancel/lostpointercapture zorla temizler → orbit fare kontrolü asla asılı kalmaz.
+    //   (Kanıt kancası: forceEndCanvasDrag + canvasDragStateForTest.) Bu adım1→adım2 turuna gerek bırakmaz.
+    el.addEventListener('pointercancel',function(){ forceEndCanvasDrag(); });
+    el.addEventListener('lostpointercapture',function(){ if(extDrag||camDrag||camAimDrag||furnDrag) forceEndCanvasDrag(); });
+    // teşhis: sürükleme + capture durumu (K5 preview/test — orbit kilidi asılı kalmıyor mu)
+    _canvasDragProbe=function(){ return { capturedPid:_capturedPid, extDrag:!!extDrag, camDrag:!!camDrag,
+      camAimDrag:!!camAimDrag, furnDrag:!!furnDrag, orbitEnabled:(controls?controls.enabled:null) }; };
     // tekerlek = seçili mobilyayı döndür (5° hassas, Shift=1° ince ayar); orbit zoom'u furnMode+seçili iken atlanır (attachOrbit)
     el.addEventListener('wheel',function(e){ if(furnMode && activeFurnIdx>=0){ const f=furnList[activeFurnIdx], st=e.shiftKey?1:5;
       f.rot_deg=((((f.rot_deg||0)+(e.deltaY<0?st:-st))%360)+360)%360; f.source='manual'; f.locked=true; renderFurniture(); schedulePersist(); return; }
@@ -4444,6 +4597,19 @@
       return out;
     });
   }
+  // K2: KADRAJ GALERİSİ THUMBNAIL'LERİ (KREDİSİZ — yerel viewport render'ı, render-server'a İSTEK ATMAZ).
+  //   Her iç kamera + her drone için küçük 16:9 önizleme dataURL'i. Kart görseli = o kameranın gerçek kadraj
+  //   thumbnail'i. exportCameras/exportExteriorCameras ŞEMASI DEĞİŞMEZ (ayrı hafif yol). Boyut varsayılan 320×180.
+  const THUMB_W=384, THUMB_H=216;
+  function snapCameraThumbs(){
+    return camList.map(function(c,i){ return { id:'cam'+(i+1), idx:i, kind:'interior',
+      thumb:snapCameraDataURL(c,{w:THUMB_W,h:THUMB_H}) }; });
+  }
+  function snapExtCameraThumbs(){
+    if(!exteriorMode || !exteriorGroup) return [];
+    return extCams.map(function(c,i){ return { id:'ext'+(i+1), idx:i, kind:'exterior',
+      thumb:snapExtCameraDataURL(c,{w:THUMB_W,h:THUMB_H}) }; });
+  }
   function getCameras(){ return camList.map(function(c){ return {pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens,height:c.height}; }); }
   function setCameras(arr){                                // demo/türetilmiş kameraları yükle (Faz 4)
     // Q2: yüklenen kamera Y'si tavanı aşıyorsa clamp'le (eski/dış kayıt tavan üstünde olabilir); export şeması değişmez
@@ -4508,6 +4674,9 @@
     if(!overlay) return;
     syncCamBtns();                                         // dock highlight + slider + hint (updateCamDock içinde)
   }
+  // K4: adım-2 kamera/drone ÖNİZLEME — yerleştirilmiş kameraları SALT-GÖRÜNÜR yap (mesh+koni+etiket). camUIEnabled
+  //   ile karşılıklı-dışlayıcı değil (kamera adımında zaten tam gizmo çizilir); yalnız camUIEnabled KAPALIYKEN etki eder.
+  function setCamPreview(on){ camPreviewMode=!!on; renderCamGizmos(); if(exteriorMode) renderExtGizmos(); }
   // placeMode AÇIK → mesh KİLİTLİ (controls.enabled=false, #3) + zemine tıklama etkin. KAPALI → mesh serbest (döndür/zoom).
   function setPlaceMode(on){
     placeMode=!!on; pendingPos=null;
@@ -4684,6 +4853,9 @@
         '<div class="row"><span style="font-size:9px;opacity:.6">aşağı</span><input type="range" id="v3dCamTilt" min="-80" max="80" step="1" style="flex:1;min-width:110px"><span style="font-size:9px;opacity:.6">yukarı</span><span class="val" id="v3dCamTiltVal">0°</span></div>'+
       '</div>'+
       '<div class="sep"></div>'+
+      // K3: bakış-yönü küresi (iç kamera) — yükseklik/bakış-açısı yanında; sürükle = yön+eğim
+      '<div class="dcol" id="v3dCamDirWrap"'+(has?'':' style="opacity:.4;pointer-events:none"')+'>'+dirSphereHTML('v3dCamDirSph')+'</div>'+
+      '<div class="sep"></div>'+
       // objektif + gün saati
       '<div class="dcol">'+
         '<div class="lbl">Objektif</div>'+
@@ -4727,6 +4899,8 @@
     if(tl){ tl.addEventListener('pointerdown',function(){ camSliderDrag=true; });
             tl.addEventListener('input',function(){ camSliderDrag=true; setCamTilt(+tl.value); if(tlv) tlv.textContent=Math.round(+tl.value)+'°'; });
             tl.addEventListener('change',function(){ camSliderDrag=false; }); }
+    // K3: iç kamera bakış-yönü küresi (yükseklik/bakış-açısı yanında; sürükle = yön+eğim, tilt slider'ı ile senkron)
+    if(activeCamIdx>=0){ wireDirSphere('v3dCamDirSph', camDirCtx()); updateDirSphere('v3dCamDirSph', camDirCtx()); }
     if(more) more.addEventListener('click',function(){ camDockAdvOpen=!camDockAdvOpen; dk.querySelector('.dk').classList.toggle('advopen',camDockAdvOpen); more.textContent=camDockAdvOpen?'Render ayarları ▲':'Render ayarları ▾'; updateCamRender(); });
     // B1-R: özet çip → detay katmanını aç/kapa (kompakt genişleme)
     const sum=dk.querySelector('#v3dCamSum');
@@ -6330,6 +6504,24 @@
       setPlaceMode(false);                                   // önce serbest gözat; "Kamera yerleştir" ile kilitle
     });
   }
+  // AKIŞ-2 K1: KAMERA ADIMI (yeni adım 3) — 3B mesh TAM ekran + kamera bölümü AÇIK, ama boyalı-referans YOK
+  //   (boya artık Kamera'dan SONRA gelen Render adımında). openCompare'in compare-layout'suz ikizi: kamera yerleştir/
+  //   yön/drone + PiP + yön küresi çalışır; sol "boyalı plan" küçük-resmi/açı-uyarısı yok. Vitrin kameralar otomatik.
+  function openPlace(opts){
+    compareMode=false; compareRefURL=null; embedded=!!(opts&&opts.embedded)||true; onReRenderCb=null;
+    return boot().then(function(map){
+      if(!map) return;
+      setCamPreview(false);                                  // önizleme kapat (bu adımda TAM kamera UI)
+      setCamUI(true); setFurnUI(true); setMatUI(true);
+      const sig=planSig(map);
+      if(camList.length && camPlanSig && camPlanSig!==sig) clearCams();
+      if(!camList.length) deriveShowcaseCameras(map);
+      else { renderCamGizmos(); updateCamPanel(); }
+      camPlanSig=sig;
+      setPlaceMode(false);
+      return map;
+    });
+  }
   // overlay'i full ↔ yan-yana (sol boyalı img / sağ 3B host) arasında geçir + paneli taşı.
   // overlay: 3B mesh TAM genişlik + sol-üstte küçük "boyalı plan" lightbox küçük-resmi (tıkla→büyüt). Slider/split KALDIRILDI.
   function setCompareLayout(on, paintedURL){
@@ -6422,6 +6614,9 @@
       if(exteriorMode) renderExtPip(); else renderPip();     // S2: dış modda drone PiP; içte B1-R kamera PiP (scissor pass)
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
       updateOrb();                                           // B1-1: yön küresi iğnesini mevcut azimuta döndür (hafif DOM yazımı)
+      // K3: bakış-yönü küresi iğnesi seçili kamera/drone yönünü canlı gösterir (wheel/slider/aim ile de senkron)
+      if(exteriorMode){ if(extActive>=0) updateDirSphere('v3dExtDirSph', droneDirCtx()); }
+      else if(camUIEnabled && activeCamIdx>=0) updateDirSphere('v3dCamDirSph', camDirCtx());
       // SUNUM-4C T4: yüzen çubuklar HER KARE koşulsuz güncellenir → "seçim yok → display:none" TEK MERKEZ
       //   güvence (updateFurnBar/updateCamBar içindeki `show` testi). Eskiden çağrı `activeIdx>=0`
       //   koşuluyla kapılıydı → deselect/boş-tık/Esc/silme/mod-değişimi yolları çubuğu güncellemeyip
@@ -6431,13 +6626,17 @@
       if(zoomEl&&!zoomActive) zoomEl.value=distToSlider(controls.getDistance()); } }
 
   // dışa aç + buton bağla
-  window.View3D = { open:open, openCompare:openCompare, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
+  window.View3D = { open:open, openCompare:openCompare, openPlace:openPlace, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
     snapCameraDataURL:snapCameraDataURL, snapCameraDepthMap:snapCameraDepthMap, captureCameraSnapshots:captureCameraSnapshots,
     fpvSnapDataURL:fpvSnapDataURL,   // B1 teşhis: FPV göz-hizası tek-kare (pencere-altı bant reprodüksiyonu)
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
     clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras,
+    // K2: kadraj galerisi thumbnail'leri (KREDİSİZ yerel viewport render'ı — iç kameralar + drone'lar).
+    snapCameraThumbs:snapCameraThumbs, snapExtCameraThumbs:snapExtCameraThumbs,
     // KAMERA-S2: iç-mekân render yöntemi oku/yaz ('snapshot'=Sadık · 'prompt'=Yaratıcı · 'both'). exportCameras şeması DEĞİŞMEZ.
     getCamRenderMethod:function(){ return camRenderMethod; }, setCamRenderMethod:setCamRenderMethod,
+    // K4: adım-2 (3B) kamera/drone ÖNİZLEME görünürlüğü (salt-görünür mesh+koni+etiket; düzenleme Kamera adımında).
+    setCamPreview:setCamPreview,
     // B1-4: gün saati — global oku/yaz (iso render köprüsü + prototip). Kamera-başına override camList'te.
     getTimeOfDay:function(){ return timeOfDay; }, setTimeOfDay:function(t){ setTimeOfDay(t,false); },
     // mobilya: map'ten furnList'i tazele + çiz (test + Faz 3). getMap = canlı harita erişimi.
@@ -6546,6 +6745,19 @@
     extStateForTest:function(){ return { mode:exteriorMode, droneCount:extCams.length, active:extActive, facade:extFacade,
       placeActive:extPlaceActive, placeAction:extPlaceAction, hasGhost:!!extGhost, yRange:extDroneYRange(),
       orbitEnabled:(controls?controls.enabled:null), orbitNoRotate:(controls?!!controls.noRotate:null), hasDrag:!!extDrag }; },
+    // K5 teşhis: canvas sürükleme/pointer-capture durumu (orbit kilidi asılı kalmadı mı — preview + gerçek-drag kanıtı)
+    canvasDragStateForTest:function(){ return _canvasDragProbe?_canvasDragProbe():null; },
+    // K3 HEADLESS: bakış-yönü küresi MATEMATİĞİ (THREE'siz, drone extCams salt-veri). ctx='drone'|'cam'. yaw(delta)
+    //   + pitch(abs) uygular, sonuç heading/pitch okur (küre iğnesi bunu gösterir). Drone yolu THREE gerekmez.
+    dirSphereForTest:function(which, op){
+      const isD=(which==='drone'); const ctx=isD?droneDirCtx():camDirCtx();
+      if(op){ if(op.yaw!=null && ctx.yaw) ctx.yaw(op.yaw); if(op.pitch!=null && ctx.pitch) ctx.pitch(op.pitch); }
+      return { yaw:ctx.getYaw?ctx.getYaw():null, pitch:ctx.getPitch?ctx.getPitch():null,
+        pitchMin:ctx.pitchMin, pitchMax:ctx.pitchMax }; },
+    // K4 teşhis: adım-2 önizleme açık/kapalı + gizmo çocuk sayısı (kameralar 3B'de görünür mü)
+    camPreviewForTest:function(on){ if(on!==undefined) setCamPreview(on);
+      return { preview:camPreviewMode, camUI:camUIEnabled, exterior:exteriorMode,
+        gizChildren:(camGizmos?camGizmos.children.length:0), extGizChildren:(extGizmos?extGizmos.children.length:0) }; },
     // CEPHE-2: dış kabuk ölçümü (perf + pencere raporu) — exteriorGroup.userData'dan.
     extShellStatsForTest:function(){ const u=exteriorGroup&&exteriorGroup.userData; if(!u) return null;
       return { buildMs:u.buildMs, meshCount:u.meshCount, protoWin:u.protoWin, fullBlocks:u.fullBlocks,
