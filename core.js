@@ -22,6 +22,16 @@ const REG = {
   bloklarArasiMin:6.0, // site: iki blok arası şematik asgari mesafe (m; imar/yangın durumuna göre değişir)
   katOturumOran:0.7, // katları ayrı planlanan villada her kat oturumu ≥ zeminin %70'i
   parkBayLen:5.0, parkBayWid:2.5, parkAisle:5.0, // dik (90°) park yeri 2,5×5 m + manevra yolu 5 m (Otopark Yön.)
+  /* ── SİTE İMKANLARI (S3) — parsel bahçesine yerleştirilen peyzaj öğeleri (park yeri ailesinin
+     PARSEL-katmanı akrabası). Motor çıktısını (oda/daire/duvar) DEĞİŞTİRMEZ; bina footprint'i DIŞINA,
+     parsel içine konur. Varsayılan boyutlar gerçekçi TR site değerleridir; kullanıcı +/- ile ayarlar. */
+  amenities:{
+    green:   {name:'Yeşil Alan',   w:10, h:8,  min:2,   step:1,   color:'#6a994e', fill:'rgba(106,153,78,.28)'},
+    playground:{name:'Çocuk Parkı', w:8,  h:6,  min:2,   step:0.5, color:'#c98a2b', fill:'rgba(201,138,43,.22)'},
+    pool:    {name:'Yüzme Havuzu', w:12, h:6,  min:2,   step:0.5, color:'#2b7fb8', fill:'rgba(43,127,184,.30)'},
+    ornament:{name:'Süs Havuzu',   w:4,  h:3,  min:1,   step:0.5, color:'#3f9fbf', fill:'rgba(63,159,191,.30)'},
+    seating: {name:'Oturma / Pergola', w:5, h:4, min:1.5, step:0.5, color:'#8a6d3b', fill:'rgba(138,109,59,.20)'}
+  },
   siginakMinM2:12.0, siginakKisiM2:1.0,
   /* Otopark Yönetmeliği (Ek-1, konut/mesken) — daire brüt alanına göre asgari otopark */
   otoparkBrutKats:1.25,       // şematik net daire alanı → brüt yaklaşığı

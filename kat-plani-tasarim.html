@@ -171,6 +171,7 @@
       <button id="tParcel" class="pro-only" data-ic="parcel" data-tip="Parsel (P)" aria-label="Parsel"></button>
       <button id="tSite" style="display:none" data-ic="blok" data-tip="Site görünümü (S)" aria-label="Site"></button>
       <button id="tPark" style="display:none" data-ic="parking" data-tip="Park düzeni (T)" aria-label="Park"></button>
+      <button id="tAmenity" style="display:none" data-ic="trees" data-tip="Site imkanları (I)" aria-label="Site imkanları"></button>
     </div>
     <div class="tbsep"></div>
     <div class="tbgrp">
@@ -197,6 +198,15 @@
     <button data-orient="v">Dikey</button>
     <button id="parkReset" title="Otomatik düzene dön" data-ic="reset">Sıfırla</button>
     <span class="ph">tıkla=ekle/sil · sürükle=taşı · R=yatay/dikey döndür</span>
+  </div>
+  <div id="amenityBar" style="display:none">
+    <span class="pl" data-ic="trees">Site imkanı:</span>
+    <button data-am="green" class="active">Yeşil Alan</button>
+    <button data-am="playground">Çocuk Parkı</button>
+    <button data-am="pool">Yüzme Havuzu</button>
+    <button data-am="ornament">Süs Havuzu</button>
+    <button data-am="seating">Oturma / Pergola</button>
+    <span class="ph">tıkla=ekle/sil · sürükle=taşı · R=yatay/dikey döndür · bahçeye (bina dışı) konur</span>
   </div>
   <div id="status"><span>İmleç: <b id="stPos">–</b></span><span>Alan: <b id="stArea">–</b></span><span>Çevre: <b id="stPerim">–</b></span><span id="stDxf" style="color:#b45309"></span><span id="stHint"></span></div>
   <div id="zoomCtl">

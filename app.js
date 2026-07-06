@@ -19,6 +19,12 @@ let hoverBay = null;          // park modunda imleç altındaki park yeri index'
 let parkGhost = null;         // park modunda eklenecek boş park yeri önizlemesi {x,y,w,h,ang} | null
 let parkGhostVert = null;     // U3: R ile çevrilen yerleştirme yönü override'ı (null=çubuk yönü) | true(dikey)/false(yatay)
 let parkLastSx = null, parkLastSy = null; // son imleç (park modu) — R basınca önizleme aynı noktada anında dönsün
+let amenities = [];           // S3: site imkanları (parsel-katmanı, dünya koord): {type,x,y,w,h,ang}. Bina footprint'i DIŞINA konur; parsel-ORTAK (blok başına değil). 2D bahçede + 3B dış görünümde + drone prompt sinyalinde görünür.
+let hoverAmenity = null;      // imkan modunda imleç altındaki imkan index'i | null
+let amenityGhost = null;      // imkan modunda eklenecek imkan önizlemesi {type,x,y,w,h,ang,invalid?} | null
+let amenityType = 'green';    // aktif imkan tipi (çubuktan seçilir): green|playground|pool|ornament|seating
+let amenityGhostVert = null;  // R ile çevrilen yerleştirme yönü override'ı (null=varsayılan yatay) | true(dikey)/false(yatay)
+let amenityLastSx = null, amenityLastSy = null; // son imleç (imkan modu) — R basınca önizleme aynı noktada anında dönsün
 let editHistory = [];         // elle düzenleme geçmişi (geri al): {type, ...} — pushEdit() ile yazılır
 let redoHistory = [];         // ileri al yığını: undoEdit her geri almada o anki TAM durumu buraya iter; redoEdit geri yükler
 const HIST_CAP = 100;         // geçmiş üst sınırı (en eski adım düşürülür)
@@ -65,7 +71,7 @@ const EDIT_LABELS = {
   wallsnap:'Duvar taşındı', cut:'Daire sınırı', door:'Kapı', balk:'Balkon', avlu:'Avlu',
   park:'Otopark', retype:'Oda tipi', swap:'Oda yeri', unitswap:'Daire taşındı',
   corelock:'Çekirdek', bound:'Sınır taşındı', bounddraw:'Sınır köşesi', structedit:'Yapı elemanı',
-  ulayout:'Daire düzeni', sitemove:'Blok taşındı', roomdraw:'Oda çizildi', __snap:'Adım'
+  ulayout:'Daire düzeni', sitemove:'Blok taşındı', roomdraw:'Oda çizildi', amenity:'Site imkanı', __snap:'Adım'
 };
 function labelFor(e){
   if(!e) return 'Düzenleme';
@@ -406,6 +412,7 @@ function updateKatAyriUI(){
   const cb=document.getElementById('katAyri');
   if(totalFloors()<2&&cb&&cb.checked) floorsOff();
   renderFloorTabs();
+  if(typeof updateAmenityBtn==='function') updateAmenityBtn();   // S3: bina çizilince site imkanları butonu görünür
 }
 /* özelliği kapat: zemin kata dönülür, kat anlık görüntüleri bırakılır */
 function floorsOff(){

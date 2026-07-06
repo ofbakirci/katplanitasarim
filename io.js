@@ -126,6 +126,7 @@ function stateSnapshot(bare, withBlocks){
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
     parcelClosed, parcelRot, parcelImar, balconies:balconies.map(b=>({...b})),
     courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
+    amenities:(typeof amenities!=='undefined'?amenities:[]).map(a=>({...a})),   // S3: site imkanları (parsel-katmanı, site-ORTAK — her snapshot aynı global kopyayı taşır)
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ?customCutsZ.map(a=>a?a.slice():null):null, unitLayout:Object.assign({},unitLayout),
     doors:{ov:doorOverrides, extra:extraDoors, hidden:doorHidden},
     windows:{ov:windowOverrides, extra:extraWindows, hidden:windowHidden},
@@ -217,6 +218,7 @@ function restoreState(st, opt){
   if(typeof psSyncRotUI==='function') psSyncRotUI();
   balconies=(st.balconies||[]).map(b=>({...b}));
   courtyards=(st.courtyards||[]).map(av=>({poly:(av.poly||[]).map(p=>({x:p.x,y:p.y}))})); avluGhost=null;
+  amenities=(st.amenities||[]).map(a=>({...a})); hoverAmenity=null; amenityGhost=null;   // S3: site imkanları geri yükle (eski kayıtta yok → []; salt-veri, davranış değişmez)
   unitSpecs=st.specs.map(s=>({...s})); renderUnits();
   customCutsZ=st.cuts||null; unitLayout=st.unitLayout||{};
   doorOverrides=(st.doors&&st.doors.ov)||{};

@@ -93,6 +93,14 @@ chk(/dark|charcoal|anthracite|band/i.test(pP), 'plaster prompt: koyu bant sinyal
 // gün saati enjekte
 const pNight = run(`window.View3D.buildExteriorPrompt({facade:'neutral',timeOfDay:'night'})`);
 chk(/night/i.test(pNight), 'gün saati (night) prompt\'a akıyor');
+// S3: SİTE İMKANLARI peyzaj sinyali → yalnız VAR olanlar adlandırılır, LOCK korunur
+const pNoAm = run(`window.View3D.buildExteriorPrompt({facade:'neutral', amenities:[]})`);
+chk(!/playground|swimming pool|ornamental/i.test(pNoAm), 'imkan yok → prompt havuz/park adlandırmaz (uydurmaz)');
+const pAm = run(`window.View3D.buildExteriorPrompt({facade:'neutral', amenities:['green','playground','pool']})`);
+assertPrompt('amenities', pAm);
+chk(/playground/i.test(pAm) && /swimming pool/i.test(pAm), 'S3: mevcut imkanlar (çocuk parkı + havuz) prompt\'a adlandırılıyor');
+chk(!/ornamental/i.test(pAm), 'S3: VAR OLMAYAN imkan (süs havuzu) prompt\'a girmez');
+chk(/keep these site features/i.test(pAm), 'S3: imkan sinyali LOCK disiplinine uyar (konum korunur)');
 
 /* ---- 4) DRONE KAMERA LİSTESİ: setExteriorCameras/getExteriorCameras (salt-veri, THREE'siz) ---- */
 const nSet = run(`window.View3D.setExteriorCameras([

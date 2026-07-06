@@ -212,6 +212,9 @@ svg.addEventListener('mousemove',e=>{
     if(dragging.type==='park'){ const b=plan&&plan.parking&&plan.parking.bays[dragging.idx];
       if(b){ const nx=snapG(S2Wx(sx)-dragging.gx), ny=snapG(S2Wy(sy)-dragging.gy);
         if(nx!==b.x||ny!==b.y){ b.x=nx; b.y=ny; dragging.moved=true; render(); } } }
+    if(dragging.type==='amenity'){ const a=amenities[dragging.idx];
+      if(a){ const nx=snapG(S2Wx(sx)-dragging.gx), ny=snapG(S2Wy(sy)-dragging.gy);
+        if(nx!==a.x||ny!==a.y){ a.x=nx; a.y=ny; dragging.moved=true; render(); } } }
     if(dragging.type==='bvert'){ pts[dragging.idx]={x:snapG(S2Wx(sx)), y:snapG(S2Wy(sy))};
       document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
       document.getElementById('stPerim').textContent=fmt(perim(pts))+' m'; render(); }
@@ -313,6 +316,17 @@ svg.addEventListener('mousemove',e=>{
     if(hb!==hoverBay || gKey(ghost)!==gKey(parkGhost)){
       hoverBay=hb; parkGhost=ghost;
       svg.style.cursor = hb!=null? 'pointer' : ((ghost&&!ghost.invalid)?'copy':'not-allowed'); // I4: geçersiz→yasak imleç
+      render();
+    }
+  }
+  else if(mode==='amenity'){
+    amenityLastSx=sx; amenityLastSy=sy;                    // R basınca önizleme aynı noktada dönsün
+    const ha=hitAmenity(sx,sy);
+    const ghost = (ha==null)? amenityGhostAt(sx,sy) : null;
+    const gKey=g=>g?g.type+','+g.x+','+g.y+','+g.w+','+(g.invalid?'x':''):'';
+    if(ha!==hoverAmenity || gKey(ghost)!==gKey(amenityGhost)){
+      hoverAmenity=ha; amenityGhost=ghost;
+      svg.style.cursor = ha!=null? 'pointer' : ((ghost&&!ghost.invalid)?'copy':'not-allowed');
       render();
     }
   }
@@ -432,6 +446,18 @@ svg.addEventListener('mousedown',e=>{
     } else { const g=parkGhostAt(sx,sy);
       if(g && !g.invalid){ pushEdit({type:'park', prev:parkSnapshot()});   // I4: geçersiz (çakışan/alan-dışı) hayalet eklenmez
         plan.parking.bays.push({x:g.x,y:g.y,w:g.w,h:g.h,ang:g.ang}); parkGhost=null; parkEditRefresh(); }
+    }
+    return;
+  }
+  if(mode==='amenity'){
+    if(e.button!==0) return;
+    const ha=hitAmenity(sx,sy);
+    if(ha!=null){ const a=amenities[ha];   // mevcut imkan → sürükle (taşı) ya da hareketsiz tık = sil
+      dragging={type:'amenity', idx:ha, gx:S2Wx(sx)-a.x, gy:S2Wy(sy)-a.y, undo:amenitySnapshot(), moved:false};
+      e.preventDefault();
+    } else { const g=amenityGhostAt(sx,sy);   // boş yer → yeni imkan ekle (geçersiz hayalet eklenmez)
+      if(g && !g.invalid){ pushEdit({type:'amenity', prev:amenitySnapshot()});
+        amenities.push({type:g.type, x:g.x, y:g.y, w:g.w, h:g.h, ang:g.ang}); amenityGhost=null; amenityEditRefresh(); }
     }
     return;
   }
@@ -615,6 +641,21 @@ function finishDrag(){
       pushEdit({type:'park', prev:dragging.undo});
       parkEditRefresh();
     }
+  } else if(dragging.type==='amenity'){
+    const a=amenities[dragging.idx];
+    if(!dragging.moved){ /* hareketsiz = tık → imkanı sil */
+      amenities.splice(dragging.idx,1);
+      pushEdit({type:'amenity', prev:dragging.undo});
+      hoverAmenity=null; amenityEditRefresh();
+    } else if(a && (!amenityAreaOk(a) || amenityOverlapsExisting(a, dragging.idx))){
+      /* geçersiz konuma bırakıldı (parsel dışı / bina üstü / çakışma) → eski hâle dön */
+      amenities=dragging.undo;
+      setStatusHint('İmkan parsel içinde, bina dışında ve boş bir yere konmalı — eski konuma dönüldü.','#b35a2e');
+      hoverAmenity=null; amenityEditRefresh();
+    } else { /* geçerli taşıma → geçmişe yaz */
+      pushEdit({type:'amenity', prev:dragging.undo});
+      amenityEditRefresh();
+    }
   } else if(dragging.type==='siteMove'){
     const d=dragging; dragging=null;
     if(d.moved){
@@ -712,7 +753,7 @@ window.addEventListener('keydown',e=>{
 /* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
    pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.
    Space/Esc/Ctrl+Z/Y'ye DOKUNMAZ (ayrı handler'lar); form alanı + sürükleme ortasında YUTULUR. */
-const MODE_KEYS={d:'tDraw',o:'tRoom',k:'tDoor',w:'tWin',b:'tBalk',a:'tAvlu',y:'tStruct',p:'tParcel',t:'tPark',s:'tSite'};
+const MODE_KEYS={d:'tDraw',o:'tRoom',k:'tDoor',w:'tWin',b:'tBalk',a:'tAvlu',y:'tStruct',p:'tParcel',t:'tPark',i:'tAmenity',s:'tSite'};
 window.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey) return;          // Ctrl/Cmd/Alt kombinasyonları başka handler'larda
   if(dragging) return;                                 // sürükleme ortasında mod değişimi yok (B1 dragOverlay yarım kalmasın)
@@ -742,6 +783,8 @@ function undoEdit(){
   if(e.type==='window'){ windowRestore(e.prev); hoverWindow=null; if(typeof updateWindowPanel==='function') updateWindowPanel(); render(); return true; }
   if(e.type==='park'){ if(plan&&e.prev){ plan.parking=e.prev; hoverBay=null; parkGhost=null;
     runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); } return true; }
+  if(e.type==='amenity'){ amenities=(e.prev||[]).map(a=>({...a})); hoverAmenity=null; amenityGhost=null;
+    if(plan) runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); return true; }
   if(e.type==='avlu'){ courtyards=(e.prev||[]).map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})); avluGhost=null; avluChanged(); return true; }
   if(e.type==='sitemove'){
     if(e.active){ try{ restoreState(e.snap, {keepBlocks:true}); }catch(err){ console.error(err); } }
@@ -1011,6 +1054,97 @@ function updateParkBtn(){
   pk.style.display = ok? '' : 'none';
   if(!ok && mode==='park') setMode('draw');
 }
+
+/* ===================== S3: SİTE İMKANLARI (parsel-katmanı) =====================
+   Park yeri (bay) ailesinin PARSEL-katmanı akrabası: aynı vektör dikdörtgen + SAT çakışma
+   (bayCorners/polyOverlapSAT ORTAK) + R döndürme + kırmızı hayalet deseni. FARK: park yeri
+   plan ızgarasında (bina içi) yaşar; imkan PARSEL bahçesinde (bina footprint'i DIŞI) dünya
+   koordinatında yaşar → site-ORTAK (blocks[] snapshot'larına değil global amenities[]'e). */
+function amenitySnapshot(){ return amenities.map(a=>({...a})); }
+function amenityDef(t){ return (REG.amenities&&REG.amenities[t])||REG.amenities.green; }
+/* imkan yerleşim geçerli mi: (1) parsel İÇİNDE (parsel çizilmemişse serbest), (2) TÜM bina
+   footprint'lerinin DIŞINDA (site modunda tüm bloklar), (3) örneklenen tüm noktalar sağlar. */
+function amenityAreaOk(a){
+  const cx=a.x+a.w/2, cy=a.y+a.h/2, ang=(a.ang||0)*Math.PI/180, c=Math.cos(ang), s=Math.sin(ang);
+  const foots=buildingFootprints();
+  const haveParcel = parcelClosed && parcelPts.length>=3;
+  for(let dx=-a.w/2+0.4; dx<a.w/2; dx+=0.8)
+    for(let dy=-a.h/2+0.4; dy<a.h/2; dy+=0.8){
+      const wx=cx+dx*c-dy*s, wy=cy+dx*s+dy*c;
+      if(haveParcel && !pip(wx,wy,parcelPts)) return false;   // parsel dışına taşamaz
+      for(let i=0;i<foots.length;i++){ if(pip(wx,wy,foots[i])) return false; } // bina üstüne konamaz
+    }
+  return true;
+}
+/* düzenlenen + diğer blokların bina konturları (dünya koord poligonları) — imkan bunların dışında kalmalı */
+function buildingFootprints(){
+  const out=[];
+  if(typeof siteOn==='function' && siteOn() && typeof siteBlocksData==='function'){
+    siteBlocksData().forEach(bd=>{ if(bd.pts&&bd.pts.length>=3) out.push(bd.pts); });
+  } else if(closed && pts.length>=3){ out.push(pts); }
+  return out;
+}
+/* imkan merkezi parsel içinde mi (kırmızı uyarıyı yalnız parsele yakınken göster) */
+function amenityTouchesSite(a){
+  const cx=a.x+a.w/2, cy=a.y+a.h/2;
+  if(parcelClosed && parcelPts.length>=3) return pip(cx,cy,parcelPts);
+  return true;   // parsel yok → her yerde serbest (kırmızı yalnız çakışmadan gelir)
+}
+/* imkan başka bir imkanla çakışıyor mu (SAT — park yeriyle ORTAK bayCorners/polyOverlapSAT). skip=kendi index'i */
+function amenityOverlapsExisting(a, skip){
+  const A=bayCorners(a);
+  for(let i=0;i<amenities.length;i++){ if(i===skip) continue;
+    if(polyOverlapSAT(A, bayCorners(amenities[i]))) return true; }
+  // park yerleriyle de çakışmasın (bina içi park kat-özel, ama parsel görünümünde üst üste binmesin)
+  if(plan && plan.parking && plan.parking.bays){
+    for(let i=0;i<plan.parking.bays.length;i++){ if(polyOverlapSAT(A, bayCorners(plan.parking.bays[i]))) return true; }
+  }
+  return false;
+}
+/* dünya noktası imkan dikdörtgeni içinde mi → index | null (park hitBay ile aynı ang-unrotate mantığı) */
+function hitAmenity(sx,sy){
+  const wx=S2Wx(sx), wy=S2Wy(sy);
+  for(let i=amenities.length-1;i>=0;i--){ const a=amenities[i];
+    let px=wx-(a.x+a.w/2), py=wy-(a.y+a.h/2);
+    if(a.ang){ const t=-a.ang*Math.PI/180, c=Math.cos(t), s=Math.sin(t); const nx=px*c-py*s, ny=px*s+py*c; px=nx; py=ny; }
+    if(Math.abs(px)<=a.w/2+0.02 && Math.abs(py)<=a.h/2+0.02) return i;
+  }
+  return null;
+}
+/* imleç altında eklenebilecek imkan önizlemesi (aktif tip + R yönü). Geçersizse (parsel dışı /
+   bina üstü / çakışma) KIRMIZI hayalet; parsele hiç yaklaşmadıysa gizle (null) — park deseniyle bir. */
+function amenityGhostAt(sx,sy){
+  const def=amenityDef(amenityType);
+  const vert = (amenityGhostVert!=null)? amenityGhostVert : false;
+  const w = vert? def.h : def.w, h = vert? def.w : def.h;
+  const a={type:amenityType, x:snapG(S2Wx(sx)-w/2), y:snapG(S2Wy(sy)-h/2), w, h, ang:0};
+  if(!amenityAreaOk(a)) return amenityTouchesSite(a)? {...a, invalid:true} : null;
+  if(amenityOverlapsExisting(a, -1)) return {...a, invalid:true};
+  return a;
+}
+function amenityEditRefresh(){ runChecks(); render();
+  if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
+function setAmenityType(t){
+  if(!REG.amenities[t]) return;
+  amenityType=t; amenityGhost=null; amenityGhostVert=null;
+  showAmenityBar();
+  if(amenityLastSx!=null){ hoverAmenity=hitAmenity(amenityLastSx,amenityLastSy);
+    amenityGhost = hoverAmenity==null? amenityGhostAt(amenityLastSx,amenityLastSy) : null; }
+  render();
+}
+function showAmenityBar(){
+  const bar=document.getElementById('amenityBar'); if(!bar||!bar.querySelectorAll) return;
+  bar.querySelectorAll('button[data-am]').forEach(b=>b.classList.toggle('active', b.dataset.am===amenityType));
+}
+/* İmkan butonu görünürlüğü: parsel çizili + bahçe var (bina parselden küçük) ya da her zaman
+   erişilebilir — imkanlar parsel-katmanı, kat kullanımından bağımsız. Kolay erişim için DAİMA
+   göster (yalnız bir plan/sınır varken); hiç bina yoksa gizle. */
+function updateAmenityBtn(){
+  const ab=document.getElementById('tAmenity'); if(!ab) return;
+  const ok = !!(closed && pts.length>=3);
+  ab.style.display = ok? '' : 'none';
+  if(!ok && mode==='amenity') setMode('draw');
+}
 /* araç çubuğu */
 /* B2: mod rozeti — aktif mod adı + tek satır ipucu (emoji YOK; ikon inline SVG).
    Varsayılan modlar (draw/pan) sade kalsın diye rozet gizlenir; park kendi çubuğunu gösterir. */
@@ -1041,7 +1175,7 @@ function updateModeBadge(m){
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; setStatusHint('');
+const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; hoverAmenity=null; amenityGhost=null; amenityGhostVert=null; setStatusHint('');
   /* OTO-AVLU (avlu-rework): avlu moduna girince derin/karanlık footprint için nazik öneri hesapla.
      Dayatma YOK — statusHint + tıkla-yerleştir aday ghost; başka moda geçince temizlenir. */
   avluSuggestion=null;
@@ -1049,10 +1183,12 @@ const setMode=m=>{ mode=m; hoverP=null; hoverBalk=null; hoverDoor=null; hoverWin
     try{ avluSuggestion=suggestCourtyard(); }catch(err){ avluSuggestion=null; }
     if(avluSuggestion) setStatusHint('Bu taban derin/karanlık — orta bölge için avlu önerilir. Önerilen boşluğa tıkla ya da kendin sürükle.','#2f6f8f');
   }
-  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tWin','window'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tSite','site'],['tPan','pan']]){
+  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tWin','window'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tAmenity','amenity'],['tSite','site'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
   if(m==='park') showParkBar();
+  const amb=document.getElementById('amenityBar'); if(amb) amb.style.display=(m==='amenity')?'flex':'none';
+  if(m==='amenity') showAmenityBar();
   if(typeof updateWindowPanel==='function') updateWindowPanel();
   updateModeBadge(m);
   positionOnb();
@@ -1166,6 +1302,9 @@ document.getElementById('tPan').onclick=()=>setMode('pan');
 if(typeof document.querySelectorAll==='function')
   document.querySelectorAll('#parkBar button[data-orient]').forEach(b=>b.onclick=()=>setParkOrient(b.dataset.orient));
 { const pr=document.getElementById('parkReset'); if(pr) pr.onclick=()=>setParkOrient('auto'); }
+/* S3: site imkanları çubuğu — tip seçimi (data-am) */
+if(typeof document.querySelectorAll==='function')
+  document.querySelectorAll('#amenityBar button[data-am]').forEach(b=>b.onclick=()=>setAmenityType(b.dataset.am));
 document.getElementById('tUndo').onclick=()=>{
   if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
   if(undoEdit()) return; // önce elle duvar/ayırıcı/balkon düzenlemeleri
@@ -1176,6 +1315,7 @@ document.getElementById('tHist').onclick=()=>{ const p=document.getElementById('
   if(p){ const open=p.style.display==='none'||!p.style.display; p.style.display=open?'flex':'none'; if(open) refreshHistoryUI(true); } };
 document.getElementById('tClear').onclick=()=>{ pts=[];roomPts=[];closed=false;plan=null;editHistory=[];redoHistory=[];resetCuts();
   parcelPts=[];parcelClosed=false;balconies=[];courtyards=[];avluGhost=null;hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;windowOverrides={};extraWindows=[];windowHidden={};hoverWindow=null;
+  amenities=[];hoverAmenity=null;amenityGhost=null;
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
   updateStructResetBtn();

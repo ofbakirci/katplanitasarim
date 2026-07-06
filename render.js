@@ -178,6 +178,30 @@ function drawWallEdgeMask(r){
   if(pts.length) g.appendChild(el('path',{d:'M'+pts.map(q=>W2Sx(q.x)+','+W2Sy(q.y)).join('L')+(closed?'Z':''),
     fill:'none',stroke:'#000','stroke-width':Math.max(4,wallThickM('dis')*pxPerM),'stroke-linejoin':'miter','shape-rendering':'crispEdges'}));
 }
+/* S3: imkan tipine özgü ayırt edici doku — yeşil noktalar (çim/ağaç), su dalgası, oyun izi.
+   Ucuz şematik işaretler (dolgu rengi zaten tipi belli eder; doku okunurluğu güçlendirir). */
+function amenityTexture(g, a, def, cx, cy){
+  const x0=W2Sx(a.x), y0=W2Sy(a.y), w=a.w*pxPerM, h=a.h*pxPerM;
+  const clip=el('g',{}); if(a.ang) clip.setAttribute('transform',`rotate(${a.ang} ${cx} ${cy})`); g.appendChild(clip);
+  const col=def.color;
+  if(a.type==='green'||a.type==='seating'){
+    const step=Math.max(14,pxPerM*0.9);
+    for(let x=x0+step*0.6; x<x0+w-2; x+=step) for(let y=y0+step*0.6; y<y0+h-2; y+=step)
+      clip.appendChild(el('circle',{cx:x,cy:y,r:Math.max(1.4,pxPerM*0.12),fill:col,'fill-opacity':0.5}));
+  } else if(a.type==='pool'||a.type==='ornament'){
+    const n=Math.max(2,Math.round(h/(pxPerM*1.0)));
+    for(let k=1;k<n;k++){ const y=y0+h*k/n;
+      let d='M'+(x0+3)+','+y; const amp=Math.max(2,pxPerM*0.18), seg=Math.max(8,pxPerM*0.7);
+      for(let x=x0+3;x<x0+w-3;x+=seg){ d+=' q '+(seg/2)+' '+(-amp)+' '+seg+' 0'; }
+      clip.appendChild(el('path',{d,fill:'none',stroke:col,'stroke-width':1.4,'stroke-opacity':0.55})); }
+  } else if(a.type==='playground'){
+    // basit oyun izi: A-çerçeve salıncak silüeti
+    const mx=x0+w*0.5, top=y0+h*0.22, bot=y0+h*0.78;
+    clip.appendChild(el('path',{d:`M${x0+w*0.28},${bot} L${mx},${top} L${x0+w*0.72},${bot}`,fill:'none',stroke:col,'stroke-width':1.6,'stroke-opacity':0.6}));
+    clip.appendChild(el('line',{x1:mx,y1:top,x2:mx,y2:y0+h*0.6,stroke:col,'stroke-width':1.4,'stroke-opacity':0.6}));
+    clip.appendChild(el('circle',{cx:mx,cy:y0+h*0.63,r:Math.max(2,pxPerM*0.14),fill:col,'fill-opacity':0.55}));
+  }
+}
 function render(){
   svg.innerHTML='';
   const r=exportView||svg.getBoundingClientRect();
@@ -249,6 +273,40 @@ function render(){
       const lbl=gardenLabelPos();
       if(lbl){ const t=el('text',{x:W2Sx(lbl.x),y:W2Sy(lbl.y),'text-anchor':'middle','font-size':Math.max(10,Math.min(14,pxPerM*0.9)),fill:'#4a7c4a','font-weight':'700'});
         t.textContent='BAHÇE · '+fmt(Math.max(0,shoelace(parcelPts)-(closed?shoelace(pts):0)))+' m²'; g.appendChild(t); }
+    }
+  }
+
+  /* S3: SİTE İMKANLARI (yeşil alan / çocuk parkı / havuzlar / oturma) — parsel bahçesinde, plan
+     katmanlarının altında; AI temiz modda çizilmez (bina dışı peyzaj, makine-okur layout'a gürültü).
+     Normal PNG/SVG dışa aktarımında GÖRÜNÜR (drone sunum karesine iner). Aktif imkan modunda hayalet
+     (yeşil geçerli / kırmızı geçersiz) + hover vurgusu. */
+  if(!clean && ((typeof amenities!=='undefined' && amenities.length) || (mode==='amenity'))){
+    const g=el('g',{}); svg.appendChild(g);
+    const defs=(typeof REG!=='undefined'&&REG.amenities)||{};
+    const drawAmenity=(a,i)=>{
+      const def=defs[a.type]||{name:a.type,color:'#6a994e',fill:'rgba(106,153,78,.28)'};
+      const hov = mode==='amenity' && hoverAmenity===i;
+      const cx=W2Sx(a.x+a.w/2), cy=W2Sy(a.y+a.h/2);
+      const r=el('rect',{x:W2Sx(a.x), y:W2Sy(a.y), width:a.w*pxPerM, height:a.h*pxPerM, rx:Math.min(8,pxPerM*0.3),
+        fill:def.fill, stroke:def.color, 'stroke-width':hov?3:2, 'stroke-opacity':hov?1:0.9});
+      if(a.ang) r.setAttribute('transform',`rotate(${a.ang} ${cx} ${cy})`);
+      g.appendChild(r);
+      amenityTexture(g, a, def, cx, cy);
+      if(pxPerM*Math.min(a.w,a.h) > 26){   // etiket yalnız yeterince büyük çizildiğinde
+        const t=el('text',{x:cx, y:cy, 'text-anchor':'middle','dominant-baseline':'middle',
+          'font-size':Math.max(9,Math.min(13,pxPerM*0.8)), fill:def.color, 'font-weight':'700'});
+        if(a.ang) t.setAttribute('transform',`rotate(${a.ang} ${cx} ${cy})`);
+        t.textContent=def.name; g.appendChild(t);
+      }
+    };
+    if(typeof amenities!=='undefined') amenities.forEach(drawAmenity);
+    /* hayalet önizleme (yerleştirme) — park bay deseni: geçerli=yeşil kesikli, geçersiz=kırmızı */
+    if(mode==='amenity' && typeof amenityGhost!=='undefined' && amenityGhost){
+      const gh=amenityGhost, col=gh.invalid?'#c0392b':'#2e7d32', cx=W2Sx(gh.x+gh.w/2), cy=W2Sy(gh.y+gh.h/2);
+      const r=el('rect',{x:W2Sx(gh.x), y:W2Sy(gh.y), width:gh.w*pxPerM, height:gh.h*pxPerM, rx:Math.min(8,pxPerM*0.3),
+        fill:col, 'fill-opacity':gh.invalid?0.20:0.16, stroke:col, 'stroke-width':2, 'stroke-dasharray':(pxPerM*0.4)+' '+(pxPerM*0.3)});
+      if(gh.ang) r.setAttribute('transform',`rotate(${gh.ang} ${cx} ${cy})`);
+      g.appendChild(r);
     }
   }
 

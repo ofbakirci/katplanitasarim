@@ -1861,6 +1861,14 @@
                         .map(function(a){ return a.poly.map(function(p){ return [p.x,p.y]; }); }); } }catch(e){}
     return [];
   }
+  // S3: SİTE İMKANLARI (dünya metre dikdörtgenleri) — global amenities[] (parsel-katmanı). Dış kabuk
+  //   bahçesinde hafif temsil (çim plakası / oyun ekipmanı / su havuzu). İç modda görünmez (yalnız dış).
+  function extAmenities(){
+    try{ if(typeof amenities!=='undefined' && Array.isArray(amenities)){
+      return amenities.filter(function(a){ return a && a.w>0 && a.h>0; })
+                      .map(function(a){ return {type:a.type, x:a.x, y:a.y, w:a.w, h:a.h, ang:(a.ang||0)*Math.PI/180}; }); } }catch(e){}
+    return [];
+  }
   // Diğer (aktif olmayan) blokların sade kütle konturları (dünya metre) — site modu.
   //   blocks[i] = stateSnapshot (pts + ui.katSayisi/katYuk) → hayalet kütle KENDİ kat sayısı × kat yüksekliği.
   function extGhostBlocks(){
@@ -1872,6 +1880,58 @@
         if(b.ui){ fl=parseInt(b.ui.katSayisi)||0; fh=parseFloat(b.ui.katYuk)||0; }   // katSayisi = zemin-üstü kat (bodrum ayrı alan)
         out.push({ poly:bp.map(function(p){ return [p.x,p.y]; }), floors:fl||null, floorH:fh||null }); }); } }catch(e){}
     return out;
+  }
+  // S3: SİTE İMKANLARINI dış bahçede hafif inşa et. imkan başına ≤6 mesh: zemin plakası + tipe göre
+  //   birkaç minimal kütle (su/bordür/ekipman). exteriorGroup root -cx,-cz ofsetli → dünya-metre direkt oturur.
+  //   MUTLAK metre: imkan {x,y,w,h,ang(rad)} plan-dünya koordinatı; y-ekseni plan → z-ekseni 3B (px2m ile aynı).
+  function buildExtAmenities(grp, mats){
+    const list=extAmenities(); if(!list.length) return 0;
+    let meshes=0;
+    list.forEach(function(a){
+      const cx=a.x+a.w/2, cz=a.y+a.h/2, ang=-a.ang;   // plan y → 3B z; dönüş işareti kabuk konvansiyonuyla uyumlu
+      const holder=new THREE.Group(); holder.position.set(cx,0,cz); holder.rotation.y=ang; grp.add(holder);
+      const add=function(mesh){ mesh.castShadow=true; mesh.receiveShadow=true; holder.add(mesh); meshes++; };
+      if(a.type==='green'||a.type==='seating'){
+        // çim/zemin plakası + (seating) ahşap deck bandı
+        const base=new THREE.Mesh(new THREE.BoxGeometry(a.w,0.08,a.h), a.type==='seating'?mats.amDeck:mats.amGrass);
+        base.position.y=0.02; add(base);
+        if(a.type==='seating'){ // pergola: 4 direk + üst kiriş çerçevesi (2 mesh: direkler birleşik değil ama düşük)
+          const postH=2.2, pg=new THREE.Group(); holder.add(pg);
+          [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(function(s){
+            const p=new THREE.Mesh(new THREE.BoxGeometry(0.12,postH,0.12),mats.amDeck);
+            p.position.set(s[0]*(a.w/2-0.3),postH/2,s[1]*(a.h/2-0.3)); p.castShadow=true; pg.add(p); meshes++; });
+          const beam=new THREE.Mesh(new THREE.BoxGeometry(a.w-0.4,0.12,a.h-0.4),mats.amDeck);
+          beam.position.y=postH; beam.castShadow=true; pg.add(beam); meshes++;
+        } else {
+          // yeşil alan: 1-2 basit ağaç (gövde + küre yaprak) — abartısız
+          const nT=a.w*a.h>40?2:1;
+          for(let i=0;i<nT;i++){ const tg=new THREE.Group(); holder.add(tg);
+            const ox=(i? a.w*0.22 : -a.w*0.2), oz=(i? -a.h*0.15 : a.h*0.12);
+            const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,1.4,6),mats.amDeck); tr.position.set(ox,0.7,oz); tr.castShadow=true; tg.add(tr); meshes++;
+            const cr=new THREE.Mesh(new THREE.SphereGeometry(0.85,8,6),mats.amGrass); cr.position.set(ox,1.9,oz); cr.castShadow=true; tg.add(cr); meshes++; }
+        }
+      } else if(a.type==='playground'){
+        const base=new THREE.Mesh(new THREE.BoxGeometry(a.w,0.1,a.h),mats.amPlay); base.position.y=0.02; add(base);
+        // A-çerçeve salıncak: iki yan üçgen (kutu) + üst kiriş
+        const H=1.9, halfw=Math.min(a.w,a.h)*0.32;
+        [-1,1].forEach(function(sgn){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,H,0.1),mats.amCurb);
+          leg.position.set(sgn*halfw*0.9,H/2,0); leg.rotation.z=sgn*0.18; leg.castShadow=true; holder.add(leg); meshes++; });
+        const bar=new THREE.Mesh(new THREE.BoxGeometry(halfw*2,0.1,0.1),mats.amCurb); bar.position.y=H; bar.castShadow=true; holder.add(bar); meshes++;
+        // kaydırak iması: eğik plaka
+        const sl=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,a.h*0.4),mats.amCurb); sl.position.set(-a.w*0.28,0.5,a.h*0.05); sl.rotation.x=0.5; sl.castShadow=true; holder.add(sl); meshes++;
+      } else if(a.type==='pool'||a.type==='ornament'){
+        // çökük su plakası + çevre bordür + (yüzme) merdiven iması
+        const water=new THREE.Mesh(new THREE.BoxGeometry(a.w-0.3,0.12,a.h-0.3),mats.amWater); water.position.y=-0.02; water.receiveShadow=true; holder.add(water); meshes++;
+        // bordür çerçevesi: tek ince kutu-halka yerine 4 kenar birleşik değil ama düşük mesh — üst yüzey plakası
+        const curb=new THREE.Mesh(new THREE.BoxGeometry(a.w,0.16,a.h),mats.amCurb); curb.position.y=0.06; curb.castShadow=true; holder.add(curb);
+        // suyu bordürün üstüne getir (bordür kutusu suyu sarar → görsel çukur): bordürü hafif küçült yerine su daha yüksek
+        water.position.y=0.09; meshes++;
+        if(a.type==='pool'){ const step=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.05,0.5),mats.amCurb);
+          step.position.set(a.w/2-0.5,0.12,0); step.castShadow=true; holder.add(step); meshes++; }
+      }
+    });
+    grp.userData.amenityMeshes=meshes;
+    return meshes;
   }
   // metre poligonu → THREE.Shape (opsiyonel avlu delikleri)
   function extShape(polyM, holesM){
@@ -2093,7 +2153,13 @@
       frame:new THREE.MeshStandardMaterial({color:0xf4f4f2,roughness:0.55,metalness:0.02}),  // beyaz PVC pencere kasası
       sill:new THREE.MeshStandardMaterial({color:0xe0ded7,roughness:0.75,metalness:0.03}),   // denizlik
       ground:new THREE.MeshStandardMaterial({color:0x8d9b7e,roughness:1,metalness:0}),      // bahçe/parsel düzlemi (sade yeşil-gri)
-      ghost:new THREE.MeshStandardMaterial({color:0xb8b2a6,roughness:0.95,metalness:0,transparent:true,opacity:0.55})   // diğer bloklar sade kütle
+      ghost:new THREE.MeshStandardMaterial({color:0xb8b2a6,roughness:0.95,metalness:0,transparent:true,opacity:0.55}),   // diğer bloklar sade kütle
+      // S3 imkan malzemeleri (hafif dış temsil)
+      amGrass:new THREE.MeshStandardMaterial({color:0x5a8f3c,roughness:1,metalness:0}),        // çim plakası
+      amPlay:new THREE.MeshStandardMaterial({color:0xc98a2b,roughness:0.9,metalness:0}),       // oyun alanı zemini (kum/kauçuk tonu)
+      amWater:new THREE.MeshStandardMaterial({color:0x2b7fb8,roughness:0.12,metalness:0.35,transparent:true,opacity:0.86}), // havuz suyu
+      amCurb:new THREE.MeshStandardMaterial({color:0xd9d4c8,roughness:0.85,metalness:0.03}),   // bordür / merdiven / ekipman çerçevesi
+      amDeck:new THREE.MeshStandardMaterial({color:0x9a7b4d,roughness:0.9,metalness:0.02})     // ahşap deck / pergola / oturma
     };
     exteriorGroup.userData.mats=mats;
     if(extFacade!=='neutral') applyFacadePreset(extFacade);   // S2: aktif cephe preset'i (nötr dışıysa) kabuğa uygula
@@ -2115,6 +2181,8 @@
     const gw=(bmxx-bmnx)+gpad*2, gd=(bmxz-bmnz)+gpad*2;
     const ground=new THREE.Mesh(new THREE.BoxGeometry(gw,0.1,gd),mats.ground);
     ground.position.set((bmnx+bmxx)/2,-0.06,(bmnz+bmxz)/2); ground.receiveShadow=true; exteriorGroup.add(ground);
+    // S3: SİTE İMKANLARI — bahçe düzleminde hafif temsil (imkan başına ≤6 mesh hedefi)
+    buildExtAmenities(exteriorGroup, mats);
     // 1) TEK KAT-TİPİ CEPHE GRUBU (typical floor) — aktif katın map'inden
     const proto=buildExtFloorGroup(map, contour, holes, floorH, mats);
     // 2) KATLARI YIĞ (klon) — zemin katı proto, üstteki katlar proto.clone() (kat yüksekliği ofset)
@@ -2345,6 +2413,28 @@
   const EXT_TIME_HINT={ midday:'soft natural daylight, gentle shadows', sunrise:'early morning sunrise light, long soft warm shadows',
     golden:'golden hour, low warm sun, long shadows, rich amber light', night:'night time, warm interior lights glowing through the windows, dark blue evening sky' };
   function timeHint(t){ return EXT_TIME_HINT[t]||EXT_TIME_HINT.midday; }
+  // S3: mevcut site imkanlarından türetilen kısa peyzaj cümlesi (YALNIZ VAR olanları adlandırır;
+  //   konumları img2img karede zaten görünür → prompt yalnız etiketler, LOCK/RESTYLE disiplinine uygun).
+  //   opt.amenities verilirse onu (tip dizisi) kullanır; yoksa global amenities[]'ten türetir (headless güvenli).
+  const AMENITY_PHRASE={ green:'landscaped green lawn areas', playground:'a children\'s playground',
+    pool:'a swimming pool', ornament:'an ornamental water feature', seating:'a shaded pergola seating area' };
+  function amenityTypesPresent(opt){
+    let types=[];
+    if(opt && Array.isArray(opt.amenities)) types=opt.amenities.slice();
+    else { try{ if(typeof amenities!=='undefined' && Array.isArray(amenities)) types=amenities.map(function(a){ return a&&a.type; }); }catch(e){} }
+    const seen={}, ord=['green','playground','pool','ornament','seating'], out=[];
+    types.forEach(function(t){ if(t && AMENITY_PHRASE[t] && !seen[t]){ seen[t]=1; } });
+    ord.forEach(function(t){ if(seen[t]) out.push(t); });   // katalog sırası (kararlı çıktı)
+    return out;
+  }
+  function amenityPromptSignal(opt){
+    const t=amenityTypesPresent(opt); if(!t.length) return '';
+    const phrases=t.map(function(k){ return AMENITY_PHRASE[k]; });
+    let joined;
+    if(phrases.length===1) joined=phrases[0];
+    else joined=phrases.slice(0,-1).join(', ')+' and '+phrases[phrases.length-1];
+    return 'The landscaped garden around the building includes '+joined+' — keep these site features where they are in the model. ';
+  }
   // saf metin prompt kurucu (server ile paylaşılan reçete; TEST bunu assert eder)
   function buildExteriorPrompt(opt){
     opt=opt||{};
@@ -2357,6 +2447,7 @@
       'context (street, greenery, neighbouring buildings). '+
       'Keep the building massing, floor count, and every window and balcony position EXACTLY as in the input '+
       '3D model - do not move, add or remove any window, balcony or floor. '+
+      amenityPromptSignal(opt)+
       'Facade material: '+fp.promptSignal+'. '+
       'Realistic materials and lighting, '+timeHint(tod)+'. '+
       'High detail, professional real-estate photography, no people, no text.'
@@ -6015,7 +6106,11 @@
       return { meshCount:ud.meshCount, buildMs:ud.buildMs, protoWin:ud.protoWin,
                floors:extBox&&extBox.floors, below:extBox&&extBox.below, floorH:extBox&&extBox.floorH,
                topY:extBox&&+extBox.topY.toFixed(2), childCount:exteriorGroup.children.length,
-               hasCourtyardHole:extCourtyards().length>0, ghostBlocks:extGhostBlocks().length }; },
+               hasCourtyardHole:extCourtyards().length>0, ghostBlocks:extGhostBlocks().length,
+               amenityCount:extAmenities().length, amenityMeshes:ud.amenityMeshes||0 }; },
+    // S3: HEADLESS — mevcut imkanlardan türetilen drone prompt peyzaj sinyali + tip listesi (THREE'siz).
+    amenityPromptSignal:function(opt){ return amenityPromptSignal(opt); },
+    amenityTypesPresent:function(opt){ return amenityTypesPresent(opt); },
     extFloorCountForTest:function(){ return extFloorCount(); },
     // HEADLESS: THREE'siz dış-kabuk özeti (kat sayısı/kontur/cephe boşlukları/avlu/hayalet) — plan-verisinden.
     extPlanSummaryForTest:function(map){ return extPlanSummary(map||(scene&&scene.__map)); },
