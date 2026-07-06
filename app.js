@@ -479,6 +479,10 @@ function positionOnb(){
   const seen=e=>e && e.offsetParent!==null && getComputedStyle(e).display!=='none';
   // masaüstü: dikey rayın SAĞINDA, üstten (10) · mobil (≤700): YATAY araç çubuğunun ALTINDA (64)
   let top=(typeof window!=='undefined' && window.innerWidth<=700) ? 64 : 10;
+  // araç ipucu rozeti (#modeBadge) hep görünür ve aynı köşede → yığının İLK elemanı;
+  // yoksa blok/kat şeritleri altında kalıyor (site switch şikayeti, 2026-07-06)
+  const mb=document.getElementById('modeBadge');
+  if(mb && seen(mb)){ mb.style.top=top+'px'; top+=mb.offsetHeight+6; }
   ['blockTabs','floorTabs','parkBar'].forEach(id=>{
     const e=document.getElementById(id);
     if(!(e && e.style && seen(e))) return;
