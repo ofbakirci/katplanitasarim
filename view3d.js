@@ -104,6 +104,8 @@
   //   extFacade: aktif cephe malzeme preset'i (neutral|plaster|brick|contemporary) — kabuk mats'ına
   //     ANINDA yansır + dış render prompt'una malzeme sinyali olarak akar.
   let extCams=[], extActive=-1, extGizmos=null, extGhost=null, extDrag=null, extPlaceActive=false, extFacade='neutral', extPipClosed=false;
+  //   extPlaceAction (A4): seçili drone'da zemine-tıkla eylemi — 'none' (nötr) · 'move' (taşı) · 'aim' (baktır).
+  let extPlaceAction='none';
   // ── kamera-koyma modu (adım 4): raycaster ile zemine tıkla → kamera; çıktı plan-px uzayında ──
   // camUIEnabled: kamera bölümü YALNIZ adım 4'te (openCompare) görünür — adım 2 (salt 3B izleme) ASLA göstermez.
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
@@ -910,6 +912,7 @@
       const ca=t.getAttribute&&t.getAttribute('data-camact'); if(ca){ if(ca==='add'){ startCamGhost(); return; } setPlaceAction(ca); return; }   // KAMERA-S S1: Ekle → hayalet akışı (canlı PiP nişan); aim/move eski zemine-tıkla yolu
       const cs=t.getAttribute&&t.getAttribute('data-camsel'); if(cs!=null&&cs!==''){ selectCam(+cs); return; }
       const xs=t.getAttribute&&t.getAttribute('data-extsel'); if(xs!=null&&xs!==''){ selectExtCam(+xs); return; }   // S2: dış drone seç
+      const xa=t.getAttribute&&t.getAttribute('data-extact'); if(xa){ setExtPlaceAction(extPlaceAction===xa?'none':xa); return; }  // A4: Yön/Taşı toggle (zemine-tıkla eylemi)
       const xl=t.getAttribute&&t.getAttribute('data-extlens'); if(xl){ setExtCamLens(+xl); return; }                  // S2: dış drone objektif
       const xf=t.getAttribute&&t.getAttribute('data-facade'); if(xf){ applyFacadePreset(xf); renderExtDock(); return; } // S2: cephe preset (kabuğa ANINDA)
       const vseg=t.getAttribute&&t.getAttribute('data-viewseg'); if(vseg){ setExteriorMode(vseg==='exterior'); return; }   // F5: görünüm segment'i (KAT/BİNA)
@@ -1078,6 +1081,7 @@
     function wheel(e){ e.preventDefault(); if(!c.enabled) return;   // kilitliyken tekerlek-zoom da kapalı (panel zoom slider'ı açık kalır)
       if(furnMode && activeFurnIdx>=0) return;                      // mobilya seçili → tekerlek onu döndürür (attachPicker), zoom yapma
       if(camUIEnabled && activeGroup==='camera' && activeCamIdx>=0 && !camGhost && !camDrag && !camAimDrag) return;   // KAMERA-S S3: kamera seçili → tekerlek yaw döndürür (attachPicker), zoom yapma
+      if(exteriorMode && extActive>=0 && !extGhost && !extDrag) return;   // A4: dış modda drone seçili → tekerlek yaw döndürür, zoom yapma
       const base=(radiusTarget==null?c.getDistance():radiusTarget);
       c.setDistanceTarget(base*(e.deltaY<0?0.9:1.111)); }         // zoom mesafesi ayrı — hedef-tween'e dokunmaz (target sabit kalır)
     // Space basılı tut → sol-sürükle KAYDIRIR (2B editör konvansiyonu); bırakınca döndürmeye döner
@@ -2329,14 +2333,17 @@
         if(camGizmos && extSaved.camGiz!=null) camGizmos.visible=extSaved.camGiz; }
       exteriorMode=false;
       // S2: dış-mod eklentilerini kapat (drone gizmo/hayalet/dock/PiP) — iç kamera dokunulmaz
-      cancelExtGhost(); extDrag=null; extPlaceActive=false;
+      cancelExtGhost(); extDrag=null; extPlaceActive=false; extPlaceAction='none';   // A4: aim/move armını da bırak
       if(extGizmos) extGizmos.visible=false;
       extSetDocks(true);
       updateExtBtn();
       renderBlockChips();   // F4: iç moda dönünce blok çiplerini gizle
       fitView();
     }
+    // A1: İÇ↔DIŞ şerit senkronu — mod değişince prototip strand'ini haberdar et (iki yönlü segment).
+    if(typeof extModeCallback==='function'){ try{ extModeCallback(exteriorMode); }catch(e){} }
   }
+  let extModeCallback=null;   // A1: function(isExterior){} — prototip #v3dViewSeg ↔ strand segmenti senkronu
   function toggleExterior(){ setExteriorMode(!exteriorMode); }
   // F4: dış modda GÖRÜNTÜ-only blok seçimi. 2B aktif blok state'ini DEĞİŞTİRMEZ — yalnız extBlockView'i
   //   set edip kabuğu YENİDEN kurar (seçilen/Tümü tam kabuk, diğerleri hayalet). sel: sayı index | 'all'.
@@ -2433,6 +2440,17 @@
     const off=Math.max(hx,hz)*1.4+6;
     return { x:c.x+off, y:clampDroneY(topY*0.7+2), z:c.z+off };
   }
+  // A2: DIŞ ŞERİT OTOMATİK KARE — drone yoksa binayı/siteyi çerçeveleyen 1 varsayılan drone yerleştir
+  //   (kuşbakışı/perspektif). extBox merkezinden dışarı, çatı ~0.7'sinde, merkeze bakar. Zaten drone varsa NO-OP.
+  //   Dönüş: toplam drone sayısı. "Siteyi/Binayı Boya" CTA'sı bunu çağırır → hemen render edilebilir kare olur.
+  function deriveShowcaseDrones(){
+    if(extCams.length) return extCams.length;   // kullanıcının koyduğu drone'lar korunur
+    const p=extDefaultDronePos();
+    extCams.push({ pos:{x:p.x,y:p.y,z:p.z}, target:Object.assign({},extCenter()), lens:EXT_DRONE_LENS_DEF });
+    extActive=extCams.length-1; extPlaceAction='none';
+    renderExtGizmos(); renderExtDock();
+    return extCams.length;
+  }
   function extEnsureGizmos(){ if(!extGizmos||!extGizmos.parent){ extGizmos=new THREE.Group(); if(scene) scene.add(extGizmos); } return extGizmos; }
   function extDisposeGizmoChildren(){ if(!extGizmos) return; while(extGizmos.children.length){ const ch=extGizmos.children[0]; disposeGizmo(ch); extGizmos.remove(ch); } }
   // dış gizmoları çiz — koni (bakış) + kamera modeli + seçili marker. İç renderCamGizmos ikizi (aynı yapıcılar).
@@ -2477,7 +2495,7 @@
   function startExtGhost(){
     if(!exteriorMode) return;
     cancelExtGhost();
-    extActive=-1; extPlaceActive=true;
+    extActive=-1; extPlaceActive=true; extPlaceAction='none';   // A4: yeni ekleme, seçili-drone aim/move armını bırak
     const y=clampDroneY((extBox?extBox.topY:8)*0.7+2);
     extGhost={ pos:null, target:extCenter(), lens:EXT_DRONE_LENS_DEF, y:y };
     extPipClosed=false;
@@ -2497,17 +2515,51 @@
   function cancelExtGhost(){ if(!extGhost) return; extGhost=null; extPlaceActive=false;
     if(renderer) renderer.domElement.style.cursor=''; renderExtGizmos(); renderExtDock(); }
   // seçili drone gizmosu üstünde sol-drag → taşı (hedef bina merkezinde sabit kalır). İç beginCamDrag ikizi.
-  function beginExtDrag(idx){ if(idx<0||idx>=extCams.length) return; extActive=idx; extDrag={idx:idx};
+  function beginExtDrag(idx){ if(idx<0||idx>=extCams.length) return; extActive=idx; extDrag={idx:idx}; extPlaceAction='none';   // A4: doğrudan sürükle = taşı (arm gerekmez)
     if(controls) controls.enabled=false; renderExtGizmos(); renderExtDock(); }
   function moveExtDrag(ev){ if(!extDrag) return; const hit=extGroundHit(ev); if(!hit) return;
-    const c=extCams[extDrag.idx]; if(!c) return; c.pos.x=hit.x; c.pos.z=hit.z; renderExtGizmos(); }
+    const c=extCams[extDrag.idx]; if(!c) return; c.pos.x=hit.x; c.pos.z=hit.z;
+    if(!c.aimed){ c.target=Object.assign({},extCenter()); }   // A4: aim edilmemiş drone taşınırken merkeze bakmaya devam eder
+    renderExtGizmos(); }
   function endExtDrag(){ if(!extDrag) return; extDrag=null; if(controls) controls.enabled=true; renderExtGizmos(); }
-  function selectExtCam(i){ extActive=(i>=0&&i<extCams.length)?i:-1; extPipClosed=false; renderExtGizmos(); renderExtDock(); }
+  function selectExtCam(i){ extActive=(i>=0&&i<extCams.length)?i:-1; extPipClosed=false; extPlaceAction='none'; renderExtGizmos(); renderExtDock(); }
   function removeExtCam(i){ if(i<0||i>=extCams.length) return; extCams.splice(i,1);
     extActive=extCams.length?Math.min(i,extCams.length-1):-1; renderExtGizmos(); renderExtDock(); }
-  function setExtCamHeight(m){ if(extActive<0) return; const c=extCams[extActive]; c.pos.y=clampDroneY(+m); renderExtGizmos(); renderExtDock(); }
+  function setExtCamHeight(m){ if(extActive<0) return; const c=extCams[extActive]; c.pos.y=clampDroneY(+m);
+    // yükseklik değişince hedefin yatay yönü korunsun ama bakış merkeze doğru güncellensin (aim edilmemişse)
+    renderExtGizmos(); renderExtDock(); }
   function setExtCamLens(l){ if(extActive<0) return; extCams[extActive].lens=+l; renderExtGizmos(); renderExtDock(); }
   function extDroneHeightVal(c){ return c?c.pos.y:clampDroneY((extBox?extBox.topY:8)*0.7+2); }
+  // A4: DRONE YÖN (aim/yaw) PARİTESİ — iç kamerayla aynı diller (tekerlek yaw + "Yön" zemine-tıkla + koni-ucu sürükle).
+  //   Hedef artık extCenter()'a KİLİTLİ DEĞİL: bir kez aim/yaw edilince o drone bağımsız hedefe sahip olur.
+  //   extPlaceAction: 'none' (nötr) · 'move' (zemine tık = taşı) · 'aim' (zemine tık = o noktaya baktır).
+  //   İç placeAction ikizi ama DIŞ moda özel (ayrık durum). Tekerlek her seçili drone'da yaw döndürür.
+  function extYawDrone(deltaDeg){
+    if(extActive<0||extActive>=extCams.length) return; const c=extCams[extActive];
+    const dx=c.target.x-c.pos.x, dz=c.target.z-c.pos.z, dy=c.target.y-c.pos.y;
+    const a=deltaDeg*Math.PI/180, cs=Math.cos(a), sn=Math.sin(a);
+    c.target={ x:c.pos.x+dx*cs-dz*sn, y:c.pos.y+dy, z:c.pos.z+dx*sn+dz*cs };   // pitch/yükseklik farkı korunur (dy sabit)
+    c.aimed=true; renderExtGizmos(); renderExtDock();
+    setHint&&setHint('Drone yönü döndürüldü · tekerlek = döndür · "Yön" ile zemine tıklayarak da nişan al'); }
+  // seçili drone'u yeni zemin noktasına baktır (yatay hedef; yükseklik ~zemin). İç 'aim' scenePick ikizi.
+  function extAimDroneTo(hit){
+    if(extActive<0||extActive>=extCams.length||!hit) return; const c=extCams[extActive];
+    c.target={ x:hit.x, y:0.5, z:hit.z }; c.aimed=true; renderExtGizmos(); renderExtDock(); }
+  // seçili drone'u yeni zemin noktasına taşı (yükseklik korunur). İç 'move' scenePick ikizi.
+  function extMoveDroneTo(hit){
+    if(extActive<0||extActive>=extCams.length||!hit) return; const c=extCams[extActive];
+    c.pos.x=hit.x; c.pos.z=hit.z;
+    if(!c.aimed){ c.target=Object.assign({},extCenter()); }   // A4: aim edilmemişse taşınırken merkeze bakmaya devam
+    renderExtGizmos(); renderExtDock();
+    setHint&&setHint('Drone taşındı · tekrar tıkla = yine taşı · yön için "Yön"'); }
+  function setExtPlaceAction(a){
+    if((a==='aim'||a==='move') && extActive<0){ setHint&&setHint('Önce bir drone seç.'); return; }
+    extPlaceAction=a||'none';
+    if(controls){ controls.enabled=(extPlaceAction==='none'); }   // aim/move açıkken orbit kilitli (zemin-tık net)
+    renderExtGizmos(); renderExtDock();
+    setHint&&setHint(extPlaceAction==='aim'?'Zemine tıkla → seçili drone oraya bakar (tekerlek de döndürür).'
+      :extPlaceAction==='move'?'Zemine tıkla → seçili drone oraya taşınır.'
+      :'Drone: sürükle taşı · tekerlek/Yön ile bakışı ayarla · Yükseklik/Objektif dock\'ta.'); }
 
   // ── DIŞ RENDER PROMPT + PAYLOAD (headless test edilebilir) ──────────────────────────
   //   Dış render = B/img2img yolunun DIŞ karşılığı: snapshot dış-cephe mesh PNG → LOCK geometri
@@ -2540,12 +2592,77 @@
     else joined=phrases.slice(0,-1).join(', ')+' and '+phrases[phrases.length-1];
     return 'The landscaped garden around the building includes '+joined+' — keep these site features where they are in the model. ';
   }
+  // A3: SAHNE ENVANTERİ — state'ten OLGUSAL kısa İngilizce metin (blok sayısı + her blokun kat sayısı +
+  //   cephe preset sinyali + imkanlar + avlu + düz teras çatı). YARATICI dış-render'da prompt'a ÇAPA olarak
+  //   girer (AI kat/blok sayısını uydurmaz); SADAKAT'te bayrak KAPALI (img2img zaten kütleyi gösterir).
+  //   opt.blocks (test) verilirse onu kullanır; yoksa siteOn()+blocks[] global'inden türetir. Headless güvenli.
+  function extBlockFloorList(opt){
+    // dönüş: [{floors:N}] blok başına (site kapalı → tek eleman = extFloorCount.above)
+    if(opt && Array.isArray(opt.blocks) && opt.blocks.length){
+      return opt.blocks.map(function(b){ return { floors:Math.max(1,(b&&b.floors)|0||1) }; });
+    }
+    const out=[];
+    try{
+      if(typeof siteOn==='function' && siteOn() && typeof blocks!=='undefined' && Array.isArray(blocks) && blocks.length){
+        blocks.forEach(function(b){
+          let fl=0; if(b&&b.ui){ fl=parseInt(b.ui.katSayisi)||0; }
+          if(!fl) fl=extFloorCount().above;
+          out.push({ floors:Math.max(1,fl|0) });
+        });
+      }
+    }catch(e){}
+    if(!out.length){ out.push({ floors:extFloorCount().above }); }   // tek bina (site kapalı / güvenli düşüş)
+    return out;
+  }
+  function ordinalWord(n){ const w=['','one','two','three','four','five','six','seven','eight']; return w[n]||String(n); }
+  function blockLetter(i){ return String.fromCharCode(65+i); }   // 0→A, 1→B ...
+  function buildSceneInventory(opt){
+    opt=opt||{};
+    const bl=extBlockFloorList(opt);
+    const n=bl.length;
+    let s='';
+    if(n>1){
+      s+='The site has '+ordinalWord(n)+' residential blocks: '+
+        bl.map(function(b,i){ return 'block '+blockLetter(i)+' '+b.floors+' floor'+(b.floors===1?'':'s'); }).join(', ')+'. ';
+    } else {
+      s+='A single residential apartment building with '+bl[0].floors+' floor'+(bl[0].floors===1?'':'s')+' above ground. ';
+    }
+    s+='Flat terrace roofs. ';
+    const fp=facadePreset(opt.facade||extFacade);
+    s+='Facade: '+fp.promptSignal+'. ';
+    // imkanlar (yalnız VAR olanlar; amenityTypesPresent katalog sırasıyla)
+    const am=amenityTypesPresent(opt);
+    if(am.length){
+      const phr=am.map(function(k){ return AMENITY_PHRASE[k]; });
+      let joined = (phr.length===1)?phr[0]:(phr.slice(0,-1).join(', ')+' and '+phr[phr.length-1]);
+      s+='Landscaped garden with '+joined+'. ';
+    }
+    // avlu (varsa)
+    let hasCourt=false;
+    try{ if(opt.courtyard!=null) hasCourt=!!opt.courtyard; else hasCourt=extCourtyards().length>0; }catch(e){}
+    if(hasCourt) s+='An internal courtyard. ';
+    return s.trim();
+  }
   // saf metin prompt kurucu (server ile paylaşılan reçete; TEST bunu assert eder)
+  //   opt.creative=true → YARATICI dış-render: sahne envanteri (A3) ÇAPA olarak girer + serbest peyzaj/çevre
+  //   yorumu (LOCK gevşer). Varsayılan (faithful) → mevcut LOCK reçetesi + envanter bayrağı KAPALI.
   function buildExteriorPrompt(opt){
     opt=opt||{};
     const fp=facadePreset(opt.facade||extFacade);
     const tod=opt.timeOfDay||timeOfDay;
     const floors=(extBox&&extBox.floors)||(opt.floors||1);
+    if(opt.creative){
+      // A2/A3: YARATICI şık — envanter çapası + serbest çevre/peyzaj. Kütle/kat sayısı envanterle bağlanır
+      //   ama pencere-pencere LOCK yok (AI cephe/peyzaj yorumlar). no people/text korunur.
+      return (
+        'Photorealistic architectural exterior photograph, aerial drone perspective, of this residential '+
+        'project. '+buildSceneInventory(opt)+' '+
+        'Keep the overall building massing and floor count as described; you may creatively interpret the '+
+        'facade detailing, landscaping and surrounding environment (street, greenery, neighbouring context, sky). '+
+        'Realistic materials and lighting, '+timeHint(tod)+'. '+
+        'High detail, professional real-estate photography, no people, no text.'
+      );
+    }
     return (
       'Photorealistic architectural exterior photograph of a '+floors+'-storey residential apartment building, '+
       'aerial drone perspective looking down at an angle toward the building, with sky and surrounding '+
@@ -2566,11 +2683,14 @@
       facade:extFacade, floors:(extBox&&extBox.floors)||null };
   }
   // dış render payload'u (prototip → render-server POST /camera {profile:'exterior'}). snapshot = dış-sahne PNG.
-  function exportExteriorCameras(){
+  //   renderStyle: 'faithful' (LOCK — mevcut, varsayılan) · 'creative' (envanter çapası + serbest yorum, A2/A3).
+  function exportExteriorCameras(renderStyle){
+    const creative = (renderStyle==='creative');
     return extCams.map(function(c,i){ const out=extCamViewObj(c,i);
       out.profile='exterior'; out.render_method='snapshot';
+      out.render_style=creative?'creative':'faithful';
       out.time_of_day=timeOfDay; out.facade_signal=facadePreset(extFacade).promptSignal;
-      out.prompt=buildExteriorPrompt({facade:extFacade});
+      out.prompt=buildExteriorPrompt({facade:extFacade, creative:creative});
       out.snapshot=snapExtCameraDataURL(c);
       return out; });
   }
@@ -2659,11 +2779,16 @@
     // drone çipleri (seçim)
     const camChips=extCams.length? extCams.map(function(cc,i){
       return '<button class="chip'+(i===extActive?' on':'')+'" data-extsel="'+i+'">Drone '+(i+1)+'</button>'; }).join('') : '<span style="font-size:11px;opacity:.6">Henüz drone yok</span>';
-    // seçili drone kontrolleri (yükseklik + objektif + sil)
+    // seçili drone kontrolleri (A4: Yön/Taşı + yükseklik + objektif + sil) — iç kamera dock paritesi
     let selRow='';
     if(c){
       const yv=extDroneHeightVal(c);
       selRow='<div class="sep"></div>'+
+        '<div class="col"><span class="lbl">Düzenle</span>'+
+          '<div class="row">'+
+            '<button class="pill'+(extPlaceAction==='aim'?' on':'')+'" data-extact="aim" title="Yön — zemine tıkla, drone oraya baksın (tekerlek de döndürür)">Yön</button>'+
+            '<button class="pill'+(extPlaceAction==='move'?' on':'')+'" data-extact="move" title="Taşı — zemine tıkla, drone oraya taşınsın (sürükleyerek de taşınır)">Taşı</button>'+
+          '</div></div>'+
         '<div class="col"><span class="lbl">Yükseklik</span>'+
           '<div class="row"><input type="range" id="v3dExtH" min="'+r.min.toFixed(1)+'" max="'+r.max.toFixed(1)+'" step="0.5" value="'+yv.toFixed(1)+'"><span class="val" id="v3dExtHVal">'+yv.toFixed(1)+' m</span></div></div>'+
         '<div class="col"><span class="lbl">Objektif</span>'+
@@ -2687,18 +2812,30 @@
   // "Dış Render" CTA → ÖDEME-ÖNCESİ SON ADIM: onay dialoğu. Onaylanırsa payload'u kurar ve dışarıya callback ile
   //   verir (prototip render-server'a POST eder). BU FONKSİYON İSTEK ATMAZ — yalnız payload + onay.
   //   extRenderConfirm dış çağrı (prototip) ile atanır; yoksa yerel confirm() fallback (standalone).
-  let extRenderConfirm=null;   // function(payload){ return Promise<bool> } — prototip atar (modal)
+  let extRenderConfirm=null;   // function(payload){ return Promise<bool|string> } — prototip atar (modal); string dönerse render-style
   let extRenderSubmit=null;    // function(payload){} — onaydan sonra render-server'a POST (prototip atar)
-  function triggerExteriorRender(){
+  //   arg renderStyle: 'faithful' (varsayılan) · 'creative'. Prototip modal'ı seçimi confirm callback dönüşünde
+  //   ('faithful'|'creative' string) ya da doğrudan bu argümanla verebilir. payload buna göre kurulur.
+  function triggerExteriorRender(renderStyle){
     if(!extCams.length){ setHint&&setHint('Önce bir drone kamerası ekle.'); return Promise.resolve(false); }   // CTA yalnız dış modda görünür → mod guard'a gerek yok (headless payload da kurulabilir)
-    const payload={ profile:'exterior', style:extFacade, facade:extFacade, timeOfDay:timeOfDay,
-      count:extCams.length, cameras:exportExteriorCameras() };
-    const doSubmit=function(okFlag){ if(!okFlag) return false; if(typeof extRenderSubmit==='function'){ try{ extRenderSubmit(payload); }catch(e){} } return true; };
-    if(typeof extRenderConfirm==='function'){ return Promise.resolve(extRenderConfirm(payload)).then(doSubmit); }
+    function buildPayload(rs){
+      const creative=(rs==='creative');
+      return { profile:'exterior', style:extFacade, facade:extFacade, timeOfDay:timeOfDay,
+        render_style:creative?'creative':'faithful', count:extCams.length, cameras:exportExteriorCameras(rs) };
+    }
+    const doSubmit=function(res){
+      // res: true/false (eski sözleşme) YA DA 'faithful'/'creative' (yeni: seçilen stil)
+      if(res===false || res==null) return false;
+      const rs=(res==='creative')?'creative':(res==='faithful'?'faithful':(renderStyle||'faithful'));
+      const payload=buildPayload(rs);
+      if(typeof extRenderSubmit==='function'){ try{ extRenderSubmit(payload); }catch(e){} }
+      return true;
+    };
+    if(typeof extRenderConfirm==='function'){ return Promise.resolve(extRenderConfirm(buildPayload(renderStyle||'faithful'))).then(doSubmit); }
     // standalone fallback: tarayıcı confirm (prototip modal atamadıysa)
     let okFlag=false;
-    try{ okFlag=(typeof confirm==='function') ? confirm('Dış render başlatılsın mı?\n\n'+payload.count+' drone kamerası, cephe: '+facadePreset(extFacade).name+'.\nBu işlem render kredisi harcar.') : true; }catch(e){ okFlag=true; }
-    return Promise.resolve(doSubmit(okFlag));
+    try{ okFlag=(typeof confirm==='function') ? confirm('Dış render başlatılsın mı?\n\n'+extCams.length+' drone kamerası, cephe: '+facadePreset(extFacade).name+'.\nBu işlem render kredisi harcar.') : true; }catch(e){ okFlag=true; }
+    return Promise.resolve(doSubmit(okFlag ? (renderStyle||'faithful') : false));
   }
   // PNG'yi İNGİLİZCE etiketle ver (AI 3D-render İngilizce sever; pipeline'ın geri kalanı da EN).
   // Etiketleri EN'e çevir → render → indir → ekrandaki TR'yi geri koy.
@@ -4124,6 +4261,11 @@
       if(exteriorMode){   // S2: dış mod — drone sürükle bitir / hayalet yerinde tık = drone düşür
         if(extDrag){ endExtDrag(); return; }
         if(extGhost){ if(!moved && e.button===0){ moveExtGhost(e); clickExtGhost(e); } return; }
+        // A4: Yön/Taşı armlıysa boş-zemin tık = seçili drone'u baktır/taşı (iç scenePick aim/move ikizi)
+        if(!moved && e.button===0 && extActive>=0 && (extPlaceAction==='aim'||extPlaceAction==='move')){
+          const hit=extGroundHit(e); if(hit){ if(extPlaceAction==='aim') extAimDroneTo(hit); else extMoveDroneTo(hit); }
+          return;
+        }
         return;
       }
       if(furnGhost){ if(!moved && e.button===0){ moveFurnGhost(e); dropFurnGhost(); } return; }   // hayalet: yerinde tık = bırak (sürükleyip orbit ettiyse bırakmaz)
@@ -4134,6 +4276,8 @@
     // tekerlek = seçili mobilyayı döndür (5° hassas, Shift=1° ince ayar); orbit zoom'u furnMode+seçili iken atlanır (attachOrbit)
     el.addEventListener('wheel',function(e){ if(furnMode && activeFurnIdx>=0){ const f=furnList[activeFurnIdx], st=e.shiftKey?1:5;
       f.rot_deg=((((f.rot_deg||0)+(e.deltaY<0?st:-st))%360)+360)%360; f.source='manual'; f.locked=true; renderFurniture(); schedulePersist(); return; }
+      // A4: dış modda seçili drone'da tekerlek = yaw döndür (iç kamera yawCam ikizi; 5°/Shift 1°). Orbit zoom atlanır.
+      if(exteriorMode && extActive>=0 && !extGhost && !extDrag){ const st=e.shiftKey?1:5; extYawDrone(e.deltaY<0?st:-st); return; }
       // KAMERA-S S3: kamera modunda seçili kamerada tekerlek = yaw döndür (mobilya ikizi; 5°/Shift 1°). orbit zoom attachOrbit'te atlanır.
       if(camUIEnabled && activeGroup==='camera' && activeCamIdx>=0 && !camGhost && !camDrag && !camAimDrag){
         const st=e.shiftKey?1:5; yawCam(e.deltaY<0?st:-st); } }, {passive:true});
@@ -6206,6 +6350,8 @@
     getMaterials:function(){ return JSON.parse(JSON.stringify(materialOverrides)); }, hydrateMaterials:hydrateMaterials,
     // S1 DIŞ GÖRÜNÜM (BİNA KABUĞU): mod aç/kapa + kabuk metrikleri (test + prototip).
     setExteriorMode:setExteriorMode, isExteriorMode:function(){ return exteriorMode; },
+    // A1: dış↔iç mod değişimini prototip'e bildir (strand segmenti iki yönlü senkron). isExterior bool döner.
+    setExteriorModeCallback:function(fn){ extModeCallback=(typeof fn==='function')?fn:null; },
     buildExteriorForTest:function(){ if(!scene||!scene.__map) return null; buildExterior();
       if(!exteriorGroup) return null; const ud=exteriorGroup.userData;
       return { meshCount:ud.meshCount, buildMs:ud.buildMs, protoWin:ud.protoWin,
@@ -6237,15 +6383,26 @@
     facadePresets:function(){ return FACADE_PRESETS.map(function(p){ return {key:p.key,name:p.name,promptSignal:p.promptSignal}; }); },
     // dış render prompt kurucu (HEADLESS — istek atmaz; render-server 'exterior' profili ile aynı reçete anahtar ifadeleri).
     buildExteriorPrompt:buildExteriorPrompt,
+    // A3: SAHNE ENVANTERİ — state'ten olgusal İngilizce metin (blok/kat sayısı + cephe + imkan + avlu). Yaratıcı çapa.
+    buildSceneInventory:buildSceneInventory,
     // "Dış Render" onay-öncesi tetik + prototip callback atama (extRenderConfirm=modal, extRenderSubmit=POST).
     triggerExteriorRender:triggerExteriorRender,
+    // A2: dış şerit otomatik kare — drone yoksa binayı/siteyi çerçeveleyen varsayılan drone yerleştir (kuşbakışı).
+    deriveShowcaseDrones:deriveShowcaseDrones,
     setExtRenderHandlers:function(confirmFn,submitFn){ extRenderConfirm=(typeof confirmFn==='function')?confirmFn:null; extRenderSubmit=(typeof submitFn==='function')?submitFn:null; },
     // TEST: dış drone ekle/say/PiP-kaynağı (THREE gerekir → standalone/preview). Headless prompt/payload yolları THREE'siz.
     extAddDroneForTest:function(pos,target,lens){ if(!exteriorMode) return -1;
       extCams.push({pos:{x:pos.x,y:clampDroneY(pos.y),z:pos.z},target:target||Object.assign({},extCenter()),lens:lens||EXT_DRONE_LENS_DEF});
       extActive=extCams.length-1; renderExtGizmos(); renderExtDock(); return extActive; },
     extStateForTest:function(){ return { mode:exteriorMode, droneCount:extCams.length, active:extActive, facade:extFacade,
-      placeActive:extPlaceActive, hasGhost:!!extGhost, yRange:extDroneYRange() }; },
+      placeActive:extPlaceActive, placeAction:extPlaceAction, hasGhost:!!extGhost, yRange:extDroneYRange() }; },
+    // A4 HEADLESS: drone yön/taşı paritesi (THREE'siz — extCams salt-veri). setExteriorCameras ile yükle, sonra:
+    //   yaw = seçili drone'u döndür · aim = hedefe baktır · move = taşı · placeAction oku. Hedef bağımsızlaşır (aimed).
+    extYawDroneForTest:function(deltaDeg){ extYawDrone(deltaDeg); return (extActive>=0?Object.assign({},extCams[extActive].target):null); },
+    extAimDroneForTest:function(hit){ extAimDroneTo(hit); return (extActive>=0?Object.assign({},extCams[extActive].target):null); },
+    extMoveDroneForTest:function(hit){ extMoveDroneTo(hit); return (extActive>=0?Object.assign({},extCams[extActive].pos):null); },
+    extSelectForTest:function(i){ selectExtCam(i); return extActive; },
+    extSetPlaceActionForTest:function(a){ setExtPlaceAction(a); return extPlaceAction; },
     snapExtCameraDataURL:snapExtCameraDataURL };
   function bind(){
     const btn=document.getElementById('t3d');

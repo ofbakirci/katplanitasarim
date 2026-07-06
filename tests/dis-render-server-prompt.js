@@ -46,6 +46,16 @@ const pu = rs.exteriorPrompt('warm', custom, 'x', 'midday');
 if (pu !== custom) fail('userPrompt passthrough BOZUK (view3d prompt\'u ezilmemeli): ' + pu.slice(0, 60));
 else ok('userPrompt passthrough (view3d = tek kaynak) doğru');
 
+/* ---- 2b) DIŞ-AKIŞ A2: renderStyle generic fallback — creative LOCK'u gevşetir (prompt boş) ---- */
+const pFaithGen = rs.exteriorPrompt('warm', '', facadeSignal, 'midday', 'faithful');
+const pCreatGen = rs.exteriorPrompt('warm', '', facadeSignal, 'midday', 'creative');
+if (!/EXACTLY/.test(pFaithGen)) fail('A2: sadakat generic prompt LOCK ("EXACTLY") taşımalı');
+else ok('A2: sadakat generic prompt LOCK korur');
+if (/EXACTLY/.test(pCreatGen)) fail('A2: yaratıcı generic prompt katı LOCK ("EXACTLY") İÇERMEMELİ');
+else if (!/creatively interpret/i.test(pCreatGen)) fail('A2: yaratıcı generic prompt "creatively interpret" içermeli');
+else if (!/no people, no text/i.test(pCreatGen)) fail('A2: yaratıcı generic prompt no people/text korumalı');
+else ok('A2: yaratıcı generic prompt LOCK gevşetir + serbest yorum + no people/text');
+
 /* ---- 3) İÇ kamera prompt kurucuları DEĞİŞMEDİ (regresyon sinyali) ---- */
 if (typeof rs.camSnapshotPrompt === 'function') {
   const cs = rs.camSnapshotPrompt('warm', '', 'midday');

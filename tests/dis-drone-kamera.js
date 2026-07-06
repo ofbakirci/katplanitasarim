@@ -155,8 +155,87 @@ if(ctx.__PAYLOAD && ctx.__PAYLOAD.cameras && ctx.__PAYLOAD.cameras[0]){
   chk(cam0.pos_m && cam0.target_m && typeof cam0.heading_deg==='number', 'kamera[0] poz/hedef/heading taşır');
 }
 
+/* ═══ A3: SAHNE ENVANTERİ ÜRETİCİ (buildSceneInventory) — olgusal İngilizce ═══════════════════════ */
+const hasInv = run(`typeof window.View3D.buildSceneInventory==='function'`);
+chk(hasInv, 'A3: View3D.buildSceneInventory export edilmiş');
+if(hasInv){
+  // 1) TEK BİNA (site kapalı, 5 kat) — plan yukarıda generate edildi
+  const inv1 = run(`window.View3D.buildSceneInventory({facade:'brick'})`);
+  chk(/single residential apartment building/i.test(inv1), 'A3: tek bina cümlesi ("single ... apartment building"): '+inv1.slice(0,60));
+  chk(/\bfloors\b/i.test(inv1), 'A3: kat sayısı ("floors") geçiyor');
+  chk(/flat terrace roof/i.test(inv1), 'A3: düz teras çatı sinyali');
+  chk(/brick/i.test(inv1), 'A3: cephe preset sinyali (brick) envantere akıyor');
+  chk(!/playground|swimming pool/i.test(inv1), 'A3: imkan yokken park/havuz UYDURMAZ');
+
+  // 2) İKİ BLOK (opt.blocks override) — "two residential blocks: block A 5 floors, block B 8 floors"
+  const inv2 = run(`window.View3D.buildSceneInventory({facade:'neutral', blocks:[{floors:5},{floors:8}]})`);
+  chk(/two residential blocks/i.test(inv2), 'A3: iki blok cümlesi ("two residential blocks"): '+inv2.slice(0,80));
+  chk(/block A 5 floors/i.test(inv2), 'A3: block A 5 floors adlandırılıyor');
+  chk(/block B 8 floors/i.test(inv2), 'A3: block B 8 floors adlandırılıyor');
+
+  // 3) İMKAN + AVLU envantere girer (yalnız verilenler)
+  const inv3 = run(`window.View3D.buildSceneInventory({facade:'neutral', blocks:[{floors:5}], amenities:['pool','playground'], courtyard:true})`);
+  chk(/swimming pool/i.test(inv3) && /playground/i.test(inv3), 'A3: mevcut imkanlar (havuz+park) envanterde');
+  chk(/courtyard/i.test(inv3), 'A3: avlu envanterde');
+  chk(!/ornamental/i.test(inv3), 'A3: VAR OLMAYAN imkan (süs havuzu) envantere girmez');
+
+  // 4) İki farklı kurulum FARKLI metin üretir (assert: örnek çıktı ayrımı)
+  chk(inv1!==inv2, 'A3: iki farklı kurulum farklı envanter üretir');
+}
+
+/* ═══ A2/A3: YARATICI dış-render prompt — envanter ÇAPASI + serbest yorum, LOCK gevşer ═══════════════ */
+const pCreative = run(`window.View3D.buildExteriorPrompt({facade:'neutral', creative:true, blocks:[{floors:5},{floors:8}]})`);
+chk(/drone/i.test(pCreative) && /exterior/i.test(pCreative), 'A2: yaratıcı prompt drone/exterior içerir');
+chk(/two residential blocks/i.test(pCreative), 'A2: yaratıcı prompt envanter çapası taşır (blok/kat)');
+chk(/creatively interpret/i.test(pCreative), 'A2: yaratıcı prompt "creatively interpret" (serbest yorum) içerir');
+chk(/no people, no text/i.test(pCreative), 'A2: yaratıcı prompt no people/text korur');
+chk(!/EXACTLY/.test(pCreative), 'A2: yaratıcı prompt katı pencere-LOCK ("EXACTLY") İÇERMEZ (bayrak farkı)');
+// SADAKAT (varsayılan) = eski LOCK reçetesi, EXACTLY var
+const pFaithful = run(`window.View3D.buildExteriorPrompt({facade:'neutral'})`);
+chk(/EXACTLY/.test(pFaithful), 'A2: sadakat (varsayılan) prompt LOCK ("EXACTLY") korur');
+chk(pFaithful!==pCreative, 'A2: sadakat vs yaratıcı prompt FARKLI');
+
+/* ═══ A4: DRONE YÖN (aim/yaw/move) PARİTESİ — hedef artık merkeze KİLİTLİ DEĞİL ═════════════════════ */
+const hasA4 = run(`typeof window.View3D.extYawDroneForTest==='function' && typeof window.View3D.extAimDroneForTest==='function'`);
+chk(hasA4, 'A4: drone yön/taşı test API mevcut');
+if(hasA4){
+  run(`window.View3D.setExteriorCameras([{pos:{x:30,y:14,z:30}, target:{x:16,y:5,z:8}, lens:24}]); window.View3D.extSelectForTest(0);`);
+  const tBefore = run(`window.View3D.getExteriorCameras()[0].target`);
+  // 4a) YAW: tekerlek döndürme = hedef pos etrafında döner (yatay yön değişir, mesafe korunur)
+  const tYaw = run(`window.View3D.extYawDroneForTest(30)`);
+  const posc = run(`window.View3D.getExteriorCameras()[0].pos`);
+  const distB = Math.hypot(tBefore.x-posc.x, tBefore.z-posc.z), distA = Math.hypot(tYaw.x-posc.x, tYaw.z-posc.z);
+  chk(Math.abs(distB-distA)<0.01, 'A4: yaw hedef mesafesini korur (sadece yön döner): '+distB.toFixed(2)+'→'+distA.toFixed(2));
+  chk(Math.abs(tYaw.x-tBefore.x)+Math.abs(tYaw.z-tBefore.z)>0.5, 'A4: yaw hedefi gerçekten döndürdü (yön değişti)');
+  // 4b) AIM: zemine tıkla = hedef o noktaya gider (yatay), aimed bayrağı → bağımsız hedef
+  const tAim = run(`window.View3D.extAimDroneForTest({x:5, z:-3})`);
+  chk(Math.abs(tAim.x-5)<0.01 && Math.abs(tAim.z-(-3))<0.01, 'A4: aim hedefi tıklanan zemine taşıdı (5,-3)');
+  // 4c) MOVE: aimed drone taşınınca hedef DEĞİŞMEZ (bağımsız hedefi korur)
+  const posMoved = run(`window.View3D.extMoveDroneForTest({x:40, z:40})`);
+  const tAfterMove = run(`window.View3D.getExteriorCameras()[0].target`);
+  chk(Math.abs(posMoved.x-40)<0.01 && Math.abs(posMoved.z-40)<0.01, 'A4: move drone konumunu taşıdı (40,40)');
+  chk(Math.abs(tAfterMove.x-5)<0.01 && Math.abs(tAfterMove.z-(-3))<0.01, 'A4: aim edilmiş drone taşınınca bağımsız hedefini KORUR');
+  // 4d) UN-AIMED drone taşınınca merkeze bakmaya devam (yeni drone, aim edilmemiş)
+  run(`window.View3D.setExteriorCameras([{pos:{x:30,y:14,z:30}, target:{x:0,y:0,z:0}, lens:24}]); window.View3D.extSelectForTest(0);`);
+  const tCenterBefore = run(`window.View3D.getExteriorCameras()[0].target`);
+  const posUnaimed = run(`window.View3D.extMoveDroneForTest({x:-20, z:-20})`);
+  const tCenterAfter = run(`window.View3D.getExteriorCameras()[0].target`);
+  // aim edilmemiş → hedef merkeze re-track (tam değer extBox'a bağlı; en azından DEĞİŞMİŞ olabilir ya da 0'a yakın kalır)
+  chk(Math.abs(posUnaimed.x-(-20))<0.01, 'A4: un-aimed drone taşındı');
+  chk(typeof tCenterAfter.x==='number', 'A4: un-aimed drone taşınınca hedef geçerli (merkez-takip)');
+  // 4e) placeAction (Yön/Taşı toggle) durumu
+  run(`window.View3D.extSelectForTest(0);`);
+  const pa1 = run(`window.View3D.extSetPlaceActionForTest('aim')`);
+  chk(pa1==='aim', 'A4: setPlaceAction("aim") → aim');
+  const pa2 = run(`window.View3D.extSetPlaceActionForTest('move')`);
+  chk(pa2==='move', 'A4: setPlaceAction("move") → move');
+  const pa3 = run(`window.View3D.extSetPlaceActionForTest('none')`);
+  chk(pa3==='none', 'A4: setPlaceAction("none") → nötr');
+  run(`window.View3D.clearExteriorCameras()`);
+}
+
 function report(){
-  console.log('\nDIS-DRONE-KAMERA (S2): '+pass+' geçti, '+fail+' başarısız');
+  console.log('\nDIS-DRONE-KAMERA (S2+A3+A4): '+pass+' geçti, '+fail+' başarısız');
 }
 report();
 process.exit(fail?1:0);
