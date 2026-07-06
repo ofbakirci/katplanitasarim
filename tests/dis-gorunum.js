@@ -105,6 +105,33 @@ run(`
 const ghost = ctx.__GHOST;
 if(ghost==='siteOff'){ ok('site modu stub yok — hayalet blok atlandı (zararsız)'); }
 else chk(ghost===1, 'site: aktif olmayan 1 blok hayalet kütle: '+ghost);
+
+/* ---- 5) SITE-FIX F4: dış-mod blok-görünüm seçimi (salt görüntü, 2B state DEĞİŞMEZ) ---- */
+const hasF4 = run(`!!(window.View3D && window.View3D.extBlockViewForTest)`);
+if(!hasF4){ ok('F4: extBlockViewForTest yok — atlandı (zararsız)'); }
+else {
+  run(`
+  // 2 blok kurulu: activeBlock=0. Her iki blok plan verili olsun ki tam kabuk sınıflansın.
+  var sm=document.getElementById('siteMod'); if(sm){ sm.checked=true; }
+  blocks=[{ pts:pts.map(function(p){return {x:p.x,y:p.y};}), ui:{katSayisi:'5',katYuk:'2.9'}, plan:{} },
+          { pts:[{x:40,y:0},{x:60,y:0},{x:60,y:16},{x:40,y:16}], ui:{katSayisi:'4',katYuk:'2.9'}, plan:{} }];
+  activeBlock=0;
+  var _a2=JSON.stringify(pts), _ab2=activeBlock;   // 2B state imzası (değişmemeli)
+  __F4def = window.View3D.extBlockViewForTest(null);   // varsayılan: aktif tam, diğer hayalet
+  __F4sel = window.View3D.extBlockViewForTest(1);       // başka blok seç: blok1 tam, aktif(0) hayalet
+  __F4all = window.View3D.extBlockViewForTest('all');   // Tümü: hepsi tam, hayalet yok
+  __F4state = { same: (_a2===JSON.stringify(pts) && _ab2===activeBlock) };
+  window.View3D.extBlockViewForTest(null);
+  `);
+  const d=ctx.__F4def, s=ctx.__F4sel, a=ctx.__F4all, st=ctx.__F4state;
+  chk(d && d.activeIsFull===true && d.ghosts.length===1 && d.fulls.length===0,
+      'F4 varsayılan: aktif blok tam + diğeri hayalet: '+JSON.stringify(d&&{f:d.fulls,g:d.ghosts,af:d.activeIsFull}));
+  chk(s && s.activeIsFull===false && s.fulls.indexOf(1)>=0,
+      'F4 başka blok seç: seçilen tam + aktif blok hayalet (activeIsFull=false): '+JSON.stringify(s&&{f:s.fulls,g:s.ghosts,af:s.activeIsFull}));
+  chk(a && a.activeIsFull===true && a.ghosts.length===0 && a.fulls.length===1,
+      'F4 Tümü: tüm bloklar tam, hayalet yok: '+JSON.stringify(a&&{f:a.fulls,g:a.ghosts,af:a.activeIsFull}));
+  chk(st && st.same===true, 'F4: 2B aktif blok + pts DEĞİŞMEDİ (salt görüntü)');
+}
 run(`blocks=null; var _sm=document.getElementById('siteMod'); if(_sm) _sm.checked=false;`);
 
 function report(){

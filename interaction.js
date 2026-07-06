@@ -913,6 +913,7 @@ function finishPoly(){
   document.getElementById('genBtn').disabled=false;
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+  if(typeof updateAmenityBtn==='function') updateAmenityBtn();   // F1: bina sınırı kapanınca imkan düğmesi görünür (yerleşim beklemeden keşfedilebilir)
   render();
 }
 /* serbest oda çizimi: kısa uyarı baloncuğu (canvasWrap'a, ~1,6 sn) */
@@ -1285,6 +1286,10 @@ function updateWindowPanel(){
 document.getElementById('tStruct').onclick=()=>setMode('struct');
 { const tr=document.getElementById('tRoom'); if(tr) tr.onclick=()=>setMode('roomdraw'); }
 document.getElementById('tPark').onclick=()=>setMode('park');
+/* S3-FIX (F1): site imkanları düğmesine tık = imkan moduna geç. S3 commit'i düğmeyi + modu +
+   pointer işleyicilerini + setMode kaydını ekledi ama BU onclick bağını unuttu → düğme (ve onu
+   .click()'leyen "I" kısayolu) ölüydü. Diğer araç düğmeleriyle aynı desen. */
+{ const am=document.getElementById('tAmenity'); if(am) am.onclick=()=>setMode('amenity'); }
 { const sb=document.getElementById('tSite'); if(sb) sb.onclick=()=>{ if(siteOn()) setMode(mode==='site'?'draw':'site'); }; }
 document.getElementById('tPan').onclick=()=>setMode('pan');
 /* U2: 3B GİRİŞ KAPISI — konut-DIŞI kat (ticari/otopark/sığınak) için 3B henüz yok.
@@ -1325,6 +1330,7 @@ document.getElementById('tClear').onclick=()=>{ pts=[];roomPts=[];closed=false;p
 document.getElementById('tFit').onclick=fitView;
 document.getElementById('tSample').onclick=()=>{ pts=[{x:0,y:0},{x:32,y:0},{x:32,y:16},{x:0,y:16}]; closed=true;
   document.getElementById('genBtn').disabled=false; resetCuts(); fitView();
+  if(typeof updateAmenityBtn==='function') updateAmenityBtn();   // F1: örnek sınırda da imkan düğmesi görünür
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m'; };
 function fitView(){

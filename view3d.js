@@ -89,6 +89,11 @@
   //     yeniden üretim YOK. İÇ hiçbir şey (bölme/kapı/mobilya/etiket) yaratılmaz. Draw-call bütçesi düşük.
   //   extSaved: iç sahne gruplarının exteriorMode öncesi görünürlükleri (geri yükleme için).
   let exteriorMode=false, exteriorGroup=null, extBox=null, extSaved=null;
+  // F4: dış modda GÖRÜNTÜ-only blok seçimi (2B aktif blok state'ini BOZMADAN). Değerler:
+  //   null → varsayılan (2B aktif blok tam kabuk, diğerleri hayalet — S1 sözleşmesi);
+  //   <sayı> → o blok index'i tam kabuk, diğerleri hayalet;
+  //   'all' → TÜM blokların tam kabuğu (hayalet yok). blocks[] snapshot'ından okunur; 2B'ye dokunmaz.
+  let extBlockView=null;
   // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ ──────────────────────────────
   //   extCams: DIŞ moddaki drone kameraları — İÇ camList'ten TAMAMEN AYRI (exportCameras iç
   //     sözleşmesi DEĞİŞMEZ). Her item {pos:{x,y,z}, target:{x,y,z}, lens} — DÜNYA metre (iç kamera
@@ -655,6 +660,16 @@
     overlay.style.cssText='position:fixed;inset:0;z-index:9999;background:'+UIPAL.scene+';display:none;';
     overlay.innerHTML =
       '<div id="v3dHost" style="position:absolute;inset:0"></div>'+
+      // F5: GÖRÜNÜM SEGMENT'İ — üst-orta belirgin ikili anahtar (KAT / BİNA). #v3dViewCol'daki küçük
+      //   ikon toggle yerine TEK DOĞRU KAYNAK. Segment tıklaması setExteriorMode'a bağlanır (data-viewseg).
+      '<div id="v3dViewSeg" class="v3dseg" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:4;display:flex">'+
+        '<button data-viewseg="interior" class="on" title="İç kat görünümü">Kat Görünümü</button>'+
+        '<button data-viewseg="exterior" title="Bütün binanın dış görünümü (drone/site)">Bina Görünümü</button>'+
+      '</div>'+
+      // F4: BLOK ÇİPLERİ — bina modunda + 2+ blok varsa üst-orta (segment'in ALTINDA). Seçilen blok TAM
+      //   kabuk, diğerleri hayalet kütle; "Tümü" = tüm blokların tam kabuğu. Salt GÖRÜNTÜ (2B aktif blok
+      //   DEĞİŞMEZ). renderBlockChips doldurur/gösterir; data-blockchip = hedef index ya da 'all'.
+      '<div id="v3dBlockChips" class="v3dseg" style="position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:4;display:none"></div>'+
       '<div id="v3dDock" style="position:absolute;top:12px;right:12px;display:flex;align-items:flex-start;gap:8px;z-index:3">'+
         '<div id="v3dDrawer" style="background:'+UIPAL.panel+';color:'+UIPAL.ink+';font:13px/1.45 system-ui,sans-serif;padding:13px 15px;border-radius:'+UIPAL.rLg+';width:250px;max-height:calc(100vh - 24px);overflow:auto;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+';display:none"></div>'+
         '<div id="v3dRail" style="background:'+UIPAL.panel+';border-radius:'+UIPAL.rLg+';padding:6px;display:flex;flex-direction:column;gap:5px;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'"></div>'+
@@ -760,6 +775,14 @@
       // SUNUM-4C T2: orbit küresi yanı BAKIŞ preset düğmeleri (İzo/Üst/Persp/Sığdır)
       '.v3dvb{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:0;border-radius:'+U.rMd+';background:'+U.hoverFill+';color:'+U.inkAcc+';cursor:pointer;padding:0}'+
       '.v3dvb:hover{background:'+U.acc+';color:'+U.onAcc+'}.v3dvbfit{color:'+U.ok+'}.v3dvbfit:hover{background:'+U.ok+';color:'+U.onOk+'}'+
+      // F5/F4: GÖRÜNÜM SEGMENT'İ + BLOK ÇİPLERİ — kamera dock .seg deseninin belirgin, üstte duran ikizi
+      '.v3dseg{align-items:center;gap:0;background:'+U.dock+';border:1px solid '+U.lineSoft+';border-radius:'+U.r10+';padding:4px;box-shadow:'+U.shadow+';backdrop-filter:'+U.blur+'}'+
+      '.v3dseg button{background:transparent;color:'+U.inkDim+';border:0;border-radius:'+U.r7+';padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;letter-spacing:.01em}'+
+      '.v3dseg button:hover{background:'+U.hoverFill+';color:'+U.ink+'}'+
+      '.v3dseg button.on{background:'+U.acc+';color:'+U.onAcc+'}'+
+      '#v3dBlockChips button{padding:6px 12px;font-size:11.5px}'+          // çipler biraz daha küçük
+      '#v3dBlockChips button.on{background:'+U.ok+';color:'+U.onOk+'}'+    // seçili blok yeşil (dış-mod aksanı)
+      '#v3dBlockChips .cl{font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;font-weight:700;padding:0 8px 0 6px;color:'+U.inkDim+';align-self:center}'+
       '.v3drailb{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:0;border-radius:'+U.r9+';background:transparent;color:'+U.inkAcc+';cursor:pointer}'+
       '.v3drailb:hover{background:'+U.hoverFill+';color:'+U.ink+'}.v3drailb.on{background:'+U.acc+';color:'+U.onAcc+'}'+
       '.v3drailx{color:'+U.bad+'}.v3drailx:hover{background:rgba(192,73,43,.22);color:'+U.onBad+'}'+
@@ -889,6 +912,8 @@
       const xs=t.getAttribute&&t.getAttribute('data-extsel'); if(xs!=null&&xs!==''){ selectExtCam(+xs); return; }   // S2: dış drone seç
       const xl=t.getAttribute&&t.getAttribute('data-extlens'); if(xl){ setExtCamLens(+xl); return; }                  // S2: dış drone objektif
       const xf=t.getAttribute&&t.getAttribute('data-facade'); if(xf){ applyFacadePreset(xf); renderExtDock(); return; } // S2: cephe preset (kabuğa ANINDA)
+      const vseg=t.getAttribute&&t.getAttribute('data-viewseg'); if(vseg){ setExteriorMode(vseg==='exterior'); return; }   // F5: görünüm segment'i (KAT/BİNA)
+      const bchip=t.getAttribute&&t.getAttribute('data-blockchip'); if(bchip!=null&&bchip!==''){ setExtBlockView(bchip); return; }   // F4: bina modunda blok seç (salt görüntü)
       const cdz=t.getAttribute&&t.getAttribute('data-camdesel'); if(cdz){ deselectCam(); return; }   // çip × = seçimi bırak (silmez)
       const fca=t.getAttribute&&t.getAttribute('data-furncat'); if(fca!=null&&fca!==''){ furnDockCat=+fca; renderFurnDock(); return; }   // B2-1: kategori sekmesi
       const fpk=t.getAttribute&&t.getAttribute('data-furnpick'); if(fpk){ startFurnGhost(fpk); return; }   // B2-1: palet parçası → hayalet yerleştirme
@@ -1082,7 +1107,7 @@
     // sahneyi temizle
     while(scene.children.length) scene.remove(scene.children[0]);
     camGizmos=null; pendingPos=null;                        // eski gizmo grubu sahneyle gitti (camList korunur)
-    exteriorGroup=null; extBox=null;                        // S1: eski dış kabuk sahneyle gitti → dış moddaysak yeniden kurulur
+    exteriorGroup=null; extBox=null; extBlockView=null;     // S1: eski dış kabuk sahneyle gitti → dış moddaysak yeniden kurulur (F4: blok-görünüm seçimi varsayılana döner)
     extGizmos=null; extGhost=null; extDrag=null; extPlaceActive=false;   // S2: dış gizmo grubu sahneyle gitti (extCams korunur, yeniden çizilir)
     scene.add(new THREE.AmbientLight(0xfff0e0,0.38));   // kısık ambient → gölgeler belirgin
     const key=new THREE.DirectionalLight(0xffe2b8,1.45); key.position.set(16,34,12); key.castShadow=true;
@@ -1869,18 +1894,44 @@
                       .map(function(a){ return {type:a.type, x:a.x, y:a.y, w:a.w, h:a.h, ang:(a.ang||0)*Math.PI/180}; }); } }catch(e){}
     return [];
   }
-  // Diğer (aktif olmayan) blokların sade kütle konturları (dünya metre) — site modu.
-  //   blocks[i] = stateSnapshot (pts + ui.katSayisi/katYuk) → hayalet kütle KENDİ kat sayısı × kat yüksekliği.
-  function extGhostBlocks(){
-    const out=[];
-    try{ if(typeof siteOn==='function' && siteOn() && typeof blocks!=='undefined' && Array.isArray(blocks)){
-      blocks.forEach(function(b,i){ if(i===activeBlock) return;   // aktif blok tam kabuk (ayrı üretilir)
-        const bp=b&&b.pts; if(!(bp&&bp.length>=3)) return;
-        let fl=0, fh=0;
-        if(b.ui){ fl=parseInt(b.ui.katSayisi)||0; fh=parseFloat(b.ui.katYuk)||0; }   // katSayisi = zemin-üstü kat (bodrum ayrı alan)
-        out.push({ poly:bp.map(function(p){ return [p.x,p.y]; }), floors:fl||null, floorH:fh||null }); }); } }catch(e){}
-    return out;
+  // F4: dış modda TAM kabuk gösterilecek blok = 2B-aktif blok, ya da extBlockView seçimi. Site kapalıysa
+  //   daima 2B-aktif (tek bina). Dönüş: tam-kabuk blok index'i (Tümü/başka-seçimde aktif blok da tam olur).
+  function extFullBlockIdx(){
+    if(typeof extBlockView==='number' && extBlockView>=0) return extBlockView;   // başka blok seçildi
+    return (typeof activeBlock!=='undefined')?activeBlock:0;
   }
+  // F4: bir blok snapshot'ından dış kabuk parametreleri (dünya-metre kontur + kat sayısı/yüksekliği).
+  //   2B-aktif blok için CANLI pts/kontur+kat kullanılır (buildExterior ayrı ele alır); diğerleri snapshot.
+  function blockShellParams(b){
+    const bp=b&&b.pts; if(!(bp&&bp.length>=3)) return null;
+    let fl=0, fh=0;
+    if(b.ui){ fl=parseInt(b.ui.katSayisi)||0; fh=parseFloat(b.ui.katYuk)||0; }   // katSayisi = zemin-üstü kat
+    return { poly:bp.map(function(p){ return [p.x,p.y]; }), floors:fl||null, floorH:fh||null };
+  }
+  // Aktif-OLMAYAN blokları böl: hayalet (sade kütle) vs tam kabuk (F4 seçim/Tümü). extBlockView'e göre:
+  //   null → hepsi hayalet (S1 varsayılan); <sayı> → yalnız o blok tam (aktif dâhil diğerleri hayalet);
+  //   'all' → hepsi tam kabuk (hayalet yok). Dönüş {ghosts:[...], fulls:[...]} (dünya-metre + kat bilgisi).
+  function extOtherBlocks(){
+    const ghosts=[], fulls=[];
+    try{ if(typeof siteOn==='function' && siteOn() && typeof blocks!=='undefined' && Array.isArray(blocks)){
+      const fullIdx=extFullBlockIdx(), allFull=(extBlockView==='all');
+      blocks.forEach(function(b,i){
+        if(i===activeBlock) return;   // 2B-aktif blok DAİMA ana yolda kurulur (buildExterior full/ghost seçer)
+        const p=blockShellParams(b); if(!p) return;
+        p.idx=i;
+        const isFull = allFull || (i===fullIdx);
+        if(isFull) fulls.push(p); else ghosts.push(p);
+      }); } }catch(e){}
+    return { ghosts:ghosts, fulls:fulls };
+  }
+  // F4: 2B-aktif blok dış modda TAM kabuk mu (map cephesi) yoksa HAYALET mi? Tümü ya da seçim=aktif → tam.
+  function extActiveIsFull(){
+    if(extBlockView==='all') return true;
+    if(extBlockView==null) return true;   // varsayılan: aktif blok tam kabuk (S1 sözleşmesi)
+    return extBlockView===((typeof activeBlock!=='undefined')?activeBlock:0);
+  }
+  // geriye-uyum: eski çağrılar (metrics/testler) hayalet listesini bekler
+  function extGhostBlocks(){ return extOtherBlocks().ghosts; }
   // S3: SİTE İMKANLARINI dış bahçede hafif inşa et. imkan başına ≤6 mesh: zemin plakası + tipe göre
   //   birkaç minimal kütle (su/bordür/ekipman). exteriorGroup root -cx,-cz ofsetli → dünya-metre direkt oturur.
   //   MUTLAK metre: imkan {x,y,w,h,ang(rad)} plan-dünya koordinatı; y-ekseni plan → z-ekseni 3B (px2m ile aynı).
@@ -2183,39 +2234,64 @@
     ground.position.set((bmnx+bmxx)/2,-0.06,(bmnz+bmxz)/2); ground.receiveShadow=true; exteriorGroup.add(ground);
     // S3: SİTE İMKANLARI — bahçe düzleminde hafif temsil (imkan başına ≤6 mesh hedefi)
     buildExtAmenities(exteriorGroup, mats);
-    // 1) TEK KAT-TİPİ CEPHE GRUBU (typical floor) — aktif katın map'inden
-    const proto=buildExtFloorGroup(map, contour, holes, floorH, mats);
-    // 2) KATLARI YIĞ (klon) — zemin katı proto, üstteki katlar proto.clone() (kat yüksekliği ofset)
-    const stack=new THREE.Group(); exteriorGroup.add(stack);
-    let meshCount=0;
-    for(let f=0; f<fc.above; f++){
-      const g=(f===0)?proto:proto.clone();   // ilk kat proto, diğerleri paylaşımlı-geometri klonu (draw-call düşük)
-      g.position.y=f*floorH; stack.add(g);
-      g.traverse(function(o){ if(o.isMesh) meshCount++; });
-    }
-    // 3) ÇATI — düz teras + parapet (bina bbox üstünde). Avlu delikli döşeme + çevre parapet bandı.
-    const roofY=fc.above*floorH;
-    const roofSlab=new THREE.Mesh(new THREE.ExtrudeGeometry(extShape(contour,holes),{depth:0.15,bevelEnabled:false}),mats.slab);
-    roofSlab.geometry.rotateX(Math.PI/2); roofSlab.position.y=roofY; roofSlab.castShadow=true; roofSlab.receiveShadow=true; exteriorGroup.add(roofSlab);
-    // parapet: çatı çevresi (+ avlu kenarı) ~0.9m band — tüm ring parçaları TEK mesh'te (perf)
     const PARAPET_H=0.9;
-    const pcol=extCollector();
-    function parapetRing(ringM){ for(let i=0;i<ringM.length;i++){ const a=ringM[i], b=ringM[(i+1)%ringM.length];
-      const dx=b[0]-a[0], dz=b[1]-a[1], el=Math.hypot(dx,dz); if(el<0.2) continue; const ang=-Math.atan2(dz,dx);
-      pcol.pushBox('wall', el+WALL_T, PARAPET_H, WALL_T, 0, roofY+PARAPET_H/2-0.02, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); } }   // taban çatı plakasına 2cm gömülü (dikişsiz)
-    parapetRing(contour); holes.forEach(function(h){ parapetRing(h); });
-    pcol.emit(exteriorGroup, mats);
-    // 4) SİTE — diğer bloklar sade kütle (blok sınırından ekstrüzyon, penceresiz). Aktif blok tam kabuk (yukarıda).
-    //   Hayalet bloklar root'a DÜNYA metrede eklenir (root -cx,-cz ofsetli → poly-koordinatı direkt oturur).
-    //   Yükseklik = o bloğun KENDİ kat sayısı × kat yüksekliği (snapshot ui'ından); yoksa aktif blokla aynı.
-    const ghosts=extGhostBlocks();
-    ghosts.forEach(function(gb){ const gm=gb.poly; const shp=new THREE.Shape(); gm.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
+    let meshCount=0;
+    // TAM KABUK inşacısı (yeniden kullanılır: 2B-aktif blok + F4 diğer tam bloklar). faceProto = kat-tipi
+    //   cephe grubu (map'li = pencereli; boş map = penceresiz sade kabuk). contM/holesM dünya-metre.
+    //   Katları yığar (klon) + düz çatı + parapet. Dönüş: bu bloğun çatı üstü yüksekliği (topY).
+    function stackShell(contM, holesM, floorsN, flH, faceProto){
+      const stack=new THREE.Group(); exteriorGroup.add(stack);
+      for(let f=0; f<floorsN; f++){
+        const g=(f===0)?faceProto:faceProto.clone();
+        g.position.y=f*flH; stack.add(g);
+        g.traverse(function(o){ if(o.isMesh) meshCount++; });
+      }
+      const roofY=floorsN*flH;
+      const roofSlab=new THREE.Mesh(new THREE.ExtrudeGeometry(extShape(contM,holesM),{depth:0.15,bevelEnabled:false}),mats.slab);
+      roofSlab.geometry.rotateX(Math.PI/2); roofSlab.position.y=roofY; roofSlab.castShadow=true; roofSlab.receiveShadow=true; exteriorGroup.add(roofSlab); meshCount++;
+      const pcol=extCollector();
+      const rings=[contM].concat(holesM||[]);
+      rings.forEach(function(ringM){ for(let i=0;i<ringM.length;i++){ const a=ringM[i], b=ringM[(i+1)%ringM.length];
+        const dx=b[0]-a[0], dz=b[1]-a[1], el=Math.hypot(dx,dz); if(el<0.2) continue; const ang=-Math.atan2(dz,dx);
+        pcol.pushBox('wall', el+WALL_T, PARAPET_H, WALL_T, 0, roofY+PARAPET_H/2-0.02, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); } });   // taban çatıya 2cm gömülü (dikişsiz)
+      pcol.emit(exteriorGroup, mats);
+      return roofY+PARAPET_H+0.15;
+    }
+    // 1+2+3) 2B-AKTİF BLOK — F4: extActiveIsFull() ise TAM kabuk (map cephesi: pencere/balkon + çatı),
+    //   değilse (başka blok seçildi) HAYALET kütle — proto DAİMA kurulur (protoWin metrik/testler için).
+    const proto=buildExtFloorGroup(map, contour, holes, floorH, mats);
+    if(extActiveIsFull()){
+      stackShell(contour, holes, fc.above, floorH, proto);
+    } else {
+      // aktif blok hayalet: tek ekstrüzyon kütle (diğer hayalet bloklarla aynı dil)
+      const shp=new THREE.Shape(); contour.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
+      const massH=fc.above*floorH;
+      const mg=new THREE.ExtrudeGeometry(shp,{depth:massH,bevelEnabled:false}); mg.rotateX(Math.PI/2);
+      const mass=new THREE.Mesh(mg,mats.ghost); mass.position.y=massH; mass.castShadow=true; mass.receiveShadow=true; exteriorGroup.add(mass); meshCount++;
+    }
+    // 4) DİĞER BLOKLAR — F4: seçime göre TAM kabuk (Tümü/başka-seçim) ya da HAYALET kütle.
+    //   Tam bloklar: snapshot konturundan penceresiz kabuk (buildExtFloorGroup boş-map → sade cephe) —
+    //   katlı+çatılı gerçek kütle (hayalet düz kutudan ayrışır). Hayalet: tek ekstrüzyon (sade, ucuz).
+    //   Hepsi root'a DÜNYA metrede oturur (root -cx,-cz ofsetli → poly doğrudan yerine gelir).
+    const others=extOtherBlocks();
+    others.fulls.forEach(function(fb){
+      const fFloors=fb.floors||fc.above, fFH=fb.floorH||floorH;
+      const fProto=buildExtFloorGroup({windows:[],balconies:[]}, fb.poly, [], fFH, mats);   // penceresiz sade kabuk
+      stackShell(fb.poly, [], fFloors, fFH, fProto);
+    });
+    others.ghosts.forEach(function(gb){ const gm=gb.poly; const shp=new THREE.Shape(); gm.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
       const massH=(gb.floors||fc.above)*(gb.floorH||floorH);
       const mg=new THREE.ExtrudeGeometry(shp,{depth:massH,bevelEnabled:false}); mg.rotateX(Math.PI/2);
       const mass=new THREE.Mesh(mg,mats.ghost); mass.position.y=massH; mass.castShadow=true; mass.receiveShadow=true; exteriorGroup.add(mass);
       meshCount++; });
-    // fit için bina + zemin bbox'ı (dünya metre → merkez-hizalı)
-    extBox={ hx:(bmxx-bmnx)/2, hz:(bmxz-bmnz)/2, cx:(bmnx+bmxx)/2-cx, cz:(bmnz+bmxz)/2-cz, topY:roofY+PARAPET_H+0.15,
+    const roofY=fc.above*floorH;
+    // fit için bina + zemin bbox'ı (dünya metre → merkez-hizalı). F4: diğer TAM/hayalet blokları da kapsa
+    //   (Tümü/başka-seçim → kamera tüm siteyi çerçeveler; drone karesi tüm blokları görür).
+    let fbmnx=bmnx,fbmnz=bmnz,fbmxx=bmxx,fbmxz=bmxz, fTopY=roofY+PARAPET_H+0.15;
+    others.fulls.concat(others.ghosts).forEach(function(ob){ ob.poly.forEach(function(m){
+      fbmnx=Math.min(fbmnx,m[0]); fbmnz=Math.min(fbmnz,m[1]); fbmxx=Math.max(fbmxx,m[0]); fbmxz=Math.max(fbmxz,m[1]); });
+      const oh=(ob.floors||fc.above)*(ob.floorH||floorH)+PARAPET_H+0.15; if(oh>fTopY) fTopY=oh; });
+    extBox={ hx:(fbmxx-fbmnx)/2, hz:(fbmxz-fbmnz)/2, cx:(fbmnx+fbmxx)/2-cx, cz:(fbmnz+fbmxz)/2-cz, topY:fTopY,
              floors:fc.above, below:fc.below, floorH:floorH };
     exteriorGroup.updateMatrixWorld(true);
     const t1=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
@@ -2242,6 +2318,7 @@
       // dış modda kamera/mobilya/malzeme dock ve FPV/pegman gizle (İndir kalır — dış kare indirilebilir)
       extSetDocks(false);
       updateExtBtn();
+      renderBlockChips();   // F4: bina modunda blok çipleri (2+ blok varsa)
       fitExtView();
       // S2: dış (drone) kamera dock'u + gizmoları göster (iç kamera akışına DOKUNMAZ)
       renderExtGizmos(); renderExtDock();
@@ -2256,10 +2333,35 @@
       if(extGizmos) extGizmos.visible=false;
       extSetDocks(true);
       updateExtBtn();
+      renderBlockChips();   // F4: iç moda dönünce blok çiplerini gizle
       fitView();
     }
   }
   function toggleExterior(){ setExteriorMode(!exteriorMode); }
+  // F4: dış modda GÖRÜNTÜ-only blok seçimi. 2B aktif blok state'ini DEĞİŞTİRMEZ — yalnız extBlockView'i
+  //   set edip kabuğu YENİDEN kurar (seçilen/Tümü tam kabuk, diğerleri hayalet). sel: sayı index | 'all'.
+  function setExtBlockView(sel){
+    if(!exteriorMode) return;
+    const nv = (sel==='all')? 'all' : (+sel);
+    if(extBlockView===nv || (typeof nv==='number' && extBlockView===nv)) { renderBlockChips(); return; }
+    extBlockView=nv;
+    if(exteriorGroup){ scene.remove(exteriorGroup); exteriorGroup=null; }   // kabuğu at → yeni seçimle yeniden kur
+    buildExterior();
+    if(exteriorGroup){ exteriorGroup.visible=true; }
+    renderBlockChips(); renderExtGizmos(); fitExtView();
+  }
+  // F4: bina modunda + 2+ blok varsa üst-orta blok çiplerini kur (A · B · … · Tümü). Salt görüntü.
+  function renderBlockChips(){
+    const box=overlay&&overlay.querySelector('#v3dBlockChips'); if(!box) return;
+    let n=0; try{ if(typeof siteOn==='function' && siteOn() && typeof blocks!=='undefined' && Array.isArray(blocks)) n=blocks.length; }catch(e){ n=0; }
+    if(!exteriorMode || n<2){ box.style.display='none'; box.innerHTML=''; return; }
+    const cur = (extBlockView==null)? (typeof activeBlock!=='undefined'?activeBlock:0) : extBlockView;   // seçili çip
+    const nm = function(i){ try{ if(typeof blockName==='function') return blockName(i); }catch(e){} return String.fromCharCode(65+i); };
+    let html='<span class="cl">Blok</span>';
+    for(let i=0;i<n;i++){ html+='<button data-blockchip="'+i+'" class="'+(cur===i?'on':'')+'" title="Blok '+nm(i)+' tam kabuk (diğerleri hayalet)">'+nm(i)+'</button>'; }
+    html+='<button data-blockchip="all" class="'+(extBlockView==='all'?'on':'')+'" title="Tüm blokların tam kabuğu (site render)">Tümü</button>';
+    box.innerHTML=html; box.style.display='flex';
+  }
   // dış modda dock/pegman görünürlüğü — off (dış mod): kamera/mobilya/malzeme/FPV dock + pegman GİZLİ;
   //   grup rail'i açık kalır (İndir erişilebilir — İndir dış görünümü render eder). on: iç mod, mevcut
   //   grup mantığına geri bırak. Dış moda girişte aktif grup null'lanır (interior-tool dock'ları kapanır).
@@ -2276,8 +2378,11 @@
       renderRail(); renderDrawer();   // iç mod: mevcut aktif gruba göre dock/drawer'ı geri kur
     }
   }
-  function updateExtBtn(){ const b=overlay&&overlay.querySelector('#v3dExtBtn'); if(!b) return;
+  function updateExtBtn(){ const b=overlay&&overlay.querySelector('#v3dExtBtn'); if(b){
     if(exteriorMode) b.classList.add('on'); else b.classList.remove('on'); }
+    // F5: üst-orta görünüm segment'ini de senkronla (tek doğru kaynak — küçük ikon + segment birlikte)
+    if(overlay){ overlay.querySelectorAll('#v3dViewSeg button[data-viewseg]').forEach(function(s){
+      const isExt=s.getAttribute('data-viewseg')==='exterior'; s.classList.toggle('on', isExt===exteriorMode); }); } }
   // dış mod bakış preset'i (iso/top/persp) — extBox merkez/yükseklik kullanır.
   function setExtView(v){ if(!cam||!controls||!extBox) return;
     const d=Math.max(24, (Math.max(extBox.hx,extBox.hz)*2 + extBox.topY));
@@ -6114,6 +6219,12 @@
     extFloorCountForTest:function(){ return extFloorCount(); },
     // HEADLESS: THREE'siz dış-kabuk özeti (kat sayısı/kontur/cephe boşlukları/avlu/hayalet) — plan-verisinden.
     extPlanSummaryForTest:function(map){ return extPlanSummary(map||(scene&&scene.__map)); },
+    // F4 HEADLESS: dış-mod blok-görünüm sınıflaması (THREE'siz). setExtBlockView sahne kurar → test için
+    //   YALNIZ extBlockView'i set edip sınıflamayı okuruz (buildExterior çağrılmaz). sel: null|<sayı>|'all'.
+    extBlockViewForTest:function(sel){ if(sel!==undefined) extBlockView=(sel==='all'?'all':(sel==null?null:+sel));
+      const o=extOtherBlocks();
+      return { view:extBlockView, activeIsFull:extActiveIsFull(),
+               fulls:o.fulls.map(function(b){return b.idx;}), ghosts:o.ghosts.map(function(b){return b.idx;}) }; },
     // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ (test + prototip) ──
     //   İç kamera sözleşmesinden (exportCameras/getCameras) TAMAMEN AYRI — extCams kendi listesi.
     getExteriorCameras:function(){ return extCams.map(function(c){ return {pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens}; }); },

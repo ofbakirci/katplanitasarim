@@ -1,6 +1,25 @@
 'use strict';
 /* ================= plan üretimi ================= */
-document.getElementById('genBtn').addEventListener('click',()=>{ resetCuts(); generate(); fitView(); });
+/* F2 (geçmiş RESETLENMESİN): "Yerleşimi Oluştur" düğmesi generate() ile TÜM elle-düzenleme
+   geçmişini siliyordu (generate filtresi bölge-referanslı delta'ları — kapı/duvar/oda tipi vb.
+   — bayat oldukları için düşürür; hiçbir geri-dönüş kaydı bırakmaz). Kullanıcı kararı: geçmiş
+   dursun + undo zinciri kopmasın. Çözüm mevcut __snap altyapısıyla: YENİDEN üretmeden HEMEN önce,
+   var olan planın TAM durumunu (elle düzenlemeler dâhil) yakala ve editHistory'ye tek __snap
+   "checkpoint" olarak it. generate sonrası filtre __snap'i KORUR → panelde "Yerleşim oluşturuldu"
+   satırı durur, Ctrl+Z generate ÖNCESİ görsel duruma birebir döner (bölge-bayat delta'lar tek
+   snapshot'a katlanır — zincir kopmaz). Yalnız KULLANICI düğmesinde; iç generate çağrıları
+   (undo/redo/blok/kat/cut) DOKUNULMAZ. */
+/* F2: KULLANICI "Yerleşimi Oluştur" akışı — generate ÖNCESİ TAM durumu __snap checkpoint olarak
+   editHistory'ye iter (geçmiş resetlenmez + Ctrl+Z generate öncesine döner). Ayrı fonksiyon:
+   headless testler (tests/site-fix-history.js) event listener'a değil buna çağırır. İç generate
+   çağrıları (undo/redo/blok/kat/cut) BU YOLU KULLANMAZ — yalnız kullanıcı düğmesi + testler. */
+function generateWithHistory(){
+  let pre=null;
+  try{ if(plan && typeof stateSnapshot==='function') pre=stateSnapshot(false); }catch(err){ pre=null; }
+  resetCuts(); generate();
+  if(pre && typeof pushEdit==='function'){ pushEdit({type:'__snap', state:pre, label:'Yerleşim oluşturuldu'}); }
+}
+document.getElementById('genBtn').addEventListener('click',()=>{ generateWithHistory(); fitView(); });
 document.getElementById('structReset').addEventListener('click',()=>{ resetLockedCore(); });
 
 /* ================= otopark yerleşimi (gerçek park yerleri + sürüş yolları) =================

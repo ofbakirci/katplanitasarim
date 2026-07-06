@@ -51,7 +51,8 @@ const strictTests = [
   'tests/dis-gorunum.js',
   'tests/dis-drone-kamera.js',
   'tests/dis-render-server-prompt.js',
-  'tests/site-imkan.js'
+  'tests/site-imkan.js',
+  'tests/site-fix-history.js'
 ];
 
 const smokeTests = [
