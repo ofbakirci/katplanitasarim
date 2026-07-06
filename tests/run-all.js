@@ -47,7 +47,8 @@ const strictTests = [
   'tests/test27.js',
   'tests/antre-test.js',
   'tests/camera-prompt.js',
-  'tests/balkon-3b.js'
+  'tests/balkon-3b.js',
+  'tests/dis-gorunum.js'
 ];
 
 const smokeTests = [
