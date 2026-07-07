@@ -795,7 +795,12 @@
         pegmanWidgetHTML()+
         // B1-1: YÖN KÜRESİ (viewcube) — üstünde sürükle=orbit (NAV hassasiyeti), hazır görüş noktaları (Üst/İzo/K-G-D-B).
         //   Kilitliyken İzo/yön seçmek kilidi açar ("dikine kaldım" çözümü). DOM/SVG — three.js sahne-içi küp DEĞİL.
-        orbWidgetHTML()+
+        //   KİLİT butonu artık kürenin ÜSTÜNDE (kullanıcı isteği) — kilit=orbit kilidi, mantıksal olarak orbit
+        //   küresiyle aynı grup; İndir rail'ine yapışması giderildi. Görünür yalnız kamera/mobilya grubunda (updateLockBtn).
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:6px">'+
+          '<button id="v3dLockBtn" title="Kuşbakışı kilidi" style="display:none;width:38px;height:38px;border:0;border-radius:'+UIPAL.r10+';background:'+UIPAL.panel+';color:'+UIPAL.inkAcc+';cursor:pointer;align-items:center;justify-content:center;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'"></button>'+
+          orbWidgetHTML()+
+        '</div>'+
         // SUNUM-4C T2: BAKIŞ preset'leri (İzo/Üst/Persp) + Sığdır orbit küresinin YANINA — "Görünüm" çekmecesi
         //   dock'tan kalktı, bu işlevler nav kümesine (orbit+zoom+pegman) katıldı. İkon-sütun (etiket tooltip'te).
         '<div id="v3dViewCol" style="display:flex;flex-direction:column;align-items:center;gap:5px;background:'+UIPAL.panel+';padding:6px;border-radius:'+UIPAL.rLg+';backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'">'+
@@ -806,13 +811,11 @@
           '<button data-v3d="exterior" id="v3dExtBtn" class="v3dvb" title="Dış görünüm (bina kabuğu)">'+ic('building',18)+'</button>'+
           '<button data-v3d="fit" class="v3dvb v3dvbfit" title="Sığdır">'+ic('fit',18)+'</button>'+
         '</div>'+
-        '<div style="display:flex;flex-direction:column;align-items:center;gap:8px">'+
-          '<button id="v3dLockBtn" title="Kuşbakışı kilidi" style="display:none;width:38px;height:38px;border:0;border-radius:'+UIPAL.r10+';background:'+UIPAL.panel+';color:'+UIPAL.inkAcc+';cursor:pointer;align-items:center;justify-content:center;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'"></button>'+
-          '<div id="v3dZoomBar" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:'+UIPAL.panel+';padding:8px 6px;border-radius:'+UIPAL.rLg+';backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'">'+
-            '<button data-zoom="in" title="Yakınlaştır" style="width:28px;height:28px;border:0;border-radius:'+UIPAL.rMd+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('plus',15)+'</button>'+
-            '<input type="range" id="v3dZoom" min="0" max="1000" value="600" title="Yakınlaştırma" style="writing-mode:vertical-lr;direction:rtl;-webkit-appearance:slider-vertical;width:22px;height:130px;accent-color:'+UIPAL.acc+';cursor:pointer">'+
-            '<button data-zoom="out" title="Uzaklaştır" style="width:28px;height:28px;border:0;border-radius:'+UIPAL.rMd+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('minus',15)+'</button>'+
-          '</div>'+
+        // ZOOM barı (kilit butonu kürenin üstüne taşındı → burada tek başına)
+        '<div id="v3dZoomBar" style="display:flex;flex-direction:column;align-items:center;gap:6px;background:'+UIPAL.panel+';padding:8px 6px;border-radius:'+UIPAL.rLg+';backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'">'+
+          '<button data-zoom="in" title="Yakınlaştır" style="width:28px;height:28px;border:0;border-radius:'+UIPAL.rMd+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('plus',15)+'</button>'+
+          '<input type="range" id="v3dZoom" min="0" max="1000" value="600" title="Yakınlaştırma" style="writing-mode:vertical-lr;direction:rtl;-webkit-appearance:slider-vertical;width:22px;height:130px;accent-color:'+UIPAL.acc+';cursor:pointer">'+
+          '<button data-zoom="out" title="Uzaklaştır" style="width:28px;height:28px;border:0;border-radius:'+UIPAL.rMd+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('minus',15)+'</button>'+
         '</div>'+
       '</div>'+
       // B1-2: KAMERA DOCK — kamera moduna girince alt kenara yaslanır (setCamUI gösterir/gizler). İçeriği renderCamDock kurar.
@@ -6880,13 +6883,29 @@
     return boot().then(function(map){
       if(!map) return;
       setCamPreview(false);                                  // önizleme kapat (bu adımda TAM kamera UI)
-      setCamUI(true); setFurnUI(true); setMatUI(true);
+      setCamUI(true); setFurnUI(true); setMatUI(true);       // araçları ETKİNLEŞTİR (rail'de Kamera/Drone/İç Malzeme/Dış Cephe/Mobilya görünür)
       const sig=planSig(map);
       if(camList.length && camPlanSig && camPlanSig!==sig) clearCams();
       if(!camList.length) deriveShowcaseCameras(map);
       else { renderCamGizmos(); updateCamPanel(); }
       camPlanSig=sig;
       setPlaceMode(false);
+      // NÖTR AÇILIŞ (kullanıcı isteği: plan-boyama açı-kilidi mantığı): kamera adımı HİÇBİR aracı
+      //   otomatik seçmez, kuşbakışına kilitlemez. setCamUI camera grubunu+kilidi tetikledi; deriveShowcase
+      //   kamera 0'ı seçti → burada geri al: grup yok · seçili kamera yok · kilit yok · mesh serbest orbit.
+      //   Dış moddan gelindiyse (strand=exterior) exterior mode KORUNUR → nötr = ne Kamera ne Drone açık,
+      //   dış kabuk serbest açıda. wireStrandSync (setExteriorMode) bu .then'den ÖNCE koştuğundan sıra deterministik.
+      activeCamIdx=-1;                                        // seçili vitrin kamerasını bırak (K1 seçili başlamasın)
+      activeGroup=null;                                       // hiçbir rail aracı otomatik açık değil
+      pipClosed=true;                                          // seçili kamera yok → PiP gizli
+      // setCamUI'nin tetiklediği kuşbakışı kilidini bırak — saklanan açıyı GERİ YÜKLEME (dış moddaysa iç
+      //   fitView kadrajı bozar); yalnız kilidi aç + tween'i durdur, sonra moda göre uygun fit uygula.
+      if(topLocked){ topLocked=false; if(controls){ controls.noRotate=false; if(controls.cancelViewTween) controls.cancelViewTween(); if(controls.sync) controls.sync(); } }
+      freeSavedView=null;
+      if(exteriorMode) fitExtView(); else fitView();          // nötr serbest kadraj (mod-doğru)
+      syncFurnModeToGroup();
+      renderRail(); renderDrawer(); renderCamGizmos(); updateLockBtn();
+      const cd=overlay&&overlay.querySelector('#v3dCamDock'); if(cd){ cd.style.display='none'; cd.innerHTML=''; }   // nötr: kamera dock kapalı (Kamera aracıyla açılır)
       return map;
     });
   }
