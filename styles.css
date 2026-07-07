@@ -301,29 +301,15 @@
      overflow-x:hidden bir KIRPMA kutusu kurar → ::after tooltip'i rayın sağında görünmeden
      kırpılıyordu (I5a). Bu yüzden tooltip artık CSS ::after DEĞİL, body'ye eklenen #tbTip
      (interaction.js) ile çizilir; kırpma kutusundan kaçar. Aşağıdaki #tbTip onun stili. */
-  #tbTip{position:fixed; transform:translateY(-50%); z-index:2000; pointer-events:none;
-    background:var(--ink); color:#fff; font-size:11.5px; font-weight:600; line-height:1; white-space:nowrap;
-    padding:6px 8px; border-radius:6px; box-shadow:0 3px 10px rgba(0,0,0,.22);
+  /* TÜM data-tip ipuçları TEK JS balonundan (#tbTip, interaction.js) çizilir. Eski genel CSS
+     ::after ipuçları kaldırıldı: viewport/panel kenarını bilmedikleri için sekmelerde
+     TAŞIYORLARDI (2026-07-07 SS'li şikayet). JS balonu kenara kelepçeler, alta sığmazsa üste açar. */
+  #tbTip{position:fixed; z-index:2000; pointer-events:none;
+    background:var(--ink); color:#fff; font-size:11.5px; font-weight:600; line-height:1.25;
+    white-space:normal; width:max-content; max-width:230px; text-align:center;
+    padding:6px 9px; border-radius:6px; box-shadow:0 3px 10px rgba(0,0,0,.22);
     opacity:0; transition:opacity .12s;}
   #tbTip.show{opacity:1;}
-  /* U1: GENEL hover ipucu — toolbar DIŞINDAKİ işlevsel butonlar (sekme, panel footer, mod seçici,
-     zoom, tablo/geçmiş toggle, kat/blok sekmeleri). Toolbar kendi sağ-açılan tooltip'ini korur;
-     çakışmasın diye burada toolbar HARİÇ kapsam tek tek verildi. İpucu öğenin ALTINA açılır. */
-  header [data-tip], aside [data-tip], #panelFooter [data-tip],
-  #zoomCtl [data-tip], #unitTable [data-tip], #histPanel [data-tip],
-  #floorTabs button[data-tip], #blockTabs button[data-tip]{position:relative;}
-  header [data-tip]::after, aside [data-tip]::after, #panelFooter [data-tip]::after,
-  #zoomCtl [data-tip]::after, #unitTable [data-tip]::after, #histPanel [data-tip]::after,
-  #floorTabs button[data-tip]::after, #blockTabs button[data-tip]::after{
-    content:attr(data-tip); position:absolute; left:50%; top:calc(100% + 7px); transform:translateX(-50%);
-    background:var(--ink); color:#fff; font-size:11.5px; font-weight:600; line-height:1.25; white-space:normal; width:max-content; max-width:230px;
-    text-align:center; padding:6px 9px; border-radius:6px; box-shadow:0 3px 10px rgba(0,0,0,.22);
-    opacity:0; pointer-events:none; transition:opacity .12s .15s; z-index:60;}
-  header [data-tip]:hover::after, aside [data-tip]:hover::after, #panelFooter [data-tip]:hover::after,
-  #zoomCtl [data-tip]:hover::after, #unitTable [data-tip]:hover::after, #histPanel [data-tip]:hover::after,
-  #floorTabs button[data-tip]:hover::after, #blockTabs button[data-tip]:hover::after{opacity:1;}
-  /* zoom kutusu üstte-sağda → ipucu yukarı açılsın (aşağı taşmasın) */
-  #zoomCtl [data-tip]::after{top:auto; bottom:calc(100% + 7px);}
   /* villa kat sekmeleri (katları ayrı planla) — dikey rayın SAĞINDA, "KAT" grip'inden sürüklenir */
   #floorTabs{position:absolute; top:10px; left:64px; display:none; gap:4px; align-items:center; background:var(--panel); padding:4px 6px; border-radius:9px; border:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.06); z-index:5; flex-wrap:wrap; max-width:calc(100% - 74px);}
   #floorTabs button{border:1px solid transparent; border-radius:6px; background:transparent; padding:5px 10px; cursor:pointer; font:inherit; font-size:12px; color:var(--ink); white-space:nowrap;}

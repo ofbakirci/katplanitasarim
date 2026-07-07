@@ -1349,22 +1349,37 @@ function syncToolbarOverflow(){
    koyuyordu ama overflow-kutusu onu KIRPIYORDU (hiç görünmüyordu). Çözüm: CSS ::after yerine
    body'ye eklenen TEK paylaşımlı tooltip'i JS ile konumla → kırpma kutusundan kaçar, her
    viewport'ta çalışır. Görsel dil aynen: rayın sağında, koyu balon, "Çiz (D)" formatı. */
+/* 2026-07-07 genişletme: TÜM [data-tip] öğeleri bu balondan (belge-geneli delege).
+   Eski genel CSS ::after ipuçları viewport kenarını bilmediğinden sekmelerde TAŞIYORDU —
+   kaldırıldı; burada boyut ölçülüp kenara KELEPÇELENİR, alta sığmazsa ÜSTE açılır.
+   Toolbar içindekiler eski dilde rayın SAĞINA açılmaya devam eder. */
 (function(){
-  const tb=document.getElementById('toolbar'); if(!tb||!tb.addEventListener) return;
+  if(typeof document==='undefined' || !document.addEventListener || !document.body) return;
   let tip=null;
   const ensureTip=()=>{ if(tip) return tip;
     tip=document.createElement('div'); tip.id='tbTip'; document.body.appendChild(tip); return tip; };
-  const show=btn=>{ const txt=btn.getAttribute('data-tip'); if(!txt) return;
+  const M=8, GAP=7;
+  const show=el=>{ const txt=el.getAttribute('data-tip'); if(!txt) return;
     const t=ensureTip(); t.textContent=txt;
-    const r=btn.getBoundingClientRect();
-    t.style.left=(r.right+10)+'px'; t.style.top=(r.top+r.height/2)+'px';
-    t.classList.add('show'); };
+    t.style.left='-9999px'; t.style.top='0px'; t.classList.add('show');   // önce görünmez ölç
+    const w=t.offsetWidth, h=t.offsetHeight, r=el.getBoundingClientRect();
+    const vw=window.innerWidth, vh=window.innerHeight;
+    if(el.closest && el.closest('#toolbar')){                 // ray: sağa açılır (mevcut dil)
+      t.style.left=Math.min(r.right+10, vw-w-M)+'px';
+      t.style.top=Math.max(M, Math.min(r.top+r.height/2-h/2, vh-h-M))+'px';
+    } else {                                                  // genel: altına, kelepçeli; sığmazsa üstüne
+      let x=r.left+r.width/2-w/2; x=Math.max(M, Math.min(x, vw-w-M));
+      let y=r.bottom+GAP; if(y+h>vh-M) y=r.top-GAP-h; if(y<M) y=M;
+      t.style.left=x+'px'; t.style.top=y+'px';
+    } };
   const hide=()=>{ if(tip) tip.classList.remove('show'); };
-  tb.addEventListener('mouseover',e=>{ const b=e.target.closest&&e.target.closest('button[data-tip]'); if(b) show(b); });
-  tb.addEventListener('mouseout',e=>{ const b=e.target.closest&&e.target.closest('button[data-tip]');
-    if(b && !(e.relatedTarget && b.contains(e.relatedTarget))) hide(); });
-  tb.addEventListener('mouseleave',hide);
-  tb.addEventListener('scroll',hide,{passive:true});
+  document.addEventListener('mouseover',e=>{
+    const b=e.target.closest && e.target.closest('[data-tip]');
+    if(b) show(b); else hide();
+  });
+  document.addEventListener('mouseleave',hide);
+  window.addEventListener('scroll',hide,{passive:true,capture:true});
+  document.addEventListener('pointerdown',hide,true);
 })();
 /* onboarding ("Nasıl kullanılır?") kutusu kaldırıldı (kullanıcı isteği). */
 document.getElementById('tDraw').onclick=()=>setMode('draw');
