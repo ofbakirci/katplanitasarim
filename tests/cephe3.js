@@ -114,6 +114,9 @@ chk(/discreet AC units/i.test(pF), 'Ç4: gizli klima detayı');
 chk(/no people, no text/i.test(pF), 'Ç4: no people/text korunur');
 // cephe-detay cümlesi LOCK ile ÇELİŞMEZ (as long as ... moved/added/removed disiplini)
 chk(/as long as no window, balcony or floor is moved, added or removed/i.test(pF), 'Ç4: detay cümlesi LOCK disiplinine bağlı (massing dokunulmaz)');
+// U3 (ilk render provası): "weathering" AŞIRI ESKİTME yapıyordu → detay talimatından ÇIKARILDI + cephe TEMİZ/YENİ pekiştirmesi.
+chk(/subtle material texture(?!\s+and weathering)/i.test(pF), 'U3: cephe dokusu "subtle material texture" (weathering YOK, aşırı eskitme durdu)');
+chk(/newly built and well maintained/i.test(pF) && /no weathering, no aging/i.test(pF), 'U3: bina YENİ/temiz pekiştirmesi (clean fresh facade, no dirt/stains/weathering)');
 
 /* ═══ Ç4: YARATICI ENVANTER — çıkma / çatı olgusu ═══════════════════════════════════════ */
 // düz teras + çıkma yok (varsayılan olgu)

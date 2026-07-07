@@ -106,6 +106,11 @@
   let extCams=[], extActive=-1, extGizmos=null, extGhost=null, extDrag=null, extPlaceActive=false, extFacade='neutral', extPipClosed=false;
   //   extPlaceAction (A4): seçili drone'da zemine-tıkla eylemi — 'none' (nötr) · 'move' (taşı) · 'aim' (baktır).
   let extPlaceAction='none';
+  //   extDockDrag (U2 DRONE-DOCK-SLIDER fix): dock içi bir sürüklenebilir (yükseklik slider'ı, yön küresi)
+  //     AKTİF sürüklemedeyken TRUE. Sürükleme boyunca renderExtDock() TAM DOM'u YENİDEN KURMAMALI — aksi halde
+  //     sürüklenen <input>/<svg> ELEMANI YOK EDİLİR (native drag iptal olur → yalnız tık çalışır). Bayrak açıkken
+  //     drone setter'ları yalnız gizmoları + değer etiketini CANLI tazeler (iç kamera dock'undaki camSliderDrag ikizi).
+  let extDockDrag=false;
   // ── kamera-koyma modu (adım 4): raycaster ile zemine tıkla → kamera; çıktı plan-px uzayında ──
   // camUIEnabled: kamera bölümü YALNIZ adım 4'te (openCompare) görünür — adım 2 (salt 3B izleme) ASLA göstermez.
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
@@ -628,6 +633,7 @@
     svg.addEventListener('pointerdown',function(e){
       drag={ x:e.clientX, y:e.clientY, pitch:(ctx.getPitch?ctx.getPitch():0) }; svg.style.cursor='grabbing';
       try{ svg.setPointerCapture(e.pointerId); }catch(_){}
+      if(ctx.onDragStart) ctx.onDragStart();   // U2: drone küresinde extDockDrag=true → setter'lar SVG'yi yeniden kurmaz
       e.preventDefault(); e.stopPropagation();
     });
     svg.addEventListener('pointermove',function(e){
@@ -641,7 +647,9 @@
       drag.x=e.clientX; drag.y=e.clientY; updateDirSphere(id,ctx);
     });
     const end=function(e){ if(!drag) return; drag=null; svg.style.cursor='grab';
-      try{ svg.releasePointerCapture(e&&e.pointerId); }catch(_){} };
+      try{ svg.releasePointerCapture(e&&e.pointerId); }catch(_){}
+      if(ctx.onDragEnd) ctx.onDragEnd();   // U2: extDockDrag=false → dock BİR KEZ tam tazelenir (senkron)
+    };
     svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end); svg.addEventListener('lostpointercapture',end);
   }
   // iç kamera bağlamı: seçili camList[activeCamIdx] için yaw/pitch köprüsü (yön küresi ORTAK sözleşmesi)
@@ -650,10 +658,13 @@
     getPitch:function(){ return (activeCamIdx>=0)?camTiltDeg(camList[activeCamIdx]):0; },
     yaw:function(d){ yawCam(d); }, pitch:function(a){ setCamTilt(a); }, pitchMin:-85, pitchMax:85 }; }
   // drone bağlamı: seçili extCams[extActive]
+  //   U2: onDragStart/onDragEnd → yön küresi sürüklemesi boyunca extDockDrag guard'ı (setter'lar dock DOM'unu
+  //   yeniden kurmaz → sürüklenen SVG yok olmaz). İç cam küresi bu hook'ları VERMEZ (davranışı değişmez).
   function droneDirCtx(){ return {
     getYaw:function(){ return (extActive>=0)?extHeadingOf(extCams[extActive]):0; },
     getPitch:function(){ return (extActive>=0)?extDroneTiltDeg(extCams[extActive]):0; },
-    yaw:function(d){ extYawDrone(d); }, pitch:function(a){ setExtDroneTilt(a); }, pitchMin:-89, pitchMax:30 }; }
+    yaw:function(d){ extYawDrone(d); }, pitch:function(a){ setExtDroneTilt(a); }, pitchMin:-89, pitchMax:30,
+    onDragStart:function(){ extDockDrag=true; }, onDragEnd:function(){ extDockDrag=false; renderExtDock(); } }; }
 
   // PEGMAN: zeminde bırakma-halkası (camGhost halka deseni) — geçerli=yeşil, geçersiz=kırmızı. world x,z (scene-root).
   function pegShowGhost(wx,wz,valid){
@@ -2582,12 +2593,18 @@
       const upHoles = cikmaOnB && shellOpt.upperHoles ? shellOpt.upperHoles : holesM;
       const upProto = cikmaOnB && shellOpt.upperProto ? shellOpt.upperProto : faceProto;
       const stack=new THREE.Group(); exteriorGroup.add(stack);
-      let faceUsed=false, upUsed=false;   // proto TEK örnek — ilk kullan, sonrakiler klon (base/upper ayrı)
+      // proto TEK örnek — her benzersiz proto nesnesini İLK isteyen KAT ham alır, sonrakiler klonlar.
+      //   BUG (UÇAN-BİNA/U1): çıkma KAPALIYKEN upProto===faceProto (aynı referans). Eski kod faceUsed/upUsed
+      //   AYRI bayrak tutuyordu → f=0 ham proto'yu alıp y=0'a koyuyor, f=1 AYNI nesneyi tekrar isteyip y=flH'ye
+      //   TAŞIYOR → zemin kat yok olur, bina flH kadar HAVADA başlar. Fix: proto nesnesi bazında "kullanıldı mı"
+      //   izle (Set) → paylaşılan proto ikinci kez istenince KLONLANIR, zemin kat y=0'da kalır.
+      const usedProtos=new Set();
+      function claim(p){ if(!usedProtos.has(p)){ usedProtos.add(p); return p; } return p.clone(); }
       for(let f=0; f<floorsN; f++){
         let g;
-        if(f===0 && groundProto){ g=groundProto; }                          // C2: zemin ayrı vitrin cephesi
-        else if(f===0){ if(!faceUsed){ g=faceProto; faceUsed=true; } else g=faceProto.clone(); }  // zemin = taban kontur
-        else { if(!upUsed){ g=upProto; upUsed=true; } else g=upProto.clone(); }                    // üst katlar = (çıkmalı) kontur
+        if(f===0 && groundProto){ g=claim(groundProto); }                   // C2: zemin ayrı vitrin cephesi
+        else if(f===0){ g=claim(faceProto); }                               // zemin = taban kontur
+        else { g=claim(upProto); }                                          // üst katlar = (çıkmalı) kontur
         g.position.y=f*flH; stack.add(g);
         g.traverse(function(o){ if(o.isMesh) meshCount++; });
       }
@@ -2958,7 +2975,7 @@
     extActive=extCams.length?Math.min(i,extCams.length-1):-1; renderExtGizmos(); renderExtDock(); }
   function setExtCamHeight(m){ if(extActive<0) return; const c=extCams[extActive]; c.pos.y=clampDroneY(+m);
     // yükseklik değişince hedefin yatay yönü korunsun ama bakış merkeze doğru güncellensin (aim edilmemişse)
-    renderExtGizmos(); renderExtDock(); }
+    renderExtGizmos(); renderExtDockSoft(); }   // U2: sürükleme boyunca soft (DOM'u YENİDEN KURMA)
   function setExtCamLens(l){ if(extActive<0) return; extCams[extActive].lens=+l; renderExtGizmos(); renderExtDock(); }
   function extDroneHeightVal(c){ return c?c.pos.y:clampDroneY((extBox?extBox.topY:8)*0.7+2); }
   // A4: DRONE YÖN (aim/yaw) PARİTESİ — iç kamerayla aynı diller (tekerlek yaw + "Yön" zemine-tıkla + koni-ucu sürükle).
@@ -2970,7 +2987,7 @@
     const dx=c.target.x-c.pos.x, dz=c.target.z-c.pos.z, dy=c.target.y-c.pos.y;
     const a=deltaDeg*Math.PI/180, cs=Math.cos(a), sn=Math.sin(a);
     c.target={ x:c.pos.x+dx*cs-dz*sn, y:c.pos.y+dy, z:c.pos.z+dx*sn+dz*cs };   // pitch/yükseklik farkı korunur (dy sabit)
-    c.aimed=true; renderExtGizmos(); renderExtDock();
+    c.aimed=true; renderExtGizmos(); renderExtDockSoft();   // U2: yön küresi sürüklemesinde soft (SVG'yi YENİDEN KURMA)
     setHint&&setHint('Drone yönü döndürüldü · tekerlek = döndür · "Yön" ile zemine tıklayarak da nişan al'); }
   // seçili drone'u yeni zemin noktasına baktır (yatay hedef; yükseklik ~zemin). İç 'aim' scenePick ikizi.
   function extAimDroneTo(hit){
@@ -2988,7 +3005,7 @@
     const ux=(Math.hypot(dx,dz)<1e-4?0:dx/Math.hypot(dx,dz)), uz=(Math.hypot(dx,dz)<1e-4?-1:dz/Math.hypot(dx,dz));
     const t=Math.max(-89,Math.min(30,+deg))*Math.PI/180;
     c.target={ x:c.pos.x+ux*horiz, y:c.pos.y+Math.tan(t)*horiz, z:c.pos.z+uz*horiz }; c.aimed=true;
-    renderExtGizmos(); renderExtDock(); }
+    renderExtGizmos(); renderExtDockSoft(); }   // U2: yön küresi dikey sürüklemesinde soft
   // seçili drone'u yeni zemin noktasına taşı (yükseklik korunur). İç 'move' scenePick ikizi.
   function extMoveDroneTo(hit){
     if(extActive<0||extActive>=extCams.length||!hit) return; const c=extCams[extActive];
@@ -3094,12 +3111,15 @@
     return s.trim();
   }
   // Ç4: CEPHE-DETAY ZENGİNLEŞTİRME cümlesi (iç Zengin Sadakat camSnapshotPrompt deseninin DIŞ karşılığı).
-  //   massing'i (pencere/balkon/kat) DEĞİŞTİRMEYEN gerçekçi cephe detayı: söve/denizlik, korkuluk, doku/
-  //   eskime, çatı kenar/damla, gizli klima. render-server exteriorPrompt ile AYNI cümle (tek kaynak).
+  //   massing'i (pencere/balkon/kat) DEĞİŞTİRMEYEN gerçekçi cephe detayı: söve/denizlik, korkuluk, doku,
+  //   çatı kenar/damla, gizli klima. render-server exteriorPrompt ile AYNI cümle (tek kaynak).
+  //   U3 (ilk render provası): "weathering" kelimesi modeli cepheyi AŞIRI ESKİTİYORDU (kir/akıntı lekesi) →
+  //     çıkarıldı + cümle sonu "NEWLY BUILT / temiz cephe" talimatıyla pekiştirildi (sunucu ile birebir).
   const EXT_FACADE_DETAIL_SENTENCE=
     'Add realistic facade detailing that does not change the massing - window reveals and sills, balcony '+
-    'railings, subtle material texture and weathering, roof edge and drip details, discreet AC units - as '+
-    'long as no window, balcony or floor is moved, added or removed.';
+    'railings, subtle material texture, roof edge and drip details, discreet AC units - as '+
+    'long as no window, balcony or floor is moved, added or removed. '+
+    'The building is NEWLY BUILT and well maintained: clean fresh facade, no dirt, no stains, no weathering, no aging.';
   // saf metin prompt kurucu (server ile paylaşılan reçete; TEST bunu assert eder)
   //   opt.creative=true → YARATICI dış-render: sahne envanteri (A3) ÇAPA olarak girer + serbest peyzaj/çevre
   //   yorumu (LOCK gevşer). Varsayılan (faithful) → mevcut LOCK reçetesi + envanter bayrağı KAPALI.
@@ -3271,8 +3291,24 @@
           '<button class="cta" data-v3d="extrender"'+(extCams.length?'':' disabled')+'>Dış Render'+(extCams.length?(' ('+extCams.length+')'):'')+'</button></div>'+
       '</div>';
     const hs=dock.querySelector('#v3dExtH');
-    if(hs){ hs.addEventListener('input',function(){ const v=parseFloat(hs.value); const lab=dock.querySelector('#v3dExtHVal'); if(lab) lab.textContent=v.toFixed(1)+' m'; setExtCamHeight(v); }); }
+    // U2 (DRONE-DOCK-SLIDER fix): pointerdown → extDockDrag=true (setter'lar soft davranır, DOM yeniden kurulmaz);
+    //   input → değeri CANLI yaz (label elde tazelenir, setExtCamHeight soft yolla gizmoları günceller);
+    //   change/pointerup → extDockDrag=false → dock BİR KEZ tam tazelenir (highlight/senkron). İç cam dock ikizi.
+    if(hs){ hs.addEventListener('pointerdown',function(){ extDockDrag=true; });
+            hs.addEventListener('input',function(){ const v=parseFloat(hs.value); const lab=dock.querySelector('#v3dExtHVal'); if(lab) lab.textContent=v.toFixed(1)+' m'; setExtCamHeight(v); });
+            hs.addEventListener('change',function(){ extDockDrag=false; renderExtDock(); }); }
     if(c){ wireDirSphere('v3dExtDirSph', droneDirCtx()); updateDirSphere('v3dExtDirSph', droneDirCtx()); }   // K3: drone yön küresi (seçili drone varsa)
+  }
+  // U2: dock'u SÜRÜKLEME-GÜVENLİ tazele. extDockDrag açıkken (yükseklik slider'ı / yön küresi sürüklemesi)
+  //   TAM DOM'u yeniden KURMAZ (sürüklenen eleman yok olmaz) — yalnız canlı geri-bildirimi (yükseklik etiketi +
+  //   yön küresi iğnesi) günceller. Sürükleme yokken normal renderExtDock() (tam tazeleme). Setter'lar bunu çağırır.
+  function renderExtDockSoft(){
+    if(!extDockDrag){ renderExtDock(); return; }
+    if(!overlay) return; const dock=overlay.querySelector('#v3dExtDock'); if(!dock) return;
+    const c=(extActive>=0&&extActive<extCams.length)?extCams[extActive]:null; if(!c) return;
+    const lab=dock.querySelector('#v3dExtHVal'); if(lab) lab.textContent=extDroneHeightVal(c).toFixed(1)+' m';
+    const hs=dock.querySelector('#v3dExtH'); if(hs && document.activeElement!==hs) hs.value=extDroneHeightVal(c).toFixed(1);
+    updateDirSphere('v3dExtDirSph', droneDirCtx());   // yön küresi iğnesini tazele (SVG'yi yeniden KURMADAN)
   }
   // "Dış Render" CTA → ÖDEME-ÖNCESİ SON ADIM: onay dialoğu. Onaylanırsa payload'u kurar ve dışarıya callback ile
   //   verir (prototip render-server'a POST eder). BU FONKSİYON İSTEK ATMAZ — yalnız payload + onay.
@@ -7047,6 +7083,24 @@
       return { buildMs:u.buildMs, meshCount:u.meshCount, protoWin:u.protoWin, fullBlocks:u.fullBlocks,
         blockWins:u.blockWins, groundSeparate:!!u.groundSeparate, groundWin:u.groundWin,
         groundFromParcel:!!u.groundFromParcel }; },
+    // U1 (UÇAN-BİNA) REGRESYON: dış kabuk bina mesh'lerinin dünya-Y AABB'si vs zemin düzlemi Y. Zemin katın
+    //   tabanı HER zaman zemin düzlemine (y≈0) oturmalı — bodrum sayısından bağımsız. gapAboveGround>~0.1 =
+    //   bina havada (regresyon). ground mesh (mats.ground) hariç tüm mesh'lerin world-Y min/max'ı.
+    extYBoundsForTest:function(){ if(!exteriorGroup) return null;
+      exteriorGroup.updateMatrixWorld(true);
+      const mats=exteriorGroup.userData.mats, groundMat=mats&&mats.ground;
+      let bMinY=1e9,bMaxY=-1e9, gY=null;
+      const bb=new THREE.Box3();
+      exteriorGroup.traverse(function(o){ if(!o.isMesh||!o.geometry) return;
+        const isGround=(groundMat&&o.material===groundMat);
+        if(!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld);
+        if(isGround){ gY=+((bb.min.y+bb.max.y)/2).toFixed(3); return; }
+        if(bb.min.y<bMinY) bMinY=bb.min.y; if(bb.max.y>bMaxY) bMaxY=bb.max.y;
+      });
+      return { buildingMinY:+bMinY.toFixed(3), buildingMaxY:+bMaxY.toFixed(3), groundY:gY,
+               gapAboveGround:+(bMinY-(gY!=null?gY:0)).toFixed(3),
+               below:extBox&&extBox.below, floors:extBox&&extBox.floors }; },
     // A4 HEADLESS: drone yön/taşı paritesi (THREE'siz — extCams salt-veri). setExteriorCameras ile yükle, sonra:
     //   yaw = seçili drone'u döndür · aim = hedefe baktır · move = taşı · placeAction oku. Hedef bağımsızlaşır (aimed).
     extYawDroneForTest:function(deltaDeg){ extYawDrone(deltaDeg); return (extActive>=0?Object.assign({},extCams[extActive].target):null); },
