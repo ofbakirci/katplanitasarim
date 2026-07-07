@@ -282,7 +282,8 @@
     swatch:'<path d="M2 13a2 2 0 0 0 2 2h1M2 13V4a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v9M2 13a9 9 0 0 0 9 9 9 9 0 0 0 9-9M11 13h9a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-1"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>',  // malzeme rail ikonu (renk paleti/swatch)
     walk:'<circle cx="13" cy="4" r="2"/><path d="M13 6l-2.5 4 3 2 1 6M10.5 10 7 13M13.5 12l3.5 2M6 22l3-6M15 16l1.5 6"/>',  // gezinti rail ikonu (yürüyen kişi)
     pegman:'<circle cx="12" cy="4.5" r="2.5"/><path d="M12 8a3 3 0 0 0-3 3v4h1.6l.5 5h1.8l.5-5H15v-4a3 3 0 0 0-3-3z"/>',   // PEGMAN — cepheden duran adam silueti (Street View pegman)
-    building:'<rect x="6" y="3" width="12" height="18" rx="1"/><path d="M6 21h12M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M10.5 21v-3h3v3"/>'   // S1: BİNA (dış görünüm) — pencereli çok-katlı cephe + giriş
+    building:'<rect x="6" y="3" width="12" height="18" rx="1"/><path d="M6 21h12M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M10.5 21v-3h3v3"/>',   // S1: BİNA (dış görünüm) — pencereli çok-katlı cephe + giriş
+    drone:'<rect x="9.5" y="9.5" width="5" height="5" rx="1"/><circle cx="4.5" cy="4.5" r="2.3"/><circle cx="19.5" cy="4.5" r="2.3"/><circle cx="4.5" cy="19.5" r="2.3"/><circle cx="19.5" cy="19.5" r="2.3"/><path d="M6.3 6.3l3.2 3.2M17.7 6.3l-3.2 3.2M6.3 17.7l3.2-3.2M17.7 17.7l-3.2-3.2"/>'   // DIŞ araç raili: DRONE (quadcopter — gövde + 4 pervane)
   };
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
@@ -425,8 +426,10 @@
     //   "Görünüm" çekmecesi dock'tan KALKTI (bakış preset'leri orbit küresi yanına taşındı, #v3dViewCol).
     //   Kamera (adım 4) Malzeme'den önce; Gezinti (FPV) İndir'in hemen öncesinde kalır.
     const gs=[{k:'layers',i:'layers',t:'Katmanlar'}];
-    if(camUIEnabled) gs.push({k:'camera',i:'camera',t:'Kamera'});
-    if(matUIEnabled) gs.push({k:'material',i:'swatch',t:'Malzeme'});
+    // İÇ/DIŞ ARAÇ ÇİFTLERİ (kullanıcı akışı): Kamera'nın altında Drone, İç Malzeme'nin altında Dış Cephe.
+    //   İç araca tık dıştayken İÇ moda, dış araca tık içteyken DIŞ moda geçirir (setGroup köprüsü).
+    if(camUIEnabled){ gs.push({k:'camera',i:'camera',t:'Kamera (İç)'}); gs.push({k:'drone',i:'drone',t:'Drone (Dış)'}); }
+    if(matUIEnabled){ gs.push({k:'material',i:'swatch',t:'İç Malzeme'}); gs.push({k:'facade',i:'building',t:'Dış Cephe'}); }
     if(furnUIEnabled) gs.push({k:'furniture',i:'sofa',t:'Mobilya'});
     gs.push({k:'walk',i:'walk',t:'Gezinti (masaüstü)'});   // W1: WASD first-person POV — pointer-lock, göz hizası 1.6m
     gs.push({k:'export',i:'download',t:'İndir'});
@@ -443,7 +446,7 @@
   function renderDrawer(){
     const d=overlay&&overlay.querySelector('#v3dDrawer'); if(!d) return;
     // B1-R: kamera/mobilya/malzeme grubunda çekmece BOŞ (araçlar alt dock'ta) → çekmeceyi gizle, dock'u aç.
-    if(!activeGroup || activeGroup==='camera' || activeGroup==='furniture' || activeGroup==='material'){ d.style.display='none'; d.innerHTML=''; }
+    if(!activeGroup || activeGroup==='camera' || activeGroup==='furniture' || activeGroup==='material' || activeGroup==='drone' || activeGroup==='facade'){ d.style.display='none'; d.innerHTML=''; }
     else { d.style.display='block'; d.innerHTML=groupHTML(activeGroup); }
     // SUNUM-4C T3: kamera dock YALNIZ 'camera' grubunda görünür. Kamera modundan kamera ikonuyla çıkınca
     //   (setGroup 'camera'→null, camUIEnabled hâlâ true) eskiden dock AÇIK kalıyordu (else yoktu). Şimdi kapat.
@@ -460,12 +463,21 @@
       const cd=overlay.querySelector('#v3dCamDock'); if(cd) cd.style.display='none';
       const fd=overlay.querySelector('#v3dFurnDock'); if(fd) fd.style.display='none';
     } else { const md=overlay.querySelector('#v3dMatDock'); if(md){ md.style.display='none'; md.innerHTML=''; } }
+    // DIŞ araç dock'u (#v3dExtDock) kendi görünürlüğüne activeGroup'tan karar verir (drone/facade dışında gizli)
+    renderExtDock();
   }
   function setGroup(g){
-    // S1: dış (bina kabuğu) modda kamera/mobilya/malzeme/gezinti anlamsız → yalnız Katmanlar/İndir izinli.
-    if(exteriorMode && g!=='layers' && g!=='export'){ setHint&&setHint('Bina dış görünümündesiniz — bu araç iç görünümde.'); return; }
-    const prev=activeGroup;
-    activeGroup=(activeGroup===g?null:g);
+    // İÇ↔DIŞ KÖPRÜ: Kamera/İç Malzeme/Mobilya = İÇ araçları, Drone/Dış Cephe = DIŞ araçları.
+    //   Yanlış moddayken araç butonuna tık → ÖNCE mod değişir, SONRA araç açılır. Doğru modda aktif
+    //   araca yeniden tık = bırak (deselect). Katmanlar/İndir iki modda da serbest (mod değiştirmez).
+    const isExtTool=(g==='drone'||g==='facade');
+    const isIntTool=(g==='camera'||g==='material'||g==='furniture');
+    const prev=activeGroup;                                    // köprü öncesi grup (extSetDocks null'layabilir)
+    if(prev!==g){
+      if(exteriorMode && isIntTool){ setExteriorMode(false); }
+      else if(!exteriorMode && isExtTool){ setExteriorMode(true); if(!exteriorMode){ renderRail(); return; } }   // kabuk kurulamadı → araca girme
+    }
+    activeGroup=(prev===g?null:g);
     // A4: kamera/mobilya grubuna GİRİŞ → varsayılan kuşbakışı kilidi (yumuşak). ÇIKIŞ → serbest açı geri.
     const inLockGroup=(activeGroup==='camera'||activeGroup==='furniture');
     const wasLockGroup=(prev==='camera'||prev==='furniture');
@@ -476,6 +488,8 @@
     if(activeGroup==='camera' && prev!=='camera'){ pipClosed=false; applyPipSize(); }
     // B2-4: MOBİLYA grubundan BAŞKA gruba geçiş → düzenleme + seçim + yarım hayalet otomatik temizlenir
     if(prev==='camera' && activeGroup!=='camera' && placeMode) setPlaceMode(false);   // kamera grubundan çıkış → yerleştirme açık kalmasın
+    // DRONE grubundan çıkış → hayalet/Yön-Taşı armı bırakılır (dış modda nötr orbit kalır)
+    if(prev==='drone' && activeGroup!=='drone'){ cancelExtGhost(); extPlaceAction='none'; extPlaceActive=false; if(controls) controls.enabled=true; if(exteriorMode) renderExtGizmos(); }
     syncFurnModeToGroup();                                                            // grup 'furniture' değilse furnMode kapanır (ghost+seçim temizler)
     renderRail(); renderDrawer(); updateLockBtn();
   }
@@ -758,8 +772,8 @@
       // F5: GÖRÜNÜM SEGMENT'İ — üst-orta belirgin ikili anahtar (KAT / BİNA). #v3dViewCol'daki küçük
       //   ikon toggle yerine TEK DOĞRU KAYNAK. Segment tıklaması setExteriorMode'a bağlanır (data-viewseg).
       '<div id="v3dViewSeg" class="v3dseg" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:4;display:flex">'+
-        '<button data-viewseg="interior" class="on" title="İç kat görünümü">Kat Görünümü</button>'+
-        '<button data-viewseg="exterior" title="Bütün binanın dış görünümü (drone/site)">Bina Görünümü</button>'+
+        '<button data-viewseg="interior" class="on" title="İç görünüm (kat içi)">İç</button>'+
+        '<button data-viewseg="exterior" title="Dış görünüm (bina kabuğu/drone/site)">Dış</button>'+
       '</div>'+
       // F4: BLOK ÇİPLERİ — bina modunda + 2+ blok varsa üst-orta (segment'in ALTINDA). Seçilen blok TAM
       //   kabuk, diğerleri hayalet kütle; "Tümü" = tüm blokların tam kabuğu. Salt GÖRÜNTÜ (2B aktif blok
@@ -789,7 +803,7 @@
           '<button data-v3d="top" class="v3dvb" title="Üstten (kuşbakışı)">'+ic('topdown',18)+'</button>'+
           '<button data-v3d="persp" class="v3dvb" title="Perspektif">'+ic('persp',18)+'</button>'+
           // S1: BİNA (dış görünüm) modu — iç kat görünümü ↔ bütün bina dış kabuğu geçişi (toggle, aktifken vurgulu)
-          '<button data-v3d="exterior" id="v3dExtBtn" class="v3dvb" title="Bina dış görünümü">'+ic('building',18)+'</button>'+
+          '<button data-v3d="exterior" id="v3dExtBtn" class="v3dvb" title="Dış görünüm (bina kabuğu)">'+ic('building',18)+'</button>'+
           '<button data-v3d="fit" class="v3dvb v3dvbfit" title="Sığdır">'+ic('fit',18)+'</button>'+
         '</div>'+
         '<div style="display:flex;flex-direction:column;align-items:center;gap:8px">'+
@@ -997,7 +1011,7 @@
       //   data-furntype/furnsel/furndel/furndesel/furnact (B2 mobilya paleti hayalet-akışına geçti),
       //   data-camdel (silme yalnız data-v3d="camdel" ikonundan). Selektörden + handler'dan kaldırıldı.
       const t=e.target.closest&&e.target.closest('[data-grp],[data-camh],[data-caml],[data-cammethod],[data-camtime],[data-camact],[data-camsel],[data-camdesel],[data-furnrot],[data-furncat],[data-furnpick],[data-matslot],[data-v3d]')||e.target;
-      const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ if(exteriorMode && gp==='walk'){ return; } if(gp==='walk'){ toggleWalk(); return; } setGroup(gp); return; }
+      const gp=t.getAttribute&&t.getAttribute('data-grp'); if(gp){ if(gp==='walk'){ if(exteriorMode) setExteriorMode(false); toggleWalk(); return; } setGroup(gp); return; }   // gezinti = iç araç → dıştaysa önce İç moda köprüle
       const ch=t.getAttribute&&t.getAttribute('data-camh'); if(ch){ setCamHeight(ch); return; }
       const cl=t.getAttribute&&t.getAttribute('data-caml'); if(cl){ setCamLens(+cl); return; }
       const cm=t.getAttribute&&t.getAttribute('data-cammethod'); if(cm){ setCamRenderMethod(cm); return; }
@@ -2785,7 +2799,8 @@
       updateExtBtn();
       renderBlockChips();   // F4: bina modunda blok çipleri (2+ blok varsa)
       fitExtView();
-      // S2: dış (drone) kamera dock'u + gizmoları göster (iç kamera akışına DOKUNMAZ)
+      // S2: drone gizmoları görünür (iç kamera akışına DOKUNMAZ). Dock KENDİLİĞİNDEN AÇILMAZ —
+      //   dış mod nötr başlar; drone/cephe araçları rail'deki Drone / Dış Cephe butonlarıyla açılır.
       renderExtGizmos(); renderExtDock();
     } else {
       if(exteriorGroup) exteriorGroup.visible=false;
@@ -2795,6 +2810,7 @@
       exteriorMode=false;
       // S2: dış-mod eklentilerini kapat (drone gizmo/hayalet/dock/PiP) — iç kamera dokunulmaz
       cancelExtGhost(); extDrag=null; extPlaceActive=false; extPlaceAction='none';   // A4: aim/move armını da bırak
+      if(activeGroup==='drone'||activeGroup==='facade') activeGroup=null;   // DIŞ araç grubu içeride anlamsız → bırak (rail vurgusu asılı kalmasın)
       if(extGizmos) extGizmos.visible=false;
       extSetDocks(true);
       updateExtBtn();
@@ -2837,6 +2853,10 @@
     if(!overlay) return;
     const peg=overlay.querySelector('#v3dPegman'); if(peg) peg.style.display=interiorVisible?'':'none';
     if(!interiorVisible){
+      // KİLİT-KÖPRÜ FIX: kamera/mobilya grubundan (kuşbakışı kilitli) doğrudan DIŞ moda geçiş —
+      //   kilidi burada bırak (noRotate asılı kalmasın) ama saklanan İÇ açıyı GERİ YÜKLEME
+      //   (freeSavedView temizlenir; dış kadrajı hemen ardından fitExtView kurar).
+      if(activeGroup==='camera'||activeGroup==='furniture'){ exitTopLock(); freeSavedView=null; }
       activeGroup=null; renderRail();   // aktif grubu bırak → dock'lar kapanır; rail (İndir dahil) görünür kalır
       ['v3dCamDock','v3dFurnDock','v3dMatDock','v3dFurnBar','v3dCamBar','v3dPip'].forEach(function(id){ const el=overlay.querySelector('#'+id); if(el) el.style.display='none'; });
       const dr=overlay.querySelector('#v3dDrawer'); if(dr) dr.style.display='none';
@@ -2992,13 +3012,17 @@
     if(renderer) renderer.domElement.style.cursor=''; renderExtGizmos(); renderExtDock(); }
   // seçili drone gizmosu üstünde sol-drag → taşı (hedef bina merkezinde sabit kalır). İç beginCamDrag ikizi.
   function beginExtDrag(idx){ if(idx<0||idx>=extCams.length) return; extActive=idx; extDrag={idx:idx}; extPlaceAction='none';   // A4: doğrudan sürükle = taşı (arm gerekmez)
+    if(camUIEnabled && exteriorMode && activeGroup!=='drone'){ activeGroup='drone'; renderRail(); renderDrawer(); }   // drone'a dokunmak Drone aracını açar (selectExtCam paritesi)
     if(controls) controls.enabled=false; renderExtGizmos(); renderExtDock(); }
   function moveExtDrag(ev){ if(!extDrag) return; const hit=extGroundHit(ev,true); if(!hit) return;   // H2: cheap zemin-düzlemi hit
     const c=extCams[extDrag.idx]; if(!c) return; c.pos.x=hit.x; c.pos.z=hit.z;
     if(!c.aimed){ c.target=Object.assign({},extCenter()); }   // A4: aim edilmemiş drone taşınırken merkeze bakmaya devam eder
     renderExtGizmosSoon(); }   // H2: kare-başına 1 gizmo yeniden-kur (donma fix)
   function endExtDrag(){ if(!extDrag) return; extDrag=null; if(controls) controls.enabled=true; renderExtGizmos(); }
-  function selectExtCam(i){ extActive=(i>=0&&i<extCams.length)?i:-1; extPipClosed=false; extPlaceAction='none'; renderExtGizmos(); renderExtDock(); }
+  function selectExtCam(i){ extActive=(i>=0&&i<extCams.length)?i:-1; extPipClosed=false; extPlaceAction='none';
+    // sahnede drone seçmek Drone aracını da açar (dock kapalıysa kontroller görünsün) — iç kamera seçim paritesi
+    if(extActive>=0 && camUIEnabled && exteriorMode && activeGroup!=='drone'){ activeGroup='drone'; renderRail(); renderDrawer(); }
+    renderExtGizmos(); renderExtDock(); }
   function removeExtCam(i){ if(i<0||i>=extCams.length) return; extCams.splice(i,1);
     extActive=extCams.length?Math.min(i,extCams.length-1):-1; renderExtGizmos(); renderExtDock(); }
   function setExtCamHeight(m){ if(extActive<0) return; const c=extCams[extActive]; c.pos.y=clampDroneY(+m);
@@ -3279,13 +3303,20 @@
   function renderExtDock(){
     if(!overlay) return;
     const dock=overlay.querySelector('#v3dExtDock'); if(!dock) return;
-    if(!exteriorMode){ dock.style.display='none'; dock.innerHTML=''; return; }
+    // DIŞ ARAÇ AYRIMI: dock yalnız dış modda + Drone ya da Dış Cephe rail grubu AÇIKKEN görünür.
+    //   Dış moda girmek artık drone araçlarını KENDİLİĞİNDEN açmaz (nötr orbit — plan-boyama açı-kilidi mantığı).
+    if(!exteriorMode || (activeGroup!=='drone' && activeGroup!=='facade')){ dock.style.display='none'; dock.innerHTML=''; return; }
     dock.style.display='block';
-    const c=(extActive>=0&&extActive<extCams.length)?extCams[extActive]:null;
-    const r=extDroneYRange();
     // cephe preset düğmeleri
     const facadeBtns=FACADE_PRESETS.map(function(p){
       return '<button class="chip'+(p.key===extFacade?' on':'')+'" data-v3d="extfacade" data-facade="'+p.key+'" title="'+extEsc(p.promptSignal)+'">'+extEsc(p.name)+'</button>'; }).join('');
+    // DIŞ CEPHE grubu: yalnız cephe malzeme preset'leri (drone araçlarından ayrıldı — kullanıcı talimatı)
+    if(activeGroup==='facade'){
+      dock.innerHTML='<div class="dk"><div class="col"><span class="lbl">Dış Cephe Malzemesi</span><div class="row">'+facadeBtns+'</div></div></div>';
+      return;
+    }
+    const c=(extActive>=0&&extActive<extCams.length)?extCams[extActive]:null;
+    const r=extDroneYRange();
     // drone çipleri (seçim)
     const camChips=extCams.length? extCams.map(function(cc,i){
       return '<button class="chip'+(i===extActive?' on':'')+'" data-extsel="'+i+'">Drone '+(i+1)+'</button>'; }).join('') : '<span style="font-size:11px;opacity:.6">Henüz drone yok</span>';
@@ -3309,8 +3340,6 @@
     }
     dock.innerHTML=
       '<div class="dk">'+
-        '<div class="col"><span class="lbl">Cephe</span><div class="row">'+facadeBtns+'</div></div>'+
-        '<div class="sep"></div>'+
         '<div class="col"><span class="lbl">Drone Kamera</span>'+
           '<div class="row"><button class="pill'+(extPlaceActive?' on':'')+'" data-v3d="extadd">+ Drone Ekle</button>'+camChips+'</div></div>'+
         selRow+
