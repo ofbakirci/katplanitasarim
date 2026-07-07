@@ -2390,61 +2390,84 @@
       exteriorGroup.add(mesh); return 1;
     }catch(e){ return 0; }
   }
-  // Ç3 KIRMA ÇATI: düz teras yerine dört-yüzlü kırma çatı. Footprint konveks/dikdörtgene yakınsa GERÇEK hip
-  //   (straight-skeleton yerine sağlam yaklaşım: bbox tabanlı hip — dört saçaklı eğim tepe sırtında buluşur).
-  //   L/karmaşık planda bbox-hip kabul edilebilir yaklaşım (çirkin taşma yok: saçak footprint bbox'ına + ~40cm
-  //   pay). İşaretli yaratıcı karar: motor keyfi poligon için straight-skeleton taşımaz (mesh bütçesi + kırılganlık);
-  //   dikdörtgen/konveks kütlelerde gerçekçi, L-planda temsili ama temiz kapatan bbox-hip → tek çatı kütlesi.
-  function buildHipRoof(cont, roofY, mats){
-    let added=0;
-    // footprint bbox + saçak payı
+  // ── Ç3 KIRMA ÇATI HALKA MATEMATİĞİ (THREE'siz, saf — headless test edilebilir) ────────────
+  //   İki segment KESİŞİR mi (uç paylaşımı hariç) — içbükeyde aşırı içe-ofset kendini keser → geçersiz.
+  function segIntersect2D(a,b,c,d){
+    function cr(o,p,q){ return (p[0]-o[0])*(q[1]-o[1])-(p[1]-o[1])*(q[0]-o[0]); }
+    const d1=cr(c,d,a), d2=cr(c,d,b), d3=cr(a,b,c), d4=cr(a,b,d);
+    return ((d1>0)!==(d2>0)) && ((d3>0)!==(d4>0));
+  }
+  function polySelfIntersects(poly){ const n=poly.length;
+    for(let i=0;i<n;i++){ const a=poly[i], b=poly[(i+1)%n];
+      for(let j=i+1;j<n;j++){ if((j+1)%n===i || (i+1)%n===j) continue;   // komşu kenarları atla (uç paylaşır)
+        if(segIntersect2D(a,b,poly[j],poly[(j+1)%n])) return true; } }
+    return false; }
+  // İçe-ofset MAHYA halkası geçerli mi: (1) yönü korunur + tümüyle çökmemiş (2) kendini kesmez (3) her köşe
+  //   orijinal kontur İÇİNDE. Geçersiz = ters dönmüş/kesişen (çirkin) → caller r küçültür ya da TERAS'a düşer.
+  function hipRingValid(ring, cont, sgn){
+    if(!ring || ring.length<3) return false;
+    let a=0; for(let i=0;i<ring.length;i++){ const p=ring[i], q=ring[(i+1)%ring.length]; a+=p[0]*q[1]-q[0]*p[1]; }
+    if(a*sgn<=0.02) return false;                              // ters dönmüş ya da tümüyle çökmüş
+    if(polySelfIntersects(ring)) return false;                // kendini kesiyor (içbükeyde aşırı ofset)
+    for(let i=0;i<ring.length;i++){ if(!pointInPolyM(ring[i][0],ring[i][1],cont)) return false; }
+    return true;
+  }
+  const HIP_EAVE=0.4;   // saçak payı ~40cm — çatı konturdan YALNIZ bu kadar taşar (bbox köprüleme YOK)
+  // Kontur (dünya-metre poligon) → kırma çatı HALKA ÇİFTİ. SAÇAK halkası = kontur DIŞA-ofset (HIP_EAVE, duvar
+  //   üstü); MAHYA halkası = kontur İÇE-ofset r (kısa kenarın ~yarısı → dar kenarlar mahyada sivrilir). İçe-ofset
+  //   ters döner/kendini keserse r kademeli küçültülür; hiçbir r geçerli değilse {ok:false} → caller TERAS'a düşer
+  //   (çirkin geometri asla üretilmez). İki halka AYNI poligonun ofseti → kenar sayısı BİREBİR eşit (yüzler eşleşir).
+  function hipRoofRings(cont){
+    if(!cont || cont.length<3) return { ok:false, eaveOff:HIP_EAVE };
+    let area=0; for(let i=0;i<cont.length;i++){ const a=cont[i], b=cont[(i+1)%cont.length]; area+=a[0]*b[1]-b[0]*a[1]; }
+    if(Math.abs(area)<0.5) return { ok:false, eaveOff:HIP_EAVE };   // yok denecek kadar küçük footprint
+    const sgn=area>0?1:-1;
+    const eave=offsetPolygon(cont, HIP_EAVE, false);                // dış saçak halkası (dışa taşan çatı kenarı)
     let mnx=1e9,mnz=1e9,mxx=-1e9,mxz=-1e9;
     cont.forEach(function(m){ mnx=Math.min(mnx,m[0]); mnz=Math.min(mnz,m[1]); mxx=Math.max(mxx,m[0]); mxz=Math.max(mxz,m[1]); });
-    const EAVE=0.4;   // saçak payı ~40cm
-    const x0=mnx-EAVE, x1=mxx+EAVE, z0=mnz-EAVE, z1=mxz+EAVE;
-    const w=x1-x0, dpth=z1-z0, cxr=(x0+x1)/2, czr=(z0+z1)/2;
-    const short=Math.min(w,dpth);
-    const rise=Math.max(1.2, Math.min(2.6, short*0.32));   // çatı yüksekliği (eğim ~30-35°, mantıklı sınır)
-    const eaveY=roofY+0.05;   // saçak kotu (çatı düz çatı üstünden hafif yukarıda başlar)
-    const ridgeY=eaveY+rise;
+    const short=Math.min(mxx-mnx, mxz-mnz);
+    let r=Math.max(0.6, short*0.48);   // hedef mahya insetı (0.48<0.5 → mahya İNCE şeride/çizgiye yaklaşır, sivri)
+    let ridge=null, rUse=0;
+    for(let it=0; it<10 && r>=0.24; it++){
+      const cand=offsetPolygon(cont, r, true);
+      if(hipRingValid(cand, cont, sgn)){ ridge=cand; rUse=r; break; }
+      r*=0.62;   // geçersiz → mahya insetını küçült (dar kontur/içbükey → tepe segmente/noktaya yaklaşır)
+    }
+    if(!ridge) return { ok:false, eaveOff:HIP_EAVE, eave:eave };   // hiçbir inset geçerli değil → TERAS güvenli düşüş
+    const rise=Math.max(1.0, Math.min(2.8, (HIP_EAVE+rUse)*0.62));  // eğim ~32° (dik-kesit run = saçak + inset)
+    return { ok:true, eave:eave, ridge:ridge, rise:rise, eaveOff:HIP_EAVE, rUse:rUse };
+  }
+  // Ç3 KIRMA ÇATI: footprint POLİGONUNU izleyen GERÇEK kırma çatı (bbox DEĞİL). hipRoofRings ile saçak/mahya
+  //   halkaları kurulur; her saçak kenarı ↔ karşılık gelen mahya kenarı arası YAMUK şerit yüz + üstte mahya kapağı
+  //   + footprint çevresi saçak bandı (fascia). Yamuk/eğik/L konturda çatı KONTURU izler; dejenere (dar/kendini-
+  //   kesen inset) konturda null döndürür → caller TERAS'a düşer (çirkin köprüleme yok). Dönüş: eklenen mesh sayısı.
+  function buildHipRoof(cont, roofY, mats){
+    const R=hipRoofRings(cont);
+    if(!R.ok) return null;   // dejenere kontur → caller TERAS güvenli düşüşü kurar
+    const eave=R.eave, ridge=R.ridge, EAVE=R.eaveOff;
+    const eaveY=roofY+0.05, ridgeY=eaveY+R.rise;
+    const tile=mats.tile||mats.slab; tile.side=THREE.DoubleSide;
+    let added=0;
     // ince saçak bandı (çatı-cephe geçişi damla/drip profili) — footprint çevresi 'slab' ile bir bant
     const pcol=extCollector();
     for(let i=0;i<cont.length;i++){ const a=cont[i], b=cont[(i+1)%cont.length];
       const dx=b[0]-a[0], dz=b[1]-a[1], el=Math.hypot(dx,dz); if(el<0.2) continue; const ang=-Math.atan2(dz,dx);
       pcol.pushBox('slab', el+WALL_T, 0.12, WALL_T+2*EAVE, 0, roofY-0.06, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); }
     added+=pcol.emit(exteriorGroup, mats) ? Object.keys(pcol.buckets).length : 0;
-    // hip mesh: 4 üçgen/yamuk yüz (ridge = uzun eksen boyunca). BufferGeometry (5 köşe: 4 saçak + ridge çizgisi)
-    const half=(w>=dpth);   // ridge uzun eksende
-    // ridge iki uç noktası (kısa eksende ortada, uzun eksende içeri EAVE+rise*0 çekik → hip)
-    let rlen=(half? w : dpth) - (half? dpth : w);   // ridge uzunluğu = uzun - kısa (hip ucu kısa/2 içeri)
-    if(rlen<0) rlen=0;
-    const tile=mats.tile||mats.slab;
-    const geo=new THREE.BufferGeometry();
-    // 4 saçak köşesi (eaveY) + 2 ridge köşesi (ridgeY)
-    const c=[[x0,eaveY,z0],[x1,eaveY,z0],[x1,eaveY,z1],[x0,eaveY,z1]];
-    let r0,r1;
-    if(half){ r0=[cxr-rlen/2,ridgeY,czr]; r1=[cxr+rlen/2,ridgeY,czr]; }
-    else { r0=[cxr,ridgeY,czr-rlen/2]; r1=[cxr,ridgeY,czr+rlen/2]; }
-    // yüzler (CCW dışa): iki üçgen hip ucu + iki yamuk uzun yüz (yamuk = 2 üçgen)
-    const V=[];
+    // hip yüzeyleri: saçak halkası kenar i ↔ mahya halkası kenar i (aynı poligonun iki ofseti → birebir eşleşir)
+    const V=[]; const n=cont.length;
     function tri(p,q,r){ V.push(p[0],p[1],p[2], q[0],q[1],q[2], r[0],r[1],r[2]); }
-    if(half){
-      // uzun yüzler: ön (z0) + arka (z1)
-      tri(c[0],c[1],r1); tri(c[0],r1,r0);   // ön (z0)
-      tri(c[3],r0,r1);  tri(c[3],r1,c[2]);  // arka (z1)
-      // hip uçları: sol (x0) + sağ (x1)
-      tri(c[0],r0,c[3]);                     // sol uç
-      tri(c[1],c[2],r1);                     // sağ uç
-    } else {
-      // uzun yüzler: sol (x0) + sağ (x1)
-      tri(c[0],r0,r1); tri(c[0],r1,c[1]);   // ? yön — düzelt: sol yüz x0 kenarı
-      tri(c[3],c[2],r1); tri(c[3],r1,r0);
-      tri(c[0],c[3],r0);                     // ön/arka hip uçları
-      tri(c[1],r1,c[2]);
+    for(let i=0;i<n;i++){ const j=(i+1)%n;
+      const E0=[eave[i][0],eaveY,eave[i][1]], E1=[eave[j][0],eaveY,eave[j][1]];
+      const R0=[ridge[i][0],ridgeY,ridge[i][1]], R1=[ridge[j][0],ridgeY,ridge[j][1]];
+      tri(E0,E1,R1); tri(E0,R1,R0);   // dörtgen şerit (yamuk yüz = 2 üçgen)
     }
-    const arr=new Float32Array(V); geo.setAttribute('position',new THREE.BufferAttribute(arr,3)); geo.computeVertexNormals();
-    const roof=new THREE.Mesh(geo,tile); roof.castShadow=true; roof.receiveShadow=true; roof.material.side=THREE.DoubleSide;
-    exteriorGroup.add(roof); added++;
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(V),3)); geo.computeVertexNormals();
+    const roof=new THREE.Mesh(geo,tile); roof.castShadow=true; roof.receiveShadow=true; exteriorGroup.add(roof); added++;
+    // mahya kapağı (üst düz kapak — mahya poligonu ridgeY kotunda; içbükey L-mahyada da doğru üçgenlenir)
+    const cap=new THREE.Mesh(new THREE.ShapeGeometry(extShape(ridge)), tile);
+    cap.geometry.rotateX(Math.PI/2); cap.position.y=ridgeY; cap.castShadow=true; cap.receiveShadow=true; exteriorGroup.add(cap); added++;
     return added;
   }
   // Ç2 ARTİKÜLASYON: kat silmeleri (her kat hizasında ince koyu bant) + (preset b/c) düşey bantlar.
@@ -2613,11 +2636,8 @@
       const roofY=floorsN*flH;
       const roofCont=cikmaOnB?upCont:contM, roofHoles=cikmaOnB?upHoles:holesM;   // çatı çıkma hattını izler
       const artOpt={ floorsN:floorsN, flH:flH, contM:contM, upperCont:upCont, cikmaOnB:cikmaOnB, mats:mats };
-      if((shellOpt.roof||'teras')==='kirma'){
-        // Ç3: KIRMA ÇATI (düz teras + parapet yerine dört-yüzlü kiremit çatı)
-        meshCount+=buildHipRoof(roofCont, roofY, mats);
-      } else {
-        // TERAS (varsayılan/bugünkü davranış): düz çatı plakası + parapet ring
+      // TERAS çatı (varsayılan + kırma dejenere güvenli düşüşü): düz plaka + parapet + harpuşta ring
+      function buildTerasRoof(){
         const roofSlab=new THREE.Mesh(new THREE.ExtrudeGeometry(extShape(roofCont,roofHoles),{depth:0.15,bevelEnabled:false}),mats.slab);
         roofSlab.geometry.rotateX(Math.PI/2); roofSlab.position.y=roofY; roofSlab.castShadow=true; roofSlab.receiveShadow=true; exteriorGroup.add(roofSlab); meshCount++;
         const pcol=extCollector();
@@ -2627,6 +2647,14 @@
           pcol.pushBox('wall', el+WALL_T, PARAPET_H, WALL_T, 0, roofY+PARAPET_H/2-0.02, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang);      // parapet gövdesi
           pcol.pushBox('slab', el+WALL_T+0.06, 0.06, WALL_T+0.08, 0, roofY+PARAPET_H, 0, (a[0]+b[0])/2, (a[1]+b[1])/2, ang); } });  // Ç2 harpuşta (parapet başlığı, hafif taşkın)
         pcol.emit(exteriorGroup, mats);
+      }
+      if((shellOpt.roof||'teras')==='kirma'){
+        // Ç3: KIRMA ÇATI — footprint konturunu izleyen GERÇEK hip (bbox DEĞİL). Dejenere kontur → TERAS'a düş.
+        const hip=buildHipRoof(roofCont, roofY, mats);
+        if(hip==null){ buildTerasRoof(); if(exteriorGroup) exteriorGroup.userData.roofFellBack=true; }
+        else meshCount+=hip;
+      } else {
+        buildTerasRoof();   // TERAS (varsayılan/bugünkü davranış)
       }
       // CEPHE-3 Ç2: ARTİKÜLASYON SETİ (kat silmeleri + düşey bantlar) — merge bütçesi içinde
       meshCount+=buildArticulation(artOpt);
@@ -7044,6 +7072,9 @@
       buildExterior(); if(exteriorGroup){ exteriorGroup.visible=true; } fitExtView(); return true; },
     // CEPHE-3 HEADLESS: çıkma ofset geometrisi + kabuk çıkma/çatı ölçümü (THREE'siz test edilebilir kısım).
     offsetPolygonForTest:function(poly,d,inward){ return offsetPolygon(poly,d,inward); },
+    // ÇATI-FIX: kırma çatı saçak/mahya halkaları (THREE'siz saf math). {ok,eave,ridge,rise,eaveOff,rUse}
+    //   ok=false → dejenere kontur (caller TERAS'a düşer). Taşma testi: halka köşeleri konturdan ≤ saçak (dik).
+    hipRoofRingsForTest:function(cont){ return hipRoofRings(cont); },
     extCephe3ForTest:function(){ const u=exteriorGroup&&exteriorGroup.userData||{};
       return { cikma:extCikma(), roof:extRoofType(), builtCikmaOn:!!u.cikmaOn, builtCikmaD:u.cikmaD||0, builtRoof:u.roofType||'teras' }; },
     // cephe preset: oku/yaz/liste (prototip dock ile senkron). applyFacadePreset kabuğa ANINDA yansır.

@@ -137,8 +137,72 @@ chk(!/EXACTLY/.test(pCreat), 'Ç4: yaratıcı prompt katı LOCK ("EXACTLY") İÇ
 // SADAKAT envanteri çıkma/çatı bayrağını İÇERMEZ (img2img kütleyi zaten gösterir; envanter kapalı)
 chk(!/hipped tile roof|project outward/i.test(pF), 'Ç4: SADAKAT prompt envanter olgusu (çıkma/çatı bayrağı) taşımaz — bayrak KAPALI');
 
+/* ═══ ÇATI-FIX: KIRMA ÇATI KONTURU İZLER (bbox köprüleme BİTER) ═══════════════════════════
+   buildHipRoof artık bbox yerine footprint POLİGONUNDAN kurulur: saçak halkası (dışa-ofset ~0.4) +
+   mahya halkası (içe-ofset). Taşma ölçümü: TÜM çatı köşelerinin (saçak+mahya) konturdan max DİK uzaklığı
+   ≤ saçak(0.4)+eps. Yamuk/eğik konturda eski bbox-hip devasa taşardı; yeni halka yalnız 40cm taşar. */
+const EAVE = 0.4, EPS = 1e-4;
+function pip(x,z,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j];
+  if(((a[1]>z)!==(b[1]>z)) && (x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])) c=!c; } return c; }
+// bir noktanın konturun EN YAKIN kenar-doğrusuna DİK uzaklığı (miter köşede saçak = tam 0.4)
+function perpToNearestEdge(pt, poly){ let best=1e9;
+  for(let i=0;i<poly.length;i++){ const a=poly[i], b=poly[(i+1)%poly.length];
+    let ex=b[0]-a[0], ez=b[1]-a[1]; const L=Math.hypot(ex,ez)||1; const nx=ez/L, nz=-ex/L;
+    const d=Math.abs((pt[0]-a[0])*nx + (pt[1]-a[1])*nz); if(d<best) best=d; }
+  return best; }
+// taşma = kontur DIŞINDAysa en yakın kenara dik uzaklık, İÇİNDEyse 0 (mahya köşeleri içeride → 0)
+function overhang(pt, poly){ return pip(pt[0],pt[1],poly) ? 0 : perpToNearestEdge(pt, poly); }
+// EUCLID taşma (kontur poligonuna gerçek en yakın nokta uzaklığı) — bbox köşesi "uzatılmış kenar-doğrusu"
+//   yakınına düşünce dik-metrik yanıltır; segment-uzaklığı gerçek konsol taşmasını ölçer (bbox-bug kanıtı).
+function distSeg(p,a,b){ let ex=b[0]-a[0], ez=b[1]-a[1]; const L2=ex*ex+ez*ez||1;
+  let t=((p[0]-a[0])*ex+(p[1]-a[1])*ez)/L2; t=Math.max(0,Math.min(1,t));
+  return Math.hypot(p[0]-(a[0]+t*ex), p[1]-(a[1]+t*ez)); }
+function euclOverhang(pt, poly){ if(pip(pt[0],pt[1],poly)) return 0; let d=1e9;
+  for(let i=0;i<poly.length;i++) d=Math.min(d, distSeg(pt, poly[i], poly[(i+1)%poly.length])); return d; }
+function maxOverhang(rings, cont){ let mx=0;
+  (rings.eave||[]).concat(rings.ridge||[]).forEach(p=>{ const o=overhang(p,cont); if(o>mx) mx=o; }); return mx; }
+function ringsFor(cont){ return run(`window.View3D.hipRoofRingsForTest(${JSON.stringify(cont)})`); }
+
+// 1) DİKDÖRTGEN — regresyon: gerçek hip kurulur, taşma yalnız saçak (eski görünüme eşdeğer)
+const rRect = ringsFor([[0,0],[10,0],[10,6],[0,6]]);
+chk(rRect && rRect.ok===true, 'ÇATI: dikdörtgende kırma çatı halkaları kurulur (ok)');
+if(rRect && rRect.ok){
+  chk(rRect.eave.length===4 && rRect.ridge.length===4, 'ÇATI: dikdörtgen saçak/mahya 4 köşe (kenar sayısı eşit)');
+  const ov=maxOverhang(rRect, [[0,0],[10,0],[10,6],[0,6]]);
+  chk(ov<=EAVE+EPS, 'ÇATI: dikdörtgen taşma yalnız saçak (≤0.4): '+ov.toFixed(4));
+  chk(rRect.rise>0.8 && rRect.rise<2.8, 'ÇATI: dikdörtgen mahya yüksekliği makul (0.8–2.8m): '+rRect.rise.toFixed(2));
+}
+// 2) YAMUK (eğik duvarlı) — kullanıcı SS'inin KARŞITI: çatı konturu izler, bbox boşluğuna KONSOL atmaz
+const yamuk = [[0,0],[12,0],[9,7],[3,7]];   // üstü dar trapez (yan duvarlar eğik)
+const rYam = ringsFor(yamuk);
+chk(rYam && rYam.ok===true, 'ÇATI: YAMUK konturda kırma çatı halkaları kurulur (ok)');
+if(rYam && rYam.ok){
+  const ov=maxOverhang(rYam, yamuk);
+  chk(ov<=EAVE+EPS, 'ÇATI: YAMUK taşma (dik) yalnız saçak — kontur İZLENİR (≤0.4): '+ov.toFixed(4));
+  // ESKİ bbox-hip KARŞILAŞTIRMASI (EUCLID konsol taşması): bbox köşeleri konturdan ÇOK taşardı (bug kanıtı)
+  let eNew=0; rYam.eave.concat(rYam.ridge).forEach(p=>{ const o=euclOverhang(p,yamuk); if(o>eNew) eNew=o; });
+  let mnx=1e9,mnz=1e9,mxx=-1e9,mxz=-1e9; yamuk.forEach(m=>{ mnx=Math.min(mnx,m[0]); mnz=Math.min(mnz,m[1]); mxx=Math.max(mxx,m[0]); mxz=Math.max(mxz,m[1]); });
+  const bboxEave=[[mnx-EAVE,mnz-EAVE],[mxx+EAVE,mnz-EAVE],[mxx+EAVE,mxz+EAVE],[mnx-EAVE,mxz+EAVE]];
+  let eBbox=0; bboxEave.forEach(p=>{ const o=euclOverhang(p,yamuk); if(o>eBbox) eBbox=o; });
+  chk(eBbox>1.5, 'ÇATI: eski bbox-hip YAMUK\'ta >1.5m konsol taşardı (bug) — bbox EUCLID: '+eBbox.toFixed(3));
+  chk(eBbox > eNew*2, 'ÇATI: yeni halka EUCLID taşması eski bbox\'ın en az 2× altında — yeni: '+eNew.toFixed(3)+' vs bbox: '+eBbox.toFixed(3)+' (konsol biter)');
+}
+// 3) L-PLAN (içbükey) — çatı girintiyi izler, halka köşeleri saçak payı içinde
+const Lp = [[0,0],[14,0],[14,5],[7,5],[7,12],[0,12]];
+const rL = ringsFor(Lp);
+chk(rL && rL.ok===true, 'ÇATI: L-planda kırma çatı halkaları kurulur (ok)');
+if(rL && rL.ok){
+  chk(rL.eave.length===Lp.length && rL.ridge.length===Lp.length, 'ÇATI: L-plan halka kenar sayısı korunur (girinti izlenir)');
+  const ov=maxOverhang(rL, Lp);
+  chk(ov<=EAVE+EPS, 'ÇATI: L-plan taşma yalnız saçak (≤0.4): '+ov.toFixed(4));
+}
+// 4) DEJENERE (çok dar sliver) — hiçbir içe-ofset geçerli değil → ok:false → caller TERAS'a düşer
+const sliver = [[0,0],[20,0],[20,0.3],[0,0.3]];
+const rDeg = ringsFor(sliver);
+chk(rDeg && rDeg.ok===false, 'ÇATI: dejenere dar konturda ok:false (TERAS güvenli düşüşü, çirkin geometri yok)');
+
 function report(){
-  console.log('\nCEPHE-3 (Ç1 çıkma + Ç3 çatı + Ç4 prompt): '+pass+' geçti, '+fail+' başarısız');
+  console.log('\nCEPHE-3 (Ç1 çıkma + Ç3 çatı + Ç4 prompt + ÇATI-FIX kontur-hip): '+pass+' geçti, '+fail+' başarısız');
 }
 report();
 process.exit(fail?1:0);
