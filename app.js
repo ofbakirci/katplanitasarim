@@ -25,6 +25,7 @@ let hoverAmenity = null;      // imkan modunda imleç altındaki imkan index'i |
 let amenityGhost = null;      // imkan modunda eklenecek imkan önizlemesi {type,x,y,w,h,ang,invalid?} | null
 let amenityType = 'green';    // aktif imkan tipi (çubuktan seçilir): green|playground|pool|ornament|seating
 let amenityGhostVert = null;  // R ile çevrilen yerleştirme yönü override'ı (null=varsayılan yatay) | true(dikey)/false(yatay)
+let amenityGhostSize = {};    // İMKAN-BOYUT: tip-başına HATIRLANAN hayalet boyutu {type:{w,h}} — Büyüt/Küçült henüz yerleştirilmemiş hayalete uygulanınca burada tutulur (oturum içi; sayfa yenilemede varsayılana döner, kalıcılaştırma YOK)
 let amenityLastSx = null, amenityLastSy = null; // son imleç (imkan modu) — R basınca önizleme aynı noktada anında dönsün
 let editHistory = [];         // elle düzenleme geçmişi (geri al): {type, ...} — pushEdit() ile yazılır
 let redoHistory = [];         // ileri al yığını: undoEdit her geri almada o anki TAM durumu buraya iter; redoEdit geri yükler

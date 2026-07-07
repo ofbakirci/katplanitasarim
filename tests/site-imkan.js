@@ -169,6 +169,86 @@ chk(run(`editHistory.length===1 && editHistory[0].type==='amenity'`), 'H1b: boyu
 run(`undoEdit()`);
 chk(run(`amenities[0].w===4 && amenities[0].h===3`), 'H1b: geri al boyutlandırmayı çözer (4×3)');
 
+/* ---- 12) İMKAN-BOYUT: YERLEŞTİRME HAYALETİ boyutlandırma (koymadan ÖNCE) ---- */
+chk(run(`typeof amenityGhostResizeStep==='function' && typeof amenityBaseSize==='function' && typeof amenityBarResize==='function' && typeof amenityRememberSize==='function' && typeof amenityGhostSize==='object'`),
+  'İMKAN-BOYUT: hayalet-boyut yardımcıları tanımlı (ghostResizeStep/baseSize/barResize/rememberSize)');
+
+// hayalet modu, tip=playground (8×6, step 0.5). Hatırlanmış boyut YOK → baz = katalog varsayılanı.
+run(`mode='amenity'; amenityType='playground'; amenityGhostSize={}; amenityGhostVert=null; hoverAmenity=null; amenityLastSx=null; amenityLastSy=null;`);
+chk(run(`(function(){ var b=amenityBaseSize('playground'); return b.w===8 && b.h===6; })()`), 'İMKAN-BOYUT: hatırlanmamış tip baz = katalog varsayılanı (8×6)');
+// hayaleti KÜÇÜLT ×2 (−0.5 ×2 = −1) → tip-başına hatırlanır 7×5
+chk(run(`amenityGhostResizeStep(-1) && amenityGhostResizeStep(-1)`), 'İMKAN-BOYUT: hayalet küçültme başarılı (yerleşmiş imkan yokken de çalışır)');
+chk(run(`amenityGhostSize.playground.w===7 && amenityGhostSize.playground.h===5`), 'İMKAN-BOYUT: küçültülen boyut tip-başına hatırlanır (7×5)');
+// sonraki aynı-tip hayalet o boyda başlar (amenityBaseSize)
+chk(run(`(function(){ var b=amenityBaseSize('playground'); return b.w===7 && b.h===5; })()`), 'İMKAN-BOYUT: sonraki çocuk-parkı hayaleti hatırlanan boyda başlar (7×5)');
+// başka tip ETKİLENMEZ (tip-başına izole)
+chk(run(`(function(){ var b=amenityBaseSize('pool'); return b.w===12 && b.h===6; })()`), 'İMKAN-BOYUT: boyut TİP-BAŞINA — başka tip (havuz) varsayılan kalır (12×6)');
+// min clamp: çok küçült → 2×2 altına inmez
+run(`amenityGhostSize={}; amenityType='ornament';`);  // 4×3, step 0.5
+run(`for(var i=0;i<20;i++) amenityGhostResizeStep(-1);`);
+chk(run(`amenityGhostSize.ornament.w>=2 && amenityGhostSize.ornament.h>=2 && amenityGhostSize.ornament.w<3`), 'İMKAN-BOYUT: hayalet min 2×2 clamp (defalarca küçültülse de <2 olmaz)');
+
+/* ---- 13) İMKAN-BOYUT: DAR-ALAN senaryosu — varsayılan sığmaz(KIRMIZI/red), küçültülmüş sığar(kabul) ---- */
+// Dar bir cep kur: bina 0..32 × 0..16; iki komşu imkanla DAR bir boşluk bırak.
+// Bahçe kuzeyinde y=-10..-2 bandı; x eksende (-6..14) arası boş kalsın, kenarları imkanla doldur.
+run(`amenities=[
+  {type:'green', x:-14, y:-10, w:8, h:8, ang:0},     // sol blok: x -14..-6
+  {type:'green', x:14, y:-10, w:8, h:8, ang:0}        // sağ blok: x 14..22
+]; editHistory=[]; redoHistory=[];`);
+// Boşluk: x -6..14 = 20 m geniş DEĞİL — parsel -14..46 ama komşularla SAT. Daha dar bir cep:
+// Aslında merkezde x=4, y=-8 civarına konacak imkanı komşulara YAKIN yap → 10 genişlik SAT'a çarpar, 4 çarpmaz.
+run(`amenities=[
+  {type:'green', x:-14, y:-10, w:9.5, h:8, ang:0},    // sol: x -14..-4.5
+  {type:'green', x:4.5, y:-10, w:9.5, h:8, ang:0}      // sağ: x 4.5..14
+]; editHistory=[]; redoHistory=[];`);
+// cep: x -4.5..4.5 = 9 m; merkez x=0. Varsayılan yeşil 10 genişlik → SAT'a çarpar (KIRMIZI). Küçük süs (4) sığar.
+run(`mode='amenity'; amenityType='ornament'; amenityGhostSize={}; amenityGhostVert=null;`);
+// varsayılan süs 4×3 aslında cebe sığar; senaryoyu net kur: cebi süs varsayılanından DAR yap (3 m).
+run(`amenities=[
+  {type:'green', x:-14, y:-10, w:12.5, h:8, ang:0},   // sol: x -14..-1.5
+  {type:'green', x:1.5, y:-10, w:12.5, h:8, ang:0}      // sağ: x 1.5..14
+]; editHistory=[]; redoHistory=[];`);
+// cep: x -1.5..1.5 = 3 m; merkez x=0, y merkez=-6. Varsayılan süs 4 genişlik → çarpar. 2×2'ye küçültülmüş sığar.
+const defOrn = run(`(function(){ var cx=0,cy=-6,def=amenityDef('ornament');
+  var a={type:'ornament', x:cx-def.w/2, y:cy-def.h/2, w:def.w, h:def.h, ang:0};
+  return { areaOk:amenityAreaOk(a), overlap:amenityOverlapsExisting(a,-1) }; })()`);
+chk(defOrn.areaOk===true && defOrn.overlap===true, 'İMKAN-BOYUT dar-alan: VARSAYILAN süs (4 gen.) komşuya çarpar → geçersiz (kırmızı) — çakışma:'+defOrn.overlap);
+// küçült: hayaleti 2×2'ye indir → aynı merkez artık SIĞAR (kabul)
+run(`amenityType='ornament'; amenityGhostSize={ornament:{w:2,h:2}};`);
+const shrunkOrn = run(`(function(){ var cx=0,cy=-6,b=amenityBaseSize('ornament');
+  var a={type:'ornament', x:cx-b.w/2, y:cy-b.h/2, w:b.w, h:b.h, ang:0};
+  return { areaOk:amenityAreaOk(a), overlap:amenityOverlapsExisting(a,-1) }; })()`);
+chk(shrunkOrn.areaOk===true && shrunkOrn.overlap===false, 'İMKAN-BOYUT dar-alan: KÜÇÜLTÜLMÜŞ süs (2×2) cebe SIĞAR → geçerli (kabul)');
+
+/* ---- 14) İMKAN-BOYUT: YERLEŞEN imkan hatırlanan boyda DOĞAR (buton yolu = hayaleti koyma) ---- */
+// hayalet boyutu 7×5 hatırlanmış → o merkeze konan imkanın w/h = 7×5 (amenityGhostAt üzerinden).
+run(`mode='amenity'; amenityType='playground'; amenityGhostSize={playground:{w:7,h:5}}; amenityGhostVert=null;
+  amenities=[]; editHistory=[]; redoHistory=[];`);
+const born = run(`(function(){ var cx=30,cy=-6,b=amenityBaseSize('playground');
+  // hayalet yerleştirmeyi taklit et: ghost {w,h}=baz → amenities.push
+  var g={type:'playground', x:cx-b.w/2, y:cy-b.h/2, w:b.w, h:b.h, ang:0};
+  amenities.push({type:g.type,x:g.x,y:g.y,w:g.w,h:g.h,ang:g.ang});
+  return { w:amenities[amenities.length-1].w, h:amenities[amenities.length-1].h }; })()`);
+chk(born.w===7 && born.h===5, 'İMKAN-BOYUT: yerleşen imkan hatırlanan hayalet boyunda doğar (7×5)');
+
+/* ---- 15) İMKAN-BOYUT: R DÖNDÜRME hatırlanan boyu korur (yatay taban swap) ---- */
+run(`mode='amenity'; amenityType='pool'; amenityGhostSize={pool:{w:9,h:4}}; amenityGhostVert=true;`);
+const rotBase = run(`(function(){ var vert=(amenityGhostVert!=null)?amenityGhostVert:false, b=amenityBaseSize('pool');
+  var w=vert?b.h:b.w, h=vert?b.w:b.h; return {w:w,h:h}; })()`);
+chk(rotBase.w===4 && rotBase.h===9, 'İMKAN-BOYUT: R dikeyde hatırlanan baz (9×4) swap edilir (4×9), boy korunur');
+// yerleşmiş DÖNDÜRÜLMÜŞ imkanı hatırlarken YATAY tabana normalize
+run(`amenityGhostSize={};`);
+run(`amenityRememberSize({type:'pool', x:0, y:0, w:4, h:9, ang:90})`);
+chk(run(`amenityGhostSize.pool.w===9 && amenityGhostSize.pool.h===4`), 'İMKAN-BOYUT: döndürülmüş imkan boyu YATAY tabana normalize hatırlanır (4×9 ang90 → 9×4)');
+
+/* ---- 16) İMKAN-BOYUT: buton yolu (amenityBarResize) — hover varsa yerleşmiş, yoksa hayalet ---- */
+// hover=null + imkan modu → hayalet boyutlanır
+run(`mode='amenity'; amenityType='seating'; amenityGhostSize={}; amenityGhostVert=null; hoverAmenity=null; amenityLastSx=null; amenityLastSy=null; amenities=[];`);
+chk(run(`amenityBarResize(-1) && amenityGhostSize.seating && amenityGhostSize.seating.w<amenityDef('seating').w`), 'İMKAN-BOYUT: amenityBarResize hover yokken HAYALETİ küçültür');
+// hover=yerleşmiş imkan → o imkan boyutlanır (hayalet-boyut haritası da tipe göre güncellenir)
+run(`amenities=[{type:'seating', x:30, y:-6, w:5, h:4, ang:0}]; hoverAmenity=0; editHistory=[];`);
+chk(run(`(function(){ var w0=amenities[0].w; var ok=amenityBarResize(1); return ok && amenities[0].w>w0; })()`), 'İMKAN-BOYUT: amenityBarResize hover varken YERLEŞMİŞ imkanı büyütür');
+
 function report(){
   console.log('\nSITE-IMKAN (S3): '+pass+' geçti, '+fail+' başarısız');
 }

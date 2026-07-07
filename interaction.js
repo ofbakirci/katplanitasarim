@@ -703,7 +703,7 @@ function finishDrag(){
       amenities=dragging.undo;
       setStatusHint('İmkan bu boyutta parsel dışına/başka öğeye taşıyor — eski boyuta dönüldü.','#b35a2e');
       hoverAmenity=null; amenityEditRefresh();
-    } else { pushEdit({type:'amenity', prev:dragging.undo}); amenityEditRefresh(); }
+    } else { amenityRememberSize(a); pushEdit({type:'amenity', prev:dragging.undo}); amenityEditRefresh(); }
   } else if(dragging.type==='siteMove'){
     const d=dragging; dragging=null;
     if(d.moved){
@@ -1190,12 +1190,19 @@ function hitAmenity(sx,sy){
   }
   return null;
 }
-/* imleç altında eklenebilecek imkan önizlemesi (aktif tip + R yönü). Geçersizse (parsel dışı /
-   bina üstü / çakışma) KIRMIZI hayalet; parsele hiç yaklaşmadıysa gizle (null) — park deseniyle bir. */
+/* İMKAN-BOYUT: aktif tipin YATAY (eksen-hizalı, ang 0) taban boyutu — tip-başına hatırlanmış
+   varsa o, yoksa katalog varsayılanı (def.w/def.h). Hayalet + döndürme bu tabandan türer. */
+function amenityBaseSize(t){
+  const def=amenityDef(t), r=amenityGhostSize[t];
+  return { w:(r&&r.w)||def.w, h:(r&&r.h)||def.h };
+}
+/* imleç altında eklenebilecek imkan önizlemesi (aktif tip + R yönü + HATIRLANAN boyut).
+   Geçersizse (parsel dışı / bina üstü / çakışma) KIRMIZI hayalet; parsele hiç yaklaşmadıysa gizle
+   (null) — park deseniyle bir. */
 function amenityGhostAt(sx,sy){
-  const def=amenityDef(amenityType);
+  const base=amenityBaseSize(amenityType);
   const vert = (amenityGhostVert!=null)? amenityGhostVert : false;
-  const w = vert? def.h : def.w, h = vert? def.w : def.h;
+  const w = vert? base.h : base.w, h = vert? base.w : base.h;
   const a={type:amenityType, x:snapG(S2Wx(sx)-w/2), y:snapG(S2Wy(sy)-h/2), w, h, ang:0};
   if(!amenityAreaOk(a)) return amenityTouchesSite(a)? {...a, invalid:true} : null;
   if(amenityOverlapsExisting(a, -1)) return {...a, invalid:true};
@@ -1248,11 +1255,36 @@ function amenityResizeStep(idx, sign){
     setStatusHint('İmkan bu boyutta parsel dışına/başka öğeye taşıyor — değiştirilmedi.','#b35a2e'); return false;
   }
   a.x=cand.x; a.y=cand.y; a.w=cand.w; a.h=cand.h;
+  amenityRememberSize(a);
   pushEdit({type:'amenity', prev}); amenityEditRefresh(); return true;
+}
+/* İMKAN-BOYUT: yerleşmiş bir imkanın boyutunu o tipin HAYALET tabanı olarak hatırla (sonraki aynı-tip
+   hayalet + yerleşen o boyda başlasın). Döndürülmüşte (ang≈90) on-screen w/h swap'lı → YATAY tabana
+   normalize (h→w) çevirerek sakla. Min AMENITY_MIN taban. */
+function amenityRememberSize(a){
+  if(!a||!a.type) return;
+  const rot = Math.abs(((a.ang||0)%180))===90;
+  const w = Math.max(AMENITY_MIN, rot? a.h : a.w), h = Math.max(AMENITY_MIN, rot? a.w : a.h);
+  amenityGhostSize[a.type]={ w:+w.toFixed(3), h:+h.toFixed(3) };
 }
 /* +/- bar için seçili imkan index'i: hover varsa o, yoksa son eklenen (varsa). */
 function amenitySelIdx(){ if(hoverAmenity!=null) return hoverAmenity;
   return (typeof amenities!=='undefined' && amenities.length)? amenities.length-1 : -1; }
+/* İMKAN-BOYUT: henüz yerleştirilmemiş HAYALETİ adımlı büyüt/küçült. Boyut aktif TİP için hatırlanır
+   (amenityGhostSize) → sonraki aynı-tip hayalet + yerleşen imkan o boyda doğar. R döndürme tabanı
+   YATAY (ang 0) w/h olarak tutar; hayalet vert ise ekranda swap edilir. Min AMENITY_MIN taban.
+   Geçerlilik (kırmızı/normal) hayalet yeniden türetilerek ANINDA güncellenir. */
+function amenityGhostResizeStep(sign){
+  if(mode!=='amenity') return false;
+  const def=amenityDef(amenityType), step=(def&&def.step)||0.5;
+  const base=amenityBaseSize(amenityType);
+  const nw=Math.max(AMENITY_MIN, +(base.w+sign*step).toFixed(3));
+  const nh=Math.max(AMENITY_MIN, +(base.h+sign*step).toFixed(3));
+  amenityGhostSize[amenityType]={w:nw, h:nh};
+  if(amenityLastSx!=null){ hoverAmenity=hitAmenity(amenityLastSx,amenityLastSy);
+    amenityGhost = hoverAmenity==null? amenityGhostAt(amenityLastSx,amenityLastSy) : null; }
+  render(); return true;
+}
 function setAmenityType(t){
   if(!REG.amenities[t]) return;
   amenityType=t; amenityGhost=null; amenityGhostVert=null;
@@ -1450,12 +1482,22 @@ if(typeof document.querySelectorAll==='function')
   document.querySelectorAll('#amenityBar button[data-am]').forEach(b=>b.onclick=()=>setAmenityType(b.dataset.am));
 /* C4: imkan Döndür butonu (dokunmatik parite — R tuşunun buton karşılığı) */
 { const ar=document.getElementById('amenityRot'); if(ar) ar.onclick=()=>toggleAmenityOrient(); }
-/* H1b: imkan Büyüt/Küçült — dokunmatik/kesin boyutlandırma (köşe tutamacının buton karşılığı).
-   Seçili = hover'daki, yoksa son eklenen imkan. Guard başarısızsa uyarı verir, boyut değişmez. */
-{ const ab=document.getElementById('amenityBigger'); if(ab) ab.onclick=()=>{ const i=amenitySelIdx();
-    if(i<0){ setStatusHint('Önce bir imkan ekleyip üstüne gel (ya da tek imkan bırak).','#b35a2e'); return; } amenityResizeStep(i,+1); }; }
-{ const as=document.getElementById('amenitySmaller'); if(as) as.onclick=()=>{ const i=amenitySelIdx();
-    if(i<0){ setStatusHint('Önce bir imkan ekleyip üstüne gel (ya da tek imkan bırak).','#b35a2e'); return; } amenityResizeStep(i,-1); }; }
+/* H1b + İMKAN-BOYUT: imkan Büyüt/Küçült — dokunmatik/kesin boyutlandırma (köşe tutamacının buton
+   karşılığı). İKİ durumu da boyutlandırır:
+     (1) imleç YERLEŞMİŞ bir imkanın üstündeyse (hover) → o imkanı boyutlandırır (H1b);
+     (2) aksi halde (imkan modunda, hayalet varken) → YERLEŞTİRME HAYALETİNİ boyutlandırır
+         → tip-başına hatırlanır, sonraki hayalet + yerleşen imkan o boyda doğar (İMKAN-BOYUT).
+   Kök neden düzeltmesi: buton eskiden yalnız amenitySelIdx()>=0 (yerleşmiş) yola bağlıydı →
+   yerleştirmeden ÖNCE küçültme yapılamıyordu. */
+function amenityBarResize(sign){
+  if(hoverAmenity!=null) return amenityResizeStep(hoverAmenity, sign);   // yerleşmiş imkan (hover)
+  if(mode==='amenity') return amenityGhostResizeStep(sign);               // yerleştirme hayaleti
+  const i=amenitySelIdx();                                                // düşüş: son eklenen
+  if(i<0){ setStatusHint('Önce bir imkan ekleyip üstüne gel (ya da hayaleti bahçeye getir).','#b35a2e'); return false; }
+  return amenityResizeStep(i,sign);
+}
+{ const ab=document.getElementById('amenityBigger'); if(ab) ab.onclick=()=>amenityBarResize(+1); }
+{ const as=document.getElementById('amenitySmaller'); if(as) as.onclick=()=>amenityBarResize(-1); }
 document.getElementById('tUndo').onclick=()=>{
   if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
   if(undoEdit()) return; // önce elle duvar/ayırıcı/balkon düzenlemeleri
