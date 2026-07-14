@@ -160,7 +160,7 @@ document.getElementById('addUnit').addEventListener('click',()=>{
   if(document.getElementById('binaTipi').value==='villa') return;
   unitSpecs.push({oda:3, salon:1, ensuite:true, acik:false, adet:1}); renderUnits(); resetCuts(); safeGen();
 });
-document.getElementById('binaTipi').addEventListener('change',()=>{ lockedCore=null; updateStructResetBtn(); renderUnits(); updateKatAyriUI(); resetCuts(); safeGen(); });
+document.getElementById('binaTipi').addEventListener('change',()=>{ closeFloorPaste(); lockedCore=null; updateStructResetBtn(); renderUnits(); updateKatAyriUI(); resetCuts(); safeGen(); });
 document.getElementById('koridorYon').addEventListener('change',e=>{ koridorYon=e.target.value; resetCuts(); safeGen(); });
 /* CEPHE-3: çıkma / çatı tipi — dış kabuk (3B) tercihleri. generate() ÇAĞIRMAZLAR (plan üretimi
    değişmez); yalnız globalleri günceller + açık dış kabuğu tazeler (View3D.refreshExterior). */
@@ -453,6 +453,7 @@ function floorsOff(){
 /* kat/bodrum sayısı değişti: dizi SEVİYE koruyarak yeniden indekslenir, anlık görüntüler
    güncel kat/yükseklikle damgalanır, aktif katın canlı durumu hedefe getirilir */
 function onFloorCountChange(){
+  closeFloorPaste();                                              // kat/bodrum sayısı değişti: reflow src indeksini kaydırır → tampon bayat kalır
   if(villaFloors && plan) villaFloors[activeFloor]=stateSnapshot(true); // canlıyı kaydet (kaymadan önce)
   updateKatAyriUI();
   if(!villaFloors){ villaOffset=bodrumSayisi; return; }
@@ -498,6 +499,14 @@ function renderFloorTabs(){
     b.addEventListener('click',()=>switchFloor(k));
     box.appendChild(b);
   }
+  if(totalFloors()>=2){   // şeritte kopyala girişi — sol paneldeki #floorCopyBtn ile aynı iş (bağlam: kat sekmeleri); şerit her çizimde sıfırlanır → handler tazelenir
+    const cp=document.createElement('button');
+    cp.className='fcopy'; cp.innerHTML=icon('copy','inl');
+    cp.setAttribute('data-tip','Bu kat düzenini kopyala → katlara uygula');
+    cp.setAttribute('aria-label','Bu kat düzenini kopyala');
+    cp.addEventListener('click',copyActiveFloorLayout);
+    box.appendChild(cp);
+  }
   if(title) title.textContent=(villa?'Oda Programı — ':'Daire Tipleri — ')+floorName(activeFloor);
   const fcb=document.getElementById('floorCopyBtn'); if(fcb) fcb.style.display = (totalFloors()>=2)?'':'none';
   renderFloorPaste(false);   // panel açıksa not/onay kutularını tazele (kapalıysa gizli kalır)
@@ -541,7 +550,6 @@ function makeStripDraggable(id){
 function switchFloor(k){
   if(!floorsOn()) return;
   if(k<0||k>=totalFloors()||k===activeFloor) return;
-  closeFloorPaste();   // kat değişti: kopyala/uygula tamponunu bırak (bağlam değişti)
   if(plan) villaFloors[activeFloor]=stateSnapshot(true);
   const prev=activeFloor; activeFloor=k;
   const snap=villaFloors[k];
@@ -601,7 +609,10 @@ function copyActiveFloorLayout(){
   if(!floorsOn()||!plan) return;
   villaFloors[activeFloor]=stateSnapshot(true);                  // güncel (elle düzenlenmiş) düzeni yakala
   floorClip={ src:activeFloor, snap:JSON.parse(JSON.stringify(villaFloors[activeFloor])) };
+  if(typeof showPanelTab==='function') showPanelTab('daireler'); // panel "daireler" sekmesinde → şeritten kopyalayınca görünür kıl
   renderFloorPaste(true);
+  const p=document.getElementById('floorPastePanel');
+  if(p&&p.scrollIntoView) p.scrollIntoView({block:'nearest'});
 }
 function renderFloorPaste(open){
   const panel=document.getElementById('floorPastePanel'),
@@ -611,16 +622,28 @@ function renderFloorPaste(open){
   if(!floorClip || !floorsOn()){ panel.style.display='none'; return; }
   if(open) panel.style.display='';
   head.innerHTML='<b>'+floorName(floorClip.src)+'</b> düzeni kopyalandı — hangi katlara uygulansın?';
-  const total=totalFloors(), buUse=floorClip.snap.plan.katKullanim||'konut';
+  /* tampon kat geçişinde yaşadığından liste yeniden çizilir → kullanıcının ELLE işaret/kaldır
+     seçimlerini koru: hâlâ uygun (enabled) satırlarda önceki seçimi uygula, yeni/az önce
+     devre dışı kalmış satırlar varsayılana döner */
+  const prev={};
+  list.querySelectorAll('input[type=checkbox][data-k]').forEach(cb=>{ prev[cb.dataset.k]={c:cb.checked,en:!cb.disabled}; });
+  const total=totalFloors(), buUse=floorClip.snap.plan.katKullanim||'konut',
+        apt=document.getElementById('binaTipi').value==='apartman';
   let html='', any=false;
   for(let k=total-1;k>=0;k--){
     if(k===floorClip.src) continue;
     const ok=floorPasteOK(k), visited=!!(villaFloors[k]&&villaFloors[k].plan);
-    const note = ok ? (visited?'üzerine yazılır':'yeni')
+    /* konut kaynak + ziyaret edilmemiş bodrum: uygulanabilir ama VARSAYILAN işaretsiz — istemeden
+       bodrumu konut yapma tuzağını önler (kullanıcı bilerek işaretlerse uygulanır) */
+    const bodrumOpt = ok && !visited && apt && buUse==='konut' && floorLevel(k)<0;
+    let checked = ok && !bodrumOpt;
+    const pv=prev[k];                                            // hâlâ uygun + önceden de uygunsa kullanıcı seçimini koru
+    if(ok && pv && pv.en) checked=pv.c;
+    const note = ok ? (visited?'üzerine yazılır':(bodrumOpt?'bodrum — istersen seç':'yeni'))
       : (usageOf(k)!==buUse ? (USAGE_TR[usageOf(k)]||'farklı kullanım') : 'farklı taban');
     if(ok) any=true;
     html += '<label style="display:flex;align-items:center;gap:7px;font-size:12px;padding:3px 0;'+(ok?'':'opacity:.45')+'">'
-      + '<input type="checkbox" data-k="'+k+'" '+(ok?'checked':'disabled')+'>'
+      + '<input type="checkbox" data-k="'+k+'" '+(ok?(checked?'checked':''):'disabled')+'>'
       + '<span>'+floorName(k)+'</span>'
       + '<small style="color:#9c8e76;margin-left:auto">'+note+'</small></label>';
   }
@@ -1011,6 +1034,7 @@ function renderBlockTabs(){
 }
 function switchBlock(k){
   if(!siteOn()||k<0||k>=blocks.length||k===activeBlock) return;
+  closeFloorPaste();                                              // blok değişti: floorClip app-globali → hedef bloğun katlarında bayat kalır
   if(mode==='site'&&typeof setMode==='function') setMode('draw');
   saveActiveBlock();
   const prev=activeBlock; activeBlock=k;

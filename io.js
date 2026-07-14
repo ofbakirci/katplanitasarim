@@ -1370,6 +1370,7 @@ function kpBuildPlanFromCells(geom){
   runChecks(); buildUnitTable(); fitView(); render();
 }
 function importPlanText(txt, fname){
+  if(typeof closeFloorPaste==='function') closeFloorPaste();   // içe aktarma bağlamı sıfırlar → kat kopyala tamponunu bırak
   txt=txt.replace(/^﻿/,'');
   try{
     if(/^\s*\{/.test(txt)){ restoreState(JSON.parse(txt)); repairImportedPlan(); return; }
