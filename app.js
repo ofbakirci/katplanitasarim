@@ -992,13 +992,34 @@ function updateSiteSummary(){
   else html+='<div class="ss-note">Parsel çizilmedi — TAKS/KAKS oranları için Parsel getirin ya da çizin.</div>';
   box.innerHTML=html;
 }
+/* KAT-M2-BAYAT fix: bvert (sınır köşe/kenar) düzenlemesi + undo(bound/bounddraw) + generate()
+   zinciri renderBlockTabs()'ı hiç çağırmıyordu → #blockTabs m² etiketi bayat kalıyordu (kardeş
+   panel updateSiteSummary render()'a bağlı olduğu için hiç bayatlamıyor). Noktasal çağrı eklemek
+   yerine render() döngüsüne bağlandı (render.js) + ucuz imza-memo eklendi: her render'da
+   çağrılması artık normal ama DOM'u yalnız durum GERÇEKTEN değiştiyse yeniden kurar. */
+let __blockTabsSig=null;
 function renderBlockTabs(){
   const box=document.getElementById('blockTabs');
   if(!box) return;
   makeStripDraggable('blockTabs');   // "BLOK" grip'inden sürüklenebilir
   updateSiteBtn();
   if(typeof updateSiteSummary==='function') updateSiteSummary();
-  if(!siteOn()){ box.style.display='none'; positionOnb(); return; }
+  if(!siteOn()){
+    if(box.style.display!=='none'){ box.style.display='none'; __blockTabsSig=null; }
+    positionOnb();
+    return;
+  }
+  // ucuz imza: blok sayısı + aktif blok + her bloğun alanı(yuvarlı)/planlı-mı — bvert/undo/generate
+  // gibi noktasal çağırmayan yollarda da m²/durum canlı kalsın diye
+  let sig=blocks.length+'|'+activeBlock;
+  for(let k=0;k<blocks.length;k++){
+    const b=blocks[k], isActive=k===activeBlock;
+    const area=isActive? (closed?shoelace(pts):0) : (b&&b.pts&&b.pts.length>=3?shoelace(b.pts):0);
+    const hasPlan=isActive? !!plan : !!(b&&b.plan);
+    sig+='|'+Math.round(area*100)+':'+(hasPlan?1:0);
+  }
+  if(sig===__blockTabsSig){ box.style.display='flex'; positionOnb(); return; } // durum değişmedi → DOM'a dokunma
+  __blockTabsSig=sig;
   box.style.display='flex'; box.innerHTML='';
   const lbl=document.createElement('span'); lbl.className='bl'; lbl.textContent='BLOK'; lbl.title='Sürükle: kutuyu taşı'; box.appendChild(lbl);
   blocks.forEach((b,k)=>{

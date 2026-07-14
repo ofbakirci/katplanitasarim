@@ -127,7 +127,10 @@ function stateSnapshot(bare, withBlocks){
         roofType:(typeof roofType!=='undefined')?roofType:'teras'},
     wallThick:(typeof wallThick!=='undefined'&&wallThick)?Object.assign({},wallThick):{}, // L1-A1: kullanıcı duvar kalınlığı override'ı (görsel; eksikse minimum)
     pts:pts.map(p=>({x:p.x,y:p.y})), parcelPts:parcelPts.map(p=>({x:p.x,y:p.y})),
-    parcelClosed, parcelRot, parcelImar, balconies:balconies.map(b=>({...b})),
+    parcelClosed, parcelRot, parcelImar,
+    geo:(typeof psProj!=='undefined' && psProj)? {lng0:psProj.lng0, lat0:psProj.lat0, mLng:psProj.mLng, mLat:psProj.mLat,
+      dx:psProj.dx||0, dy:psProj.dy||0, rot:psProj.rot||0, ring:psProj.ring} : null,   // TKGM geo-referansı (uydu/yeniden-projeksiyon için); eski kayıtta yok → null
+    balconies:balconies.map(b=>({...b})),
     courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
     amenities:(typeof amenities!=='undefined'?amenities:[]).map(a=>({...a})),   // S3: site imkanları (parsel-katmanı, site-ORTAK — her snapshot aynı global kopyayı taşır)
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ?customCutsZ.map(a=>a?a.slice():null):null, unitLayout:Object.assign({},unitLayout),
@@ -225,7 +228,11 @@ function restoreState(st, opt){
     parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed; psFrontEdge=-1;
     parcelRot=(typeof st.parcelRot==='number' && isFinite(st.parcelRot))?st.parcelRot:0;
     parcelImar = st.parcelImar || null;                          // imar durumu kayıttan geri yüklenir (yeniden sorgulanmaz)
-    psProj=null; psSatReq=null;                                  // kayıttan: geo referansı yok (parcelPts döndürülmüş saklanır)
+    // TKGM geo-referansı: kayıtta varsa (ring>=3) geri kur (uydu/yeniden-projeksiyon çalışsın); yoksa eski kayıt geri-uyumluluğu (parcelPts döndürülmüş saklanır)
+    psProj=(st.geo && Array.isArray(st.geo.ring) && st.geo.ring.length>=3)
+      ? {lng0:st.geo.lng0, lat0:st.geo.lat0, mLng:st.geo.mLng, mLat:st.geo.mLat, dx:st.geo.dx||0, dy:st.geo.dy||0, rot:st.geo.rot||0, ring:st.geo.ring.map(c=>c.slice())}
+      : null;
+    psSatReq=null;
     if(typeof psComputeSetback==='function') psComputeSetback();
     if(parcelPts.length>=3 && parcelClosed){ const imar=document.getElementById('psImar'); if(imar) imar.style.display='block'; if(typeof imarRender==='function') imarRender(parcelImar); }
     if(typeof psSyncRotUI==='function') psSyncRotUI();
@@ -252,12 +259,16 @@ function restoreState(st, opt){
     villaFloors=null; activeFloor=0;
     if(ka) ka.checked=false;
   }
-  /* site blokları: dosyadan TAM site durumu geliyorsa diziyi kur; blok geçişinde (keepBlocks) dokunma */
+  /* site blokları: dosyadan TAM site durumu geliyorsa diziyi kur; blok geçişinde (keepBlocks) dokunma.
+     SİTE-DEĞİŞMEZİ: KAT geçişi de (keepFloors) blocks'u CANLIDAN korur — per-kat snapshot'ta st.blocks
+     YOKTUR; bu asimetri (villaFloors keepFloors ile korunuyordu, blocks korunmuyordu) yüzünden site
+     açıkken kata-ayrı planlamada bir kat seçilince siteMod kapanıp bloklar siliniyordu. Undo/dosya
+     yükleme (opt'suz TAM restore) blocks'u kayıttan yönetmeye DEVAM eder. */
   const sm=document.getElementById('siteMod');
   if(st.blocks){
     blocks=st.blocks.slice(); activeBlock=st.activeBlock||0;
     if(sm) sm.checked=true;
-  } else if(!opt||!opt.keepBlocks){
+  } else if(!opt||(!opt.keepBlocks&&!opt.keepFloors)){
     blocks=null; activeBlock=0;
     if(sm) sm.checked=false;
   }
@@ -1388,6 +1399,7 @@ function normalizeFloorParcels(st){
     f.parcelClosed=!!src.parcelClosed;
     f.parcelRot=(typeof src.parcelRot==='number'&&isFinite(src.parcelRot))?src.parcelRot:0;
     f.parcelImar=src.parcelImar||null;
+    f.geo=src.geo? JSON.parse(JSON.stringify(src.geo)) : null;   // TKGM geo-referansı da parsel-ailesiyle damgalanır (derin kopya — ring paylaşımı olmasın)
     f.amenities=(src.amenities||[]).map(a=>({...a}));
   };
   if(st.katAyri&&Array.isArray(st.floors)) st.floors.forEach(stampFrom(st));

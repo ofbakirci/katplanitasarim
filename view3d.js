@@ -6756,6 +6756,26 @@
   }
   // dışa: tüm mobilya düz liste (px dahil) — render pipeline / hata ayıklama
   function exportFurniture(){ const map=scene&&scene.__map; if(map) syncFurniturePx(map); return furnList.map(function(f){ return JSON.parse(JSON.stringify(f)); }); }
+  // içe: exportFurniture çıktısını (düz liste; pos MUTLAK metre, __w/__d korunur) geri yükle — setCameras ikizi.
+  //   Kalıcı store'a (window.__kptaFurniture, room_id→item[]) YAZAR → sahne yoksa da sonraki
+  //   buildFloorplanMap mobilyayı görür; canlı sahne varsa map'e bindirir + yeniden çizer.
+  //   px alanları (polygon_px/centroid_px) türetilmiştir → syncFurniturePx taze map'e göre yeniden damgalar.
+  function setFurniture(arr){
+    arr=(arr||[]).filter(function(f){ return f && f.type && f.pos && f.room_id; });
+    const store={};
+    arr.forEach(function(f){ const c=JSON.parse(JSON.stringify(f)); (store[c.room_id]=store[c.room_id]||[]).push(c); });
+    try{ window.__kptaFurniture=store; }catch(e){}
+    const map=scene&&scene.__map;
+    if(map){
+      const wipe=function(r){ r.furniture=[]; };
+      (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(wipe); }); (map.common_areas||[]).forEach(wipe);
+      balconyRooms(map).forEach(wipe);
+      Object.keys(store).forEach(function(rid){ const r=furnRoomById(rid); if(r) r.furniture=store[rid]; });   // odası bulunmayan kayıt sahneye binmez (store'da kalır)
+      syncFurniturePx(map);
+      collectFurnList(); activeFurnIdx=-1; renderFurniture();
+    }
+    return arr.length;
+  }
 
   // ── açılış: boot (three.js + sahne) → full ya da yan-yana (compare) layout ──
   let compareMode=false, compareRefURL=null;   // adım 4 karşılaştırma: mesh tam genişlik + sol-üst boyalı-plan lightbox
@@ -7078,7 +7098,7 @@
     worldToPxForTest:function(wx,wz){ var m=scene&&scene.__map; return m?worldToPx(m,wx,wz):null; },
     roomIdAtPointForTest:function(wx,wz){ return roomIdAtPoint({x:wx,z:wz}); },   // B4/B5: balkon dahil oda kimliği
     balconyRoomsForTest:function(){ var m=scene&&scene.__map; return m?balconyRooms(m).map(function(r){ return {id:r.id, type:r.type, npoly:r.polygon_px.length, nfurn:(r.furniture||[]).length}; }):[]; },
-    exportFurniture:exportFurniture, sceneDescription:sceneDescription,
+    exportFurniture:exportFurniture, setFurniture:setFurniture, sceneDescription:sceneDescription,   // setFurniture: proje paketi (.mskpkg) mobilya rehydration'ı (setCameras ikizi)
     // MALZEME (M-serisi): preset kataloğu + oda-başına seç/uygula/sıfırla + kalıcılık (test + prototip).
     setMatUI:setMatUI, materialPresets:function(){ return MAT_PRESETS.map(function(p){ return {key:p.key,group:p.group,cls:p.cls,name:p.name}; }); },
     selectMatRoom:selectMatRoom, applyMaterial:applyMaterial, resetRoomMaterial:resetRoomMaterial,

@@ -209,6 +209,11 @@ function render(){
   const clean = typeof aiCleanMode!=='undefined' && aiCleanMode; // AI temiz mod: gürültü katmanlarını (grid/parsel/balkon/düğüm/m²/ölçü/seçim) atla
   /* S4a: site özeti canlı takip (yalnız ekran; dışa-aktarım/temiz modda değil) */
   if(!exportView && !clean && typeof updateSiteSummary==='function') updateSiteSummary();
+  /* KAT-M2-BAYAT: #blockTabs m² etiketi de aynı korumalı desenle render döngüsüne bağlı — bvert
+     (sınır köşe) düzenleme + undo(bound/bounddraw) + generate() zinciri noktasal çağırmıyordu.
+     renderBlockTabs kendi içinde imza-memo'lu (app.js) → her render'da çağrılması ucuz; site
+     kapalıyken de kendini gizliyor, guard'a gerek yok. */
+  if(!exportView && !clean && typeof renderBlockTabs==='function') renderBlockTabs();
   /* ızgara (AI temiz modda çizilmez) */
   if(!clean){
     const g0=el('g',{}); svg.appendChild(g0);
