@@ -56,7 +56,8 @@ const strictTests = [
   'tests/cephe3.js',
   'tests/yon-kuresi.js',
   'tests/site-imkan.js',
-  'tests/site-fix-history.js'
+  'tests/site-fix-history.js',
+  'tests/parsel-cekme.js'
 ];
 
 const smokeTests = [

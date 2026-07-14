@@ -421,7 +421,7 @@ function tkgmSetbackMiter(poly, dspec){
     out.push({x:l1.px+l1.dx*t, y:l1.py+l1.dy*t});
   }
   let oa=0; for(let i=0;i<N;i++){const q=out[(i+1)%N]; oa+=out[i].x*q.y-q.x*out[i].y;}
-  if(oa<=1) return [];
+  if(Math.abs(oa)<=1 || Math.sign(oa)!==Math.sign(a2)) return [];   // dejenere ya da yönü girişten farklı (ters dönmüş) → geçersiz; NOT: CW parselde oa negatiftir, eski `oa<=1` yön-körü olduğundan miter'ı hep eliyordu
   for(let i=0;i<N;i++){ if(!pip(out[i].x, out[i].y, p)) return []; }
   return out.map(q=>({x:Math.round(q.x*1000)/1000, y:Math.round(q.y*1000)/1000}));
 }
