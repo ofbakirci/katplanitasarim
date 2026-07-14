@@ -491,9 +491,25 @@ function ruleBalkon(add,p){
   if(balconies.length){
     const tot=balconies.reduce((s,b)=>s+balkArea(b),0);
     add('info',`${balconies.length} balkon, toplam ${fmt(tot)} m² açık alan (brüt alana dahil edilmedi).`);
+    /* PAİY md.41 "Çıkmalar": açık çıkma (balkon) sınırı, YAPI YAKLAŞMA SINIRINDAN (çekme
+       çizgisi) en çok REG.cikmaMax m taşmadır — bina CEPHESİNDEN değil. Aynı madde:
+       "Bina tabanı zeminde yapı yaklaşma sınırlarından daha içeri çekilerek ... istenilen
+       ölçülerde yapılabilir." → bina geride oturuyorsa balkon cikmaMax'tan DERİN olabilir
+       ve YASALDIR. Bu yüzden ölçüm referansı çekme zarfı (psSetbackPoly), balkonun kendi
+       derinliği DEĞİL. Zarf yoksa (parsel çizilmemiş) mevzuat referansı da yok → 'bad'
+       ÜRETİLMEZ (ezbere kırmızı yanlış-pozitifti); en fazla nazik bir 'info'. */
+    const env = (typeof psSetbackPoly==='function') ? (psSetbackPoly()||null) : null;
+    const envOk = !!(env && env.length>=3);
     balconies.forEach((b,i)=>{
-      if(b.depth>REG.cikmaMax) add('bad',`Balkon ${i+1}: çıkma derinliği ${fmt(b.depth)} m > max ${fmt(REG.cikmaMax)} m (PAİY açık çıkma).`);
-      else if(b.depth<REG.balkonMinD) add('info',`Balkon ${i+1}: derinlik ${fmt(b.depth)} m < ${fmt(REG.balkonMinD)} m — kullanışlılık için önerilen min.`);
+      if(envOk){
+        let worst=0;
+        balkQuad(b).forEach(q=>{ if(!pip(q.x,q.y,env)) worst=Math.max(worst, distToPoly(q,env)); });
+        if(worst>REG.cikmaMax+1e-6)
+          add('bad',`Balkon ${i+1}: çekme (yapı yaklaşma) sınırından ${fmt(worst)} m taşıyor > max ${fmt(REG.cikmaMax)} m (PAİY md.41 açık çıkma).`);
+      } else if(b.depth>REG.cikmaMax){
+        add('info',`Balkon ${i+1}: derinlik ${fmt(b.depth)} m. Çıkma sınırı (PAİY md.41: yapı yaklaşma sınırından en çok ${fmt(REG.cikmaMax)} m) parsel ve imar çekmesi olmadan ölçülemez — parseli çizip imar durumunu girerseniz denetlenir.`);
+      }
+      if(b.depth<REG.balkonMinD) add('info',`Balkon ${i+1}: derinlik ${fmt(b.depth)} m < ${fmt(REG.balkonMinD)} m — kullanışlılık için önerilen min.`);
       if(parcelClosed && balkQuad(b).some(q=>!pip(q.x,q.y,parcelPts)))
         add('bad',`Balkon ${i+1} parsel dışına taşıyor!`);
     });

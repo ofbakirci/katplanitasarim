@@ -508,9 +508,10 @@ function render(){
        (park/mobilya geçersiz-hayalet deseniyle tutarlı) → çakışma anında görünür. */
     const bad = mode==='draw' && typeof blockDrawBad!=='undefined' && blockDrawBad;
     const col=bad?'#c0392b':mode==='parcel'?'#4a7c4a':mode==='roomdraw'?'#7a4fb3':'#b35a2e';
-    /* aday sınırın kapalı önizlemesi (site + ≥2 köşe): çakışmayı bölge olarak göster */
-    if(mode==='draw' && typeof siteOn==='function' && siteOn() && act.arr.length>=2 && !hoverP.closing){
-      const poly=act.arr.concat([{x:hoverP.x,y:hoverP.y}]);
+    /* aday sınırın kapalı önizlemesi (≥2 köşe + imleç = 3. nokta): oda çizimindeki hayalet alanın ikizi.
+       Site modunda ayrıca çakışmayı bölge olarak gösterir (bad → kırmızı). */
+    if(mode==='draw' && act.arr.length>=2){
+      const poly = hoverP.closing ? act.arr.slice() : act.arr.concat([{x:hoverP.x,y:hoverP.y}]);
       g.appendChild(el('path',{d:'M'+poly.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z',
         fill:bad?'rgba(192,57,43,.10)':'rgba(179,90,46,.06)', stroke:'none'}));
     }
