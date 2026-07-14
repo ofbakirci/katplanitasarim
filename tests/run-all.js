@@ -16,6 +16,7 @@ const strictTests = [
   'tests/villa-kat.js',
   'tests/ticari-kat.js',
   'tests/kat-kopyala.js',
+  'tests/parsel-kat-invariant.js',
   'tests/import.js',
   'tests/dxf-import.js',
   'tests/dxf-roundtrip.js',

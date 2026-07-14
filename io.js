@@ -217,16 +217,23 @@ function restoreState(st, opt){
   { const bi=document.getElementById('bodrumSayisi'); if(bi) bi.value=String(bodrumSayisi); }
   katKullanim=(st.plan&&st.plan.katKullanim)||'konut'; // bu katın kullanım tipi (per-kat)
   pts=st.pts.map(p=>({x:p.x,y:p.y})); closed=true;
-  parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed; psFrontEdge=-1;
-  parcelRot=(typeof st.parcelRot==='number' && isFinite(st.parcelRot))?st.parcelRot:0;
-  parcelImar = st.parcelImar || null;                          // imar durumu kayıttan geri yüklenir (yeniden sorgulanmaz)
-  psProj=null; psSatReq=null;                                  // kayıttan: geo referansı yok (parcelPts döndürülmüş saklanır)
-  if(typeof psComputeSetback==='function') psComputeSetback();
-  if(parcelPts.length>=3 && parcelClosed){ const imar=document.getElementById('psImar'); if(imar) imar.style.display='block'; if(typeof imarRender==='function') imarRender(parcelImar); }
-  if(typeof psSyncRotUI==='function') psSyncRotUI();
+  /* parsel-ailesi SİTE-DEĞİŞMEZİ: kat (keepFloors) ve blok (keepBlocks) geçişinde snapshot'tan
+     OKUNMAZ, canlı korunur. Aksi hâlde bir kat/bloktayken parsel değişince (TKGM/çizim/döndürme)
+     diğerlerinin bayat snapshot parseli geçişte geri basılıyordu → aynı parselin katları/blokları
+     farklı parsel taşıyordu. Undo/redo ve dosya yükleme (tam restore) parseli geri basmaya DEVAM eder. */
+  if(!opt||(!opt.keepFloors&&!opt.keepBlocks)){
+    parcelPts=(st.parcelPts||[]).map(p=>({x:p.x,y:p.y})); parcelClosed=!!st.parcelClosed; psFrontEdge=-1;
+    parcelRot=(typeof st.parcelRot==='number' && isFinite(st.parcelRot))?st.parcelRot:0;
+    parcelImar = st.parcelImar || null;                          // imar durumu kayıttan geri yüklenir (yeniden sorgulanmaz)
+    psProj=null; psSatReq=null;                                  // kayıttan: geo referansı yok (parcelPts döndürülmüş saklanır)
+    if(typeof psComputeSetback==='function') psComputeSetback();
+    if(parcelPts.length>=3 && parcelClosed){ const imar=document.getElementById('psImar'); if(imar) imar.style.display='block'; if(typeof imarRender==='function') imarRender(parcelImar); }
+    if(typeof psSyncRotUI==='function') psSyncRotUI();
+    amenities=(st.amenities||[]).map(a=>({...a}));               // S3: site imkanları parsel-katmanı/site-ORTAK → parsel-ailesiyle birlikte
+  }
   balconies=(st.balconies||[]).map(b=>({...b}));
   courtyards=(st.courtyards||[]).map(av=>({poly:(av.poly||[]).map(p=>({x:p.x,y:p.y}))})); avluGhost=null;
-  amenities=(st.amenities||[]).map(a=>({...a})); hoverAmenity=null; amenityGhost=null;   // S3: site imkanları geri yükle (eski kayıtta yok → []; salt-veri, davranış değişmez)
+  hoverAmenity=null; amenityGhost=null;
   unitSpecs=st.specs.map(s=>({...s})); renderUnits();
   customCutsZ=st.cuts||null; unitLayout=st.unitLayout||{};
   doorOverrides=(st.doors&&st.doors.ov)||{};
@@ -1369,15 +1376,37 @@ function kpBuildPlanFromCells(geom){
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   runChecks(); buildUnitTable(); fitView(); render();
 }
+/* Eski bozuk kayıt onarımı: kat snapshot'ları parsel taşırdı ve ıraksayabiliyordu (bir katta
+   parsel değişince diğerleri eskide kalır, ör. kat-plani-4: floors[2] 5 köşe / floors[3..5] 11 köşe).
+   Üst-seviye (aktif katın) parsel-ailesi TÜM kat snapshot'larına damgalanır; footprint'lere (pts)
+   DOKUNULMAZ — bina yeni parsele taşarsa mevcut PARSEL check'i (checks.js "parsel dışına taşıyor")
+   uyarır. restoreState'e KOYMA: undo/redo/kat-geçişi de onu kullanır (repair-import deseni). */
+function normalizeFloorParcels(st){
+  if(!st||typeof st!=='object') return st;
+  const stampFrom=src=>f=>{ if(!f||typeof f!=='object') return;
+    f.parcelPts=(src.parcelPts||[]).map(p=>({x:p.x,y:p.y}));
+    f.parcelClosed=!!src.parcelClosed;
+    f.parcelRot=(typeof src.parcelRot==='number'&&isFinite(src.parcelRot))?src.parcelRot:0;
+    f.parcelImar=src.parcelImar||null;
+    f.amenities=(src.amenities||[]).map(a=>({...a}));
+  };
+  if(st.katAyri&&Array.isArray(st.floors)) st.floors.forEach(stampFrom(st));
+  /* bloklar-arası da eşitlenir (parsel SİTE-ortak): üst-seviye (aktif bloğun) parseli tüm blok
+     üst-seviyelerine + onların katlarına damgalanır; blok footprint/courtyards'a dokunulmaz */
+  if(Array.isArray(st.blocks)) st.blocks.forEach(b=>{ if(!b) return;
+    stampFrom(st)(b);
+    if(b.katAyri&&Array.isArray(b.floors)) b.floors.forEach(stampFrom(st)); });
+  return st;
+}
 function importPlanText(txt, fname){
   if(typeof closeFloorPaste==='function') closeFloorPaste();   // içe aktarma bağlamı sıfırlar → kat kopyala tamponunu bırak
   txt=txt.replace(/^﻿/,'');
   try{
-    if(/^\s*\{/.test(txt)){ restoreState(JSON.parse(txt)); repairImportedPlan(); return; }
+    if(/^\s*\{/.test(txt)){ restoreState(normalizeFloorParcels(JSON.parse(txt))); repairImportedPlan(); return; }
     const m=txt.match(/<metadata[^>]*id="kpState"[^>]*>([\s\S]*?)<\/metadata>/);
     if(m){
       const json=m[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
-      restoreState(JSON.parse(json)); repairImportedPlan(); return;
+      restoreState(normalizeFloorParcels(JSON.parse(json))); repairImportedPlan(); return;
     }
     /* DXF: uzantı ya da içerik imzası (SVG/JSON bu yola düşmez) */
     if(/\.dxf$/i.test(fname||'') || (/\bENTITIES\b/.test(txt) && /\b(LWPOLYLINE|POLYLINE)\b/.test(txt))){
