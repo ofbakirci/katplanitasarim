@@ -58,6 +58,7 @@ const strictTests = [
   'tests/balkon-cekme.js',
   'tests/dis-gorunum.js',
   'tests/dis-drone-kamera.js',
+  'tests/ic-blok-kat-cip.js',
   'tests/dis-render-server-prompt.js',
   'tests/cephe3.js',
   'tests/yon-kuresi.js',

@@ -390,7 +390,11 @@ Masaüstünde birinci-şahıs gezinti yapabilirsin: Pointer Lock ile fareyle bak
 
 ### Kat, blok ve indirme
 
-Kat seçimi 2B editörün kat sekmelerindendir; 3B aktif katı gösterir. Aktif kat konut-dışıysa otomatik olarak ilk konut katına geçilir (bilgi mesajıyla); hiç konut katı yoksa dış görünüme düşülür. Çok bloklu sitede **blok çipleri** görünür: **"A · B · … · Tümü"** — seçilen tam kabuk olarak, diğerleri hayalet (salt görsel) çizilir.
+Kat ve blok seçimi 3B'nin içinden yapılır (üst-orta çip satırları):
+
+- **İç görünümde:** çok bloklu sitede **"Blok"** çipleri (A, B, …) aktif bloğu GERÇEKTEN değiştirir — sahne seçilen bloğun planıyla yeniden kurulur. "Katları ayrı planla" açıksa altında **"Kat"** çipleri belirir (Zemin kat, 1. kat, …); konut katları tıklanabilir, ticari/otopark/sığınak katları soluk görünür ("iç mekânı yakında"). Kat/blok gezerken yerleştirilmiş kameralar ve drone'lar SİLİNMEZ.
+- **Dış görünümde:** blok çipleri **"A · B · … · Tümü"** biçimindedir ve salt görseldir — seçilen tam kabuk, diğerleri hayalet çizilir; 2B aktif blok değişmez.
+- Aktif kat konut-dışıysa 3B açılışta otomatik ilk konut katına geçer (bilgi mesajıyla); hiç konut katı yoksa dış görünüme düşülür.
 
 **"İndir"** grubundaki **"Görüntüyü indir (PNG)"**, o anki 3B görünümü 1920 px olarak kaydeder. Bu bir "AI render değil"dir ve kredisizdir.
 
@@ -398,7 +402,7 @@ Kat seçimi 2B editörün kat sekmelerindendir; 3B aktif katı gösterir. Aktif 
 
 ## 8. Adım 3: Kamera
 
-Bu adımda 3B tam ekran açık kalır ve kamera paneli görünür. Panel şerit-farkındadır: **"İç Mekan"** şeridindeyken oda kameraları, **"Dış Görünüm"** şeridindeyken drone dock'u gelir. Adımın CTA'sı **"Render Kadrajları"**; ona bastığında 3B canlıyken tüm kamera ve drone kadrajlarının küçük görselleri **kredisiz** yakalanır ve Adım 4'e geçilir.
+Bu adımda 3B tam ekran açık kalır ve kamera paneli görünür. Panel şerit-farkındadır: **"İç Mekan"** şeridindeyken oda kameraları, **"Dış Görünüm"** şeridindeyken drone dock'u gelir. Adımın CTA'sı **"Render Kadrajları"**; ona bastığında 3B canlıyken tüm kamera ve drone kadrajlarının küçük görselleri **kredisiz** yakalanır ve Adım 4'e geçilir. Hiç drone eklemeden ilerlersen bir kezlik nazik bir hatırlatma çıkar (**"Drone Ekle"** seni Dış şeridine götürür, **"Devam Et"** normal akışla sürer) — dış cephe karesini istemeden atlamazsın. Yakalama hibrittir: hangi şeritte bırakırsan bırak, iç kamera kadrajları iç sahneden, drone kadrajları dış kabuktan, **"Planı Boya"** kadrajı ise her zaman deterministik izometrik açıdan alınır — kart önizlemesi ile üretilen sonuç aynı kaynaktan gelir.
 
 Araç grupları rail üstünde sırayla: **"Kamera (İç)"**, **"Drone (Dış)"**, **"İç Malzeme"**, **"Dış Cephe"**, **"Mobilya"**, **"Gezinti (masaüstü)"**, **"İndir"**. Bir dış araca tıklayınca otomatik dış moda, bir iç araca tıklayınca iç moda geçilir (araçlar köprülüdür).
 
@@ -502,11 +506,17 @@ Plan önce renk-kodlu gerçek 3B mesh'e çevrilir; yapay zekâ yalnız malzeme v
 | Antre | Bej |
 | Çekirdek | Koyu gri |
 
-### Kadraj galerisi
+### Kadraj galerisi ve Render Listesi
 
-Her iç kamera, her drone ve bir **"Planı Boya"** kartı, kadraj kartları galerisini oluşturur. Kart görseli 3B'den alınan yerel bir küçük görüntüdür (kredisiz). **"Planı Boya"**, izometrik açıdan renk-kodlu bir PNG kadrajıdır ve galeride bir karttır.
+Galeri üç grupta toplanır: **"Plan Boyama"**, **"İç Kameralar"** ve **"Dış / Drone"** (başlıklarda kart sayısıyla). Kart görselleri 3B'den alınan yerel küçük görüntülerdir (kredisiz).
 
-<!-- GORSEL 13: Adim-4 render galerisi — ic kamera + drone + "Planı Boya" kartlari; global "Sadık/Yaratıcı" secici; alt cubukta "Üret (N)" -->
+- **"Planı Boya"** kartı izometrik açıdan renk-kodlu bir kadrajdır; çok bloklu sitede **blok başına bir kart** oluşur (**"Planı Boya — Blok A"**, **"— Blok B"**...).
+- Sağdaki **"Render Listesi"** her kartın satırını gösterir: seçim kutusu (kartla çift yönlü eş), etiket ve durum çipi (bekliyor / üretiliyor / hazır / hata). Satıra tıklamak ilgili karta kaydırır; "Üret" ilerledikçe durumlar burada akar.
+- Hiç drone yoksa Dış grubunda "Drone yok — dış cephe kareleri için Kamera adımında Drone ekleyin" satırı ve **"Kamera adımına dön"** düğmesi görünür.
+
+Üst şeritteki adım noktaları da durum gösterir: Kamera adımında iç nokta = en az bir iç kamera, dış nokta = en az bir drone; Render adımında noktalar üretim durumunu izler (üzerine gelince ayrıntı yazar).
+
+<!-- GORSEL 13: Adim-4 render galerisi — uc grup basligi (Plan Boyama blok karti x2, Ic Kameralar, Dis/Drone) + sagda Render Listesi checklist'i; alt cubukta "Üret (N)" -->
 
 ### Sadık / Yaratıcı
 

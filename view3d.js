@@ -777,8 +777,13 @@
       '</div>'+
       // F4: BLOK ÇİPLERİ — bina modunda + 2+ blok varsa üst-orta (segment'in ALTINDA). Seçilen blok TAM
       //   kabuk, diğerleri hayalet kütle; "Tümü" = tüm blokların tam kabuğu. Salt GÖRÜNTÜ (2B aktif blok
-      //   DEĞİŞMEZ). renderBlockChips doldurur/gösterir; data-blockchip = hedef index ya da 'all'.
+      //   DEĞİŞMEZ). İŞ 1b: İÇ modda AYNI kutu — ama "Tümü" yok, tık 2B aktif bloğu GERÇEKTEN değiştirir
+      //   (switchBlock). renderBlockChips doldurur/gösterir; data-blockchip = hedef index ya da 'all'.
       '<div id="v3dBlockChips" class="v3dseg" style="position:absolute;top:52px;left:50%;transform:translateX(-50%);z-index:4;display:none"></div>'+
+      // İŞ 1c: KAT ÇİPLERİ — blok çiplerinin ALTINDA, YALNIZ İÇ modda + katları-ayrı + 2+ kat varsa. Konut-dışı
+      //   (ticari/otopark/sığınak) katlar devre dışı görünür (H3 ürün kararıyla aynı: iç mekân yalnız konut
+      //   katlarda var). renderFloorChips doldurur/gösterir; data-floorchip = hedef kat indeksi.
+      '<div id="v3dFloorChips" class="v3dseg" style="position:absolute;top:92px;left:50%;transform:translateX(-50%);z-index:4;display:none"></div>'+
       '<div id="v3dDock" style="position:absolute;top:12px;right:12px;display:flex;align-items:flex-start;gap:8px;z-index:3">'+
         '<div id="v3dDrawer" style="background:'+UIPAL.panel+';color:'+UIPAL.ink+';font:13px/1.45 system-ui,sans-serif;padding:13px 15px;border-radius:'+UIPAL.rLg+';width:250px;max-height:calc(100vh - 24px);overflow:auto;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+';display:none"></div>'+
         '<div id="v3dRail" style="background:'+UIPAL.panel+';border-radius:'+UIPAL.rLg+';padding:6px;display:flex;flex-direction:column;gap:5px;backdrop-filter:'+UIPAL.blur+';box-shadow:'+UIPAL.shadowSm+'"></div>'+
@@ -895,6 +900,11 @@
       '#v3dBlockChips button{padding:6px 12px;font-size:11.5px}'+          // çipler biraz daha küçük
       '#v3dBlockChips button.on{background:'+U.ok+';color:'+U.onOk+'}'+    // seçili blok yeşil (dış-mod aksanı)
       '#v3dBlockChips .cl{font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;font-weight:700;padding:0 8px 0 6px;color:'+U.inkDim+';align-self:center}'+
+      // İŞ 1c: kat çipleri — blok çipleri deseninin ikizi; konut-dışı katlar soluk+tıklanamaz.
+      '#v3dFloorChips button{padding:6px 12px;font-size:11.5px}'+
+      '#v3dFloorChips button.on{background:'+U.ok+';color:'+U.onOk+'}'+
+      '#v3dFloorChips button.off{opacity:.35;cursor:not-allowed}'+
+      '#v3dFloorChips .cl{font-size:9px;letter-spacing:.06em;text-transform:uppercase;opacity:.6;font-weight:700;padding:0 8px 0 6px;color:'+U.inkDim+';align-self:center}'+
       '.v3drailb{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:0;border-radius:'+U.r9+';background:transparent;color:'+U.inkAcc+';cursor:pointer}'+
       '.v3drailb:hover{background:'+U.hoverFill+';color:'+U.ink+'}.v3drailb.on{background:'+U.acc+';color:'+U.onAcc+'}'+
       '.v3drailx{color:'+U.bad+'}.v3drailx:hover{background:rgba(192,73,43,.22);color:'+U.onBad+'}'+
@@ -1026,7 +1036,18 @@
       const xl=t.getAttribute&&t.getAttribute('data-extlens'); if(xl){ setExtCamLens(+xl); return; }                  // S2: dış drone objektif
       const xf=t.getAttribute&&t.getAttribute('data-facade'); if(xf){ applyFacadePreset(xf); renderExtDock(); return; } // S2: cephe preset (kabuğa ANINDA)
       const vseg=t.getAttribute&&t.getAttribute('data-viewseg'); if(vseg){ setExteriorMode(vseg==='exterior'); return; }   // F5: görünüm segment'i (KAT/BİNA)
-      const bchip=t.getAttribute&&t.getAttribute('data-blockchip'); if(bchip!=null&&bchip!==''){ setExtBlockView(bchip); return; }   // F4: bina modunda blok seç (salt görüntü)
+      const bchip=t.getAttribute&&t.getAttribute('data-blockchip');
+      if(bchip!=null&&bchip!==''){
+        if(exteriorMode) setExtBlockView(bchip);   // F4: bina modunda blok seç (salt GÖRÜNTÜ — 2B aktif blok değişmez)
+        // İŞ 1b: İÇ modda "Tümü" çipi yok ('all' burada asla gelmemeli); tık 2B aktif bloğu GERÇEKTEN değiştirir
+        else if(bchip!=='all'){ try{ if(typeof switchBlock==='function') switchBlock(+bchip); }catch(e){} rebuildFromEngine(); renderBlockChips(); renderFloorChips(); }
+        return;
+      }
+      const fchip=t.getAttribute&&t.getAttribute('data-floorchip');   // İŞ 1c: İÇ modda kat çipi → 2B aktif katı değiştirir (yalnız konut katlar tıklanabilir; disabled buton click yaymaz)
+      if(fchip!=null&&fchip!==''){
+        if(!exteriorMode){ try{ if(typeof switchFloor==='function') switchFloor(+fchip); }catch(e){} rebuildFromEngine(); renderBlockChips(); renderFloorChips(); }
+        return;
+      }
       const cdz=t.getAttribute&&t.getAttribute('data-camdesel'); if(cdz){ deselectCam(); return; }   // çip × = seçimi bırak (silmez)
       const fca=t.getAttribute&&t.getAttribute('data-furncat'); if(fca!=null&&fca!==''){ furnDockCat=+fca; renderFurnDock(); return; }   // B2-1: kategori sekmesi
       const fpk=t.getAttribute&&t.getAttribute('data-furnpick'); if(fpk){ startFurnGhost(fpk); return; }   // B2-1: palet parçası → hayalet yerleştirme
@@ -2800,7 +2821,7 @@
       // dış modda kamera/mobilya/malzeme dock ve FPV/pegman gizle (İndir kalır — dış kare indirilebilir)
       extSetDocks(false);
       updateExtBtn();
-      renderBlockChips();   // F4: bina modunda blok çipleri (2+ blok varsa)
+      renderBlockChips(); renderFloorChips();   // F4: bina modunda blok çipleri (2+ blok varsa); İş 1c: kat çipleri İÇ moda özel → gizlenir
       fitExtView();
       // S2: drone gizmoları görünür (iç kamera akışına DOKUNMAZ). Dock KENDİLİĞİNDEN AÇILMAZ —
       //   dış mod nötr başlar; drone/cephe araçları rail'deki Drone / Dış Cephe butonlarıyla açılır.
@@ -2817,7 +2838,7 @@
       if(extGizmos) extGizmos.visible=false;
       extSetDocks(true);
       updateExtBtn();
-      renderBlockChips();   // F4: iç moda dönünce blok çiplerini gizle
+      renderBlockChips(); renderFloorChips();   // İş 1b: iç moda dönünce blok çipleri "Tümü"süz haliyle kalır (varsa); İş 1c: kat çipleri (varsa) görünür olur
       fitView();
     }
     // A1: İÇ↔DIŞ şerit senkronu — mod değişince prototip strand'ini haberdar et (iki yönlü segment).
@@ -2837,16 +2858,49 @@
     if(exteriorGroup){ exteriorGroup.visible=true; }
     renderBlockChips(); renderExtGizmos(); fitExtView();
   }
-  // F4: bina modunda + 2+ blok varsa üst-orta blok çiplerini kur (A · B · … · Tümü). Salt görüntü.
+  // F4 + İŞ 1b: 2+ blok varsa üst-orta blok çiplerini kur (A · B · …). DIŞ modda salt-GÖRÜNTÜ (+"Tümü" çipi,
+  //   2B aktif blok DEĞİŞMEZ — setExtBlockView). İÇ modda (yeni) AYNI kutu ama "Tümü" YOK, tık 2B aktif bloğu
+  //   GERÇEKTEN değiştirir (switchBlock, tıklama işleyicisinde).
   function renderBlockChips(){
     const box=overlay&&overlay.querySelector('#v3dBlockChips'); if(!box) return;
     let n=0; try{ if(typeof siteOn==='function' && siteOn() && typeof blocks!=='undefined' && Array.isArray(blocks)) n=blocks.length; }catch(e){ n=0; }
-    if(!exteriorMode || n<2){ box.style.display='none'; box.innerHTML=''; return; }
-    const cur = (extBlockView==null)? (typeof activeBlock!=='undefined'?activeBlock:0) : extBlockView;   // seçili çip
+    if(n<2){ box.style.display='none'; box.innerHTML=''; return; }
     const nm = function(i){ try{ if(typeof blockName==='function') return blockName(i); }catch(e){} return String.fromCharCode(65+i); };
     let html='<span class="cl">Blok</span>';
-    for(let i=0;i<n;i++){ html+='<button data-blockchip="'+i+'" class="'+(cur===i?'on':'')+'" title="Blok '+nm(i)+' tam kabuk (diğerleri hayalet)">'+nm(i)+'</button>'; }
-    html+='<button data-blockchip="all" class="'+(extBlockView==='all'?'on':'')+'" title="Tüm blokların tam kabuğu (site render)">Tümü</button>';
+    if(exteriorMode){
+      const cur = (extBlockView==null)? (typeof activeBlock!=='undefined'?activeBlock:0) : extBlockView;   // seçili çip
+      for(let i=0;i<n;i++){ html+='<button data-blockchip="'+i+'" class="'+(cur===i?'on':'')+'" title="Blok '+nm(i)+' tam kabuk (diğerleri hayalet)">'+nm(i)+'</button>'; }
+      html+='<button data-blockchip="all" class="'+(extBlockView==='all'?'on':'')+'" title="Tüm blokların tam kabuğu (site render)">Tümü</button>';
+    } else {
+      const cur = (typeof activeBlock!=='undefined')?activeBlock:0;
+      for(let i=0;i<n;i++){ html+='<button data-blockchip="'+i+'" class="'+(cur===i?'on':'')+'" title="Blok '+nm(i)+'">'+nm(i)+'</button>'; }
+    }
+    box.innerHTML=html; box.style.display='flex';
+  }
+  // İŞ 1d: sahne kurmadan salt-veri kat sınıflaması (extBlockViewForTest deseni) — [{idx,name,enabled}].
+  //   enabled = konut kat (H3 ürün kararıyla aynı: iç mekân yalnız konut katlarda var; ticari/otopark/sığınak yakında).
+  function floorChipsForTest(){
+    const out=[];
+    try{
+      if(typeof totalFloors!=='function'||typeof floorName!=='function'||typeof usageOf!=='function') return out;
+      const tot=totalFloors();
+      for(let k=0;k<tot;k++) out.push({ idx:k, name:floorName(k), enabled:(usageOf(k)==='konut') });
+    }catch(e){}
+    return out;
+  }
+  // İŞ 1c: kat çipleri — blok çiplerinin ALTINDA, YALNIZ İÇ modda + katları-ayrı + 2+ kat. Konut-dışı katlar
+  //   devre dışı görünür (tıklanamaz) — H3 nonResidentialFallback ile aynı ürün kararı.
+  function renderFloorChips(){
+    const box=overlay&&overlay.querySelector('#v3dFloorChips'); if(!box) return;
+    let show=false;
+    try{ show=!exteriorMode && typeof floorsOn==='function' && floorsOn() && typeof totalFloors==='function' && totalFloors()>=2; }catch(e){ show=false; }
+    if(!show){ box.style.display='none'; box.innerHTML=''; return; }
+    const cur=(typeof activeFloor!=='undefined')?activeFloor:0;
+    let html='<span class="cl">Kat</span>';
+    floorChipsForTest().forEach(function(c){
+      if(c.enabled) html+='<button data-floorchip="'+c.idx+'" class="'+(c.idx===cur?'on':'')+'" title="'+c.name+'">'+c.name+'</button>';
+      else html+='<button data-floorchip="'+c.idx+'" class="off" disabled title="Ticari/otopark iç mekânı yakında">'+c.name+'</button>';
+    });
     box.innerHTML=html; box.style.display='flex';
   }
   // dış modda dock/pegman görünürlüğü — off (dış mod): kamera/mobilya/malzeme/FPV dock + pegman GİZLİ;
@@ -5919,6 +5973,26 @@
     buildScene(map);
     if(v) restoreView(v);
   }
+  // İŞ 1a: 2B motorundaki (app.js) GÜNCEL durumdan (switchBlock/switchFloor sonrası) 3B sahneyi yeniden kur —
+  //   H3 (nonResidentialFallback) deseninin ikizi: view3d.js app.js'in switchFloor/switchBlock'unu DOĞRUDAN
+  //   çağırır (aynı pencere, köprü kurmaya gerek yok — bkz. boot() üstündeki H3 yorumu).
+  //   KAMERALAR SİLİNMEZ (kullanıcı kararı): camList/extCams veri olarak zaten korunur (buildScene yalnız
+  //   camGizmos'u null'lar — "eski gizmo grubu sahneyle gitti, camList korunur" — bkz. buildScene başı).
+  //   Kameralar başka bir katın/bloğun planına ait olsa da dünya-koordinat çapalı kalır (kabul edilen davranış).
+  //   İÇ kamera gizmoları buildScene'de KENDİLİĞİNDEN kurulmaz → renderCamGizmos ile veriden MESH'E GERİ
+  //   BİNDİRİLİR (openCompare/openPlace'teki "else{ renderCamGizmos(); updateCamPanel(); }" dalıyla AYNI
+  //   mekanizma — yeni bir şey icat edilmedi). DIŞ (drone) gizmoları: buildScene exteriorMode'daysa kendi
+  //   içinde setExteriorMode(true)'ı yeniden tetikler (bkz. buildScene sonu) → renderExtGizmos zaten oradan
+  //   çağrılır, burada tekrar etmeye gerek yok.
+  function rebuildFromEngine(){
+    if(!scene) return;
+    const map=window.buildFloorplanMap && window.buildFloorplanMap();
+    if(!map || !map.units || !map.units.length) return;   // hedef kat/blok konutsuz/boş → sahneye dokunma (mevcut görünüm kalır)
+    const saved=getView();
+    buildScene(map);                       // İÇİNDE: exteriorMode ise dış kabuğu kendi kendine yeniden kurar (S1 deseni, buildScene sonu)
+    renderCamGizmos(); updateCamPanel();    // İÇ kamera gizmoları veriden geri bindirilir (camList SİLİNMEDİ — yalnız görsel gizmo grubu gitti)
+    if(saved) restoreView(saved);           // KİLİT-KÖPRÜ (~2859 yorumu): bundan SONRA hiçbir fitView/fitExtView çağrısı YOK
+  }
   // mesh'te odaya tıkla → seç (scenePick material dalı bunu çağırır). floor mesh userData.roomRef taşır.
   function selectMatRoom(roomId){
     matSelRoom=roomId||null; renderMatDock();
@@ -6860,6 +6934,7 @@
       resize();
       hydrateMaterials();                                    // M3: kalıcı store'dan malzeme seçimlerini yükle (save/load + 3B kapat-aç korunur)
       buildScene(map); built=true;
+      renderBlockChips(); renderFloorChips();   // İş 1b/1c: açılış İÇ moddaysa da (varsa) blok/kat çipleri görünsün — setExteriorMode dışında tek çağrı noktası
       if(_bootWantExterior && !exteriorMode){ try{ setExteriorMode(true); }catch(e){} }   // H3: konutsuz bina → DIŞ (Bina) görünümle aç
       // host bazen boot anında daha boyutlanmamış olur → fitView aşırı yakın çerçeveler.
       // Bir sonraki karede (host kesin boyutlu) yeniden boyutlandır + sığdır (açıyı korur).
@@ -7034,6 +7109,12 @@
 
   // dışa aç + buton bağla
   window.View3D = { open:open, openCompare:openCompare, openPlace:openPlace, close:close, snapDataURL:snapDataURL, getView:getView, restoreView:restoreView,
+    setView:setView,   // İş 3a: dış (template) tarafın deterministik izo açıyı tetikleyebilmesi için (captureIsoSnap)
+    rebuildFromEngine:rebuildFromEngine,   // FAZ 2 İŞ A: kabuk (prototip) switchBlock sonrası sahneyi 2B motorun GÜNCEL durumundan tazeler
+    // FAZ 2 İŞ A: blok bağlamı köprüsü — blocks/activeBlock app.js'te top-level let → iframe window'una DÜŞMEZ
+    //   (ES let global-lexical); kabuk sayaç/aktif-indeksi buradan okur (siteOn/switchBlock/blockName fonksiyon
+    //   bildirimi olduğundan window üzerinden zaten erişilir).
+    blockContext:function(){ try{ return { on:(typeof siteOn==='function'&&!!siteOn()), count:(typeof blocks!=='undefined'&&Array.isArray(blocks))?blocks.length:0, active:(typeof activeBlock!=='undefined')?(activeBlock|0):0 }; }catch(e){ return {on:false,count:0,active:0}; } },
     snapCameraDataURL:snapCameraDataURL, snapCameraDepthMap:snapCameraDepthMap, captureCameraSnapshots:captureCameraSnapshots,
     fpvSnapDataURL:fpvSnapDataURL,   // B1 teşhis: FPV göz-hizası tek-kare (pencere-altı bant reprodüksiyonu)
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
@@ -7128,6 +7209,8 @@
       const o=extOtherBlocks();
       return { view:extBlockView, activeIsFull:extActiveIsFull(),
                fulls:o.fulls.map(function(b){return b.idx;}), ghosts:o.ghosts.map(function(b){return b.idx;}) }; },
+    // İŞ 1d HEADLESS: kat çipi sınıflaması (THREE'siz, sahne gerekmez) — [{idx,name,enabled}] (enabled=konut kat).
+    floorChipsForTest:floorChipsForTest,
     // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ (test + prototip) ──
     //   İç kamera sözleşmesinden (exportCameras/getCameras) TAMAMEN AYRI — extCams kendi listesi.
     getExteriorCameras:function(){ return extCams.map(function(c){ return {pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens}; }); },
