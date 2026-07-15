@@ -64,7 +64,9 @@ const strictTests = [
   'tests/site-imkan.js',
   'tests/site-fix-history.js',
   'tests/parsel-cekme.js',
-  'tests/onboarding.js'
+  'tests/onboarding.js',
+  'tests/dis-cephe-olcu.js',
+  'tests/olcu-arac.js'
 ];
 
 const smokeTests = [

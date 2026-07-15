@@ -355,6 +355,9 @@ svg.addEventListener('mousemove',e=>{
   else if(mode==='site'){
     svg.style.cursor = (siteOn()&&hitBlock(S2Wx(sx),S2Wy(sy))>=0)? 'move' : '';
   }
+  else if(mode==='measure'){
+    if(measureStart && !measureEnd){ measureHover={x:snapG(S2Wx(sx)), y:snapG(S2Wy(sy))}; render(); }
+  }
   else if(plan && closed && mode!=='parcel'){ // oda duvarı + oda ölçüsü vurgusu
     const cutH=(mode==='pan')? null : hitCutHandle(sx,sy);
     const w=(mode==='pan'||cutH)? null : hitWallRun(sx,sy);
@@ -432,7 +435,11 @@ svg.addEventListener('mousedown',e=>{
       const prevPts=pts.map(p=>({...p}));
       let idx=bh.idx;
       if(bh.kind==='edge'){ const a=pts[bh.idx], b=pts[(bh.idx+1)%pts.length];
-        pts.splice(bh.idx+1,0,{x:snapG((a.x+b.x)/2), y:snapG((a.y+b.y)/2)}); idx=bh.idx+1; }
+        const mp={x:snapG((a.x+b.x)/2), y:snapG((a.y+b.y)/2)};
+        /* A3: eklenen köşe komşu köşelerden birine çakışacak kadar yakınsa (dejenere kenar) sessizce iptal */
+        if(Math.hypot(mp.x-a.x,mp.y-a.y)<0.01 || Math.hypot(mp.x-b.x,mp.y-b.y)<0.01){
+          setStatusHint('Kenar çok kısa — köşe eklenemedi','#b45309'); return; }
+        pts.splice(bh.idx+1,0,mp); idx=bh.idx+1; }
       dragging={type:'bvert', idx, prevPts, prevCore:lockedCore?lockedCore.map(o=>({...o})):null};
       e.preventDefault(); render();
     }
@@ -525,6 +532,13 @@ svg.addEventListener('mousedown',e=>{
     if(roomPts.length && q.x===roomPts[roomPts.length-1].x && q.y===roomPts[roomPts.length-1].y) return;
     roomPts.push({x:q.x,y:q.y}); render(); return;
   }
+  if(mode==='measure'){
+    if(e.button!==0) return;
+    const p={x:snapG(S2Wx(sx)), y:snapG(S2Wy(sy))};
+    if(!measureStart || measureEnd){ measureStart=p; measureEnd=null; measureHover=p; }  // yeni ölçüm: eskisi silinir
+    else measureEnd=p;                                                                    // ikinci tık: sabitlenir, ekranda kalır
+    render(); return;
+  }
   if(plan && e.button===0){ // ayırıcı tutamacı? oda duvarı?
     const h=hitCutHandle(sx,sy);
     if(h){ h.undo=customCutsZ&&customCutsZ.map(a=>a?a.slice():null);
@@ -542,7 +556,11 @@ svg.addEventListener('mousedown',e=>{
       const prevPts=pts.map(p=>({...p}));
       let idx=bh.idx;
       if(bh.kind==='edge'){ const a=pts[bh.idx], b=pts[(bh.idx+1)%pts.length];
-        pts.splice(bh.idx+1,0,{x:snapG((a.x+b.x)/2), y:snapG((a.y+b.y)/2)}); idx=bh.idx+1; }
+        const mp={x:snapG((a.x+b.x)/2), y:snapG((a.y+b.y)/2)};
+        /* A3: eklenen köşe komşu köşelerden birine çakışacak kadar yakınsa (dejenere kenar) sessizce iptal */
+        if(Math.hypot(mp.x-a.x,mp.y-a.y)<0.01 || Math.hypot(mp.x-b.x,mp.y-b.y)<0.01){
+          setStatusHint('Kenar çok kısa — köşe eklenemedi','#b45309'); return; }
+        pts.splice(bh.idx+1,0,mp); idx=bh.idx+1; }
       dragging={type:'bvert', idx, prevPts, prevCore:lockedCore?lockedCore.map(o=>({...o})):null};
       e.preventDefault(); render(); return;
     }
@@ -770,6 +788,11 @@ window.addEventListener('keydown',e=>{
   if(e.key!=='Escape' || mode!=='roomdraw' || !roomPts.length) return;
   roomPts=[]; hoverP=null; render();
 });
+/* Esc: ölçü aracını temizle (roomdraw Esc deseninin ikizi) */
+window.addEventListener('keydown',e=>{
+  if(e.key!=='Escape' || mode!=='measure' || (!measureStart && !measureEnd)) return;
+  measureStart=null; measureEnd=null; measureHover=null; render();
+});
 /* E3(c) EMNİYET AĞI: balkon modunda üzerine gelinen (hover) balkonu Del/Backspace ile sil.
    Sağ-tık silme (balkon modu + her mod) asıl yol; bu, hayalet balkona takılan kullanıcı için
    klavye kaçış kapısı. Yalnız balkon modunda + gerçek bir balkon hover'dayken; form alanı yut. */
@@ -818,7 +841,7 @@ window.addEventListener('keydown',e=>{
 /* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
    pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.
    Space/Esc/Ctrl+Z/Y'ye DOKUNMAZ (ayrı handler'lar); form alanı + sürükleme ortasında YUTULUR. */
-const MODE_KEYS={d:'tDraw',o:'tRoom',k:'tDoor',w:'tWin',b:'tBalk',a:'tAvlu',y:'tStruct',p:'tParcel',t:'tPark',i:'tAmenity',s:'tSite'};
+const MODE_KEYS={d:'tDraw',o:'tRoom',k:'tDoor',w:'tWin',b:'tBalk',a:'tAvlu',y:'tStruct',p:'tParcel',t:'tPark',i:'tAmenity',s:'tSite',m:'tMeasure'};
 window.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey) return;          // Ctrl/Cmd/Alt kombinasyonları başka handler'larda
   if(dragging) return;                                 // sürükleme ortasında mod değişimi yok (B1 dragOverlay yarım kalmasın)
@@ -1318,7 +1341,8 @@ const MODE_BADGE={
   window:  {ic:'window',    name:'Pencere', key:'W', hint:'Cepheye çift-tık: pencere ekle · sürükle: taşı · çift-tık: sil · seç: genişlik/yükseklik/parapet ayarla'},
   struct:  {ic:'structure', name:'Yapı',    key:'Y', hint:'Çekirdek ve bina köşe tutamaçlarından sürükleyerek boyutlandır'},
   roomdraw:{ic:'roomdraw',  name:'Oda Çiz', key:'O', hint:'Daire üstüne kapalı poligon çiz: yeni oda · çift-tık ya da ilk köşe: kapat · Esc: iptal'},
-  site:    {ic:'blok',      name:'Site',    key:'S', hint:'Blokları sürükleyerek yerleştir'}
+  site:    {ic:'blok',      name:'Site',    key:'S', hint:'Blokları sürükleyerek yerleştir'},
+  measure: {ic:'measure',   name:'Ölçü',    key:'M', hint:'İki noktaya tıkla: mesafe ölç · Esc: temizle'}
   /* NOT: park modunun kendi alt çubuğu (#parkBar) var — "R=yatay/dikey döndür" orada; rozet
      eklenirse çubukla üst üste biner (mevcut tasarım kararı), bu yüzden bilinçle dışarıda. */
 };
@@ -1336,7 +1360,7 @@ function updateModeBadge(m){
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; blockDrawBad=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; hoverAmenity=null; amenityGhost=null; amenityGhostVert=null; setStatusHint('');
+const setMode=m=>{ mode=m; hoverP=null; blockDrawBad=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; hoverAmenity=null; amenityGhost=null; amenityGhostVert=null; measureStart=null; measureEnd=null; measureHover=null; setStatusHint('');
   /* OTO-AVLU (avlu-rework): avlu moduna girince derin/karanlık footprint için nazik öneri hesapla.
      Dayatma YOK — statusHint + tıkla-yerleştir aday ghost; başka moda geçince temizlenir. */
   avluSuggestion=null;
@@ -1344,7 +1368,7 @@ const setMode=m=>{ mode=m; hoverP=null; blockDrawBad=null; hoverBalk=null; hover
     try{ avluSuggestion=suggestCourtyard(); }catch(err){ avluSuggestion=null; }
     if(avluSuggestion) setStatusHint('Bu taban derin/karanlık — orta bölge için avlu önerilir. Önerilen boşluğa tıkla ya da kendin sürükle.','#2f6f8f');
   }
-  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tWin','window'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tAmenity','amenity'],['tSite','site'],['tPan','pan']]){
+  for(const[id,mm]of[['tDraw','draw'],['tParcel','parcel'],['tBalk','balkon'],['tAvlu','avlu'],['tDoor','door'],['tWin','window'],['tStruct','struct'],['tRoom','roomdraw'],['tPark','park'],['tAmenity','amenity'],['tSite','site'],['tMeasure','measure'],['tPan','pan']]){
     const elb=document.getElementById(id); if(elb) elb.classList.toggle('active',m===mm); }
   const pb=document.getElementById('parkBar'); if(pb) pb.style.display=(m==='park')?'flex':'none';
   if(m==='park') showParkBar();
@@ -1466,6 +1490,7 @@ document.getElementById('tPark').onclick=()=>setMode('park');
    .click()'leyen "I" kısayolu) ölüydü. Diğer araç düğmeleriyle aynı desen. */
 { const am=document.getElementById('tAmenity'); if(am) am.onclick=()=>setMode('amenity'); }
 { const sb=document.getElementById('tSite'); if(sb) sb.onclick=()=>{ if(siteOn()) setMode(mode==='site'?'draw':'site'); }; }
+{ const tm=document.getElementById('tMeasure'); if(tm) tm.onclick=()=>setMode('measure'); }
 document.getElementById('tPan').onclick=()=>setMode('pan');
 /* U2 → SAHA-1/H3: eski BLOKLAYAN kapı (stopImmediatePropagation + generic engelleme) KALDIRILDI.
    Konut-dışı katta 3B artık ENGELLENMEZ, OTOMATİK YÖNLENDİRİLİR: view3d.js boot() içindeki

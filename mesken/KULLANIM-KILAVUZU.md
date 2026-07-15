@@ -217,6 +217,7 @@ Plan üretildikten sonra araç çubuğundaki araçlarla her ayrıntıyı elle d�
 | **"Site görünümü"** (Site açıkken) | S | Tüm bloklar parselde; bloğa tıkla = düzenle, sürükle = taşı. |
 | **"Park düzeni"** (otopark katında) | T | Alt çubuk: "Oto"/"Yatay"/"Dikey" yön, "Sıfırla"; tıkla = park yeri ekle/sil, sürükle = taşı, R = yön çevir. |
 | **"Site imkanları"** (parsel/bahçe varken) | I | Alt çubuk: "Yeşil Alan"/"Çocuk Parkı"/"Yüzme Havuzu"/"Süs Havuzu"/"Oturma / Pergola", "Döndür" (R), "Büyüt +"/"Küçült −"; tıkla = ekle/sil, sürükle = taşı; bahçeye yerleşir. |
+| **"Ölçü"** | M | İki noktaya tıkla = aradaki mesafeyi ölç. İlk tıktan sonra imleci izleyen canlı önizleme; ikinci tıkla ölçüm ekranda kalır, yeni tık eskisini siler; Esc = temizle. Noktalar 0,5 m ızgaraya yapışır; ölçüm dışa aktarılan görsele girmez. |
 
 **"Yapı, çekirdek"** aracının tutamaç dili: mavi kare tutamaç boyutlandırır, mavi daire ve artı taşır; turuncu tutamaçlar bina sınırının köşe/kenarlarıdır (kenara tıklayınca yeni köşe açılır). Eleman ekleme/silme sağ tık menüsündendir: **"Yapı elemanı ekle"** → **+ Merdiven** / **+ Asansör** / **+ Yangın merdiveni** / **+ Teknik-şaft**; mevcut bir öğeye sağ tık → sil.
 
@@ -603,6 +604,7 @@ Aşağıdaki bölümler şu an tamamen **ön-gösterimdir** — arayüzü hazır
 | T | Park düzeni | 2B (otopark katı) |
 | I | Site imkanları | 2B |
 | S | Site görünümü | 2B (Site açıkken) |
+| M | Ölçü aracı (iki noktaya tıkla: mesafe; Esc: temizle) | 2B |
 | Space (basılı) | Geçici kaydırma | 2B |
 | Ctrl/Cmd+Z | Geri al | 2B / mobilya |
 | Ctrl/Cmd+Shift+Z veya Ctrl/Cmd+Y | İleri al | 2B |

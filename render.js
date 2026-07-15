@@ -117,17 +117,31 @@ function gotoHistory(delta){
     tb.textContent=off?'–':'+'; });
 })();
 /* ================= çizim (render) ================= */
-/* kenar ölçü etiketleri (her iki poligon için ortak) */
+/* kenar ölçü etiketleri (her iki poligon için ortak)
+   A1: dış-normal yönü centroid-yakınlığı yerine poligonun GLOBAL sarma işaretinden (bir kez,
+   döngü dışında) türetilir — concave/kademeli (L-şekilli vb.) poligonlarda centroid-yakınlığı
+   yanlış tarafı seçebiliyordu (dış cephede etiket kayboluyordu). shoelace() abs() döndürdüğü
+   için işaret burada ayrıca (imzasız) hesaplanır. */
 function polyDims(g, arr, isClosed, color){
-  const cen=centroidOf(arr);
+  let area2=0;
+  for(let i=0;i<arr.length;i++){ const p=arr[i], q=arr[(i+1)%arr.length]; area2+=p.x*q.y-q.x*p.y; }
+  const flip=area2>0;
   const segs=[...arr.map((p,i)=>[p,arr[(i+1)%arr.length]])];
   if(!isClosed) segs.pop();
+  /* A2: çakışma azaltma — ofset ekran-uzayı duyarlı (yakınlaşınca büyür); ardışık KISA
+     kenarlarda (ekranda <~48px) etiketler off/off+16px arasında kademelenir (stagger). Uzun
+     kenarlarda davranış öncekiyle aynı kalır (etiket BASTIRMA yok). */
+  const off=Math.max(0.8, 14/pxPerM);
+  let shortRun=0;
   segs.forEach(([a,b])=>{
     const L=Math.hypot(b.x-a.x,b.y-a.y); if(L<0.01)return;
     const mx=(a.x+b.x)/2,my=(a.y+b.y)/2;
     let nx=-(b.y-a.y)/L, ny=(b.x-a.x)/L;
-    if((mx+nx-cen.x)**2+(my+ny-cen.y)**2 < (mx-nx-cen.x)**2+(my-ny-cen.y)**2){nx=-nx;ny=-ny;}
-    const t=el('text',{x:W2Sx(mx+nx*0.8),y:W2Sy(my+ny*0.8),'text-anchor':'middle','dominant-baseline':'middle',
+    if(flip){ nx=-nx; ny=-ny; }
+    const isShort=L*pxPerM<48;
+    const d=isShort? off+(shortRun%2)*(16/pxPerM) : off;
+    shortRun=isShort? shortRun+1 : 0;
+    const t=el('text',{x:W2Sx(mx+nx*d),y:W2Sy(my+ny*d),'text-anchor':'middle','dominant-baseline':'middle',
       'font-size':Math.max(10,Math.min(13,pxPerM*0.8)),fill:color,'font-weight':'600'});
     t.textContent=fmt(L)+' m'; g.appendChild(t);
   });
@@ -527,6 +541,21 @@ function render(){
       t.textContent=fmt(L)+' m'; g.appendChild(t); }
     g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:5,fill:bad?'#c0392b':hoverP.closing?'#2e7d4f':col,opacity:.8}));
     if(hoverP.snapPS) g.appendChild(el('circle',{cx:W2Sx(hoverP.x),cy:W2Sy(hoverP.y),r:9,fill:'none',stroke:'#2563a8','stroke-width':2})); // parsele yapıştı
+  }
+  /* Ölçü aracı (M): sabit iki nokta arası mesafe — hoverP/activePoly desenine benzer ayrı blok.
+     İkinci nokta sabitlenmeden imleci izleyen canlı önizleme (measureHover), sabitlenince kalıcı
+     (measureEnd). AI temiz modda diğer overlay'ler gibi çizilmez. */
+  if(measureStart && !clean){
+    const end=measureEnd||measureHover;
+    if(end){
+      const g=el('g',{}); svg.appendChild(g);
+      const col='#1d6fb8';
+      const x1=W2Sx(measureStart.x), y1=W2Sy(measureStart.y), x2=W2Sx(end.x), y2=W2Sy(end.y);
+      g.appendChild(el('line',{x1,y1,x2,y2,stroke:col,'stroke-width':2,'stroke-dasharray':'7 5'}));
+      g.appendChild(el('circle',{cx:x1,cy:y1,r:5,fill:'none',stroke:col,'stroke-width':2}));
+      g.appendChild(el('circle',{cx:x2,cy:y2,r:5,fill:'none',stroke:col,'stroke-width':2}));
+      dragMeasureLabel(g, (x1+x2)/2, (y1+y2)/2, fmt(Math.hypot(end.x-measureStart.x,end.y-measureStart.y))+' m');
+    }
   }
   /* gerçek kuzey oku — parsel döndürülünce gerçek kuzeyi gösterir (ekran-sabit:
      ekranda sol-alt [üstte araç çubuğu var], dışa aktarımda sol-üst).

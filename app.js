@@ -2,6 +2,9 @@
 /* ================= durum ================= */
 let pxPerM = 16, panX = 80, panY = 70;
 let mode = 'draw';            // draw | pan
+let measureStart = null;      // Ölçü aracı (M): birinci nokta (dünya koord) | null
+let measureEnd = null;        // Ölçü aracı: ikinci nokta; ikisi de doluyken ölçüm ekranda kalır (yeni ilk tık eskisini siler)
+let measureHover = null;      // Ölçü aracı: ikinci nokta sabitlenmeden imleci izleyen canlı önizleme ucu
 let pts = [];                 // poligon köşeleri (m)
 let roomPts = [];             // serbest oda çizimi (roomdraw modu): köşeler (m); kapanınca rasterize → yeni ODA
 let closed = false;
