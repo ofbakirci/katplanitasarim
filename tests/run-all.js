@@ -25,6 +25,7 @@ const strictTests = [
   'tests/avlu-blok.js',
   'tests/blok-cizim.js',
   'tests/blok-m2-canli.js',
+  'tests/blok-taslak.js',
   'tests/avlu-edit.js',
   'tests/pencere.js',
   'tests/malzeme.js',
@@ -62,7 +63,8 @@ const strictTests = [
   'tests/yon-kuresi.js',
   'tests/site-imkan.js',
   'tests/site-fix-history.js',
-  'tests/parsel-cekme.js'
+  'tests/parsel-cekme.js',
+  'tests/onboarding.js'
 ];
 
 const smokeTests = [

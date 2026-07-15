@@ -799,9 +799,63 @@ function siteGrossTotal(){
   });
   return sum;
 }
-/* aktif bloğu canlı globallerden anlık görüntüye yaz (plan varsa) */
+/* ================= BLOK TASLAĞI (sınır çizili, yerleşim YOK) =================
+   stateSnapshot(false) plan yoksa null döner → saveActiveBlock yalnız plan varken kaydediyordu;
+   sınırı çizilmiş ama daha "Yerleşimi Oluştur" denmemiş bloktan çıkınca (blok geçişi / + Blok /
+   blok silme) çizili pts SESSİZCE kayboluyordu. Oysa renderBlockTabs bu durumu ("sınır çizili,
+   yerleşim bekliyor") zaten gösteriyor, siteBlocksData/siteFootprintTotal/view3d ise plansız
+   blok snapshot'ını (b.pts + b.ui) zaten okuyabiliyor. TASLAK = stateSnapshot'ın plansız,
+   alan-adları BİREBİR aynı küçük ikizi; blocks[] tüketicileri `b.plan &&` ile korunduğu için
+   ek koşul gerektirmez (translateStateObj/site sürükleme dâhil).
+   SINIR: yalnız KAPALI sınır (closed && pts>=3) taslağa yazılır — yarım çizim (closed=false)
+   eskisi gibi atılır, çünkü siteBlocksData/shoelace inaktif bloğu KAPALI poligon varsayar. */
+function blockDraftSnapshot(){
+  if(plan || !closed || pts.length<3) return null;
+  const el2=id=>{ const e=document.getElementById(id); return e?e.value:''; };
+  return {v:1, app:'kat-plani-tasarim', draft:true,
+    ui:{binaTipi:el2('binaTipi'), katSayisi:el2('katSayisi'), katYuk:el2('katYuk'), koridorYon:koridorYon, bodrumSayisi:String(bodrumSayisi),
+        cikmaOn:(typeof cikmaOn!=='undefined'&&cikmaOn)?'1':'0', cikmaD:String((typeof cikmaD!=='undefined')?cikmaD:0.7),
+        roofType:(typeof roofType!=='undefined')?roofType:'teras'},
+    wallThick:(typeof wallThick!=='undefined'&&wallThick)?Object.assign({},wallThick):{},
+    pts:pts.map(p=>({x:p.x,y:p.y})),
+    courtyards:courtyardsSnapshot(),
+    specs:unitSpecs.map(s=>({...s}))};
+}
+/* taslağı canlı globallere aç (restoreState'in plansız karşılığı; plan/ızgara YOK → validateState
+   yolu ÇALIŞMAZ, bilinçli). clearCanvasForNewBlock ile başlar (parsel site-ortak → korunur),
+   sonra taslağın sınır+program+bina ayarlarını basar. Çizim kapanışıyla (interaction.js) aynı
+   UI durumunu kurar: genBtn açık + alan/çevre yazılı. */
+function restoreBlockDraft(snap){
+  clearCanvasForNewBlock();
+  if(!snap || !snap.pts || snap.pts.length<3) return false;
+  const u=snap.ui||{};
+  const set=(id,v)=>{ const e=document.getElementById(id); if(e && v!==undefined && v!=='') e.value=v; };
+  set('binaTipi', u.binaTipi); set('katSayisi', u.katSayisi); set('katYuk', u.katYuk);
+  koridorYon=u.koridorYon||'oto'; set('koridorYon', koridorYon);
+  if(u.bodrumSayisi!==undefined){ bodrumSayisi=Math.max(0,+u.bodrumSayisi||0); villaOffset=bodrumSayisi; set('bodrumSayisi', String(bodrumSayisi)); }
+  if(typeof cikmaOn!=='undefined'){ cikmaOn=(u.cikmaOn==='1'||u.cikmaOn===true);
+    const cd=parseFloat(u.cikmaD); cikmaD=(isFinite(cd)&&cd>0)?cd:0.7;
+    roofType=(u.roofType==='kirma')?'kirma':'teras';
+    if(typeof syncCephe3UI==='function') syncCephe3UI(); }
+  wallThick=(snap.wallThick&&typeof snap.wallThick==='object')?Object.assign({},snap.wallThick):{};
+  if(typeof syncWallThickUI==='function') syncWallThickUI();
+  pts=snap.pts.map(p=>({x:p.x,y:p.y})); closed=true;
+  courtyards=(snap.courtyards||[]).map(av=>({poly:(av.poly||[]).map(p=>({x:p.x,y:p.y}))}));
+  if(snap.specs && snap.specs.length){ unitSpecs=snap.specs.map(s=>({...s})); if(typeof renderUnits==='function') renderUnits(); }
+  document.getElementById('genBtn').disabled=false;
+  document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
+  document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
+  if(typeof updateAmenityBtn==='function') updateAmenityBtn();
+  updateKatAyriUI(); render();
+  return true;
+}
+/* aktif bloğu canlı globallerden anlık görüntüye yaz (plan varsa TAM durum, yoksa çizili sınır taslağı) */
 function saveActiveBlock(){
-  if(blocks && plan){ try{ blocks[activeBlock]=stateSnapshot(false); }catch(err){ console.error('blok kaydı:', err); } }
+  if(!blocks) return;
+  try{
+    const snap = plan? stateSnapshot(false) : blockDraftSnapshot();
+    if(snap) blocks[activeBlock]=snap;   // boş tuval (sınır yok) → mevcut kayıt korunur (eski davranış)
+  }catch(err){ console.error('blok kaydı:', err); }
 }
 /* Site (genel görünüm) düğmesi yalnız site modunda görünür */
 function updateSiteBtn(){
@@ -1064,7 +1118,8 @@ function switchBlock(k){
     try{ restoreState(snap, {keepBlocks:true}); }
     catch(err){ console.error('blok geçişi:', err); activeBlock=prev; renderBlockTabs(); return; }
   } else {
-    clearCanvasForNewBlock();   // boş blok: tuvali çizime hazırla (bina ayarları + parsel korunur)
+    // taslak (sınır çizili, yerleşim yok) → sınırı geri aç; snap yoksa boş tuval (bina ayarları + parsel korunur)
+    restoreBlockDraft(snap);
   }
   renderBlockTabs();
 }
@@ -1096,7 +1151,7 @@ function removeBlock(k){
   else if(k<activeBlock) activeBlock--;
   const snap=blocks[activeBlock];
   if(snap && snap.plan){ try{ restoreState(snap,{keepBlocks:true}); }catch(err){ console.error(err); } }
-  else clearCanvasForNewBlock();
+  else restoreBlockDraft(snap);   // taslak bloksa çizili sınır korunur
   renderBlockTabs();
 }
 /* boş blok için tuvali temizle: yalnız geometri sıfırlanır; bina tipi/kat ayarları VE

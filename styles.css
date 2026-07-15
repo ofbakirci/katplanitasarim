@@ -485,3 +485,27 @@
     #utHead{cursor:default;}
     #roomMenu{max-width:calc(100vw - 16px);}
   }
+
+  /* --- onboarding turu --- */
+  #onbStart{margin-left:8px; padding:5px 11px; border:1px solid var(--line); border-radius:var(--r-md); background:var(--panel); font-size:12px; font-weight:600; color:var(--muted); cursor:pointer; flex-shrink:0;}
+  #onbStart:hover{border-color:var(--acc); color:var(--acc); background:var(--acc-soft);}
+  #onbOverlay{position:fixed; inset:0; z-index:60; pointer-events:none;}
+  .onbCard{position:fixed; pointer-events:auto; max-width:320px; width:min(320px,calc(100vw - 24px)); background:var(--panel); color:var(--ink); border-radius:var(--r-lg); box-shadow:var(--sh-pop); border:1px solid var(--line); z-index:61; padding:14px 16px; font-size:13px; line-height:1.5;}
+  .onbCard .onbClose{position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0; border:0; background:transparent; color:var(--muted); font-size:15px; line-height:1; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); cursor:pointer;}
+  .onbCard .onbClose:hover{color:var(--acc); background:var(--acc-soft);}
+  .onbCard h3{margin:0 22px 6px 0; font-size:14px; font-weight:700; color:var(--ink);}
+  .onbCard p{margin:0 0 10px; color:var(--ink);}
+  .onbCard .prog{font-size:11px; font-weight:600; color:var(--muted); margin-bottom:6px; letter-spacing:.02em;}
+  .onbCard .progBar{height:3px; border-radius:var(--r-pill); background:var(--bg); overflow:hidden; margin-bottom:12px;}
+  .onbCard .progBar > i{display:block; height:100%; background:var(--acc); border-radius:var(--r-pill); transition:width .2s ease;}
+  .onbCard .onbBtns{display:flex; align-items:center; justify-content:flex-end; gap:8px;}
+  .onbCard .onbSkip{margin-right:auto; border:0; background:transparent; color:var(--muted); padding:6px 4px; font-size:12px; cursor:pointer;}
+  .onbCard .onbSkip:hover{color:var(--acc); text-decoration:underline;}
+  .onbCard .onbPrev{background:#fff; color:var(--ink); border:1px solid var(--line);}
+  .onbCard .onbNext{background:var(--acc); color:#fff; border-color:var(--acc); font-weight:600;}
+  .onbCard .onbNext:hover{background:var(--acc-hover); border-color:var(--acc-hover); color:#fff;}
+  @keyframes onbPulse{0%{transform:scale(1); opacity:.85;} 70%{transform:scale(2.2); opacity:0;} 100%{transform:scale(2.2); opacity:0;}}
+  .onbPulse{transform-origin:center; transform-box:fill-box; animation:onbPulse 1.6s ease-out infinite; fill:var(--acc); opacity:.85;}
+  /* kamera3d mini-turu: #view3dOverlay inline z-index:9999 (view3d.js) — spotlight+kart onun USTUNDE kalmali */
+  #onbOverlay.onb3d{z-index:10001;}
+  .onbCard.onb3d{z-index:10002;}

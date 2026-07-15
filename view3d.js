@@ -7105,6 +7105,8 @@
     getMaterials:function(){ return JSON.parse(JSON.stringify(materialOverrides)); }, hydrateMaterials:hydrateMaterials,
     // S1 DIŞ GÖRÜNÜM (BİNA KABUĞU): mod aç/kapa + kabuk metrikleri (test + prototip).
     setExteriorMode:setExteriorMode, isExteriorMode:function(){ return exteriorMode; },
+    // resmi bayrak: kamera yerleştirme UI'ı açık mı (openPlace/openCompare akışı) — onboarding kamera3d tetiği buna bakar
+    isCamUIEnabled:function(){ return !!camUIEnabled; },
     // A1: dış↔iç mod değişimini prototip'e bildir (strand segmenti iki yönlü senkron). isExterior bool döner.
     setExteriorModeCallback:function(fn){ extModeCallback=(typeof fn==='function')?fn:null; },
     buildExteriorForTest:function(){ if(!scene||!scene.__map) return null; buildExterior();
