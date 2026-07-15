@@ -1895,7 +1895,8 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
          cameras:{ interior:[{pos,target,lens,height, id,room_id,prompt,snapshot,render_method,time_of_day}],
                    exterior:[{pos,target,lens, id,render_method,render_style,time_of_day,facade_signal,prompt,snapshot}] },
          furniture:[<View3D.exportFurniture çıktısı olduğu gibi: {id,type,room_id,pos(mutlak-m),rot_deg,__w/__d,...}>],
-         renders:{ interior:[{id,room_id,method,image}], exterior:[{id,image}], plan:{image}|null } }
+         renders:{ interior:[{id,room_id,method,image}], exterior:[{id,image}], plan:{image}|null,
+                   plans:[{block,name,image}]  <PAKET-PLANS: blok başına plan boyama; v1'e salt-ek, eski paketlerde yok> } }
      Mobilya kpState'te YAŞAMAZ (view3d furnList + window.__kptaFurniture) → pakete ayrı alan olarak girer;
      import'ta View3D.setFurniture ile geri yüklenir (px alanları taze map'e göre yeniden damgalanır).
      Render görselleri HER ZAMAN base64 (data:) — demo modundaki URL çıktıları da fetch+encode edilir. */
@@ -1969,11 +1970,21 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       var e={ id:r.id, facade:r.facade||'', image:null }; R.exterior.push(e);
       jobs.push(pkgToDataURL(img).then(function(d){ e.image=d; })); });
     if(state.paintRender){ R.plan={ image:null }; jobs.push(pkgToDataURL(state.paintRender).then(function(d){ R.plan.image=d; })); }
+    // PAKET-PLANS: blok başına plan boyama sonuçları (FAZ 2) — v1'e SALT-EK alan (renders.plans[]).
+    //   Eski okuyucular bilmedikleri alanı görmezden gelir; R.plan (tekil, son üretilen) geriye-uyum için AYNEN kalır.
+    R.plans=[];
+    try{
+      var bnm=(w&&typeof w.blockName==='function')?w.blockName:null;
+      Object.keys(state.paintRenders||{}).forEach(function(k){ var img=state.paintRenders[k]; if(!img) return;
+        var pe={ block:+k, name:(bnm?bnm(+k):null), image:null }; R.plans.push(pe);
+        jobs.push(pkgToDataURL(img).then(function(d){ pe.image=d; })); });
+    }catch(e){}
     toast('Paket hazırlanıyor…');
     Promise.all(jobs).then(function(){
       R.interior=R.interior.filter(function(e){ return e.image; });
       R.exterior=R.exterior.filter(function(e){ return e.image; });
       if(R.plan && !R.plan.image) R.plan=null;
+      R.plans=(R.plans||[]).filter(function(e){ return e.image; }); if(!R.plans.length) delete R.plans;
       var pkg={ format:'mesken-proje-paketi', version:1,
         meta:{ createdAt:new Date().toISOString(), app:'mesken-prototip', engineKpStateV:1, title:(map.units.length+' daire') },
         kpState:kp, cameras:cams, furniture:pkgCollectFurniture(w), renders:R };
@@ -2109,16 +2120,18 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
   //   renderCards (sonuçlar id ile devralınır → yeni kamera eklenince importlu render'lar korunur).
   function rehydrateGallery(pkg){
     var R=pkg.renders||{ interior:[], exterior:[], plan:null };
-    state.paintRender = (R.plan && R.plan.image) || null;
-    // FAZ 2 İŞ A: paket v1 tek plan görseli taşır → blok-0 anahtarına; eski projenin snap'leri bayat → sıfırla.
-    state.paintRenders = state.paintRender ? {0:state.paintRender} : {};
+    // PAKET-PLANS: renders.plans[] varsa (yeni paket) blok başına plan sonuçları birebir geri gelir;
+    //   yoksa (eski v1 paket) tekil R.plan blok-0'a düşer. Snap'ler her durumda bayat → sıfırla.
+    var plans=(R.plans&&R.plans.length)?R.plans:((R.plan&&R.plan.image)?[{block:0,name:null,image:R.plan.image}]:[]);
+    state.paintRenders={}; plans.forEach(function(p){ if(p&&p.image&&p.block!=null) state.paintRenders[p.block]=p.image; });
+    state.paintRender = plans.length ? (plans[plans.length-1].image||null) : null;
     state.isoSnaps = {};
     var iCams=(pkg.cameras&&pkg.cameras.interior)||[], eCams=(pkg.cameras&&pkg.cameras.exterior)||[];
     var iThumb={}, eThumb={};
     (R.interior||[]).forEach(function(r){ if(r.id&&r.image) iThumb[r.id]=r.image; });
     (R.exterior||[]).forEach(function(r){ if(r.id&&r.image) eThumb[r.id]=r.image; });
     state.rgFrames={ interior:iCams, exterior:eCams, iThumb:iThumb, eThumb:eThumb,
-      planThumbs:(state.paintRender?[{block:0, name:null, thumb:state.paintRender}]:[]), planThumb:state.paintRender };
+      planThumbs:plans.map(function(p){ return { block:p.block, name:p.name||null, thumb:p.image }; }), planThumb:state.paintRender };
     state.cameras=iCams;
     // adım-5 galeri kaynakları (fin() çıktı şemasıyla birebir)
     var ridx=mskRoomIndex();
