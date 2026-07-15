@@ -209,7 +209,7 @@ Plan üretildikten sonra araç çubuğundaki araçlarla her ayrıntıyı elle d�
 | **"Çiz"** | D | Varsayılan araç. Tıkla = köşe ekle; çift-tık ya da ilk köşeye tık = sınırı kapat; Space basılı = geçici kaydırma. |
 | **"Oda Çiz"** | O | Üretimden sonra bir daire üstünde serbest kapalı poligon çizerek yeni bir ODA (nötr tip) oluşturur. Esc iptal. |
 | **"Kapı"** | K | Sürükleyerek komşu duvar segmentine taşı; çift-tık = kapı ekle/sil (iç kapı ya da zeminde dış giriş); sağ tık = varsayılan konuma döndür. |
-| **"Pencere"** | W | Cepheye çift-tık = ekle; sürükle = taşı; çift-tık = sil. Seçince panel: Genişlik (0,6-3 m), Yükseklik (0,6-2,7 m), Parapet (0-1,5 m), "Tam boy cam" onay kutusu. Genişlik 2B'de görünür; yükseklik ve parapet yalnız 3B'yi etkiler. |
+| **"Pencere"** | W | Cepheye çift-tık = ekle; sürükle = taşı; çift-tık = sil. Oda tipi fark etmez — antre, koridor ve apartman holü de dış cepheye değiyorsa pencere alabilir (otomatik öneri yalnız salon/yatak/mutfağa çalışır; diğerlerine elle eklersin). Seçince panel: Genişlik (0,6-3 m), Yükseklik (0,6-2,7 m), Parapet (0-1,5 m), "Tam boy cam" onay kutusu. Genişlik 2B'de görünür; yükseklik ve parapet yalnız 3B'yi etkiler. |
 | **"Balkon"** | B | Dış duvara tıkla = ekle (en az 1 m kenar teması); uç ve derinlik tutamaçlarından boyutlandır; sağ tık ya da Del = sil. Eğik dış duvarda da çalışır. |
 | **"Avlu, aydınlık boşluğu"** | A | Bina sınırı içinde sürükleyerek dikdörtgen avlu oyar; gövdeden taşı, kenar/köşeden boyutlandır; sağ tık = sil. Derin/karanlık taban tespitinde "orta bölge için avlu önerilir" ipucu ve tek tıkla yerleştirme sunar. Avluya bakan kenarlar cephe/pencere sayılır. |
 | **"Yapı, çekirdek"** | Y | Merdiven/asansör/yangın merdiveni/teknik-şaft bölgelerini ve bina dış sınırını sürükleyip boyutlandırır (aşağıda ayrıntılı). |
@@ -244,6 +244,7 @@ Bir odaya sağ tıkladığında zengin bir bağlam menüsü açılır.
 - **"Başka odayla takas et…"**
 - **"Odayı dikine böl"** / **"Odayı enine böl"**
 - Mutfakta: **"Açık mutfağa dönüştür (mutfağı salona kat)"**
+- Dairede hiç mutfak yoksa salonda: **"Salon + Mutfak'a çevir (açık mutfak)"** — hücre taşımadan salonu açık mutfaklı sayar; "ayrı mutfak yerleştirilemedi" uyarısı söner. Tipini değiştir ile SALON'a geri dönersen uyarı yeniden devreye girer.
 - Antreye komşu değilse: **"Antreyi bu odaya uzat (kapı erişimi)"**
 - **"Odayı sil (komşuya katılır)"** — "Tek salon silinemez" koruması vardır.
 
@@ -392,7 +393,7 @@ Masaüstünde birinci-şahıs gezinti yapabilirsin: Pointer Lock ile fareyle bak
 
 Kat ve blok seçimi 3B'nin içinden yapılır (üst-orta çip satırları):
 
-- **İç görünümde:** çok bloklu sitede **"Blok"** çipleri (A, B, …) aktif bloğu GERÇEKTEN değiştirir — sahne seçilen bloğun planıyla yeniden kurulur. "Katları ayrı planla" açıksa altında **"Kat"** çipleri belirir (Zemin kat, 1. kat, …); konut katları tıklanabilir, ticari/otopark/sığınak katları soluk görünür ("iç mekânı yakında"). Kat/blok gezerken yerleştirilmiş kameralar ve drone'lar SİLİNMEZ.
+- **İç görünümde:** çok bloklu sitede **"Blok"** çipleri (A, B, …) aktif bloğu GERÇEKTEN değiştirir — sahne seçilen bloğun planıyla yeniden kurulur. "Katları ayrı planla" açıksa altında **"Kat"** çipleri belirir (Zemin kat, 1. kat, …); konut katları tıklanabilir, ticari/otopark/sığınak katları soluk görünür ("iç mekânı yakında"). Aynı düzendeki ardışık katlar **tek çipte birleşir** ("1. kat – 2. kat" gibi, "Aynı düzen — tek örnek üzerinden düzenlenir" notuyla) — motor aynı katı tekrar tekrar kurmaz; bu katlar mobilya ve malzemeyi de doğal olarak paylaşır (tip kat). Farklı düzendeki katlar tamamen ayrıdır: birinde taşıdığın mobilya ya da atadığın malzeme diğerine sızmaz. Kat/blok gezerken yerleştirilmiş kameralar ve drone'lar SİLİNMEZ.
 - **Dış görünümde:** blok çipleri **"A · B · … · Tümü"** biçimindedir ve salt görseldir — seçilen tam kabuk, diğerleri hayalet çizilir; 2B aktif blok değişmez.
 - Aktif kat konut-dışıysa 3B açılışta otomatik ilk konut katına geçer (bilgi mesajıyla); hiç konut katı yoksa dış görünüme düşülür.
 

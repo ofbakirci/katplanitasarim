@@ -354,6 +354,73 @@ function floorState(k){
   const f=villaFloors[k];
   return (f&&f.plan)? {pts:f.pts, plan:f.plan} : null;
 }
+/* İş 1 + İş 3: kat düzeni "imzası" — aynı imzaya düşen ARDIŞIK katlar 3B kat çipinde TEK örnekte
+   birleşir (İş 2, floorGroupsForTest) VE mobilya/malzeme deposunda AYNI bileşik anahtarı paylaşır
+   (İş 3, "tip kat" doğal paylaşımı). g.id BİLİNÇLİ dışarıda (klonlanan katta bölge numarası kayabilir;
+   önemli olan tip+hücre kümesi, sıra numarası değil). Mobilya/malzeme İMZAYA GİRMEZ — aksi hâlde
+   döşemek/boyamak imzayı değiştirir, sonsuz "farklı kat" döngüsü oluşurdu.
+   k===activeFloor ise CANLI globallerden (stateSnapshot bare — yan etkisiz, doğrulandı: bare=true
+   villaFloors/blocks'a YAZMAZ), değilse villaFloors[k]'nin anlık görüntüsünden okur. Ziyaret edilmemiş
+   kat (plan yok) → null: ne gruplanır ne bileşik anahtara girer (İş 3 legacy düz-anahtara düşer). */
+function floorLayoutSig(k){
+  const st=(k===activeFloor)?stateSnapshot(true):(villaFloors&&villaFloors[k]);
+  if(!st||!st.plan) return null;
+  const p=st.plan;
+  const regs=p.regions.map(g=>g.type+':'+g.cells.join(',')).sort().join('|');
+  return [p.rows,p.cols,p.minX,p.minY,p.katKullanim,p.inside.join(''),regs,
+          JSON.stringify(st.doors||{}),JSON.stringify(st.windows||{})].join('#');
+}
+/* İş 3: mobilya/malzeme depo (window.__kptaFurniture / window.__kptaMaterials) OKUMA-çözümleyici.
+   Depo anahtarı roomId (legacy) ya da roomId+'@@'+floorLayoutSig(o anki kat) olabilir; bu fonksiyon
+   AKTİF kat/blok bağlamında her roomId için TEK bir girdiye çözer. Öncelik:
+   (1) TAM imza eşleşmesi — düzen değişmedi, doğrudan uygula.
+   (2) Aynı kat+blok'un (başka bir eski imzayla yazılmış) EN SON girişi — düzen (kapı/duvar) değişti ama
+       mobilya/malzeme hâlâ BU katın; en yeni __t kazanır (furnPruneInvalid/furnRectInPoly sığmayanı
+       zaten geometrik olarak ayıklar).
+   (3) legacy DÜZ roomId anahtarı — bu bileşik-anahtar değişikliğinden ÖNCEKİ kayıtlar (geri-uyum).
+   io.js (export furniture/materials okuma) + view3d.js (hydrateMaterials) ORTAK kullanır. */
+function floorStoreResolve(store){
+  if(!store) return {};
+  const fl=(typeof activeFloor!=='undefined')?activeFloor:0, bl=(typeof activeBlock!=='undefined')?activeBlock:0;
+  const sig=floorLayoutSig(fl);
+  const byRoom={};
+  Object.keys(store).forEach(k=>{
+    const v=store[k]; if(!v) return;
+    const i=k.indexOf('@@');
+    if(i<0){ (byRoom[k]=byRoom[k]||{}).legacy=v; return; }
+    const rid=k.slice(0,i), s=k.slice(i+2);
+    const b=(byRoom[rid]=byRoom[rid]||{});
+    if(sig!=null && s===sig) b.exact=v;
+    if(v.__floor===fl && v.__block===bl){
+      if(!b.sameFloor || (v.__t||0)>=(b.sameFloor.__t||0)) b.sameFloor=v;
+    }
+  });
+  const out={};
+  Object.keys(byRoom).forEach(rid=>{
+    const b=byRoom[rid];
+    out[rid]=b.exact||b.sameFloor||b.legacy||null;
+  });
+  return out;
+}
+/* İş 3: mobilya/malzeme depo YAZMA-yardımcısı — TEK bir oda için read-modify-write: aynı kat+blok'un
+   ESKİ (bayat imzalı) girişlerini + legacy düz anahtarı temizler (store'un DİĞER katlara/bloklara ait
+   girişlerine DOKUNMAZ — "tüm store'u ez" değil, hedefli temizlik), value doluysa GÜNCEL imzayla
+   (+ __t/__floor/__block damgasıyla) yazar. value boş/null → yalnız temizlik (oda bu kat için boşaltıldı).
+   view3d.js persistFurniture/setFurniture/persistMaterials ORTAK kullanır. */
+function floorStoreWrite(store, roomId, value){
+  delete store[roomId];   // tek seferlik legacy düz-anahtar temizliği
+  const fl=(typeof activeFloor!=='undefined')?activeFloor:0, bl=(typeof activeBlock!=='undefined')?activeBlock:0;
+  const prefix=roomId+'@@';
+  Object.keys(store).forEach(k=>{
+    if(k.indexOf(prefix)!==0) return;
+    const v=store[k]; if(v && v.__floor===fl && v.__block===bl) delete store[k];
+  });
+  const empty=!value || (Array.isArray(value)? !value.length : !(value.floor||value.wall));
+  if(empty) return;
+  const sig=floorLayoutSig(fl);
+  value.__t=Date.now(); value.__floor=fl; value.__block=bl;
+  store[sig!=null?(prefix+sig):roomId]=value;
+}
 /* plan (canlı ya da anlık görüntü) içindeki iç merdivenin dünya koordinatlı kapsayan kutusu */
 function stairBoxOf(pl){
   if(!pl) return null;

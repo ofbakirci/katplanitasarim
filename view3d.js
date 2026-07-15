@@ -2888,8 +2888,29 @@
     }catch(e){}
     return out;
   }
-  // İŞ 1c: kat çipleri — blok çiplerinin ALTINDA, YALNIZ İÇ modda + katları-ayrı + 2+ kat. Konut-dışı katlar
-  //   devre dışı görünür (tıklanamaz) — H3 nonResidentialFallback ile aynı ürün kararı.
+  // İŞ 2a: floorChipsForTest çıktısını AYNI düzenli (floorLayoutSig eşit) ARDIŞIK katlarda TEK gruba
+  //   indirger ("tip kat" — çip listesi şişmesin, düzenleme tek örnek üzerinden yapılsın). sig=null
+  //   (ziyaret edilmemiş kat) HİÇBİR komşusuyla gruplanmaz — bilinmeyen düzen "aynı" sayılmaz.
+  //   Dönen: [{idxs:[k,...] (artan, ARDIŞIK), enabled, label, sig}]. Tek kat → label=floorName(k);
+  //   grup → floorName(ilk)+' – '+floorName(son).
+  function floorGroupsForTest(){
+    const chips=floorChipsForTest();
+    const out=[];
+    chips.forEach(function(c){
+      const sig=(typeof floorLayoutSig==='function')? floorLayoutSig(c.idx) : null;
+      const prev=out[out.length-1];
+      if(prev && sig!=null && prev.sig===sig && prev.idxs[prev.idxs.length-1]===c.idx-1) prev.idxs.push(c.idx);
+      else out.push({ idxs:[c.idx], enabled:c.enabled, sig:sig });
+    });
+    out.forEach(function(g){
+      g.label = (g.idxs.length>1) ? (floorName(g.idxs[0])+' – '+floorName(g.idxs[g.idxs.length-1])) : floorName(g.idxs[0]);
+    });
+    return out;
+  }
+  // İŞ 1c + İŞ 2b: kat çipleri — blok çiplerinin ALTINDA, YALNIZ İÇ modda + katları-ayrı + 2+ kat. Konut-dışı
+  //   katlar devre dışı görünür (tıklanamaz) — H3 nonResidentialFallback ile aynı ürün kararı. AYNI düzenli
+  //   ARDIŞIK katlar floorGroupsForTest ile TEK çipte birleşir; data-floorchip = grubun İLK kat indeksi
+  //   (tık handler'ı DEĞİŞMEDİ — zaten switchFloor(+fchip) çağırıyor, grup da tek indekse çözülüyor).
   function renderFloorChips(){
     const box=overlay&&overlay.querySelector('#v3dFloorChips'); if(!box) return;
     let show=false;
@@ -2897,9 +2918,14 @@
     if(!show){ box.style.display='none'; box.innerHTML=''; return; }
     const cur=(typeof activeFloor!=='undefined')?activeFloor:0;
     let html='<span class="cl">Kat</span>';
-    floorChipsForTest().forEach(function(c){
-      if(c.enabled) html+='<button data-floorchip="'+c.idx+'" class="'+(c.idx===cur?'on':'')+'" title="'+c.name+'">'+c.name+'</button>';
-      else html+='<button data-floorchip="'+c.idx+'" class="off" disabled title="Ticari/otopark iç mekânı yakında">'+c.name+'</button>';
+    floorGroupsForTest().forEach(function(g){
+      const first=g.idxs[0], grouped=g.idxs.length>1, active=g.idxs.indexOf(cur)>=0;
+      if(g.enabled){
+        const title=grouped ? ('Aynı düzen — tek örnek üzerinden düzenlenir ('+g.label+')') : g.label;
+        html+='<button data-floorchip="'+first+'" class="'+(active?'on':'')+'" title="'+title+'">'+g.label+'</button>';
+      } else {
+        html+='<button data-floorchip="'+first+'" class="off" disabled title="Ticari/otopark iç mekânı yakında">'+g.label+'</button>';
+      }
     });
     box.innerHTML=html; box.style.display='flex';
   }
@@ -5989,6 +6015,11 @@
     const map=window.buildFloorplanMap && window.buildFloorplanMap();
     if(!map || !map.units || !map.units.length) return;   // hedef kat/blok konutsuz/boş → sahneye dokunma (mevcut görünüm kalır)
     const saved=getView();
+    // M3 TAZELEME FIX: hydrateMaterials eskiden YALNIZ boot()'ta çağrılıyordu → kat/blok değişince
+    //   materialOverrides bayat kalıyordu (önceki katın seçimleri, aynı room_id'ye rastlayınca YENİ
+    //   kata SIZIYORDU). buildScene odayı kurarken roomMatKey→materialOverrides'ı SENKRON okur (aşağıda
+    //   değil, İÇİNDE) → buildScene'den ÖNCE tazelenmeli.
+    hydrateMaterials();
     buildScene(map);                       // İÇİNDE: exteriorMode ise dış kabuğu kendi kendine yeniden kurar (S1 deseni, buildScene sonu)
     renderCamGizmos(); updateCamPanel();    // İÇ kamera gizmoları veriden geri bindirilir (camList SİLİNMEDİ — yalnız görsel gizmo grubu gitti)
     if(saved) restoreView(saved);           // KİLİT-KÖPRÜ (~2859 yorumu): bundan SONRA hiçbir fitView/fitExtView çağrısı YOK
@@ -6072,7 +6103,10 @@
   function balconyRooms(map){
     if(!map) return [];
     if(map.__balconyRooms) return map.__balconyRooms;
-    const FS=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+    // KAT-İZOLASYON: io.js'in units/common okuma ikizi — balkon (BALK-<unit>-<edge>) da roomId+'@@'imza
+    // bileşik anahtarına düşmüş olabilir; floorStoreResolve (app.js) aktif kat/blok bağlamına çözer.
+    const FSraw=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+    const FS=(typeof floorStoreResolve==='function')? floorStoreResolve(FSraw) : FSraw;
     const rs=(map.balconies||[]).filter(function(bk){ return bk&&bk.polygon_px&&bk.polygon_px.length>=4; }).map(function(bk){
       const id='BALK-'+(bk.unit_id||'X')+'-'+(bk.edge_index!=null?bk.edge_index:0);
       return { id:id, type:'balcony', type_tr:'Balkon', name:'Balkon', name_en:'Balcony',
@@ -6792,19 +6826,32 @@
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(stamp); }); (map.common_areas||[]).forEach(stamp);
     balconyRooms(map).forEach(stamp);
   }
-  // güncel mobilyayı kalıcı store'a yaz (px dahil, derin kopya → serileştirilebilir + alias yok)
+  // güncel mobilyayı kalıcı store'a yaz (px dahil, derin kopya → serileştirilebilir + alias yok).
+  // KAT-İZOLASYON: store'u EZMEZ (read-modify-write) — floorStoreWrite (app.js) yalnız BU odanın
+  // aktif kat+blok'una ait bayat girişini temizleyip GÜNCEL imzayla yazar; diğer katların/blokların
+  // girişleri store'da aynen kalır. floorStoreWrite erişilemezse (typeof-guard) eski düz-anahtar
+  // davranışına düşülür (geri-uyum; store yine EZİLMEZ — yalnız bu oda güncellenir).
   function persistFurniture(){
     const map=scene&&scene.__map; if(!map){ return; }
     syncFurniturePx(map);
-    const store={};
-    function take(r){ const fs=r.furniture||[]; if(fs.length) store[r.id]=fs.map(function(f){ return JSON.parse(JSON.stringify(f)); }); }
+    const store=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+    function take(r){
+      const fs=r.furniture||[];
+      const items=fs.length? fs.map(function(f){ return JSON.parse(JSON.stringify(f)); }) : null;
+      if(typeof floorStoreWrite==='function') floorStoreWrite(store, r.id, items);
+      else if(items) store[r.id]=items; else delete store[r.id];
+    }
     (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(take); }); (map.common_areas||[]).forEach(take);
     balconyRooms(map).forEach(take);
     try{ window.__kptaFurniture=store; }catch(e){}
   }
   // M3: kalıcı store'dan (window.__kptaMaterials) runtime materialOverrides'a yükle. Yalnız GEÇERLİ preset key'ler alınır.
+  // KAT-İZOLASYON: depo anahtarı bileşik (roomId+'@@'imza) olabilir — floorStoreResolve (app.js) AKTİF
+  // kat/blok bağlamına göre roomId'ye çözer (+legacy düz anahtarları da kapsar). Eskiden yalnız boot()'ta
+  // çağrılıyordu (kat değişince tazelenmiyordu — bu TAZELEME BUG'I ayrı fix: rebuildFromEngine başında da çağrılır).
   function hydrateMaterials(){
-    const store=(typeof window!=='undefined' && window.__kptaMaterials) || {};
+    const storeRaw=(typeof window!=='undefined' && window.__kptaMaterials) || {};
+    const store=(typeof floorStoreResolve==='function')? floorStoreResolve(storeRaw) : storeRaw;
     materialOverrides={};
     Object.keys(store).forEach(function(rid){
       const o=store[rid]||{}, f=(o.floor&&MAT_BY_KEY[o.floor])?o.floor:null, w=(o.wall&&MAT_BY_KEY[o.wall])?o.wall:null;
@@ -6812,10 +6859,19 @@
     });
   }
   // M3: güncel malzeme seçimlerini kalıcı store'a yaz (mobilya ikizi). Yalnız DOLU (floor|wall set) odalar → boş kayıt yok.
+  // KAT-İZOLASYON: store'u EZMEZ — floorStoreWrite (app.js) yalnız BU katın/bloğun rolündeki odaları
+  // günceller (aktif sahnedeki TÜM odalar süpürülür ki TEMİZLENEN override de deposundan silinsin);
+  // diğer katların/blokların girişleri aynen kalır. Sahne yoksa (headless) materialOverrides'ın kendi
+  // anahtar kümesi kullanılır (best-effort — normal akışta persistMaterials hep canlı sahneyle çağrılır).
   function persistMaterials(){
-    const store={};
-    Object.keys(materialOverrides).forEach(function(rid){
-      const o=materialOverrides[rid]; if(o && (o.floor||o.wall)) store[rid]={ floor:o.floor||null, wall:o.wall||null };
+    const store=(typeof window!=='undefined' && window.__kptaMaterials) || {};
+    const map=scene&&scene.__map;
+    const roomIds = map ? furnAllRooms(map).map(function(r){ return r.id; }) : Object.keys(materialOverrides);
+    roomIds.forEach(function(rid){
+      const o=materialOverrides[rid];
+      const val=(o && (o.floor||o.wall)) ? { floor:o.floor||null, wall:o.wall||null } : null;
+      if(typeof floorStoreWrite==='function') floorStoreWrite(store, rid, val);
+      else if(val) store[rid]=val; else delete store[rid];
     });
     try{ window.__kptaMaterials=store; }catch(e){}
   }
@@ -6834,17 +6890,37 @@
   //   Kalıcı store'a (window.__kptaFurniture, room_id→item[]) YAZAR → sahne yoksa da sonraki
   //   buildFloorplanMap mobilyayı görür; canlı sahne varsa map'e bindirir + yeniden çizer.
   //   px alanları (polygon_px/centroid_px) türetilmiştir → syncFurniturePx taze map'e göre yeniden damgalar.
+  // KAT-İZOLASYON: paket (.mskpkg) importu BU KATIN mobilyasını TAM DEĞİŞTİRİR (kullanıcıya "mevcut
+  // ilerleme kaybolur" uyarısıyla önceden onaylatılır) — ama yalnız AKTİF kat+blok'un girişlerini;
+  // diğer katların/blokların store kayıtlarına dokunmaz (floorStoreWrite'ın read-modify-write'ı).
+  // Paket formatı hâlâ DÜZ liste (room_id alanı dışında kat/blok bilgisi taşımaz) → içe aktarılan
+  // TÜM öğeler "aktif kat"a yazılır (mesh paketten kurulduktan SONRA çağrılır → aktif kat zaten doğru).
   function setFurniture(arr){
     arr=(arr||[]).filter(function(f){ return f && f.type && f.pos && f.room_id; });
-    const store={};
-    arr.forEach(function(f){ const c=JSON.parse(JSON.stringify(f)); (store[c.room_id]=store[c.room_id]||[]).push(c); });
-    try{ window.__kptaFurniture=store; }catch(e){}
+    const store=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+    const grouped={};
+    arr.forEach(function(f){ const c=JSON.parse(JSON.stringify(f)); (grouped[c.room_id]=grouped[c.room_id]||[]).push(c); });
     const map=scene&&scene.__map;
+    // bu katın sahnedeki TÜM odaları: pakette karşılığı olmayan oda da (eski mobilyası) TEMİZLENİR —
+    // yoksa bir sonraki rebuild'de eski (bu paketle değişmeyen) kayıt geri sızardı.
+    const roomIds = map ? furnAllRooms(map).map(function(r){ return r.id; }) : Object.keys(grouped);
+    const touched={};
+    roomIds.forEach(function(rid){
+      touched[rid]=true;
+      if(typeof floorStoreWrite==='function') floorStoreWrite(store, rid, grouped[rid]||null);
+      else if(grouped[rid]) store[rid]=grouped[rid]; else delete store[rid];
+    });
+    Object.keys(grouped).forEach(function(rid){   // pakette var ama sahnede karşılığı yoksa yine de yaz (kaybolmasın)
+      if(touched[rid]) return;
+      if(typeof floorStoreWrite==='function') floorStoreWrite(store, rid, grouped[rid]);
+      else store[rid]=grouped[rid];
+    });
+    try{ window.__kptaFurniture=store; }catch(e){}
     if(map){
       const wipe=function(r){ r.furniture=[]; };
       (map.units||[]).forEach(function(u){ (u.rooms||[]).forEach(wipe); }); (map.common_areas||[]).forEach(wipe);
       balconyRooms(map).forEach(wipe);
-      Object.keys(store).forEach(function(rid){ const r=furnRoomById(rid); if(r) r.furniture=store[rid]; });   // odası bulunmayan kayıt sahneye binmez (store'da kalır)
+      Object.keys(grouped).forEach(function(rid){ const r=furnRoomById(rid); if(r) r.furniture=grouped[rid]; });   // odası bulunmayan kayıt sahneye binmez (store'da kalır)
       syncFurniturePx(map);
       collectFurnList(); activeFurnIdx=-1; renderFurniture();
     }
@@ -7211,6 +7287,8 @@
                fulls:o.fulls.map(function(b){return b.idx;}), ghosts:o.ghosts.map(function(b){return b.idx;}) }; },
     // İŞ 1d HEADLESS: kat çipi sınıflaması (THREE'siz, sahne gerekmez) — [{idx,name,enabled}] (enabled=konut kat).
     floorChipsForTest:floorChipsForTest,
+    // İŞ 2c HEADLESS: aynı-düzenli ARDIŞIK katların TEK çipe indirgenmiş hâli — [{idxs,enabled,label,sig}].
+    floorGroupsForTest:floorGroupsForTest,
     // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ (test + prototip) ──
     //   İç kamera sözleşmesinden (exportCameras/getCameras) TAMAMEN AYRI — extCams kendi listesi.
     getExteriorCameras:function(){ return extCams.map(function(c){ return {pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens}; }); },

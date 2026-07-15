@@ -718,11 +718,16 @@ function buildFloorplanMap(opt){
     const o=fpRegionGeom(g,fr,classify); o.id='C-'+g.id; regRoomId.set(g, o.id); return o;
   });
   // mobilya (kalıcılık): runtime store'dan (view3d yazar) room_id ile eşle → 3B kapat-aç + JSON export korunur.
-  const FS=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+  // KAT-İZOLASYON: depo anahtarı roomId+'@@'+floorLayoutSig (bileşik) olabilir — floorStoreResolve
+  //   (app.js) AKTİF kat/blok bağlamında roomId'ye çözer (bkz. fonksiyonun öncelik-zinciri yorumu);
+  //   yoksa (fonksiyon erişilemezse) ham store'a düşülür (eski düz-anahtar davranışı, geri-uyum).
+  const FSraw=(typeof window!=='undefined' && window.__kptaFurniture) || {};
+  const FS=(typeof floorStoreResolve==='function')? floorStoreResolve(FSraw) : FSraw;
   units.forEach(u=>u.rooms.forEach(o=>{ if(FS[o.id]) o.furniture=FS[o.id].map(f=>f); }));
   common.forEach(o=>{ if(FS[o.id]) o.furniture=FS[o.id].map(f=>f); });
   // MALZEME (additive): runtime store'dan (view3d persistMaterials yazar) room_id ile eşle → export + render sinyali.
-  const MS=(typeof window!=='undefined' && window.__kptaMaterials) || {};
+  const MSraw=(typeof window!=='undefined' && window.__kptaMaterials) || {};
+  const MS=(typeof floorStoreResolve==='function')? floorStoreResolve(MSraw) : MSraw;
   units.forEach(u=>u.rooms.forEach(o=>{ if(MS[o.id]) o.materials={ floor:MS[o.id].floor||null, wall:MS[o.id].wall||null }; }));
   common.forEach(o=>{ if(MS[o.id]) o.materials={ floor:MS[o.id].floor||null, wall:MS[o.id].wall||null }; });
   // kapılar: gerçek kapı boşlukları (3B görünüm + AI besleme); oda poligonlarıyla AYNI px uzayı.

@@ -233,5 +233,34 @@ ok(c2.has && c2.isGround, 'C2: groundFloorSnapshot katAyri+aktif≠zemin'+"'"+'d
 ok(c2.usage==='ticari', 'C2: zemin kat kullanımı (ticari) taşınır');
 ok(c2.mapOk && c2.mapWins>0, 'C2: zemin snapshot'+"'"+'tan cephe map'+"'"+'i üretilir ('+c2.mapWins+' pencere)');
 
+/* 11) ELLE PENCERE TİP-BAĞIMSIZ: winEdgeNear üstündeki eski yorum ("yalnız yaşam-odasına
+   komşu kenar") koddan kopuktu — elle ekleme (extraWindows) tip filtresi TAŞIMAZ, otomatik
+   öneri listesi (habit: salon/yatak/mutfak) ayrıdır. Apartman holü (koridor) dış sınıra değen
+   bir kenar bulunup oraya extraWindows ile pencere eklenir → computeWindows'ta status='ok'. */
+const b = run(`(function(){
+  document.getElementById('katSayisi').value='5';
+  unitSpecs=[{oda:2,salon:1,ensuite:false,acik:false,adet:3}];
+  pts=[{x:0,y:0},{x:20,y:0},{x:20,y:13},{x:0,y:13}]; closed=true; courtyards=[];
+  generate();
+  // koridor (apartman holü) dış sınıra değen kenarı bul (probe: iç normal yönünde 0.35 m)
+  let edge=null;
+  for(let ei=0; ei<pts.length && !edge; ei++){
+    const g=winEdgeGeom(ei); if(!g||g.len<1.6) continue;
+    for(let t=0.3; t<=g.len-0.3; t+=0.25){
+      const rg=_winRegAt(g.A.x+g.ux*t+g.nx*0.35, g.A.y+g.uy*t+g.ny*0.35);
+      if(rg && rg.type==='koridor'){ edge={ei,t}; break; }
+    }
+  }
+  if(!edge) return {found:false};
+  const before=computeWindows().length;
+  extraWindows.push({ei:edge.ei, t:edge.t, w:1.6});
+  const rec=computeWindows().find(w=>w.i!=null);
+  extraWindows=[];
+  return { found:true, before, status:rec?rec.status:null, hasE:!!(rec&&rec.e) };
+})()`);
+ok(b.found, 'B: standart apartman planında apartman holü (koridor) dış sınıra değen kenar bulundu (test kurulumu geçerli)');
+ok(b.status==='ok', 'B: yaşam-odası olmayan (koridor) kenara elle eklenen pencere de status=ok (tip-bağımsız)');
+ok(b.hasE, 'B: elle eklenen pencere e{} çözülü döner');
+
 console.log('PENCERE: ' + pass + ' geçti, ' + fail + ' hata');
 if (fail) process.exit(1);

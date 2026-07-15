@@ -199,7 +199,10 @@ function computeWindows(){
 function windowSnapshot(){ return {ov:JSON.parse(JSON.stringify(windowOverrides)), extra:extraWindows.map(d=>({...d})), hidden:{...windowHidden}}; }
 function windowRestore(s){ windowOverrides=s?JSON.parse(JSON.stringify(s.ov||{})):{}; extraWindows=(s&&s.extra||[]).map(d=>({...d})); windowHidden=(s&&s.hidden)?{...s.hidden}:{}; }
 /* imlece en yakın bina-sınır kenarı üstündeki nokta (pencere ekleme için).
-   Dönüş {ei, t, x, y} — kenar boyu projeksiyonu. Yalnız yaşam-odasına komşu kenar. */
+   Dönüş {ei, t, x, y} — kenar boyu projeksiyonu. Elle pencere TİP-BAĞIMSIZDIR (antre/koridor
+   dahil) — tek koşul bina-sınır kenarına yakınlık + kenar uzunluğu ≥1.2 m (aşağıdaki g.len<1.2
+   filtresi). Otomatik öneri listesi (habit: yalnız salon/yatak/mutfak, bkz. _scanEdgeForWindows)
+   AYRI ve bilinçli olarak yaşam-odalarıyla sınırlı — bu fonksiyon o kısıtı TAŞIMAZ. */
 function winEdgeNear(wx,wy){
   if(!plan||!pts||pts.length<3) return null;
   let best=null, bd=Math.max(0.5, 12/pxPerM);

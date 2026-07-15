@@ -254,6 +254,23 @@ function openKitchen(salon){
   refreshAfterRoomEdit();
   return true;
 }
+/* salonu DOĞRUDAN açık mutfağa çevir: dairede hiç ayrı mutfak YOKKEN (openKitchen'in 'nomut'
+   dediği durum — örn. dar ayak izinde mutfak yerleştirilemediği için MUTFAK_YOK uyarısı yanan
+   daire) kullanıcı menüden bunu ister. Hücre TAŞINMAZ; yalnız salon.name='SALON + MUTFAK' +
+   spec.acik=true (MUTFAK_YOK uyarısı söner, kaydet/yükle ve EN çeviri zaten bu addan tanır).
+   Ayrı mutfak VARSA reddedilir (o durumda openKitchen — mutfağı salona katan yol — kullanılır).
+   Geri Al: mevcut 'retype' undo kolu (interaction.js) aynen çalışır — yeni dal YOK. */
+function openKitchenDirect(salon){
+  const p=plan, k=unitOfRoom(salon.id); if(k<0||salon.type!=='salon') return false;
+  const u=p.unitObjs[k];
+  if(u.rooms.some(o=>o.type==='mutfak'&&o.cells.length)) return false; // hücreli mutfak varsa openKitchen yolu geçerli
+  if(salon.name==='SALON + MUTFAK') return false;                     // zaten açık mutfak
+  pushEdit({type:'retype', reg:salon, name:salon.name, rtype:salon.type, unit:k, spec:u.spec});
+  u.spec={...u.spec, acik:true};
+  salon.name='SALON + MUTFAK';
+  refreshAfterRoomEdit();
+  return true;
+}
 /* oda ekle: ev sahibi odadan, antreye komşu tohum hücreden başlayan pencere oyulur */
 function addRoom(host, def, hint){
   const p=plan, k=unitOfRoom(host.id); if(k<0) return false;
@@ -446,6 +463,9 @@ function retypeRoom(g, def){
   if(def.type==='yatak'){ if(g.type==='yatak'||growBed) s.oda+=1; } // yatak→yatak (örn. EB. YATAK ODASI) net-0; başka→yatak açık yoksa büyümez
   else if(def.type==='salon') s.salon+=1;
   else if(def.type==='mutfak') s.acik=false;
+  /* simetri: açık mutfak (SALON + MUTFAK) düz SALON'a döndürülürse söz de düşer — yoksa
+     openKitchenDirect'in açtığı acik:true burada sessizce kalır, MUTFAK_YOK geri gelmez */
+  if(g.name==='SALON + MUTFAK' && def.name==='SALON') s.acik=false;
   u.spec=s;
   g.name=def.name; g.type=def.type;
   refreshAfterRoomEdit();
@@ -880,6 +900,8 @@ svg.addEventListener('contextmenu',e=>{
         + `<div class="mi" data-split="h">═ Odayı enine böl</div>`;
       if(g.type==='salon'&&u.rooms.some(o=>o.type==='mutfak'&&o.cells.length))
         html+=`<div class="mi" data-acik="1">⌐ Açık mutfağa dönüştür (mutfağı salona kat)</div>`;
+      else if(g.type==='salon'&&g.name!=='SALON + MUTFAK')
+        html+=`<div class="mi" data-aciknomut="1">⌐ Salon + Mutfak'a çevir (açık mutfak)</div>`;
       if(u.antre&&u.antre.cells.length&&!antreAdj)
         html+=`<div class="mi" data-extend="1">Antreyi bu odaya uzat (kapı erişimi)</div>`;
       const onlySalon=g.type==='salon'&&salonProtected()&&!u.rooms.some(o=>o!==g&&o.type==='salon'&&o.cells.length);
@@ -976,6 +998,9 @@ svg.addEventListener('contextmenu',e=>{
       if(r===true) hideRoomMenu();
       else if(r==='noadj') fail('Mutfak salona komşu değil — önce takasla ya da duvar sürükleyerek bitiştirin.');
       else fail('Bu dairede ayrı mutfak yok (zaten açık mutfak).'); };
+    const acn=roomMenu.querySelector('.mi[data-aciknomut]');
+    if(acn) acn.onclick=()=>{ if(openKitchenDirect(g)) hideRoomMenu();
+      else fail('Salon + Mutfak\'a çevrilemedi.'); };
     const ex=roomMenu.querySelector('.mi[data-extend]');
     if(ex) ex.onclick=()=>{ const r=extendAntreTo(g);
       if(r===true) hideRoomMenu();
