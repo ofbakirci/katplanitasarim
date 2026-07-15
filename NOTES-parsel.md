@@ -1,5 +1,9 @@
 # Devir Notu — TKGM Parsel özelliği
 
+> **TARİHSEL NOT (2026-07-15):** Bu 2026-06-23 tarihli bir devir notudur. TKGM parsel
+> özelliği `598763b` ile **master'a merge edildi**; "PR aç / master'a merge" açık işi
+> TAMAMLANDI. Aşağıdaki "merge edilmedi" ifadeleri tarihsel bağlamdır.
+
 **Branch:** `worktree-ozellik-deneme` · master'a **merge edilmedi** (bilerek; deneme dalı) · güncelleme 2026-06-23.
 
 ## Bu dalda ne var (commit sırası)

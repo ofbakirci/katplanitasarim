@@ -51,10 +51,12 @@ npm run test:diagnostics
 
 ## Mesken (3D render — ayrı proje)
 
-`mesken/`, bu araçtan dallanan ayrı bir projedir: kat planını layout'a sadık 3D
-"dollhouse" render'a çevirir (ControlNet / Flux-Canny). Bu araç "AI Output" düğmesiyle
-boyama tabanı + duvar kenar haritası PNG'leri üretir; mesken bunları girdi alır.
-Ayrıntı ve çalıştırma için `mesken/README.md`. (Bu klasör ana repoda gitignore'ludur.)
+`mesken/`, bu araçtan dallanan ayrı bir projedir: kat planını renk-kodlu gerçek 3B
+mesh'e çevirip yapay zekâ (nano-banana-pro) ile fotogerçekçi render'a dönüştürür.
+Aktarım elle PNG ile değil, motorun kendi 3B / kamera / render adımları üzerinden
+otomatik olur (5 adımlı akış: Sınır + Yerleşim → 3B → Kamera → Render → Döşe).
+Ayrıntı ve çalıştırma için `mesken/README.md`; kullanıcı dökümanı
+`mesken/KULLANIM-KILAVUZU.md`. (Bu klasör ana repoda gitignore'ludur.)
 
 ## Gelistirme Notlari
 

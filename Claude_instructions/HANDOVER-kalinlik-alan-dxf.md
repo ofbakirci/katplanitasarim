@@ -1,5 +1,8 @@
 # HANDOVER — Kalınlık + brüt/net alan + DXF export (yeni session için)
 
+> **TAMAMLANDI (2026-07-15 notu):** Bu brief'in işi bitti — dilim dilim onay kaydı için
+> bkz. `BRIEF-L1A.md` DURUM tablosu. Dosya tarihsel görev tanımı olarak durur.
+
 > Bu, vektör-kernel yol haritasının **L1-A** fazı: zaruri ihtiyaçları barındıran
 > **çalışan sistem**. Tek hedef: duvar **kalınlığı** + **brüt/net alan** + **DXF export**.
 > Diyagonal ve tam vektör-model rewrite bu session'ın DIŞINDA (sonraki fazlar).

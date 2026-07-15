@@ -1,5 +1,10 @@
 # Devir Notu — İmar Plan Notu çekme (TKGM parselin devamı)
 
+> **TARİHSEL NOT (2026-07-15):** Bu 2026-06-23 tarihli bir devir notudur. Sözü edilen
+> TKGM/imar özelliği ertesi gün `598763b` ile **master'a merge edildi** ve 3 il
+> (İstanbul/Ankara/İzmir) master'da canlıdır. Aşağıdaki "merge edilmedi" ifadeleri
+> tarihsel bağlamdır, artık geçerli değildir. Bu dosya da artık master'da tracked'dir.
+
 **Branch:** `worktree-ozellik-deneme` (TKGM parsel dalı; master'a merge edilmedi) · 2026-06-23
 **Önce oku:** `NOTES-parsel.md` (TKGM altyapısı — parsel zaten lat/lng + dünya koord olarak yükleniyor).
 

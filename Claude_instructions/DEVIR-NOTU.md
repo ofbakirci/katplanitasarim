@@ -1,6 +1,12 @@
 # Kat Planı Tasarım Aracı — Devir Notu
 
-Yeni sohbete başlarken bu dosyayı ve `kat-plani-tasarim.html` dosyasını ekleyin.
+> **KAPSAM NOTU (2026-07-15):** Bu devir notu 2026-06-22'ye kadarki motor değişikliklerini
+> kapsar. Sonraki büyük işler (TKGM/imar 3 il, duvar kalınlığı/brüt-net alan/DXF (L1-A),
+> mobilya sistemi v2, dağıtım DP rewrite, rectify, onboarding turları, .mskpkg paketi)
+> burada YOK — güncel resim için git log + `CLAUDE.md` + `mesken/DURUM.md`.
+
+Yeni sohbete başlarken bu dosyayı ve `CLAUDE.md`'yi okuyun; motor mantığı artık
+kökteki modüler `.js` dosyalarındadır (kabuk: `kat-plani-tasarim.html`).
 
 > Not: Plandan 3D render iş kolu artık ayrı projede: `mesken/` (kendi README + session
 > notları orada). Bu devir notu yalnız kat planı tasarım aracını kapsar.
@@ -21,7 +27,10 @@ Yeni sohbete başlarken bu dosyayı ve `kat-plani-tasarim.html` dosyasını ekle
 3. Eski-SVG çözümleyiciye balkon/parsel aktarımı (md.16'daki bilinen eksik).
 
 ## Ne bu?
-Tek dosyalık web uygulaması (`kat-plani-tasarim.html`). Türkiye mevzuatına göre şematik
+Modüler web uygulaması (kabuk: `kat-plani-tasarim.html`; motor: `core.js`, `app.js`,
+`planner.js`, `doors.js`, `walls.js`, `structure.js`, `rooms.js`, `render.js`,
+`checks.js`, `interaction.js`, `io.js`, `mobile.js`, `boot.js` — tek-dosya sürüm
+`npm run build` ile üretilir). Türkiye mevzuatına göre şematik
 apartman/villa kat planı üretir. Kullanıcı bina sınırını çizer (kenar açısı 15°'nin
 katlarına, uzunluk 0,5 m ızgaraya oturur), isteğe bağlı parsel sınırı çizer (bahçe
 alanı + TAKS + çekme mesafesi denetimi) ve dış duvarlara balkon ekler (vektörel
