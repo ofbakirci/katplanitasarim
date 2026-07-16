@@ -354,6 +354,17 @@ function floorState(k){
   const f=villaFloors[k];
   return (f&&f.plan)? {pts:f.pts, plan:f.plan} : null;
 }
+/* İş B1: floorState'in TAM-stateSnapshot ikizi — k. katın {pts,plan,balconies,courtyards,doors,windows,...}
+   TAM anlık görüntüsünü döndürür (blockFloorplanMap'in beklediği bsnap biçimi). Aktif kat: canlı
+   globallerden stateSnapshot(true) (bare=true → floors özyinelemesi YOK); diğerleri villaFloors[k]'nin
+   kendi anlık görüntüsü. groundFloorSnapshot/upperFloorSnapshot (aşağıda) + view3d.js kat-başına dış
+   cephe kurulumu (buildExterior) ORTAK kullanır. floorsOn() kapalıysa/kat yoksa null. */
+function floorSnapshotAt(k){
+  if(typeof floorsOn!=='function' || !floorsOn()) return null;
+  if(k===activeFloor) return (typeof stateSnapshot==='function')?stateSnapshot(true):null;
+  return (villaFloors&&villaFloors[k])||null;
+}
+if(typeof window!=='undefined'){ window.floorSnapshotAt=floorSnapshotAt; }
 /* İş 1 + İş 3: kat düzeni "imzası" — aynı imzaya düşen ARDIŞIK katlar 3B kat çipinde TEK örnekte
    birleşir (İş 2, floorGroupsForTest) VE mobilya/malzeme deposunda AYNI bileşik anahtarı paylaşır
    (İş 3, "tip kat" doğal paylaşımı). g.id BİLİNÇLİ dışarıda (klonlanan katta bölge numarası kayabilir;
@@ -1018,9 +1029,7 @@ function groundFloorSnapshot(){
     if(typeof floorsOn!=='function' || !floorsOn()) return null;
     if(document.getElementById('binaTipi').value==='villa') return null;
     const gi=zeminIdx();
-    let snap=null;
-    if(gi===activeFloor){ snap=(typeof stateSnapshot==='function')?stateSnapshot(true):null; }   // kat-içi anlık görüntü (bare=true → floors yok)
-    else { const f=villaFloors&&villaFloors[gi]; snap=f||null; }
+    const snap=floorSnapshotAt(gi);   // İş B1: floorState/stateSnapshot(true) veya villaFloors[gi] ikizi (davranış AYNI)
     if(!snap || !snap.plan || !snap.pts || snap.pts.length<3) return null;
     const usage=(snap.plan.katKullanim)||'konut';
     return { snap, usage, isGround:true };
@@ -1039,14 +1048,13 @@ function upperFloorSnapshot(){
     // önce zemin-üstü KONUT kat, yoksa herhangi zemin-üstü kat
     let pick=-1, fallback=-1;
     for(let k=gi+1;k<total;k++){
-      const f=(k===activeFloor)?null:(villaFloors&&villaFloors[k]);
-      const snap=(k===activeFloor)?((typeof stateSnapshot==='function')?stateSnapshot(true):null):f;
+      const snap=floorSnapshotAt(k);   // İş B1: floorState/stateSnapshot(true) veya villaFloors[k] ikizi (davranış AYNI)
       if(!snap||!snap.plan||!snap.pts||snap.pts.length<3) continue;
       if(fallback<0) fallback=k;
       if(((snap.plan.katKullanim)||'konut')==='konut'){ pick=k; break; }
     }
     const kk=(pick>=0)?pick:fallback; if(kk<0) return null;
-    const snap=(kk===activeFloor)?((typeof stateSnapshot==='function')?stateSnapshot(true):null):(villaFloors&&villaFloors[kk]);
+    const snap=floorSnapshotAt(kk);
     if(!snap||!snap.plan||!snap.pts||snap.pts.length<3) return null;
     return { snap, usage:(snap.plan.katKullanim)||'konut', floorIdx:kk };
   }catch(err){ if(typeof console!=='undefined') console.error('upperFloorSnapshot:', err); return null; }

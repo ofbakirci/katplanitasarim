@@ -70,7 +70,11 @@ const strictTests = [
   'tests/parsel-cekme.js',
   'tests/onboarding.js',
   'tests/dis-cephe-olcu.js',
-  'tests/olcu-arac.js'
+  'tests/olcu-arac.js',
+  'tests/paket-store-zarf.js',
+  'tests/kat-cephe-grup.js',
+  'tests/kamera-baglam.js',
+  'tests/ext-blok-gorunum.js'
 ];
 
 const smokeTests = [

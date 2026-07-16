@@ -394,7 +394,7 @@ Masaüstünde birinci-şahıs gezinti yapabilirsin: Pointer Lock ile fareyle bak
 Kat ve blok seçimi 3B'nin içinden yapılır (üst-orta çip satırları):
 
 - **İç görünümde:** çok bloklu sitede **"Blok"** çipleri (A, B, …) aktif bloğu GERÇEKTEN değiştirir — sahne seçilen bloğun planıyla yeniden kurulur. "Katları ayrı planla" açıksa altında **"Kat"** çipleri belirir (Zemin kat, 1. kat, …); konut katları tıklanabilir, ticari/otopark/sığınak katları soluk görünür ("iç mekânı yakında"). Aynı düzendeki ardışık katlar **tek çipte birleşir** ("1. kat – 2. kat" gibi, "Aynı düzen — tek örnek üzerinden düzenlenir" notuyla) — motor aynı katı tekrar tekrar kurmaz; bu katlar mobilya ve malzemeyi de doğal olarak paylaşır (tip kat). Farklı düzendeki katlar tamamen ayrıdır: birinde taşıdığın mobilya ya da atadığın malzeme diğerine sızmaz. Kat/blok gezerken yerleştirilmiş kameralar ve drone'lar SİLİNMEZ.
-- **Dış görünümde:** blok çipleri **"A · B · … · Tümü"** biçimindedir ve salt görseldir — seçilen tam kabuk, diğerleri hayalet çizilir; 2B aktif blok değişmez.
+- **Dış görünümde:** blok çipleri **"A · B · … · Tümü"** biçimindedir ve salt görseldir — seçilen tam kabuk, diğerleri hayalet çizilir; 2B aktif blok değişmez. Bu seçim render kadrajı yakalamada da korunur ("Tümü" seçtiysen drone karesinde hayalet blok çıkmaz). "Katları ayrı planla" açıksa dış kabuk her katı **o katın kendi verisinden** kurar: zeminde balkon yoksa zemin cephesi balkonsuz görünür; aynı düzendeki katlar tek örnekten çoğaltılır.
 - Aktif kat konut-dışıysa 3B açılışta otomatik ilk konut katına geçer (bilgi mesajıyla); hiç konut katı yoksa dış görünüme düşülür.
 
 **"İndir"** grubundaki **"Görüntüyü indir (PNG)"**, o anki 3B görünümü 1920 px olarak kaydeder. Bu bir "AI render değil"dir ve kredisizdir.
@@ -412,6 +412,8 @@ Araç grupları rail üstünde sırayla: **"Kamera (İç)"**, **"Drone (Dış)"*
 ### İç kamera dock
 
 Kamera şeridi (çipler) ve bir durum düğmesi vardır: **"Yerleştir"** → **"Bitir"** → **"Düzenle"** (duruma göre değişir), yanında **"Ekle"** çipi. Seçili bir kameranın eylemleri: **"Yön"** (bakış noktasına tıkla), **"Taşı"** (yeni konuma tıkla), Odakla, Sil.
+
+Kameralar ve drone'lar yerleştirildikleri **kat ve blok bağlamına bağlıdır**: başka bir kata/bloğa geçtiğinde o bağlamın kameraları görünür, diğerleri gizlenir (asla silinmez — geri dönünce aynen yerindedir). Böylece kamerasız bir blokta anlamsız kadraj oluşmaz; çok bloklu sitede render galerisi iç kameraları blok başlıklarıyla gruplar.
 
 Detay ayarları:
 - **"Yükseklik"** — Alçak / Göz / Üst + slider (0,4 m'den tavana).
@@ -511,7 +513,7 @@ Plan önce renk-kodlu gerçek 3B mesh'e çevrilir; yapay zekâ yalnız malzeme v
 
 Galeri üç grupta toplanır: **"Plan Boyama"**, **"İç Kameralar"** ve **"Dış / Drone"** (başlıklarda kart sayısıyla). Kart görselleri 3B'den alınan yerel küçük görüntülerdir (kredisiz).
 
-- **"Planı Boya"** kartı izometrik açıdan renk-kodlu bir kadrajdır; çok bloklu sitede **blok başına bir kart** oluşur (**"Planı Boya — Blok A"**, **"— Blok B"**...).
+- **"Planı Boya"** kartı izometrik açıdan renk-kodlu bir kadrajdır; çok bloklu sitede **blok başına bir kart** oluşur (**"Planı Boya — Blok A"**, **"— Blok B"**...). Açıyı kendin seçmek istersen: 3B görünümde açını ayarlayıp yön küresinin yanındaki **kilit (pin) düğmesine** bas — kart **"Kilitli açı"** rozeti alır ve kadraj o açıdan üretilir (blok başına ayrı kilit). Kilitlemezsen otomatik izometrik açı kullanılır; düğmeye tekrar basmak kilidi kaldırır.
 - Sağdaki **"Render Listesi"** her kartın satırını gösterir: seçim kutusu (kartla çift yönlü eş), etiket ve durum çipi (bekliyor / üretiliyor / hazır / hata). Satıra tıklamak ilgili karta kaydırır; "Üret" ilerledikçe durumlar burada akar.
 - Hiç drone yoksa Dış grubunda "Drone yok — dış cephe kareleri için Kamera adımında Drone ekleyin" satırı ve **"Kamera adımına dön"** düğmesi görünür.
 
@@ -592,7 +594,7 @@ Aşağıdaki bölümler şu an tamamen **ön-gösterimdir** — arayüzü hazır
 
 `.mskpkg`, projenin tamamını tek taşınabilir dosyada tutar:
 
-- **İçerik:** meta + motorun tam plan durumu + kameralar (iç: konum/hedef/lens/yükseklik/oda/prompt/snapshot/yöntem/gün saati; dış: + cephe sinyali/stil) + mobilya listesi (mutlak metre konum + dönüş) + tüm render'lar (iç/dış/plan) base64 gömülü.
+- **İçerik:** meta + motorun tam plan durumu (tüm katlar, bloklar, site imkanları dahil) + kameralar ve drone'lar (konum/hedef/lens/nişan/gün saati, kat-blok bağlamlarıyla) + TÜM katların ve blokların mobilya ve malzeme kayıtları (kat-imzalı depoların tam kopyası — yalnız aktif kat değil) + tüm render sonuçları: iç/dış kareler ve çok bloklu sitede blok başına Planı Boya görselleri, hepsi base64 gömülü. Kısaca: paket projenin eksiksiz fotoğrafıdır; başka makinede açtığında hiçbir kat/blok verisi eksilmez. Eski sürüm paketler de açılmaya devam eder.
 - **"Paket İndir"** — Adım 2'den itibaren aktiftir; `proje-YYYYAAGG.mskpkg` iner. Öncesinde "Önce bir yerleşim oluşturun" notu.
 - **"Paket Aç"** ya da pencereye `.mskpkg` sürükle-bırak ("Proje paketini bırakın" katmanı belirir). Mevcut ilerlemen varsa "Yeni paket aç — mevcut ilerlemeniz kaybolur…" onayı çıkar. Format/sürüm doğrulanır; plan yüklenir, tüm adımlar açılır, doğrudan Kamera adımına gidilir, kameralar mesh hazır olunca bindirilir, galeri paketten geri yüklenir.
 
