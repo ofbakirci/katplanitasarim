@@ -364,6 +364,8 @@ Plan hazır olunca üç boyutlu "dollhouse" görünümüne geçersin. Bu adım g
 
 Adım 2'de yerleştirilmiş kameralar salt-görünürdür (mesh + koni + etiket); düzenlemeleri Adım 3'te yaparsın.
 
+**"Kamera Yerleştir"** ile Adım 3'e geçerken bir kezlik bir bilgi penceresi çıkar: **"Planı Boya açısı"**. Plan boyama karesi 3B görünümün bulunduğu açıdan üretilir — ideal açıyı şimdi seçip yön küresinin yanındaki **vizör-kilit** düğmesiyle kilitleyebilirsin; kilitlemezsen dik izometrik açı otomatik kullanılır. **"Açıyı Ayarla"** seni bu adımda bırakır (açını ayarla, kilitle), **"Otomatik Açı ile Devam"** normal akışla sürer. Çok bloklu projede her blok için ayrı açı kilitlenebilir (blok çipleriyle gez).
+
 <!-- GORSEL 09: 3B dollhouse — ust kat kaldirilmis daire; oda etiketleri, mobilya ve malzeme boyamasi acik; kosede orbit kuresi ve yon chip'leri -->
 
 ### Gezinme
@@ -403,7 +405,7 @@ Kat ve blok seçimi 3B'nin içinden yapılır (üst-orta çip satırları):
 
 ## 8. Adım 3: Kamera
 
-Bu adımda 3B tam ekran açık kalır ve kamera paneli görünür. Panel şerit-farkındadır: **"İç Mekan"** şeridindeyken oda kameraları, **"Dış Görünüm"** şeridindeyken drone dock'u gelir. Adımın CTA'sı **"Render Kadrajları"**; ona bastığında 3B canlıyken tüm kamera ve drone kadrajlarının küçük görselleri **kredisiz** yakalanır ve Adım 4'e geçilir. Yakalama blok blok ve kat kat gezer: farklı katlara/bloklara yerleştirdiğin iç kameraların ve farklı bloklardaki drone'ların tümü toplanır — hiçbir kadraj, o an hangi kat/blokta durduğuna bağlı olarak düşmez. Hiç drone eklemeden ilerlersen bir kezlik nazik bir hatırlatma çıkar (**"Drone Ekle"** seni Dış şeridine götürür, **"Devam Et"** normal akışla sürer) — dış cephe karesini istemeden atlamazsın. Yakalama hibrittir: hangi şeritte bırakırsan bırak, iç kamera kadrajları iç sahneden, drone kadrajları dış kabuktan, **"Planı Boya"** kadrajı ise her zaman deterministik izometrik açıdan alınır — kart önizlemesi ile üretilen sonuç aynı kaynaktan gelir.
+Bu adımda 3B tam ekran açık kalır ve kamera paneli görünür. Panel şerit-farkındadır: **"İç Mekan"** şeridindeyken oda kameraları, **"Dış Görünüm"** şeridindeyken drone dock'u gelir. Adımın CTA'sı **"Render Kadrajları"**; ona bastığında 3B canlıyken tüm kamera ve drone kadrajlarının küçük görselleri **kredisiz** yakalanır ve Adım 4'e geçilir. Yakalama blok blok ve kat kat gezer: farklı katlara/bloklara yerleştirdiğin iç kameraların ve farklı bloklardaki drone'ların tümü toplanır — hiçbir kadraj, o an hangi kat/blokta durduğuna bağlı olarak düşmez. Hiç drone eklemeden ilerlersen bir kezlik nazik bir hatırlatma çıkar (**"Drone Ekle"** seni Dış şeridine götürür, **"Devam Et"** normal akışla sürer) — dış cephe karesini istemeden atlamazsın. Yakalama hibrittir: hangi şeritte bırakırsan bırak, iç kamera kadrajları iç sahneden, drone kadrajları dış kabuktan, **"Planı Boya"** kadrajı ise (açı kilitlemediysen) her zaman **dik izometrik açıdan** alınır — kadraj tepeden bakar, odalar okunur; kart önizlemesi ile üretilen sonuç aynı kaynaktan gelir.
 
 Araç grupları rail üstünde sırayla: **"Kamera (İç)"**, **"Drone (Dış)"**, **"İç Malzeme"**, **"Dış Cephe"**, **"Mobilya"**, **"Gezinti (masaüstü)"**, **"İndir"**. Bir dış araca tıklayınca otomatik dış moda, bir iç araca tıklayınca iç moda geçilir (araçlar köprülüdür).
 
@@ -513,11 +515,11 @@ Plan önce renk-kodlu gerçek 3B mesh'e çevrilir; yapay zekâ yalnız malzeme v
 
 Galeri üç grupta toplanır: **"Plan Boyama"**, **"İç Kameralar"** ve **"Dış / Drone"** (başlıklarda kart sayısıyla). Çok bloklu sitede İç Kameralar ve Dış / Drone grupları blok alt-başlıklarına ayrılır (**"İç Kameralar — Blok A"**, **"Dış / Drone — Blok B"** gibi); kadraj yakalama tüm blokların kameralı katlarını gezdiğinden farklı katlardaki iç kameralar da eksiksiz gelir. Kart görselleri 3B'den alınan yerel küçük görüntülerdir (kredisiz).
 
-- **"Planı Boya"** kartı izometrik açıdan renk-kodlu bir kadrajdır; çok bloklu sitede **blok başına bir kart** oluşur (**"Planı Boya — Blok A"**, **"— Blok B"**...). Açıyı kendin seçmek istersen: 3B görünümde açını ayarlayıp yön küresinin yanındaki **kilit (pin) düğmesine** bas — kart **"Kilitli açı"** rozeti alır ve kadraj o açıdan üretilir (blok başına ayrı kilit). Kilitlemezsen otomatik izometrik açı kullanılır; düğmeye tekrar basmak kilidi kaldırır.
+- **"Planı Boya"** kartı izometrik açıdan renk-kodlu bir kadrajdır; çok bloklu sitede **blok başına bir kart** oluşur (**"Planı Boya — Blok A"**, **"— Blok B"**...). Açıyı kendin seçmek istersen: 3B görünümde açını ayarlayıp yön küresinin yanındaki **vizör-kilit düğmesine** (vizör + asma kilit ikonu) bas — kart **"Kilitli açı"** rozeti alır ve kadraj o açıdan üretilir (blok başına ayrı kilit; ikon her zaman **aktif bloğun** kilidini gösterir, blok değiştirince kendini tazeler). Kilitlemezsen **dik izometrik açı** otomatik kullanılır (tepeden bakan, oda-okunur kadraj); düğmeye tekrar basmak kilidi kaldırır.
 - Sağdaki **"Render Listesi"** her kartın satırını gösterir: seçim kutusu (kartla çift yönlü eş), etiket ve durum çipi (bekliyor / üretiliyor / hazır / hata). Satıra tıklamak ilgili karta kaydırır; "Üret" ilerledikçe durumlar burada akar.
 - Hiç drone yoksa Dış grubunda "Drone yok — dış cephe kareleri için Kamera adımında Drone ekleyin" satırı ve **"Kamera adımına dön"** düğmesi görünür.
 
-Üst şeritteki adım noktaları da durum gösterir: Kamera adımında iç nokta = en az bir iç kamera, dış nokta = en az bir drone; Render adımında noktalar üretim durumunu izler (üzerine gelince ayrıntı yazar).
+Üst şeritteki adım noktaları da durum gösterir: Kamera adımında iç nokta = en az bir iç kamera, dış nokta = en az bir drone; Render adımında noktalar üretim durumunu izler (üzerine gelince ayrıntı yazar). Noktalar canlıdır — 3B içinden kamera/drone ekleyip çıkardıkça birkaç saniye içinde kendiliğinden güncellenir ve dolunca yeşil görünür.
 
 <!-- GORSEL 13: Adim-4 render galerisi — uc grup basligi (Plan Boyama blok karti x2, Ic Kameralar, Dis/Drone) + sagda Render Listesi checklist'i; alt cubukta "Üret (N)" -->
 
@@ -539,6 +541,8 @@ Dış render'da binanın kütlesi, kat sayısı ve pencere/balkon konumları kor
 
 Alt çubukta **"N kare seçili"** ve **"Üret (N)"** bulunur. **"Üret"**e basınca bir onay dialoğu çıkar; onaylarsan seçili kartlar SIRAYLA gerçek render uçlarına gönderilir (ücretli).
 
+Üretim sürerken hem alt çubuktaki **"Üret"** hem sağ alttaki **"Kareleri Üret"** düğmesi pasifleşir; ana düğme **"Üretiliyor… (k/N)"** biçiminde ilerlemeyi gösterir, alt çubukta "k/N kare tamamlandı" akar. Kart seç/bırak tıklamaları ve Render Listesi kutuları da bu sırada kilitlidir — kuyruk çalışırken seçim değişmez. Üretim bitince (başarılı ya da hatalı) düğmeler eski hâline döner ve akış kendiliğinden Döşe adımına geçer.
+
 > **Kredisiz kalanlar:** 3B **"Görüntüyü indir (PNG)"**, kadraj kartı küçük görselleri ve kendi-açı önizleme — hepsi tarayıcı içi, kredisiz. **Ücretli olan yalnız:** Render adımındaki **"Üret"** onayından sonraki gerçek yapay zekâ üretimi. Onay pencerelerindeki "Bu işlem render kredisi harcar" metni bilgilendirme amaçlıdır; şu an gerçek bir bakiye/ödeme sistemi bağlı değildir.
 
 ### Demo modu (Ön-gösterim)
@@ -557,7 +561,13 @@ Son adım, üretilen render'ları toplar ve sunuma hazırlar. Bu adımın bir k�
 
 ### Gerçek olanlar
 
-Üretilen render'lar burada toplanır: iç mekân galerisi, dış galeri ve **"Döşeli Render"** ana görseli. Adımın CTA'sı **"Planı Dışa Aktar"**.
+Üretilen render'lar burada blok-farkında bir düzenle toplanır. Adımın CTA'sı **"Planı Dışa Aktar"**.
+
+- **"Plan Boyama"** bölümü çok bloklu sitede **blok başına bir kart** gösterir (**"Planı Boya — Blok A"**, **"— Blok B"**...); tek blokta tek kart. Hiç plan render'ı yoksa eski tekil "Döşeli Render" görseli (yer tutucu) görünür.
+- **İç mekân galerisi** çok bloklu sitede **"Blok A" / "Blok B"** alt-başlıklarıyla gruplanır (kamera numaraları değişmez); tek blokta düz listedir.
+- **Dış galeri** de aynı desenle bloklara ayrılır; drone satırlarında cephe preset'i ham anahtarıyla değil **Türkçe adıyla** yazar (örn. "brick" değil "Tuğla Zemin + Sıva Üst").
+
+Bu adım ileride pazaryeri düzenine (karttan ürün değiştirme) evrilecek; bugünkü düzen bunun iskeletidir.
 
 <!-- GORSEL 14: Adim-5 Döşe ekrani — ic/dis render galerileri + "Döşeli Render" ana gorseli; asagida "Ön-gösterim" etiketli pazaryeri ve Video Turlar bolumu -->
 

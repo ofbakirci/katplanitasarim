@@ -355,7 +355,8 @@
     pegman:'<circle cx="12" cy="4.5" r="2.5"/><path d="M12 8a3 3 0 0 0-3 3v4h1.6l.5 5h1.8l.5-5H15v-4a3 3 0 0 0-3-3z"/>',   // PEGMAN — cepheden duran adam silueti (Street View pegman)
     building:'<rect x="6" y="3" width="12" height="18" rx="1"/><path d="M6 21h12M9 7h1M14 7h1M9 11h1M14 11h1M9 15h1M14 15h1M10.5 21v-3h3v3"/>',   // S1: BİNA (dış görünüm) — pencereli çok-katlı cephe + giriş
     drone:'<rect x="9.5" y="9.5" width="5" height="5" rx="1"/><circle cx="4.5" cy="4.5" r="2.3"/><circle cx="19.5" cy="4.5" r="2.3"/><circle cx="4.5" cy="19.5" r="2.3"/><circle cx="19.5" cy="19.5" r="2.3"/><path d="M6.3 6.3l3.2 3.2M17.7 6.3l-3.2 3.2M6.3 17.7l3.2-3.2M17.7 17.7l-3.2-3.2"/>',   // DIŞ araç raili: DRONE (quadcopter — gövde + 4 pervane)
-    pin:'<path d="M12 21s7-7.58 7-12a7 7 0 0 0-14 0c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/>'   // İŞ 5b: GENERİK görünüm-kilidi düğmesi (v3dLockBtn'in padlock'undan KASITLI FARKLI — bu "açı sabitlendi" pini, kuşbakışı orbit kilidi DEĞİL)
+    pin:'<path d="M12 21s7-7.58 7-12a7 7 0 0 0-14 0c0 4.42 7 12 7 12z"/><circle cx="12" cy="9" r="2.4"/>',   // (kullanım dışı — İş E2: harita-pini "açı kilidi" olarak okunmuyordu, viewlock geldi)
+    viewlock:'<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8"/><path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/><path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16"/><path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10.3 11V9.6a1.7 1.7 0 0 1 3.4 0V11"/>'   // İş E2: KADRAJ KİLİDİ (vizör köşeleri + asma kilit) — Planı Boya açı-kilidi; v3dLockBtn padlock'undan ve harita-pininden ayrışır
   };
   // inline style'da width/height ZORUNLU: motor styles.css'inde global "svg{width:100%}" var → öznitelik ezilir
   function ic(name,size){ const s=(size||16)+'px';
@@ -1872,7 +1873,11 @@
       cam.position.set(0,d*4.2,0); cam.fov=16;
     }
     else { cam.up.set(0,1,0); cam.fov=42;
-      if(v==='iso') cam.position.set(d,d*0.95,d); else cam.position.set(d*1.3,d*0.5,d*1.3); }
+      // 'isoPlan': Planı Boya kadrajı için DİK izometrik (~55° yükseliş) — standart 'iso' (~34°) plan
+      //   okuması için fazla yatık kalıyordu (uzak odalar eziliyor, duvarlar arkasını kapatıyor; kullanıcı
+      //   geri bildirimi: "çok yatay kilitliyorsun, okumaz render"). Orb/İzo butonu 'iso'da kalır.
+      if(v==='isoPlan') cam.position.set(d,d*2.0,d);
+      else if(v==='iso') cam.position.set(d,d*0.95,d); else cam.position.set(d*1.3,d*0.5,d*1.3); }
     cam.updateProjectionMatrix(); controls.sync(); controls.update();
     fitView();   // açıyı koru, modeli ekrana sığdır
   }
@@ -2028,7 +2033,7 @@
     if(!wrap||!b) return;
     wrap.style.display=viewLockCallback?'flex':'none';
     if(!viewLockCallback) return;
-    b.innerHTML=ic('pin',18);
+    b.innerHTML=ic('viewlock',18);   // İş E2: vizör+kilit — "açı kilidi" olarak okunur (harita-pini kafa karıştırıyordu)
     b.title=(viewLockOpt&&(viewLockActive?viewLockOpt.titleOn:viewLockOpt.title))||(viewLockActive?'Açı kilitli — kaldırmak için tıkla':'Mevcut açıyı kilitle');
     b.classList.toggle('on', viewLockActive);
     b.style.background=viewLockActive?UIPAL.acc:UIPAL.panel;
@@ -2041,6 +2046,15 @@
     renderViewLockBtn();
   }
   function setViewLockState(on){ viewLockActive=!!on; renderViewLockBtn(); }
+  // İş E3: kilit VERİSİ çağıranda blok-anahtarlı yaşar ama buton durumu tek global boolean'dı — blok
+  //   değişince bayat kalıyordu ("A'yı kilitledim, ikon B'de de yanıyor"). opt.getState (çağıran verir:
+  //   aktif bloğun kilidi var mı) tanımlıysa her rebuildFromEngine sonunda kaynaktan tazelenir.
+  function refreshViewLockState(){
+    if(viewLockCallback && viewLockOpt && typeof viewLockOpt.getState==='function'){
+      try{ viewLockActive=!!viewLockOpt.getState(); }catch(e){}
+      renderViewLockBtn();
+    }
+  }
   function toggleViewLock(){
     if(!viewLockCallback) return;
     viewLockActive=!viewLockActive;
@@ -6351,6 +6365,7 @@
       }
     }
     renderCamGizmos(); updateCamPanel();    // İÇ kamera gizmoları veriden geri bindirilir (camList SİLİNMEDİ — yalnız görsel gizmo grubu gitti)
+    refreshViewLockState();                 // İş E3: açı-kilidi butonu aktif bloğun kilidini göstersin (opt.getState — kaynağı çağıran)
     if(saved) restoreView(saved);           // KİLİT-KÖPRÜ (~2859 yorumu): bundan SONRA hiçbir fitView/fitExtView çağrısı YOK
   }
   // mesh'te odaya tıkla → seç (scenePick material dalı bunu çağırır). floor mesh userData.roomRef taşır.
@@ -7610,6 +7625,9 @@
     //   döngüsü her switchBlock'ta buildScene tetikler, kullanıcının "Tümü/tek blok" seçimini sessizce silerdi).
     getExtBlockView:function(){ return extBlockView; },
     setExtBlockView:function(v){ setExtBlockView(v); },
+    // İş E4: cephe preset sözlüğü (key→Türkçe ad) — kabuk galeri/kart etiketleri ham anahtar ('brick')
+    //   yerine kullanıcı-dili ad bassın diye. promptSignal BİLEREK verilmez (render sözleşmesi ayrı).
+    getFacadePresets:function(){ return FACADE_PRESETS.map(function(p){ return { key:p.key, name:p.name }; }); },
     // resmi bayrak: kamera yerleştirme UI'ı açık mı (openPlace/openCompare akışı) — onboarding kamera3d tetiği buna bakar
     isCamUIEnabled:function(){ return !!camUIEnabled; },
     // A1: dış↔iç mod değişimini prototip'e bildir (strand segmenti iki yönlü senkron). isExterior bool döner.
