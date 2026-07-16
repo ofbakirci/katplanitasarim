@@ -144,8 +144,28 @@ const yNeg = run(`window.View3D.getExteriorCameras()[0].pos.y`);
 chk(yNeg===0.5, 'İş4b: negatif y mutlak tabana (0.5) klemplenir: '+yNeg);
 run(`window.View3D.clearExteriorCameras();`);
 
+/* ═══ İş D8: KAMERA ADIMI ŞERİDİ — yalnız canlı bağlamın kameraları listelenir + bağlam değişince seçim bırakılır ═══ */
+run(`activeFloor=0; activeBlock=0; window.View3D.camListForTest([
+  {pos:{x:1,y:1.6,z:1}, target:{x:2,y:1,z:2}, lens:24, __floor:0, __block:0},
+  {pos:{x:3,y:1.6,z:3}, target:{x:4,y:1,z:4}, lens:24, __floor:0, __block:1},
+  {pos:{x:5,y:1.6,z:5}, target:{x:6,y:1,z:6}, lens:24}
+]);`);
+const visA = run(`JSON.stringify(window.View3D.camVisibleIdxForTest())`);
+chk(visA==='[0,2]', 'İşD8: bağlam A(kat0/blok0) şeridi = A-kamerası + legacy (orijinal indeksler [0,2]): '+visA);
+run(`activeBlock=1;`);
+const visB = run(`JSON.stringify(window.View3D.camVisibleIdxForTest())`);
+chk(visB==='[1,2]', 'İşD8: bağlam B(blok1) şeridi = B-kamerası + legacy ([1,2]) — numara YENİDEN VERİLMEZ: '+visB);
+const selKal = run(`window.View3D.camClampSelForTest(1)`);
+chk(selKal===1, 'İşD8: seçim bağlamda görünür kameradaysa (idx1, B) KORUNUR: '+selKal);
+run(`activeBlock=0;`);
+const selBirak = run(`window.View3D.camClampSelForTest(1)`);
+chk(selBirak===-1, 'İşD8: bağlam A\'ya dönünce B-kamerası seçimi otomatik BIRAKILIR (-1): '+selBirak);
+const selLegacy = run(`window.View3D.camClampSelForTest(2)`);
+chk(selLegacy===2, 'İşD8: legacy (damgasız) kamera seçimi her bağlamda korunur: '+selLegacy);
+run(`window.View3D.camClampSelForTest(-1); window.View3D.camListForTest([]); activeFloor=0; activeBlock=0;`);
+
 function report(){
-  console.log('\nKAMERA-BAGLAM (İş 1+4): '+pass+' geçti, '+fail+' başarısız');
+  console.log('\nKAMERA-BAGLAM (İş 1+4+D8): '+pass+' geçti, '+fail+' başarısız');
 }
 report();
 process.exit(fail?1:0);

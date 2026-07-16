@@ -3869,7 +3869,7 @@
   function pipSourceCam(){
     if(camGhost && camGhost.phase==='aim' && camGhost.pos && camGhost.target)
       return { pos:camGhost.pos, target:camGhost.target, lens:camGhost.lens };
-    if(activeCamIdx>=0 && activeCamIdx<camList.length){ const c=camList[activeCamIdx]; if(c&&c.pos&&c.target) return c; }
+    if(activeCamIdx>=0 && activeCamIdx<camList.length){ const c=camList[activeCamIdx]; if(c&&c.pos&&c.target&&camCtxMatch(c)) return c; }   // İş D8: bağlam-dışı kamera PiP kaynağı olamaz (sahne başka planda)
     return null;
   }
   function shouldShowPip(){
@@ -5441,6 +5441,7 @@
   }
   function selectCam(i){
     if(i<0||i>=camList.length) return;
+    if(!camCtxMatch(camList[i])) return;                    // İş D8: başka kat/blok bağlamının kamerası bu sahnede SEÇİLEMEZ (şerit zaten göstermez; sahne-tık/bayat yol savunması)
     pipClosed=false;                                        // C3-6: HER seçim eylemi (çip/sahne/aynı kamera) X bayrağını temizler → PiP geri gelir
     activeCamIdx=i; pendingPos=null;
     // KAMERA-S2: seçince NÖTR eyleme geç ('aim' değil) → stray boş-zemin tık seçili kamerayı re-aim ETMESİN
@@ -5525,9 +5526,19 @@
   // ── B1-2: KAMERA DOCK — alt-kenar özel paneli. renderCamDock kurar (yapısal değişimde), updateCamDock tazeler. ──
   let camDockAdvOpen=false, camSliderDrag=false, camDockDetOpen=false;   // B1-R: detay katmanı (özet çip) varsayılan KAPALI
   // kamera şeridi çipleri (numaralı, SARAR — yatay scroll YOK) + Ekle
+  // İş D8 (KAMERA ADIMI ŞERİDİ): şerit yalnız CANLI bağlamın (kat+blok, camCtxMatch) kameralarını listeler —
+  //   gizmo/export/thumb zaten böyleydi, şerit filtresizdi: B blokta A'nın kamera çipine tıklanınca sahne B
+  //   planındayken A-bağlamlı kadraj açılıyordu (kafa karıştırıcı). Numaralar ORİJİNAL indekste kalır
+  //   (export id'leri cam1..N ve galeri etiketleriyle birebir); gizlenen kamera SİLİNMEZ, bağlamına dönünce gelir.
+  function camCtxVisibleIdx(){ const out=[]; camList.forEach(function(c,i){ if(camCtxMatch(c)) out.push(i); }); return out; }
+  // bağlam değişiminde (kat/blok çipi → rebuildFromEngine → updateCamPanel) seçim artık görünmez kameradaysa bırak
+  function clampCamSelToCtx(){
+    if(activeCamIdx>=0 && (activeCamIdx>=camList.length || !camCtxMatch(camList[activeCamIdx]))){ activeCamIdx=-1; pendingPos=null; return true; }
+    return false;
+  }
   function camStripHTML(){
     let h='';
-    camList.forEach(function(c,i){ const on=(i===activeCamIdx);
+    camCtxVisibleIdx().forEach(function(i){ const c=camList[i], on=(i===activeCamIdx);
       h+='<span data-camsel="'+i+'" title="Kamera '+(i+1)+' — seç" '+
         'style="position:relative;display:inline-flex;align-items:center;gap:3px;cursor:pointer;'+
         'background:'+(on?UIPAL.active:UIPAL.chip2)+';color:'+(on?UIPAL.onAcc:UIPAL.ink)+';'+
@@ -5697,7 +5708,17 @@
     }
   }
   // eski çekmece şeridi çağrıları → dock'u tazele (uyumluluk: updateCamPanel adı korunuyor, dock'a yönlenir)
-  function updateCamPanel(){ const strip=overlay&&overlay.querySelector('#v3dCamStrip'); if(strip) strip.innerHTML=camStripHTML(); }
+  // İş D8: önce seçimi canlı bağlama klemple — kat/blok değişince (rebuildFromEngine buraya gelir) seçim
+  //   görünmez kameradaysa bırakılır; seçim DEĞİŞTİYSE dock baştan kurulur (özet çip/sliderlar bayat kalmasın)
+  //   ve ipucu satırı nötrlenir (bayat "Kamera N seçili · Yön/Taşı" metni kalmasın).
+  function updateCamPanel(){
+    if(clampCamSelToCtx()){
+      renderCamDock();
+      if(camUIEnabled) setHint('Mesh serbest — döndür/yakınlaştır · kamerayı seçmek için üstüne tıkla');
+      return;
+    }
+    const strip=overlay&&overlay.querySelector('#v3dCamStrip'); if(strip) strip.innerHTML=camStripHTML();
+  }
   function setHint(t){ lastHint=t||''; const h=overlay&&overlay.querySelector('#v3dCamHint'); if(h) h.textContent=lastHint; }
 
   /* ====================== MALZEME — prosedürel preset katalog + CanvasTexture (M-serisi) ======================
@@ -7673,6 +7694,9 @@
     // İŞ 1 TEST: camList/extCams HAM enjeksiyon/okuma — damga (__floor/__block) DAHİL, stampCamCtx/clamp
     //   BYPASS (kontrollü karma-bağlam kurgusu için; normal akışlar bu yolu kullanmaz). arr verilmezse salt okur.
     camListForTest:function(arr){ if(arr!==undefined){ camList=arr; renderCamGizmos(); } return camList.map(function(c){ return Object.assign({},c); }); },
+    // İş D8 TEST: şerit görünürlüğü (canlı bağlamın kamera indeksleri) + bağlam-değişimi seçim klempi.
+    camVisibleIdxForTest:function(){ return camCtxVisibleIdx(); },
+    camClampSelForTest:function(i){ if(i!==undefined) activeCamIdx=i; clampCamSelToCtx(); return activeCamIdx; },
     extCamsForTest:function(arr){ if(arr!==undefined){ extCams=arr; renderExtGizmos(); } return extCams.map(function(c){ return Object.assign({},c); }); },
     // İş D2 TEST: extCtxMatch'i HAM görünüm durumuyla sına. exteriorMode headless'ta GERÇEKTEN açılamaz
     //   (setExteriorMode THREE/kabuk ister) — bu knob YALNIZ bayrağı çevirir (sahne/kabuk KURULMAZ;
