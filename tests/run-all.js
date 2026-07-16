@@ -59,6 +59,7 @@ const strictTests = [
   'tests/balkon-cekme.js',
   'tests/dis-gorunum.js',
   'tests/dis-drone-kamera.js',
+  'tests/drone-kadraj.js',
   'tests/ic-blok-kat-cip.js',
   'tests/kat-grup-cip.js',
   'tests/mobilya-kat-izolasyon.js',
@@ -76,7 +77,8 @@ const strictTests = [
   'tests/kamera-baglam.js',
   'tests/ext-blok-gorunum.js',
   'tests/kat-cephe-blok.js',
-  'tests/drone-baglam.js'
+  'tests/drone-baglam.js',
+  'tests/dis-giris-kapi.js'
 ];
 
 const smokeTests = [

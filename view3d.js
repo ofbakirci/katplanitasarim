@@ -2728,6 +2728,121 @@
     col.emit(exteriorGroup, mats);
     return 4;
   }
+  // Ç4 CEPHE KAPILARI — SAF ÇIKARIM (THREE'siz, headless test edilebilir): map.doors içindeki cephe
+  //   kapılarını dış kontur kenarlarına projekte eder. Alınanlar: kind='entry' (bina ana girişi 'gh' +
+  //   dükkân girişi 'gd' — io.js DOOR_KIND ext→entry) ve DIŞ kenara OTURAN kind='unit_entry' (villa
+  //   deseni; normal apartmanda daire kapısı koridordadır → dik-mesafe eşiği 0.35'i geçemez, elenir).
+  //   'room' (iç kapı) ve blocked çekirdek kapıları (stair/fire_stair/elevator) HİÇ alınmaz.
+  //   Eşikler carveRing pencere projeksiyonuyla AYNI dil: dik mesafe <=0.35, net bindirme >0.4
+  //   (kapı min 0.8 — köşede kırpılan kıymık span üretmez). Dönüş: [{edge, t0, t1, kind, width_m}]
+  //   — edge = kontur kenar indeksi (cont[i]→cont[i+1]), t0/t1 kenar boyunca metre.
+  function extDoorSpans(map, contourM){
+    const out=[];
+    if(!map || !contourM || contourM.length<3) return out;
+    const segs=(map.doors||[])
+      .filter(function(d){ return d && !d.blocked && (d.kind==='entry'||d.kind==='unit_entry') && d.p0_px && d.p1_px; })
+      .map(function(d){ const a=px2m(map,d.p0_px[0],d.p0_px[1]), b=px2m(map,d.p1_px[0],d.p1_px[1]);
+        return {ax:a[0],az:a[1],bx:b[0],bz:b[1],kind:d.kind,w:d.width_m||0}; });
+    if(!segs.length) return out;
+    for(let i=0;i<contourM.length;i++){
+      const a=contourM[i], b=contourM[(i+1)%contourM.length];
+      const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz); if(len<0.2) continue;
+      const ux=dx/len, uz=dz/len;
+      segs.forEach(function(d){
+        const t0=(d.ax-a[0])*ux+(d.az-a[1])*uz, e0=Math.abs((d.ax-a[0])*(-uz)+(d.az-a[1])*ux);
+        const t1=(d.bx-a[0])*ux+(d.bz-a[1])*uz, e1=Math.abs((d.bx-a[0])*(-uz)+(d.bz-a[1])*ux);
+        if(e0>0.35||e1>0.35) return;
+        const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
+        if(g1-g0>0.4) out.push({edge:i, t0:+g0.toFixed(3), t1:+g1.toFixed(3), kind:d.kind, width_m:d.w});
+      });
+    }
+    // Ç4b GERÇEK GİRİŞ SENTEZİ: KONUT katta doors.js 'ext' kapısı BİLEREK üretmez (yalnız konut-dışı kat,
+    //   doors.js:172) → zeminde bina girişinin gerçek yeri = APARTMAN HOLÜnün (type_tr 'koridor',
+    //   common_areas) dış kontura değdiği kenardır. Hol poligonu fpSmoothOutline ile cepheye SNAP'li
+    //   (bkz. floorplan-map notu) → projeksiyon birebir oturur. En uzun örtüşmenin ortasına 1.5m
+    //   (PAİY md.39 bina giriş min) 'entry' span'i konur. Kullanıcı kanıtı: fallback kapı "yanlış yerde".
+    if(!out.length){
+      const holSeg=[];
+      (map.common_areas||[]).forEach(function(r){
+        if(!r || r.type_tr!=='koridor' || !r.polygon_px || r.polygon_px.length<3) return;
+        for(let k=0;k<r.polygon_px.length;k++){
+          const A=px2m(map,r.polygon_px[k][0],r.polygon_px[k][1]);
+          const B=px2m(map,r.polygon_px[(k+1)%r.polygon_px.length][0],r.polygon_px[(k+1)%r.polygon_px.length][1]);
+          holSeg.push({ax:A[0],az:A[1],bx:B[0],bz:B[1]});
+        }
+      });
+      let best=null;
+      for(let i=0;i<contourM.length && holSeg.length;i++){
+        const a=contourM[i], b=contourM[(i+1)%contourM.length];
+        const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz); if(len<1.2) continue;
+        const ux=dx/len, uz=dz/len;
+        holSeg.forEach(function(s){
+          const t0=(s.ax-a[0])*ux+(s.az-a[1])*uz, e0=Math.abs((s.ax-a[0])*(-uz)+(s.az-a[1])*ux);
+          const t1=(s.bx-a[0])*ux+(s.bz-a[1])*uz, e1=Math.abs((s.bx-a[0])*(-uz)+(s.bz-a[1])*ux);
+          if(e0>0.35||e1>0.35) return;
+          const g0=Math.max(0,Math.min(t0,t1)), g1=Math.min(len,Math.max(t0,t1));
+          if(g1-g0>1.2 && (!best || (g1-g0)>best.ol)) best={edge:i, g0:g0, g1:g1, ol:g1-g0};
+        });
+      }
+      if(best){
+        const mid=(best.g0+best.g1)/2, w=1.5;
+        out.push({edge:best.edge, t0:+Math.max(best.g0,mid-w/2).toFixed(3), t1:+Math.min(best.g1,mid+w/2).toFixed(3), kind:'entry', width_m:w, synth:true});
+      }
+    }
+    return out;
+  }
+  // Ç4 GÜVENLİ DÜŞÜŞ (saf): map.doors'ta cephe kapısı yoksa (KONUT katta computeDoors 'ext' üretmez —
+  //   doors.js yalnız konut-dışı katta bina/dükkân girişi verir) bina girişini buildEntranceNiche ile
+  //   AYNI çapaya koy: dış konturun EN UZUN kenarı ORTASI → kapı paneli markiz/nişin altına oturur.
+  //   Genişlik ~1.5m (bina ana girişi standardı), kısa kenarda küçülür. Dönüş span ya da null.
+  function extDoorFallbackSpan(cont){
+    if(!cont || cont.length<3) return null;
+    let best=-1, bi=0;
+    for(let i=0;i<cont.length;i++){ const a=cont[i], b=cont[(i+1)%cont.length];
+      const el=Math.hypot(b[0]-a[0],b[1]-a[1]); if(el>best){ best=el; bi=i; } }
+    if(best<1.2) return null;   // kapı sığmayacak kadar küçük kontur → kapı yok
+    const w=Math.max(0.9,Math.min(1.5,best*0.25)), mid=best/2;
+    return { edge:bi, t0:+(mid-w/2).toFixed(3), t1:+(mid+w/2).toFixed(3), kind:'entry', width_m:w, fallback:true };
+  }
+  // Ç4 GİRİŞ KAPISI MESH'İ: zemin cephesinde koyu kapı paneli + söve çerçevesi (geniş kapıda çift-kanat
+  //   orta derzi). YALNIZ ZEMİN kat için çağrılır — stackShell proto/klon düzeninin DIŞINDA
+  //   (buildEntranceNiche deseni): üst kat protolarına kapı girmez, klonla çoğalmaz. Tüm kapılar tek
+  //   'door' (+ derz 'rail') kovasında → blok başına ~2 mesh. Malzeme: cephe (wall) tonunun koyusu —
+  //   buildArticulation'ın lazy mats deseni (yeni doku yok, preset uygulanınca uyumlu kalır).
+  function buildExtEntryDoors(map, cont, flH, mats){
+    let spans=extDoorSpans(map, cont);
+    if(!spans.length){ const fb=extDoorFallbackSpan(cont); if(fb) spans=[fb]; }
+    if(!spans.length) return 0;
+    if(!mats.door){ const wc=(mats.wall&&mats.wall.color)?mats.wall.color.clone():new THREE.Color(0xd8d0c0);
+      wc.multiplyScalar(0.38); mats.door=new THREE.MeshStandardMaterial({color:wc,roughness:0.72,metalness:0.12}); }
+    const col=extCollector();
+    // Ç4c DIŞ NORMAL = SARIM YÖNÜNDEN (kullanıcı kanıtı: L-biçimli blokta centroid testi içbükey kenarda
+    //   TERS dönüyor, kapı duvarın İÇİNE çizilip görünmez kalıyordu — B blok "hiç kapı yok"). Poligonun
+    //   işaretli alanı sarımı verir; kenarın dış normali sarıma göre deterministiktir (konkav-güvenli).
+    let A2=0; for(let i=0;i<cont.length;i++){ const p=cont[i], q=cont[(i+1)%cont.length]; A2+=p[0]*q[1]-q[0]*p[1]; }
+    spans.forEach(function(s){
+      const a=cont[s.edge], b=cont[(s.edge+1)%cont.length];
+      const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz)||1;
+      const ux=dx/len, uz=dz/len, ang=-Math.atan2(dz,dx);
+      const tm=(s.t0+s.t1)/2, ex=a[0]+ux*tm, ez=a[1]+uz*tm;
+      const w=Math.max(0.9, Math.min(1.8, s.t1-s.t0));   // veriden (bina 1.5 / dükkân-daire 1.0), makul klemp
+      const H=Math.max(2.0, Math.min(2.2, flH-0.5));     // kapı boyu ~2.1-2.2m, kat yüksekliğine klempli; zemin hizasından başlar
+      // dış normal (sarıma göre) → local +z (dünya (sin ang, cos ang)) dışa mı bakıyor?
+      const nOx=(A2>0? uz:-uz), nOz=(A2>0? -ux:ux);
+      const lz=((Math.sin(ang)*nOx+Math.cos(ang)*nOz)>=0)?1:-1;
+      const face=WALL_T/2;                               // duvar merkez-hatlı tam kalınlık → dış yüz kotu
+      // 1) söve çerçevesi (iki yan + lento) — cepheden ~5cm çıkık, ~5cm duvara gömülü (dikişsiz)
+      [-1,1].forEach(function(sgn){ col.pushBox('door', 0.10, H+0.08, 0.10, sgn*(w/2+0.05), (H+0.08)/2, lz*face, ex, ez, ang); });
+      col.pushBox('door', w+0.20, 0.10, 0.10, 0, H+0.03, lz*face, ex, ez, ang);
+      // 2) kapı paneli — cepheden ~2cm çıkık koyu panel (duvar oyulmaz; panel yüzeyde okunur)
+      col.pushBox('door', w, H, 0.06, 0, H/2, lz*(face-0.01), ex, ez, ang);
+      // 3) çift kanat derzi (>=1.3m): orta dikme metal tonda (rail) — panelden hafif çıkık
+      if(w>=1.3) col.pushBox('rail', 0.05, H-0.10, 0.04, 0, H/2, lz*(face+0.02), ex, ez, ang);
+    });
+    col.emit(exteriorGroup, mats);
+    if(exteriorGroup) exteriorGroup.userData.extDoorCount=(exteriorGroup.userData.extDoorCount||0)+spans.length;
+    return Object.keys(col.buckets).length;
+  }
   // BÜTÜN BİNAYI KUR (kabuk). Aktif floor map'inden tek cephe grubu üret → zemin-üstü katlar için klonla.
   //   Zemin katta bina giriş kapısı boşluğu (dış kontur ilk uzun kenarında). Çatı = düz teras + parapet.
   //   Avlu delikleri döşeme + çatıda. Site: aktif blok tam kabuk + diğer bloklar hayalet kütle.
@@ -2788,6 +2903,26 @@
     const ground=new THREE.Mesh(new THREE.BoxGeometry(gw,0.1,gd),mats.ground);
     ground.position.set(gcx,-0.06,gcz); ground.receiveShadow=true; exteriorGroup.add(ground);
     exteriorGroup.userData.groundFromParcel=!!parcelM;   // test/teşhis: zemin parselden mi türedi
+    // Ç6 PARSEL ÇEVRE DUVARI (kullanıcı isteği): parsel sınırı boyunca ~1.5m bahçe duvarı + ince harpuşta.
+    //   Render'da AI'a parselin bittiği yeri NET söyler (site jenerik dokuya taşmasın) + kadraja çerçeve olur.
+    //   Yalnız parsel çizilmişse (parcelM); kenar başına 2 kutu (gövde+harpuşta), köşelerde ufak bindirme
+    //   dikişsiz kapanır. Malzeme: cephe paletiyle uyumlu nötr sıva tonu (lazy, tek üretim).
+    if(parcelM && parcelM.length>=3){
+      if(!mats.fence){
+        mats.fence=new THREE.MeshStandardMaterial({color:0xcfc6b8,roughness:0.9,metalness:0.02});
+        mats.fenceCap=new THREE.MeshStandardMaterial({color:0xbdb3a2,roughness:0.85,metalness:0.03});
+      }
+      const FW_H=1.5, FW_T=0.2, fcol=extCollector();
+      for(let i=0;i<parcelM.length;i++){
+        const a=parcelM[i], b=parcelM[(i+1)%parcelM.length];
+        const dx=b[0]-a[0], dz=b[1]-a[1], len=Math.hypot(dx,dz); if(len<0.3) continue;
+        const ang=-Math.atan2(dz,dx), mx=(a[0]+b[0])/2, mz=(a[1]+b[1])/2;
+        fcol.pushBox('fence',   len+FW_T, FW_H, FW_T, 0, FW_H/2,        0, mx, mz, ang);          // gövde (köşe bindirmeli)
+        fcol.pushBox('fenceCap',len+FW_T+0.04, 0.06, FW_T+0.08, 0, FW_H+0.03, 0, mx, mz, ang);    // harpuşta (hafif taşkın)
+      }
+      fcol.emit(exteriorGroup, mats);
+      exteriorGroup.userData.parcelWall=true;
+    }
     // S3: SİTE İMKANLARI — bahçe düzleminde hafif temsil (imkan başına ≤6 mesh hedefi)
     buildExtAmenities(exteriorGroup, mats);
     const PARAPET_H=0.9;
@@ -2944,8 +3079,24 @@
       }
       if(floorProtos) shellOpt.floorProtos=floorProtos;   // İş B3: f→proto (tip-kat paylaşımlı); yoksa mevcut tekil-yol
       stackShell(contour, holes, fc.above, floorH, proto, groundProto, shellOpt);
+      // Ç4: kapı verisi ZEMİN katın planından — aktif kat zemin değilse (katAyri) zemin snapshot'ından
+      //   türet; türetilemezse (ziyaret edilmemiş zemin / katAyri kapalı) aktif map (zaten aynı plan).
+      //   Niş de AYNI map'i okur → markiz ile kapı paneli aynı kapıya çapalanır (map'ler aynı bloğun
+      //   aynı pts kadrajından → scale birebir, px uzayı ortak).
+      let groundMapA=map;
+      try{
+        if(typeof activeFloor!=='undefined' && typeof zeminIdx==='function' && activeFloor!==zeminIdx()
+           && typeof floorSnapshotAt==='function' && typeof blockFloorplanMap==='function'){
+          const gsnap=floorSnapshotAt(zeminIdx());
+          const gm=gsnap?blockFloorplanMap(gsnap):null;
+          if(gm) groundMapA=gm;
+        }
+      }catch(e){ groundMapA=map; }
       // Ç2: GİRİŞ NİŞİ — zemin kat giriş kapısı önünde saçaklı markiz (tek bina; niş taban konturunda)
-      meshCount+=buildEntranceNiche(map, contour, floorH, mats);
+      meshCount+=buildEntranceNiche(groundMapA, contour, floorH, mats);
+      // Ç4: BİNA GİRİŞ KAPILARI — zemin cephesinde koyu kapı paneli (+ ticari zeminde dükkân kapıları);
+      //   veri yoksa nişle aynı çapaya (en uzun kenar ortası) güvenli-düşüş kapısı.
+      meshCount+=buildExtEntryDoors(groundMapA, contour, floorH, mats);
       exteriorGroup.userData.groundSeparate=!!groundProto;
       exteriorGroup.userData.groundWin=groundWin;
       exteriorGroup.userData.cikmaOn=!!ck.on; exteriorGroup.userData.cikmaD=ck.on?ck.d:0; exteriorGroup.userData.roofType=rf;
@@ -2988,6 +3139,7 @@
       //   floorProtos kurulmaz → yol BYTE-AYNI. Çıkma açıkken üst katlar (f>0) fUp konturu +
       //   edgeShift ile kurulur (fOpt.upperProto deseniyle birebir); zemin (f=0) fb.poly üstünde.
       const fPlans=extBlockFloorPlans(fb.snap, fFloors);
+      let fGroundMap=fMap;   // Ç4: bu bloğun ZEMİN kapı verisi — kat-başına yol aşağıda daha iyisini (zemin planı) yakalar
       if(fPlans.some(function(e){ return e.has; })){
         const fFloorProtos=[];
         const fSigProto=new Map();   // fb-BAŞINA önbellek — bloklar arası proto PAYLAŞILMAZ (kontur/holes/floorH blok-özel)
@@ -3000,6 +3152,7 @@
           let fp=null;
           try{
             const mapK=(typeof blockFloorplanMap==='function')? blockFloorplanMap(e.st) : null;
+            if(f===0 && mapK) fGroundMap=mapK;   // Ç4: zemin kat map'i kapı çizimi için yakala (f=0 hep önbellek-ıskası → burada üretilir)
             fp=up? buildExtFloorGroup(mapK||{windows:[],balconies:[]}, fOpt.upperCont, fOpt.upperHoles, fFH, mats, false, {d:fck.d, base:fb.poly})
                  : buildExtFloorGroup(mapK||{windows:[],balconies:[]}, fb.poly, fHoles, fFH, mats);
           }catch(err){ fp=null; }
@@ -3009,6 +3162,10 @@
         fOpt.floorProtos=fFloorProtos;
       }
       stackShell(fb.poly, fHoles, fFloors, fFH, fProto, null, fOpt);
+      // Ç4: bu bloğun zemin cephesine de giriş kapısı — aktif blokla AYNI mekanizma (planı olmayan
+      //   blok fMap=null → kapı çizilmez, sade kabuk kalır; niş/markiz yalnız aktif blokta, bilinçli).
+      // Ç4d: map yoksa da çağır — extDoorSpans null-map'te boş döner, fallback kapı garanti (kapısız blok kalmasın)
+      meshCount+=buildExtEntryDoors(fGroundMap||null, fb.poly, fFH, mats);
     });
     others.ghosts.forEach(function(gb){ const gm=gb.poly; const shp=new THREE.Shape(); gm.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
       const massH=(gb.floors||fc.above)*(gb.floorH||floorH);
@@ -3518,9 +3675,98 @@
     'railings, subtle material texture, roof edge and drip details, discreet AC units - as '+
     'long as no window, balcony or floor is moved, added or removed. '+
     'The building is NEWLY BUILT and well maintained: clean fresh facade, no dirt, no stains, no weathering, no aging.';
+  // ── Ç5 KADRAJ-FARKINDA DIŞ PROMPT (2026-07-16) ────────────────────────────────────────────
+  //   KÖK NEDEN (render-debug 2026-07-16 oturumu, kullanıcı raporu "drone sadakati hit or miss"):
+  //   prompt kameradan BAĞIMSIZ sabitti — kadraj ne olursa olsun "a N-storey ... building, aerial drone
+  //   perspective looking down" diyordu. ext1/ext3 (tek kütle, kadraja sığmış) AYNI promptla İYİ çıktı;
+  //   ext2'de drone iki blok ARASINDA ve YATAY durunca metin (tekil bina + tepeden bakış) referansla
+  //   ÇELİŞTİ → model çelişkiyi prompt lehine çözdü, snapshot'ı ATTI, üç blokluk jenerik site uydurdu.
+  //   Üç istekte prompt/parametre birebir aynıydı; TEK değişken kadrajdı → çare: bakış cümlesi + özne
+  //   kameradan TÜRETİLİR. Kanıt: aynı ext2 snapshot'ı + kadrajı anlatan promptla tek denemede
+  //   kompozisyon oturdu (uydurma blok yok). Kütle sadakati AYRI/açık iş — bu yalnız çelişkiyi kaldırır.
+  //   SÖZLEŞME: cam/framing verilmezse çıktı BYTE-AYNI (testler + eski çağrılar korunur) — türetme EK.
+  //   Saf projeksiyon (THREE'siz → headless test edilebilir): blokları kamera frustum'una projekte eder.
+  //   cam {pos,target,fov_deg} ve blocks[{poly:[[x,z]..],h}] SAHNE uzayında (çağıran plan-metreden
+  //   scene.__cx/__cz çıkarır). aspect = snapExtCameraDataURL kadrajı (1440/810).
+  //   NOT: fov_deg DİKEY okunur — LENS_FOV yorumu "yatay" der ama snapshot'ı üreten satır cam.fov=
+  //   lensToFov(c.lens) ve THREE cam.fov DİKEYdir; kadraj matematiğinde piksel gerçeği bağlayıcı.
+  function extFramingCalc(cam, blocks, aspect){
+    const out={ pitch_deg:0, view:'aerial', total:(blocks||[]).length, inFrame:0, cropped:false };
+    if(!cam||!cam.pos||!cam.target||!Array.isArray(blocks)||!blocks.length) return out;
+    const dx=cam.target.x-cam.pos.x, dy=cam.target.y-cam.pos.y, dz=cam.target.z-cam.pos.z;
+    const hor=Math.hypot(dx,dz), flen=Math.hypot(dx,dy,dz);
+    if(flen<1e-6) return out;
+    out.pitch_deg=+(Math.atan2(-dy,hor)*180/Math.PI).toFixed(1);        // + = aşağı bakıyor
+    out.view = out.pitch_deg>=30?'aerial' : (out.pitch_deg>=12?'elevated':'low');
+    const fx=dx/flen, fy=dy/flen, fz=dz/flen;                            // ileri (birim)
+    // sağ = normalize(ileri × dünya-yukarı(0,1,0)) = normalize(-fz,0,fx); tam tepeden bakışta dejenere
+    const rl=Math.hypot(fz,fx);
+    const rx=(rl<1e-6)?1:(-fz/rl), rz=(rl<1e-6)?0:(fx/rl);
+    const ux=-rz*fy, uy=rz*fx-rx*fz, uz=rx*fy;                           // yukarı = sağ × ileri
+    const tanY=Math.tan((cam.fov_deg||42)*Math.PI/360), tanX=tanY*(aspect||16/9);
+    blocks.forEach(function(b){
+      if(!b||!Array.isArray(b.poly)||b.poly.length<3) return;
+      let anyFront=false, behind=false, mnx=1e9, mxx=-1e9, mny=1e9, mxy=-1e9;
+      b.poly.forEach(function(m){
+        [0,(b.h||0)].forEach(function(py){                               // taban + tepe köşeleri
+          const vx=m[0]-cam.pos.x, vy=py-cam.pos.y, vz=m[1]-cam.pos.z;
+          const zc=vx*fx+vy*fy+vz*fz;
+          if(zc<=0.05){ behind=true; return; }                           // kamera arkası/düzlemi
+          anyFront=true;
+          const nx=(vx*rx+vz*rz)/(zc*tanX), ny=(vx*ux+vy*uy+vz*uz)/(zc*tanY);
+          if(nx<mnx) mnx=nx; if(nx>mxx) mxx=nx; if(ny<mny) mny=ny; if(ny>mxy) mxy=ny;
+        });
+      });
+      // kadraj [-1,1]² ile AABB örtüşmesi → kadrajı boydan boya kaplayan blok da "içeride" sayılır
+      if(!anyFront || !(mnx<=1 && mxx>=-1 && mny<=1 && mxy>=-1)) return;
+      out.inFrame++;
+      if(behind || mnx<-1 || mxx>1 || mny<-1 || mxy>1) out.cropped=true;
+    });
+    return out;
+  }
+  // CANLI kadraj çıkarımı: aktif blok konturu (pts) + diğer bloklar (extOtherBlocks) → SAHNE uzayına
+  //   çevir → extFramingCalc. Sahne/blok yoksa null → prompt eski (sabit) yola güvenle düşer.
+  function extFramingOf(c){
+    try{
+      if(!c||!c.pos||!c.target||typeof scene==='undefined'||!scene) return null;
+      const ox=scene.__cx||0, oz=scene.__cz||0;
+      const fh=extFloorHeight(), fc=extFloorCount();
+      const blocks=[];
+      const act=extBuildingOutline(null);                                // pts yolu (map'e gerek yok)
+      if(act&&act.length>=3) blocks.push({ poly:act.map(function(m){ return [m[0]-ox,m[1]-oz]; }), h:fc.above*fh });
+      const o=extOtherBlocks();
+      o.fulls.concat(o.ghosts).forEach(function(b){
+        if(!b||!b.poly||b.poly.length<3) return;
+        blocks.push({ poly:b.poly.map(function(m){ return [m[0]-ox,m[1]-oz]; }),
+                      h:(b.floors||fc.above)*(b.floorH||fh) });
+      });
+      if(!blocks.length) return null;
+      return extFramingCalc({ pos:c.pos, target:c.target, fov_deg:lensToFov(c.lens) }, blocks, 1440/810);
+    }catch(e){ return null; }
+  }
+  // Ç5: kameradan türeyen BAKIŞ cümlesi. LOCK/cephe/site cümleleri DEĞİŞMEZ (C5-R dersi: LOCK ayrı kalır).
+  const EXT_VIEW_SENTENCE={
+    aerial:'aerial drone perspective looking down at an angle toward the building',
+    elevated:'drone perspective from just above roof height, looking gently down toward the building',
+    low:'low drone hovering at mid-building height, camera almost level with the horizon - this is NOT a top-down aerial view'
+  };
+  // Ç5: kadrajdaki blok sayısından ÖZNE. Tekil "a building" yalnız kadrajda tek kütle varken kurulur
+  //   (ext2 dersi: iki blokluk kadrajda "a building" demek modeli sahneyi yeniden kurgulamaya itiyor).
+  function extSubjectPhrase(fr, floors){
+    const n=(fr&&fr.inFrame)||0;
+    if(n>=3) return n+' '+floors+'-storey residential apartment blocks standing around the landscaped courtyard';
+    if(n===2) return 'two '+floors+'-storey residential apartment blocks with the landscaped courtyard between them';
+    return 'a '+floors+'-storey residential apartment building';
+  }
+  // Ç5: kütle kadrajdan taşıyorsa kırpılmayı KORU (model geri çekilip kompozisyonu yeniden kurmasın).
+  const EXT_CROP_SENTENCE=
+    'Keep the framing of the input exactly: a block that runs past the frame edge stays cropped by the edge - '+
+    'do not pull the camera back, do not re-centre the composition, and do not add any building that is not in the input.';
   // saf metin prompt kurucu (server ile paylaşılan reçete; TEST bunu assert eder)
   //   opt.creative=true → YARATICI dış-render: sahne envanteri (A3) ÇAPA olarak girer + serbest peyzaj/çevre
   //   yorumu (LOCK gevşer). Varsayılan (faithful) → mevcut LOCK reçetesi + envanter bayrağı KAPALI.
+  //   Ç5: opt.cam (canlı drone) → kadraj çıkarımı; opt.framing (test) doğrudan enjekte eder. İkisi de yoksa
+  //   ESKİ sabit metin BYTE-AYNI döner.
   function buildExteriorPrompt(opt){
     opt=opt||{};
     const fp=facadePreset(opt.facade||extFacade);
@@ -3534,6 +3780,23 @@
         'project. '+buildSceneInventory(opt)+' '+
         'Keep the overall building massing and floor count as described; you may creatively interpret the '+
         'facade detailing, landscaping and surrounding environment (street, greenery, neighbouring context, sky). '+
+        'Realistic materials and lighting, '+timeHint(tod)+'. '+
+        'High detail, professional real-estate photography, no people, no text.'
+      );
+    }
+    // Ç5: kadraj biliniyorsa bakış + özne ONDAN türer (çelişki = ext2'nin kök nedeni); yoksa eski sabit metin.
+    const fr = opt.framing || (opt.cam?extFramingOf(opt.cam):null);
+    if(fr){
+      return (
+        'Photorealistic architectural exterior photograph of '+extSubjectPhrase(fr,floors)+', '+
+        EXT_VIEW_SENTENCE[fr.view]+', with sky and surrounding '+
+        'context (street, greenery, neighbouring buildings). '+
+        'Keep the building massing, floor count, and every window and balcony position EXACTLY as in the input '+
+        '3D model - do not move, add or remove any window, balcony or floor. '+
+        (fr.cropped?(EXT_CROP_SENTENCE+' '):'')+
+        EXT_FACADE_DETAIL_SENTENCE+' '+
+        amenityPromptSignal(opt)+
+        'Facade material: '+fp.promptSignal+'. '+
         'Realistic materials and lighting, '+timeHint(tod)+'. '+
         'High detail, professional real-estate photography, no people, no text.'
       );
@@ -3575,7 +3838,7 @@
       o.profile='exterior'; o.render_method='snapshot';
       o.render_style=creative?'creative':'faithful';
       o.time_of_day=timeOfDay; o.facade_signal=facadePreset(extFacade).promptSignal;
-      o.prompt=buildExteriorPrompt({facade:extFacade, creative:creative});
+      o.prompt=buildExteriorPrompt({facade:extFacade, creative:creative, cam:c});   // Ç5: prompt bu drone'un KADRAJINDAN türer
       o.snapshot=snapExtCameraDataURL(c);
       out.push(o); });
     return out;
@@ -6273,7 +6536,8 @@
   function setMatHint(t){ lastMatHint=t||''; const h=overlay&&overlay.querySelector('#v3dMatHint'); if(h) h.textContent=lastMatHint; }
   function setMatUI(on){
     matUIEnabled=!!on;
-    if(!matUIEnabled){ if(activeGroup==='material') activeGroup='layers'; matSelRoom=null; }
+    // 'facade' rail grubu da matUIEnabled'a bağlı (railGroups) → kapanınca o da bırakılır (asılı grup kalmasın).
+    if(!matUIEnabled){ if(activeGroup==='material'||activeGroup==='facade') activeGroup='layers'; matSelRoom=null; }
     renderRail(); renderDrawer();
   }
   // seçili oda → swatch uygula: yalnız O ODANIN zemin/duvar malzemesini değiştirir (M3), sahneyi tazeler (M4).
@@ -7412,7 +7676,13 @@
     return boot().then(function(map){
       if(!map) return;
       setCamPreview(false);                                  // önizleme kapat (bu adımda TAM kamera UI)
-      setCamUI(true); setFurnUI(true); setMatUI(true);       // araçları ETKİNLEŞTİR (rail'de Kamera/Drone/İç Malzeme/Dış Cephe/Mobilya görünür)
+      setCamUI(true); setFurnUI(true);                       // rail'de Kamera/Drone + Mobilya görünür
+      // RAY SADELEŞMESİ (kullanıcı isteği): KAMERA adımında İç Malzeme + Dış Cephe rail grubu GİZLİ
+      //   (railGroups matUIEnabled'a bakar; drone dock'u bundan bağımsız — cephe preset'leri zaten ayrı
+      //   'facade' grubundaydı, bu adımda erişilmez). 3B adımı open() setMatUI(true) ile geri açar.
+      //   Boyama VERİSİ etkilenmez: matUIEnabled salt UI bayrağı — materialOverrides/hydrateMaterials
+      //   dokunulmaz, sahne boyalı kalır (Katmanlar > "Malzeme boyaması" toggle'ı da bağımsız çalışır).
+      setMatUI(false);
       camStaleSweep(planSig(map));                           // İş D9: bağlam-farkında bayat-plan süpürmesi (openCompare üstündeki yorum)
       if(!camList.length) deriveShowcaseCameras(map);
       else { renderCamGizmos(); updateCamPanel(); }
@@ -7667,6 +7937,16 @@
     //   dökümü test çıktısına sızmasın): [{k,has,sig}].
     extBlockFloorPlansForTest:function(snap,fFloors){
       return extBlockFloorPlans(snap,fFloors).map(function(e){ return {k:e.k, has:e.has, sig:e.sig}; }); },
+    // Ç4 HEADLESS: cephe kapı çıkarımı (THREE'siz saf) — map.doors → dış kontur kenar spanları
+    //   [{edge,t0,t1,kind,width_m}]. map/contour verilmezse canlı sahne map'i + canlı kontur.
+    // Ç4 TEST: sahnedeki kapı sayacı (entegrasyon kanıtı — headless'ta sahne yok, canlı önizlemede okunur).
+    extDoorCountForTest:function(){ return (exteriorGroup&&exteriorGroup.userData)?(exteriorGroup.userData.extDoorCount||0):-1; },
+    extDoorSpansForTest:function(map, contourM){
+      const m=map||(scene&&scene.__map); if(!m) return [];
+      const cont=contourM||extBuildingOutline(m); if(!cont) return [];
+      return extDoorSpans(m, cont); },
+    // Ç4 HEADLESS: veri yokken güvenli-düşüş kapısı (en uzun kenar ortası — buildEntranceNiche çapası).
+    extDoorFallbackSpanForTest:function(contourM){ return extDoorFallbackSpan(contourM); },
     // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ (test + prototip) ──
     //   İç kamera sözleşmesinden (exportCameras/getCameras) TAMAMEN AYRI — extCams kendi listesi.
     // getExteriorCameras: İş 1b — DIŞA API, MEVCUT davranış (TAM liste, bağlam-filtresiz) korunur; id
@@ -7710,6 +7990,11 @@
     facadePresets:function(){ return FACADE_PRESETS.map(function(p){ return {key:p.key,name:p.name,promptSignal:p.promptSignal}; }); },
     // dış render prompt kurucu (HEADLESS — istek atmaz; render-server 'exterior' profili ile aynı reçete anahtar ifadeleri).
     buildExteriorPrompt:buildExteriorPrompt,
+    // Ç5 TEST: kadraj çıkarımı SAF math (THREE'siz) — {pitch_deg,view,total,inFrame,cropped}.
+    //   cam {pos,target,fov_deg} + blocks[{poly,h}] SAHNE uzayında; aspect varsayılan 16/9.
+    extFramingForTest:function(cam,blocks,aspect){ return extFramingCalc(cam,blocks,aspect||1440/810); },
+    // Ç5 TEST: CANLI drone'un kadrajı (sahne + bloklar gerekir → standalone/preview). Yoksa null.
+    extFramingOfCamForTest:function(i){ const c=extCams[i]; return c?extFramingOf(c):null; },
     // A3: SAHNE ENVANTERİ — state'ten olgusal İngilizce metin (blok/kat sayısı + cephe + imkan + avlu). Yaratıcı çapa.
     buildSceneInventory:buildSceneInventory,
     // "Dış Render" onay-öncesi tetik + prototip callback atama (extRenderConfirm=modal, extRenderSubmit=POST).

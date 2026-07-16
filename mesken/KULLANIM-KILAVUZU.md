@@ -364,7 +364,7 @@ Plan hazır olunca üç boyutlu "dollhouse" görünümüne geçersin. Bu adım g
 
 Adım 2'de yerleştirilmiş kameralar salt-görünürdür (mesh + koni + etiket); düzenlemeleri Adım 3'te yaparsın.
 
-**"Kamera Yerleştir"** ile Adım 3'e geçerken bir kezlik bir bilgi penceresi çıkar: **"Planı Boya açısı"**. Plan boyama karesi 3B görünümün bulunduğu açıdan üretilir — ideal açıyı şimdi seçip yön küresinin yanındaki **vizör-kilit** düğmesiyle kilitleyebilirsin; kilitlemezsen dik izometrik açı otomatik kullanılır. **"Açıyı Ayarla"** seni bu adımda bırakır (açını ayarla, kilitle), **"Otomatik Açı ile Devam"** normal akışla sürer. Çok bloklu projede her blok için ayrı açı kilitlenebilir (blok çipleriyle gez).
+**"Kamera Yerleştir"** ile Adım 3'e geçerken bir kezlik bir bilgi penceresi çıkar: **"Planı Boya açısı"**. Plan boyama karesi 3B görünümün bulunduğu açıdan üretilir — ideal açıyı şimdi seçip yön küresinin yanındaki **vizör-kilit** düğmesiyle kilitleyebilirsin; kilitlemezsen dik izometrik açı otomatik kullanılır. **"Açıyı Ayarla"** seni bu adımda bırakır ve vizör-kilit düğmesinin yanına **kalıcı bir işaret balonu** takar ("Açıyı ayarla, sonra burayı tıkla — kadraj kilitlenir"; düğme hafifçe nabız atar). Balon bir bildirim gibi kaybolmaz: kilide basana ya da adımı değiştirene kadar durur, 3B yeniden kurulsa da geri gelir. **"Otomatik Açı ile Devam"** normal akışla sürer. Çok bloklu projede her blok için ayrı açı kilitlenebilir (blok çipleriyle gez).
 
 <!-- GORSEL 09: 3B dollhouse — ust kat kaldirilmis daire; oda etiketleri, mobilya ve malzeme boyamasi acik; kosede orbit kuresi ve yon chip'leri -->
 
@@ -407,7 +407,7 @@ Kat ve blok seçimi 3B'nin içinden yapılır (üst-orta çip satırları):
 
 Bu adımda 3B tam ekran açık kalır ve kamera paneli görünür. Panel şerit-farkındadır: **"İç Mekan"** şeridindeyken oda kameraları, **"Dış Görünüm"** şeridindeyken drone dock'u gelir. Adımın CTA'sı **"Render Kadrajları"**; ona bastığında 3B canlıyken tüm kamera ve drone kadrajlarının küçük görselleri **kredisiz** yakalanır ve Adım 4'e geçilir. Yakalama blok blok ve kat kat gezer: farklı katlara/bloklara yerleştirdiğin iç kameraların ve farklı bloklardaki drone'ların tümü toplanır — hiçbir kadraj, o an hangi kat/blokta durduğuna bağlı olarak düşmez. Hiç drone eklemeden ilerlersen bir kezlik nazik bir hatırlatma çıkar (**"Drone Ekle"** seni Dış şeridine götürür, **"Devam Et"** normal akışla sürer) — dış cephe karesini istemeden atlamazsın. Yakalama hibrittir: hangi şeritte bırakırsan bırak, iç kamera kadrajları iç sahneden, drone kadrajları dış kabuktan, **"Planı Boya"** kadrajı ise (açı kilitlemediysen) her zaman **dik izometrik açıdan** alınır — kadraj tepeden bakar, odalar okunur; kart önizlemesi ile üretilen sonuç aynı kaynaktan gelir.
 
-Araç grupları rail üstünde sırayla: **"Kamera (İç)"**, **"Drone (Dış)"**, **"İç Malzeme"**, **"Dış Cephe"**, **"Mobilya"**, **"Gezinti (masaüstü)"**, **"İndir"**. Bir dış araca tıklayınca otomatik dış moda, bir iç araca tıklayınca iç moda geçilir (araçlar köprülüdür).
+Kamera adımında ray **sadeleştirilmiştir**: araç grupları **"Kamera (İç)"**, **"Drone (Dış)"**, **"Mobilya"**, **"Gezinti (masaüstü)"** ve **"İndir"** — **"İç Malzeme"** ile **"Dış Cephe"** bu adımda görünmez (onlar 3B adımının işidir, bkz. Bölüm 9; yaptığın malzeme/cephe seçimleri sahnede boyalı kalır). Bir dış araca tıklayınca otomatik dış moda, bir iç araca tıklayınca iç moda geçilir (araçlar köprülüdür).
 
 <!-- GORSEL 10: kamera dock — ic kamera secili; Yon/Tasi/Odakla/Sil eylemleri, Yukseklik ve Bakis acisi slider'lari, Bakis Yonu kuresi, Objektif chip'leri (16/24/35/50 mm), Gun saati -->
 
@@ -449,7 +449,7 @@ Her kamerada, konum + yön + lens bilgisinden bir görüş konisi kurulur. Konin
 
 ## 9. Malzeme, cephe ve mobilya
 
-Render'a girmeden önce yüzeyleri ve döşemeyi belirleyerek çıktının sadakatini yükseltirsin. Bu bölümdeki her şey kredisizdir; seçtiklerin hem 3B mesh'te gerçek doku olarak görünür hem de render prompt'una "seçilenleri aynen koru" sinyali olarak girer.
+Render'a girmeden önce yüzeyleri ve döşemeyi belirleyerek çıktının sadakatini yükseltirsin. Bu bölümdeki her şey kredisizdir; seçtiklerin hem 3B mesh'te gerçek doku olarak görünür hem de render prompt'una "seçilenleri aynen koru" sinyali olarak girer. **İç Malzeme** ve **Dış Cephe** araçları **3B adımında (Adım 2)** kullanılır — Kamera adımının rayında görünmezler (ray sadeleşmesi); Mobilya her iki adımda da vardır.
 
 ### İç Malzeme dock
 
@@ -465,6 +465,8 @@ Aynı swatch'a tekrar tıklamak seçimi kaldırır. **"Türe göre ata"** tüm o
 ### Dış Cephe preset'leri
 
 **"Dış Cephe"** grubunda dört preset çipi vardır: **"Nötr"**, **"Açık Sıva + Koyu Bant"**, **"Tuğla Zemin + Sıva Üst"**, **"Çağdaş Gri + Ahşap Balkon"**. Seçim 3B kabuğu değiştirir ve render prompt'una sinyal olarak girer. Bina sekmesindeki **"Çıkma"** + derinlik ve **"Çatı"** (Teras/Kırma) ayarları da 3B kabuğu ve render'ı etkiler.
+
+Dış kabukta zemin katta **bina giriş kapıları** da görünür: plandaki bina ana girişi ve (ticari zeminde) dükkân girişleri cepheye kapı olarak işlenir — kasa, panel ve geniş kapılarda çift-kanat derzi ile; kapı tonu cephe renginin koyusudur. Planda cepheye işlenmiş giriş yoksa bina girişi cephenin uygun kenarına otomatik yerleştirilir. Çok bloklu sitede diğer blokların zemin cephelerinde de girişler görünür. Böylece dış render "kapısız bina" üretmez.
 
 ### Mobilya
 
@@ -521,6 +523,10 @@ Galeri üç grupta toplanır: **"Plan Boyama"**, **"İç Kameralar"** ve **"Dı�
 
 Üst şeritteki adım noktaları da durum gösterir: Kamera adımında iç nokta = en az bir iç kamera, dış nokta = en az bir drone; Render adımında noktalar üretim durumunu izler (üzerine gelince ayrıntı yazar). Noktalar canlıdır — 3B içinden kamera/drone ekleyip çıkardıkça birkaç saniye içinde kendiliğinden güncellenir ve dolunca yeşil görünür.
 
+### Önce / Sonra paneli (sol kolon)
+
+Galerinin solunda sabit (sticky) bir **"Önce / Sonra"** karşılaştırma paneli durur: seçili kartın (bir karta tıklamadıysan ilk üretilmiş kartın) **kadraj görseli (önce)** ile **AI render'ı (sonra)** üst üste bindirilir ve alttaki sürgüyle ikisi arasında gezersin — sol yarı kadraj, sağ yarı render. Herhangi bir karta tıklamak paneli o karta geçirir (kartın seç/bırak davranışı aynen çalışmaya devam eder). Henüz üretilmemiş kartta yalnız kadraj ve "Üretilince karşılaştırma burada" notu görünür. Planı Boya kartında önce = dollhouse izo kadrajı, sonra = boyalı plan; drone kartında önce = 3B snapshot, sonra = dış render. Dar ekranlarda sol kolonla birlikte gizlenir.
+
 <!-- GORSEL 13: Adim-4 render galerisi — uc grup basligi (Plan Boyama blok karti x2, Ic Kameralar, Dis/Drone) + sagda Render Listesi checklist'i; alt cubukta "Üret (N)" -->
 
 ### Sadık / Yaratıcı
@@ -561,27 +567,33 @@ Son adım, üretilen render'ları toplar ve sunuma hazırlar. Bu adımın bir k�
 
 ### Gerçek olanlar
 
-Üretilen render'lar burada blok-farkında bir düzenle toplanır. Adımın CTA'sı **"Planı Dışa Aktar"**.
+Üretilen render'lar orta alanda **tek düzenli, blok-bölümlü bir kart akışında** toplanır — kartlar Render adımıyla (Adım 4) aynı dildedir (aynı genişlik/oran/köşe/gölge). Adımın CTA'sı **"Planı Dışa Aktar"**.
 
-- **"Plan Boyama"** bölümü çok bloklu sitede **blok başına bir kart** gösterir (**"Planı Boya — Blok A"**, **"— Blok B"**...); tek blokta tek kart. Hiç plan render'ı yoksa eski tekil "Döşeli Render" görseli (yer tutucu) görünür.
-- **İç mekân galerisi** çok bloklu sitede **"Blok A" / "Blok B"** alt-başlıklarıyla gruplanır (kamera numaraları değişmez); tek blokta düz listedir.
-- **Dış galeri** de aynı desenle bloklara ayrılır; drone satırlarında cephe preset'i ham anahtarıyla değil **Türkçe adıyla** yazar (örn. "brick" değil "Tuğla Zemin + Sıva Üst").
+- Çok bloklu sitede her **"Blok A" / "Blok B"** başlığının altında o bloğun kartları tek grid'de sıralanır: önce **"Planı Boya"** kartı, sonra iç kamera kartları (**"Kamera N · Oda (m²)"**). Tek blokta tek bölüm başlığı vardır ("Plan + İç Mekan"). Karesi olmayan blokta "Bu blok için henüz kare üretilmedi" notu görünür.
+- **"Dış Görünüm (Drone)"** bölümü aynı kart dilinde en sona gelir; çok blokta blok alt-başlıklarıyla ayrılır. Drone kartlarında cephe preset'i ham anahtarıyla değil **Türkçe adıyla** yazar (örn. "brick" değil "Tuğla Zemin + Sıva Üst").
+- Kartın sağ-alt köşesindeki büyüteç düğmesi görseli tam ekran açar; **karta tıklamak onu seçer** ve soldaki pazaryerini o kartın bağlamına geçirir (aşağıda).
 
-Bu adım ileride pazaryeri düzenine (karttan ürün değiştirme) evrilecek; bugünkü düzen bunun iskeletidir.
+### Bağlamsal pazaryeri (sponsorlu ürün şovu)
 
-<!-- GORSEL 14: Adim-5 Döşe ekrani — ic/dis render galerileri + "Döşeli Render" ana gorseli; asagida "Ön-gösterim" etiketli pazaryeri ve Video Turlar bolumu -->
+Sol paneldeki **"Pazaryeri"** bölümü seçili karta göre değişir — pazaryeri vizyonunun demosu:
+
+- Bir **iç render kartı** seçince başlık **"Bu render'daki ürünler — <Oda Adı>"** olur ve oda **türüne** göre sponsorlu ürün listesi gelir: yatak odası → Yatak · Yataş / Gardırop · Bellona / Duvar Boyası · Jotun / Zemin · Çamsan; banyo → Lavabo · VitrA / Armatür · GROHE / Fayans · Kale; salon → Koltuk Takımı · Bellona / TV Ünitesi · Vivense / Halı · Stepevi; mutfak → Evye · Franke / Ankastre · Arçelik / Dolap · Kelebek.
+- Her satırın küçük ürün görseli **seçili render'ın kendisinden kırpılır** (mobilya alt-orta, duvar üst-orta, zemin alt kenar — "render'da gerçekten bu ürün var" hissi; kırpım yapılamazsa stilize ikon kalır). Satırda "Sponsorlu" rozeti, örnek fiyat ve pasif bir **"Değiştir"** düğmesi (Yakında) vardır.
+- Plan/dış kartlarda ve seçim yokken genel liste görünür. Ürünler, markalar ve fiyatlar **tamamen örnektir** (placeholder) — gerçek bir katalog/ağ bağlantısı yoktur.
+
+<!-- GORSEL 14: Adim-5 Döşe ekrani — blok-bölümlü kart grid'i (Planı Boya + Kamera kartlari), sagda Döşeme Özeti; solda seçili yatak odasi render'ina göre sponsorlu ürün listesi -->
 
 ### Ön-gösterim olanlar
 
 Aşağıdaki bölümler şu an tamamen **ön-gösterimdir** — arayüzü hazır, ama arkasında gerçek bir sistem yoktur:
 
-- **Pazaryeri** — Bellona / Jotun / Çamsan / VitrA / Karaca Home sabit bir listedir.
+- **Pazaryeri** — sabit örnek markalar/fiyatlar (genel liste + oda-türüne göre bağlamsal liste); "Değiştir" pasiftir.
 - **"Döşeme Özeti"** — sabit, örnek bir "Tahmini Toplam" gösterir.
 - **"Pazaryerine Aktar"** ve **"Sunum (PDF) olarak aktar"** düğmeleri yalnız bir bildirim gösterir; gerçek bir aktarım/çıktı yapmaz.
 
 ### Video Turlar (Yakında)
 
-**"Video Turlar"** bölümünde iki düğme vardır — **"Daire Turu Videosu"** ve **"Site Turu Videosu"** — ikisi de "Yakında" rozetlidir ve şu an pasiftir. Planlanan akış: 3B gezinti kaydı → yapay zekâ ile video boyama → fotogerçekçi tur videosu.
+En altta tek yatay şerit hâlinde iki küçük düğme vardır — **"Daire Turu"** ve **"Site Turu"** — ikisi de "Yakında" rozetlidir ve şu an pasiftir. Planlanan akış: 3B gezinti kaydı → yapay zekâ ile video boyama → fotogerçekçi tur videosu.
 
 ---
 
