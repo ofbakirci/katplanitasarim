@@ -118,8 +118,12 @@
   // ── İŞ 1: KAMERA BAĞLAM DAMGASI — camList/extCams öğeleri hangi kat/blok bağlamında OLUŞTURULDUĞUNU taşır
   //   ({__floor,__block}). Amaç: çoklu kat (katAyri) / çoklu blok (site) projelerinde bir bağlamda konan
   //   kamera/drone BAŞKA bağlam görüntülenirken gizmo/export/thumbnail'e SIZMASIN (geçersiz plan-px/oda
-  //   eşlemesiyle dışa aktarılmasın). camViewObj/extCamViewObj SEÇİCİ alan listesi kullandığından __floor/
-  //   __block dışa (exportCameras/exportExteriorCameras çıktısı) ASLA sızmaz — yalnız iç filtre anahtarı.
+  //   eşlemesiyle dışa aktarılmasın). SIZINTI SÖZLEŞMESİ (İş D7 ile netleşti): camViewObj/extCamViewObj
+  //   SEÇİCİ alan listesi kullandığından __ alanları RENDER PAYLOAD'una (exportCameras/exportExteriorCameras
+  //   çıktısı) ASLA sızmaz — orası render-server şeması, damga girmez. HAM-GET API'leri (getCameras/
+  //   getExteriorCameras) ise .mskpkg paket roundtrip'i için damga alanlarını BİLEREK taşır (getCameras:
+  //   __floor+__block; getExteriorCameras: __block+__cx/__cz — drone'da __floor yok) → setCameras/
+  //   setExteriorCameras import'ta bunları KORUR (İş D3/D6), çok-bloklu paket kameraları tek bağlama yığılmaz.
   //   activeFloor/activeBlock app.js top-level let'leri — typeof-guard'lı oku (villa/tek-kat/site-kapalı
   //   projede tanımsız DEĞİL ama yine de savunmacı; site kapalıyken activeBlock zaten hep 0).
   function currentCamCtx(){
@@ -132,6 +136,55 @@
     if(!c || c.__floor==null || c.__block==null) return true;
     const cur=currentCamCtx();
     return c.__floor===cur.floor && c.__block===cur.block;
+  }
+  // ── İş D1: DIŞ (drone) BAĞLAM DAMGASI — drone DÜNYA-BİNA objesidir, KAT kavramı YOK: yalnız __block
+  //   damgalanır, __floor BİLEREK yazılmaz (iç stampCamCtx'ten ayrışır; iç kamera adımında kat gezmek
+  //   drone'u filtreden DÜŞÜRMEZ). __cx/__cz = damga anındaki sahne merkezi çapası: buildScene merkezi
+  //   her çağrıda aktif planın bbox'ından yeniden hesaplar; drone pos/target sahne-uzayında sabit
+  //   kalınca binaya göre KAYARDI (gerçek kayma) — reanchorExtCams bu çapayla farkı telafi eder.
+  //   Sahne henüz yoksa (headless/paket-önce) çapa YAZILMAZ (legacy) → ilk buildScene taşımadan damgalar.
+  function stampExtCamCtx(c){
+    // REVIEW-R1 fix: dış modda TEKİL blok görünümü açıkken (extBlockView sayı — view-only, activeBlock
+    //   DEĞİŞMEZ) drone kullanıcının BAKTIĞI bloğa aittir. activeBlock ile damgalansaydı extCtxMatch aynı
+    //   görünümde anında gizlerdi (kondu-kayboldu) ve kadraj/galeri yanlış bloğa atfederdi. 'all'/null
+    //   görünümde (ve iç modda) extViewBlock zaten activeBlock'a düşer → eski davranış aynen.
+    const vb=extViewBlock();
+    c.__block=(typeof vb==='number')? vb : ((typeof activeBlock!=='undefined')?activeBlock:0);
+    if(scene && scene.__cx!=null){ c.__cx=scene.__cx; c.__cz=(scene.__cz!=null)?scene.__cz:0; }
+    return c;
+  }
+  // İş D2: dış (drone) bağlam filtresi — camCtxMatch'in drone-özel ikizi; eşleşme YALNIZ __block
+  //   üzerinden (kat eşitliği ARANMAZ). Damgasız (legacy, __block null) her görünümde eşleşir.
+  //   Aktif "görünüm bloğu": DIŞ modda extBlockView belirler ('all' → HERKES görünür; null → activeBlock;
+  //   sayı → o blok — dış modda blok çipleri view-only, activeBlock'u DEĞİŞTİRMEZ); iç modda activeBlock.
+  //   TÜM extCams tüketicileri (gizmo/export/thumb/dock/PiP/seçim) BUNU kullanır → tutarlı liste.
+  function extViewBlock(){
+    if(exteriorMode){
+      if(extBlockView==='all') return 'all';
+      if(typeof extBlockView==='number') return extBlockView;
+    }
+    return (typeof activeBlock!=='undefined')?activeBlock:0;
+  }
+  function extCtxMatch(c){
+    if(!c || c.__block==null) return true;
+    const vb=extViewBlock();
+    return vb==='all' || c.__block===vb;
+  }
+  // İş D4: drone'ları YENİ sahne merkezine yeniden çapala. Damgadaki eski merkez (__cx/__cz) ile yeni
+  //   merkezin farkı pos+target'a uygulanır → kat/blok geçişinde (buildScene merkezi değişir) drone
+  //   binaya YAPIŞIK kalır. Damgasız (legacy, __cx==null) drone TAŞINMAZ — yalnız mevcut merkez
+  //   damgalanır (bundan sonrası izlenir). buildScene scene.__cx/__cz atamasının hemen ardından çağırır.
+  function reanchorExtCams(){
+    if(!scene) return;
+    const ncx=(scene.__cx!=null)?scene.__cx:0, ncz=(scene.__cz!=null)?scene.__cz:0;
+    extCams.forEach(function(c){
+      if(!c || !c.pos) return;
+      if(c.__cx!=null){
+        const dx=c.__cx-ncx, dz=((c.__cz!=null)?c.__cz:0)-ncz;
+        if(dx||dz){ c.pos.x+=dx; c.pos.z+=dz; if(c.target){ c.target.x+=dx; c.target.z+=dz; } }
+      }
+      c.__cx=ncx; c.__cz=ncz;
+    });
   }
   // ── KAMERA-S: mobilya-kalitesi akıcılık (hayalet ekle + canlı PiP · doğrudan sürükle · koni-ucu nişan) ──
   //   camGhost: EKLE hayalet-akışı durum makinesi — faz 'pos' (konum imleci izler, tık=konum düşer) →
@@ -1293,6 +1346,10 @@
     scene.__hx=(maxX-minX)/2; scene.__hz=(maxZ-minZ)/2;
     scene.__cx=cx; scene.__cz=cz; scene.__map=map;          // world↔px ters çevirim + kamera export için
     scene.__span=Math.hypot(maxX-minX, maxZ-minZ);          // sahne çapı (C6 depth-map far aralığı)
+    // İş D4: sahne merkezi az önce YENİDEN hesaplandı (aktif kat/blok bbox'ı değişmiş olabilir) —
+    //   drone'ları yeni merkeze yeniden çapala (drone pos/target sahne-uzayında saklanır; merkez
+    //   kayınca binaya göre kayarlardı). Damgasız (legacy) drone taşınmaz, yalnız merkezi damgalar.
+    if(extCams.length) reanchorExtCams();
     const G=new THREE.Group(); G.position.set(-cx,0,-cz); scene.add(G); scene.__floorGroup=G;
     const walls=new THREE.Group(); walls.position.set(-cx,0,-cz); scene.add(walls); scene.__walls=walls;
     const lintels=new THREE.Group(); lintels.position.set(-cx,0,-cz); lintels.visible=roofOn; scene.add(lintels); scene.__lintels=lintels;
@@ -2182,6 +2239,30 @@
   }
   // geriye-uyum: eski çağrılar (metrics/testler) hayalet listesini bekler
   function extGhostBlocks(){ return extOtherBlocks().ghosts; }
+  // İş K1: DİĞER-blok kat-başına cephe KAYNAK seçimi (SAF, THREE'siz — buildExterior others.fulls yolu
+  //   ve extBlockFloorPlansForTest AYNI fonksiyonu kullanır). snap.floors[k] (stateSnapshot(true) biçimi;
+  //   io.js blocks[i]=stateSnapshot(false) kendi st.floors'unu taşır) varsa o kat KENDİ snapshot'ından
+  //   kurulur; k===snap.activeFloor için top-level snap da geçerli kaynak (io.js stateSnapshot
+  //   floors[activeFloor]'u zaten tazeler — yine de savunmacı ikinci kaynak). floors dizisi YOKSA
+  //   (katAyri kapalı blok / eski kayıt) her giriş has=false → çağıran mevcut tekil-proto yoluna düşer
+  //   (BYTE-AYNI davranış). Zemin ofseti blockZeminIdxOf(snap.ui.bodrumSayisi) — bodrumlu blokta üst
+  //   katlar floors[zi..] aralığından okunur. Dönüş: f=0..fFloors-1 için {k, has, sig, st}
+  //   (k = zemin-ofsetli MUTLAK kat indeksi; st = seçilen snapshot — ForTest sarmalayıcı st'yi ATAR).
+  function extBlockFloorPlans(snap, fFloors){
+    const out=[];
+    const zi=(typeof blockZeminIdxOf==='function' && snap)? blockZeminIdxOf(snap) : 0;
+    const floors=(snap && Array.isArray(snap.floors) && snap.floors.length)? snap.floors : null;
+    for(let f=0; f<(fFloors|0); f++){
+      const k=zi+f;
+      let fst=null;
+      if(floors){ fst=floors[k]||null; if(!fst && snap.activeFloor===k) fst=snap; }
+      let has=!!(fst && fst.plan && fst.pts && fst.pts.length>=3), sig=null;
+      if(has){ try{ sig=(typeof floorSigOfSnap==='function')? floorSigOfSnap(fst) : null; }catch(e){ sig=null; } }
+      if(sig==null){ has=false; fst=null; }   // imzasız kaynak kullanılmaz (fallback ile aynı yol)
+      out.push({ k:k, has:has, sig:sig, st:fst });
+    }
+    return out;
+  }
   // S3: SİTE İMKANLARINI dış bahçede hafif inşa et. imkan başına ≤6 mesh: zemin plakası + tipe göre
   //   birkaç minimal kütle (su/bordür/ekipman). exteriorGroup root -cx,-cz ofsetli → dünya-metre direkt oturur.
   //   MUTLAK metre: imkan {x,y,w,h,ang(rad)} plan-dünya koordinatı; y-ekseni plan → z-ekseni 3B (px2m ile aynı).
@@ -2886,6 +2967,33 @@
         fOpt.upperCont=fUp; fOpt.upperHoles=fUpH;
         fOpt.upperProto=buildExtFloorGroup(fMap||{windows:[],balconies:[]}, fUp, fUpH, fFH, mats, false, {d:fck.d, base:fb.poly});
       }
+      // İş K1 (devam): blok KENDİ katlarını taşıyorsa (snap.floors — katAyri) kat-BAŞINA cephe
+      //   proto'ları kur — aktif blok per-floor yolunun (İş B3) snapshot-tabanlı ikizi; stackShell
+      //   floorProtos tüketicisi HAZIR. Kaynağı olmayan kat floorProtos[f]=null → stackShell
+      //   fProto/upperProto fallback'ine düşer (mevcut tek-proto davranışı). floors hiç yoksa
+      //   floorProtos kurulmaz → yol BYTE-AYNI. Çıkma açıkken üst katlar (f>0) fUp konturu +
+      //   edgeShift ile kurulur (fOpt.upperProto deseniyle birebir); zemin (f=0) fb.poly üstünde.
+      const fPlans=extBlockFloorPlans(fb.snap, fFloors);
+      if(fPlans.some(function(e){ return e.has; })){
+        const fFloorProtos=[];
+        const fSigProto=new Map();   // fb-BAŞINA önbellek — bloklar arası proto PAYLAŞILMAZ (kontur/holes/floorH blok-özel)
+        const fCikmaUp=!!(fck.on && fFloors>1);
+        fPlans.forEach(function(e,f){
+          if(!e.has){ fFloorProtos[f]=null; return; }
+          const up=fCikmaUp && f>0;
+          const key=e.sig+(up?'|u':'|z');   // aynı imzalı zemin/üst kat çıkmada FARKLI konturda → ayrı anahtar
+          if(fSigProto.has(key)){ fFloorProtos[f]=fSigProto.get(key); return; }
+          let fp=null;
+          try{
+            const mapK=(typeof blockFloorplanMap==='function')? blockFloorplanMap(e.st) : null;
+            fp=up? buildExtFloorGroup(mapK||{windows:[],balconies:[]}, fOpt.upperCont, fOpt.upperHoles, fFH, mats, false, {d:fck.d, base:fb.poly})
+                 : buildExtFloorGroup(mapK||{windows:[],balconies:[]}, fb.poly, fHoles, fFH, mats);
+          }catch(err){ fp=null; }
+          fSigProto.set(key, fp);
+          fFloorProtos[f]=fp;
+        });
+        fOpt.floorProtos=fFloorProtos;
+      }
       stackShell(fb.poly, fHoles, fFloors, fFH, fProto, null, fOpt);
     });
     others.ghosts.forEach(function(gb){ const gm=gb.poly; const shp=new THREE.Shape(); gm.forEach(function(m,i){ i?shp.lineTo(m[0],m[1]):shp.moveTo(m[0],m[1]); });
@@ -2967,7 +3075,9 @@
     if(exteriorGroup){ scene.remove(exteriorGroup); exteriorGroup=null; }   // kabuğu at → yeni seçimle yeniden kur
     buildExterior();
     if(exteriorGroup){ exteriorGroup.visible=true; }
-    renderBlockChips(); renderExtGizmos(); fitExtView();
+    // REVIEW-R3 fix: dock listesi artık extCtxMatch süzgeçli (İş D2) — görünüm bloğu değişince gizmolarla
+    //   birlikte dock da tazelenmeli, yoksa önceki görünümün drone çipleri bayat kalır.
+    renderBlockChips(); renderExtGizmos(); renderExtDock(); fitExtView();
   }
   // F4 + İŞ 1b: 2+ blok varsa üst-orta blok çiplerini kur (A · B · …). DIŞ modda salt-GÖRÜNTÜ (+"Tümü" çipi,
   //   2B aktif blok DEĞİŞMEZ — setExtBlockView). İÇ modda (yeni) AYNI kutu ama "Tümü" YOK, tık 2B aktif bloğu
@@ -3148,7 +3258,7 @@
   function deriveShowcaseDrones(){
     if(extCams.length) return extCams.length;   // kullanıcının koyduğu drone'lar korunur
     const p=extDefaultDronePos();
-    extCams.push(stampCamCtx({ pos:{x:p.x,y:p.y,z:p.z}, target:Object.assign({},extCenter()), lens:EXT_DRONE_LENS_DEF }));
+    extCams.push(stampExtCamCtx({ pos:{x:p.x,y:p.y,z:p.z}, target:Object.assign({},extCenter()), lens:EXT_DRONE_LENS_DEF }));   // İş D1: drone damgası __floor'suz (blok + merkez çapası)
     extActive=extCams.length-1; extPlaceAction='none';
     renderExtGizmos(); renderExtDock();
     return extCams.length;
@@ -3166,7 +3276,7 @@
     g.visible=true;
     const preview=(camPreviewMode && !camUIEnabled && extPlaceActive===false && extActive<0);   // K4: adım-2 salt-görünür drone (seçim yok)
     extCams.forEach(function(c,i){
-      if(!camCtxMatch(c)) return;   // İŞ 1b: başka kat/blok bağlamının drone'u bu sahnede gizmo kurmaz
+      if(!extCtxMatch(c)) return;   // İş D2: başka BLOK bağlamının drone'u bu görünümde gizmo kurmaz (kat filtresi YOK; 'Tümü'nde herkes görünür)
       const active=(i===extActive);
       if(active) g.add(makeActiveMarker({pos:c.pos})); // zemin halkası (drone yüksek olsa da nereden baktığı okunur)
       g.add(makeViewCone(c,active));
@@ -3227,7 +3337,7 @@
   function clickExtGhost(ev){ if(!extGhost) return; const hit=extGroundHit(ev); if(!hit) return;
     const c={ pos:{x:hit.x,y:extGhost.y,z:hit.z}, target:Object.assign({},extCenter()), lens:extGhost.lens||EXT_DRONE_LENS_DEF };
     extGhost=null; if(renderer) renderer.domElement.style.cursor='';
-    extCams.push(stampCamCtx(c)); extActive=extCams.length-1; extPlaceActive=false;
+    extCams.push(stampExtCamCtx(c)); extActive=extCams.length-1; extPlaceActive=false;   // İş D1: drone damgası __floor'suz (blok + merkez çapası)
     renderExtGizmos(); renderExtDock(); extOpenPip();
     setHint&&setHint('Drone '+extCams.length+' kondu · sürükle taşı · yükseklik/objektif dock\'ta'); }
   function cancelExtGhost(){ if(!extGhost) return; extGhost=null; extPlaceActive=false;
@@ -3241,7 +3351,7 @@
     if(!c.aimed){ c.target=Object.assign({},extCenter()); }   // A4: aim edilmemiş drone taşınırken merkeze bakmaya devam eder
     renderExtGizmosSoon(); }   // H2: kare-başına 1 gizmo yeniden-kur (donma fix)
   function endExtDrag(){ if(!extDrag) return; extDrag=null; if(controls) controls.enabled=true; renderExtGizmos(); }
-  function selectExtCam(i){ extActive=(i>=0&&i<extCams.length)?i:-1; extPipClosed=false; extPlaceAction='none';
+  function selectExtCam(i){ extActive=(i>=0&&i<extCams.length&&extCtxMatch(extCams[i]))?i:-1; extPipClosed=false; extPlaceAction='none';   // İş D2: bağlam-dışı drone seçilemez (dock/gizmo zaten listelemez)
     // sahnede drone seçmek Drone aracını da açar (dock kapalıysa kontroller görünsün) — iç kamera seçim paritesi
     if(extActive>=0 && camUIEnabled && exteriorMode && activeGroup!=='drone'){ activeGroup='drone'; renderRail(); renderDrawer(); }
     renderExtGizmos(); renderExtDock(); }
@@ -3446,7 +3556,7 @@
   function exportExteriorCameras(renderStyle){
     const creative = (renderStyle==='creative');
     const out=[];
-    extCams.forEach(function(c,i){ if(!camCtxMatch(c)) return;
+    extCams.forEach(function(c,i){ if(!extCtxMatch(c)) return;   // İş D2: blok-filtre (kat DEĞİL) — kat gezmek drone'u export'tan düşürmez
       const o=extCamViewObj(c,i);
       o.profile='exterior'; o.render_method='snapshot';
       o.render_style=creative?'creative':'faithful';
@@ -3492,7 +3602,8 @@
   }
   // DIŞ PiP — iç renderPip disiplini ama exteriorGroup sahnesi (çatı dokunulmaz), extGizmos gizli.
   function extPipSourceCam(){ if(extGhost && extGhost.pos) return { pos:extGhost.pos, target:extGhost.target||extCenter(), lens:extGhost.lens };
-    if(extActive>=0 && extActive<extCams.length) return extCams[extActive]; return null; }
+    // İş D2: bağlam-dışı drone PiP kaynağı olamaz — yeniden-merkezlenmiş sahnede kaymış kadraj çizerdi
+    if(extActive>=0 && extActive<extCams.length && extCtxMatch(extCams[extActive])) return extCams[extActive]; return null; }
   function extShouldShowPip(){ return exteriorMode && !extPipClosed && !!extPipSourceCam(); }
   function extOpenPip(){ extPipClosed=false; }
   function renderExtPip(){
@@ -3544,11 +3655,17 @@
       dock.innerHTML='<div class="dk"><div class="col"><span class="lbl">Dış Cephe Malzemesi</span><div class="row">'+facadeBtns+'</div></div></div>';
       return;
     }
-    const c=(extActive>=0&&extActive<extCams.length)?extCams[extActive]:null;
+    // İş D2: dock da gizmo/export/thumb ile AYNI blok-filtreyi uygular ("sekmede var, render'da yok"
+    //   tutarsızlığı biter). Bağlam-dışı öğe LİSTEDE ATLANIR ama i ORİJİNAL extCams konumu kalır
+    //   (data-extsel/Drone N numarası kaymaz); extActive bağlam-dışını gösteriyorsa kontroller gizlenir.
+    let c=(extActive>=0&&extActive<extCams.length)?extCams[extActive]:null;
+    if(c && !extCtxMatch(c)) c=null;
     const r=extDroneYRange();
     // drone çipleri (seçim)
-    const camChips=extCams.length? extCams.map(function(cc,i){
-      return '<button class="chip'+(i===extActive?' on':'')+'" data-extsel="'+i+'">Drone '+(i+1)+'</button>'; }).join('') : '<span style="font-size:11px;opacity:.6">Henüz drone yok</span>';
+    let camChips='';
+    extCams.forEach(function(cc,i){ if(!extCtxMatch(cc)) return;
+      camChips+='<button class="chip'+(i===extActive?' on':'')+'" data-extsel="'+i+'">Drone '+(i+1)+'</button>'; });
+    if(!camChips) camChips='<span style="font-size:11px;opacity:.6">Henüz drone yok</span>';
     // seçili drone kontrolleri (A4: Yön/Taşı + yükseklik + objektif + sil) — iç kamera dock paritesi
     let selRow='';
     if(c){
@@ -5217,19 +5334,28 @@
   function snapExtCameraThumbs(){
     if(!exteriorMode || !exteriorGroup) return [];
     const out=[];
-    extCams.forEach(function(c,i){ if(!camCtxMatch(c)) return;
+    extCams.forEach(function(c,i){ if(!extCtxMatch(c)) return;   // İş D2: gizmo/export ile AYNI blok-filtre (id/idx sabit)
       out.push({ id:'ext'+(i+1), idx:i, kind:'exterior', thumb:snapExtCameraDataURL(c,{w:THUMB_W,h:THUMB_H}) }); });
     return out;
   }
   // getCameras: İŞ 1b — DIŞA API, MEVCUT davranış (TAM liste, bağlam-filtresiz) korunur; mesken paket
   //   export/import bunu exportCameras'ın id şemasıyla (id = orijinal camList konumu) eşleştirir (pkgMergeCam).
-  function getCameras(){ return camList.map(function(c,i){ return {id:'cam'+(i+1), pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens,height:c.height}; }); }
+  //   İş D7: __floor/__block damgası paket roundtrip'i için ÇIKTIDA taşınır (damgasız kayıt → null;
+  //   render payload'u exportCameras DEĞİŞMEDİ — damga oraya girmez, bkz. üstteki sızıntı sözleşmesi).
+  function getCameras(){ return camList.map(function(c,i){ return {id:'cam'+(i+1), pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens,height:c.height,
+    __floor:(c.__floor!=null?c.__floor:null), __block:(c.__block!=null?c.__block:null)}; }); }
   function setCameras(arr){                                // demo/türetilmiş kameraları yükle (Faz 4)
     // Q2: yüklenen kamera Y'si tavanı aşıyorsa clamp'le (eski/dış kayıt tavan üstünde olabilir); export şeması değişmez
     const clampY=function(y){ return Math.max(CAM_Y_MIN,Math.min(CAM_Y_MAX,y)); };
     // İŞ 1a: paket import/türetme AKTİF bağlama damgalanır (o an görüntülenen kat/blok).
-    camList=(arr||[]).map(function(c){ return stampCamCtx({pos:{x:c.pos.x,y:clampY(c.pos.y!=null?c.pos.y:CAM_Y[c.height||'eye']),z:c.pos.z},
-      target:{x:c.target.x,y:(c.target.y!=null?c.target.y:0.5),z:c.target.z}, lens:c.lens||24, height:c.height||'eye'}); });
+    //   İş D6: gelen kamera KENDİ damgasını (__floor+__block İKİSİ de dolu) taşıyorsa KORUNUR — çok-bloklu
+    //   paket açılışında farklı blok/kat kameraları tek bağlama YIĞILMASIN (setExteriorCameras "geleni
+    //   koru" kuralıyla simetrik). Damgasız gelen mevcut davranışla aktif bağlama damgalanır.
+    camList=(arr||[]).map(function(c){
+      const o={pos:{x:c.pos.x,y:clampY(c.pos.y!=null?c.pos.y:CAM_Y[c.height||'eye']),z:c.pos.z},
+        target:{x:c.target.x,y:(c.target.y!=null?c.target.y:0.5),z:c.target.z}, lens:c.lens||24, height:c.height||'eye'};
+      if(c.__floor!=null && c.__block!=null){ o.__floor=c.__floor; o.__block=c.__block; return o; }
+      return stampCamCtx(o); });
     activeCamIdx=camList.length?0:-1; pendingPos=null;
     if(activeCamIdx>=0){ camHeight=camList[0].height||'eye'; camLens=camList[0].lens||24; }
     else if(placeMode) placeAction='add';                       // boş liste → zemine tıklama yeni kamera (takılı 'aim/move' kalmasın)
@@ -6182,8 +6308,27 @@
     //   materialOverrides bayat kalıyordu (önceki katın seçimleri, aynı room_id'ye rastlayınca YENİ
     //   kata SIZIYORDU). buildScene odayı kurarken roomMatKey→materialOverrides'ı SENKRON okur (aşağıda
     //   değil, İÇİNDE) → buildScene'den ÖNCE tazelenmeli.
+    // İş D5: buildScene S1 reseti extBlockView'i null'lar — İÇ modda kat/blok çipi gezmek (rebuildFromEngine)
+    //   kullanıcının "Tümü"/tek-blok DIŞ görünüm seçimini yok etmesin: sakla → buildScene → klempli geri koy
+    //   ('all' aynen; sayı blok aralığı dışına düştüyse null=varsayılan). DIŞ moddayken çağrılırsa kabuk
+    //   buildScene sonunda null görünümle kurulmuş olur → geri konan seçimle BİR KEZ yeniden kurulur
+    //   (setExtBlockView'in rebuild kısmı; fit YOK — restoreView-en-son sırası bozulmaz).
+    const savedBV=extBlockView;
     hydrateMaterials();
     buildScene(map);                       // İÇİNDE: exteriorMode ise dış kabuğu kendi kendine yeniden kurar (S1 deseni, buildScene sonu)
+    if(savedBV!=null){
+      let nBlk=0; try{ if(typeof siteOn==='function' && siteOn() && typeof blocks!=='undefined' && Array.isArray(blocks)) nBlk=blocks.length; }catch(e){ nBlk=0; }
+      const nv=(savedBV==='all')? 'all' : ((typeof savedBV==='number' && savedBV>=0 && savedBV<nBlk)? savedBV : null);
+      if(nv!=null && nv!==extBlockView){
+        extBlockView=nv;
+        if(exteriorMode && scene){   // dış moddaysak kabuğu geri konan seçimle tazele (iç modda kabuk zaten yok — dışa geçişte kurulur)
+          if(exteriorGroup){ scene.remove(exteriorGroup); exteriorGroup=null; }
+          buildExterior();
+          if(exteriorGroup){ exteriorGroup.visible=true; }
+          renderBlockChips(); renderExtGizmos(); renderExtDock();   // REVIEW-R3: dock da süzgeçli — birlikte tazele
+        }
+      }
+    }
     renderCamGizmos(); updateCamPanel();    // İÇ kamera gizmoları veriden geri bindirilir (camList SİLİNMEDİ — yalnız görsel gizmo grubu gitti)
     if(saved) restoreView(saved);           // KİLİT-KÖPRÜ (~2859 yorumu): bundan SONRA hiçbir fitView/fitExtView çağrısı YOK
   }
@@ -7466,16 +7611,35 @@
     floorGroupsForTest:floorGroupsForTest,
     // İŞ B2 HEADLESS: floorGroupsForTest'in dış-cephe ikizi (kullanım filtresiz) — [{idxs,sig,rep}].
     floorFacadeGroupsForTest:floorFacadeGroupsForTest,
+    // İş K1 HEADLESS: DİĞER-blok kat-başına cephe kaynak seçimi (THREE'siz — GERÇEK buildExterior
+    //   others.fulls yolu AYNI extBlockFloorPlans'ı kullanır). st alanı ATILIR (büyük snapshot
+    //   dökümü test çıktısına sızmasın): [{k,has,sig}].
+    extBlockFloorPlansForTest:function(snap,fFloors){
+      return extBlockFloorPlans(snap,fFloors).map(function(e){ return {k:e.k, has:e.has, sig:e.sig}; }); },
     // ── S2: DIŞ (DRONE) KAMERA + CEPHE MALZEME PRESETLERİ (test + prototip) ──
     //   İç kamera sözleşmesinden (exportCameras/getCameras) TAMAMEN AYRI — extCams kendi listesi.
     // getExteriorCameras: İş 1b — DIŞA API, MEVCUT davranış (TAM liste, bağlam-filtresiz) korunur; id
     //   exportExteriorCameras'ın id şemasıyla (orijinal extCams konumu) eşleşir (pkgMergeCam). İş 4a: aimed taşır.
-    getExteriorCameras:function(){ return extCams.map(function(c,i){ return {id:'ext'+(i+1), pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens,aimed:!!c.aimed}; }); },
+    //   İş D7: __block + __cx/__cz damgası paket roundtrip'i için ÇIKTIDA taşınır (drone'da __floor YOK —
+    //   eski kayıtta olsa bile taşınmaz; damgasız → null). exportExteriorCameras (render payload) DEĞİŞMEDİ.
+    getExteriorCameras:function(){ return extCams.map(function(c,i){ return {id:'ext'+(i+1), pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens,aimed:!!c.aimed,
+      __block:(c.__block!=null?c.__block:null), __cx:(c.__cx!=null?c.__cx:null), __cz:(c.__cz!=null?c.__cz:null)}; }); },
     // İş 4b: MUTLAK yükseklik klempi (clampDroneYAbs — CANLI bina bağlamından bağımsız; farklı yükseklikte
     //   export edilmiş bir paketin drone Y'si bu binada sessizce değişmesin). İş 4a: aimed geri yüklenir.
     //   İş 1a: paket import AKTİF bağlama damgalanır (o an görüntülenen kat/blok).
-    setExteriorCameras:function(arr){ extCams=(arr||[]).map(function(c){ return stampCamCtx({pos:{x:c.pos.x,y:clampDroneYAbs(c.pos.y),z:c.pos.z},
-      target:Object.assign({x:0,y:0,z:0},c.target), lens:c.lens||EXT_DRONE_LENS_DEF, aimed:!!c.aimed}); });
+    //   İş D3: drone damgası __floor'SUZ — gelen __floor TAŞINMAZ (eski kayıttan gelse bile atılır;
+    //   drone dünya-bina objesi, kat filtresine girmez). Gelen __block damgası KORUNUR (çok-bloklu
+    //   paket geri-yükleme), yoksa aktif blok damgalanır. __cx/__cz merkez çapası: gelende varsa
+    //   korunur (ardından reanchorExtCams eski→yeni merkez farkını pos/target'a uygular — farklı
+    //   merkez çerçevesinden gelen drone binaya yapışık kalır), yoksa mevcut sahne merkezi damgalanır.
+    setExteriorCameras:function(arr){ extCams=(arr||[]).map(function(c){
+      const o={pos:{x:c.pos.x,y:clampDroneYAbs(c.pos.y),z:c.pos.z},
+        target:Object.assign({x:0,y:0,z:0},c.target), lens:c.lens||EXT_DRONE_LENS_DEF, aimed:!!c.aimed};
+      o.__block=(c.__block!=null)?c.__block:((typeof activeBlock!=='undefined')?activeBlock:0);
+      if(c.__cx!=null){ o.__cx=c.__cx; o.__cz=(c.__cz!=null)?c.__cz:0; }
+      else if(scene && scene.__cx!=null){ o.__cx=scene.__cx; o.__cz=(scene.__cz!=null)?scene.__cz:0; }
+      return o; });
+      reanchorExtCams();
       extActive=extCams.length?0:-1; renderExtGizmos(); renderExtDock(); return extCams.length; },
     exportExteriorCameras:exportExteriorCameras, clearExteriorCameras:function(){ extCams=[]; extActive=-1; extGhost=null; renderExtGizmos(); renderExtDock(); },
     // CEPHE-3: dış kabuk mimari tercihi (çıkma/çatı) değişti → dış moddaysa kabuğu YENİDEN kur (app.js panel çağırır).
@@ -7504,12 +7668,21 @@
     setExtRenderHandlers:function(confirmFn,submitFn){ extRenderConfirm=(typeof confirmFn==='function')?confirmFn:null; extRenderSubmit=(typeof submitFn==='function')?submitFn:null; },
     // TEST: dış drone ekle/say/PiP-kaynağı (THREE gerekir → standalone/preview). Headless prompt/payload yolları THREE'siz.
     extAddDroneForTest:function(pos,target,lens){ if(!exteriorMode) return -1;
-      extCams.push(stampCamCtx({pos:{x:pos.x,y:clampDroneY(pos.y),z:pos.z},target:target||Object.assign({},extCenter()),lens:lens||EXT_DRONE_LENS_DEF}));
+      extCams.push(stampExtCamCtx({pos:{x:pos.x,y:clampDroneY(pos.y),z:pos.z},target:target||Object.assign({},extCenter()),lens:lens||EXT_DRONE_LENS_DEF}));   // İş D1
       extActive=extCams.length-1; renderExtGizmos(); renderExtDock(); return extActive; },
     // İŞ 1 TEST: camList/extCams HAM enjeksiyon/okuma — damga (__floor/__block) DAHİL, stampCamCtx/clamp
     //   BYPASS (kontrollü karma-bağlam kurgusu için; normal akışlar bu yolu kullanmaz). arr verilmezse salt okur.
     camListForTest:function(arr){ if(arr!==undefined){ camList=arr; renderCamGizmos(); } return camList.map(function(c){ return Object.assign({},c); }); },
     extCamsForTest:function(arr){ if(arr!==undefined){ extCams=arr; renderExtGizmos(); } return extCams.map(function(c){ return Object.assign({},c); }); },
+    // İş D2 TEST: extCtxMatch'i HAM görünüm durumuyla sına. exteriorMode headless'ta GERÇEKTEN açılamaz
+    //   (setExteriorMode THREE/kabuk ister) — bu knob YALNIZ bayrağı çevirir (sahne/kabuk KURULMAZ;
+    //   extCtxMatch salt-veri okur). Normal akışlar bu yolu KULLANMAZ (extBlockViewForTest deseni).
+    extExteriorModeRawForTest:function(on){ if(on!==undefined) exteriorMode=!!on; return exteriorMode; },
+    extCtxMatchForTest:function(c){ return extCtxMatch(c); },
+    // REVIEW-R1 TEST: damga kararını (görünüm bloğu mu, activeBlock mu) sahnesiz sına.
+    stampExtCamCtxForTest:function(c){ return stampExtCamCtx(c||{}); },
+    // İş D4 TEST: yeniden-çapalama (THREE'siz saf aritmetik — scene camSceneStubForTest ile kurulur).
+    reanchorExtCamsForTest:function(){ reanchorExtCams(); return extCams.map(function(c){ return Object.assign({},c); }); },
     // İŞ 1 TEST: exportCameras/camViewObj worldToPx üzerinden CANLI `scene.__cx/__cz` (dünya-merkezi ofseti)
     //   okur — normalde yalnız buildScene (THREE) kurar. Headless süitte THREE YOK → gerçek sahne asla
     //   kurulmaz; bu, exportCameras'ı bağlam-filtresiyle uçtan uca test etmeyi (map verilse bile) engeller.

@@ -74,7 +74,9 @@ const strictTests = [
   'tests/paket-store-zarf.js',
   'tests/kat-cephe-grup.js',
   'tests/kamera-baglam.js',
-  'tests/ext-blok-gorunum.js'
+  'tests/ext-blok-gorunum.js',
+  'tests/kat-cephe-blok.js',
+  'tests/drone-baglam.js'
 ];
 
 const smokeTests = [

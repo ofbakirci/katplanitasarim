@@ -373,14 +373,31 @@ if(typeof window!=='undefined'){ window.floorSnapshotAt=floorSnapshotAt; }
    k===activeFloor ise CANLI globallerden (stateSnapshot bare — yan etkisiz, doğrulandı: bare=true
    villaFloors/blocks'a YAZMAZ), değilse villaFloors[k]'nin anlık görüntüsünden okur. Ziyaret edilmemiş
    kat (plan yok) → null: ne gruplanır ne bileşik anahtara girer (İş 3 legacy düz-anahtara düşer). */
-function floorLayoutSig(k){
-  const st=(k===activeFloor)?stateSnapshot(true):(villaFloors&&villaFloors[k]);
+/* İş K1a: floorLayoutSig'in SAF çekirdeği — verilen snapshot objesinden (stateSnapshot biçimi)
+   imzayı hesaplar; kat indeksi/canlı global OKUMAZ. floorLayoutSig buna delege eder (davranış
+   byte-aynı). view3d.js DİĞER-blok kat-başına dış cephe kurulumu (extBlockFloorPlans) blocks[i]
+   .floors[k] girişleri için doğrudan kullanır (o katlar villaFloors'ta değil, blok snapshot'ında). */
+function floorSigOfSnap(st){
   if(!st||!st.plan) return null;
   const p=st.plan;
   const regs=p.regions.map(g=>g.type+':'+g.cells.join(',')).sort().join('|');
   return [p.rows,p.cols,p.minX,p.minY,p.katKullanim,p.inside.join(''),regs,
           JSON.stringify(st.doors||{}),JSON.stringify(st.windows||{})].join('#');
 }
+if(typeof window!=='undefined'){ window.floorSigOfSnap=floorSigOfSnap; }
+function floorLayoutSig(k){
+  const st=(k===activeFloor)?stateSnapshot(true):(villaFloors&&villaFloors[k]);
+  return floorSigOfSnap(st);
+}
+/* İş K1b: bir blok snapshot'ından ZEMİN kat indeksi — zeminIdx()'in snapshot-tabanlı saf ikizi.
+   stateSnapshot ui.bodrumSayisi'ni String yazar (io.js); floors dizisi bodrum+üst katları birlikte
+   indeksler (reflowFloors kuralı: zemin indeksi = bodrum sayısı). Eski/eksik kayıtta (ui yok /
+   alan yok) 0'a düşer (bodrumsuz varsayım). view3d.js extBlockFloorPlans kullanır. */
+function blockZeminIdxOf(snap){
+  const b=(snap&&snap.ui)? parseInt(snap.ui.bodrumSayisi,10) : 0;
+  return (isFinite(b)&&b>0)? b : 0;
+}
+if(typeof window!=='undefined'){ window.blockZeminIdxOf=blockZeminIdxOf; }
 /* İş 3: mobilya/malzeme depo (window.__kptaFurniture / window.__kptaMaterials) OKUMA-çözümleyici.
    Depo anahtarı roomId (legacy) ya da roomId+'@@'+floorLayoutSig(o anki kat) olabilir; bu fonksiyon
    AKTİF kat/blok bağlamında her roomId için TEK bir girdiye çözer. Öncelik:
