@@ -114,7 +114,7 @@
   // ── kamera-koyma modu (adım 4): raycaster ile zemine tıkla → kamera; çıktı plan-px uzayında ──
   // camUIEnabled: kamera bölümü YALNIZ adım 4'te (openCompare) görünür — adım 2 (salt 3B izleme) ASLA göstermez.
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
-  let placeMode=false, camUIEnabled=false, placeAction='aim', camList=[], activeCamIdx=-1, pendingPos=null, camHeight='eye', camLens=24, camPlanSig=null;
+  let placeMode=false, camUIEnabled=false, placeAction='aim', camList=[], activeCamIdx=-1, pendingPos=null, camHeight='eye', camLens=24, camPlanSig=null, camPlanCtx=null;
   // ── İŞ 1: KAMERA BAĞLAM DAMGASI — camList/extCams öğeleri hangi kat/blok bağlamında OLUŞTURULDUĞUNU taşır
   //   ({__floor,__block}). Amaç: çoklu kat (katAyri) / çoklu blok (site) projelerinde bir bağlamda konan
   //   kamera/drone BAŞKA bağlam görüntülenirken gizmo/export/thumbnail'e SIZMASIN (geçersiz plan-px/oda
@@ -7367,13 +7367,27 @@
       setCamUI(true);                                        // kamera bölümünü göster
       setFurnUI(true);                                       // mobilya bölümünü de göster (adım 5 / Döşe)
       setMatUI(true);                                         // M2: malzeme bölümünü de göster (adım 3 boya / adım 5 döşe)
-      const sig=planSig(map);
-      if(camList.length && camPlanSig && camPlanSig!==sig) clearCams();   // plan değişti → eski (geçersiz koordinatlı) kameraları at
+      camStaleSweep(planSig(map));                          // İş D9: bayat-plan süpürmesi BAĞLAM-farkında (aşağıda)
       if(!camList.length) deriveShowcaseCameras(map);       // daire başına vitrin kamera otomatik
       else { renderCamGizmos(); updateCamPanel(); }
-      camPlanSig=sig;
       setPlaceMode(false);                                   // önce serbest gözat; "Kamera yerleştir" ile kilitle
     });
+  }
+  // İş D9: BAYAT-PLAN bekçisi (bağlam-farkında). Eski hali tek-blok dönemindendi: `camPlanSig!==sig → clearCams()`.
+  //   Çok-blok/kat dünyasında kamera adımında blok/kat çipiyle gezip render'a gidip DÖNMEK bile imzayı
+  //   değiştiriyordu → TÜM kameralar silinip vitrin yeniden basılıyordu ("kameralarım silindi, bloklar
+  //   karıştı" — kullanıcının paketiyle kanıtlandı: 7 kamera → 6 otomatik B-kamerası). Kural: imza farkı
+  //   YALNIZ aynı bağlamda (kat+blok) gerçek plan düzenlemesi demektir → yalnız o bağlamın kameraları
+  //   (camCtxMatch: bağlam-eşleşen + legacy damgasız) atılır, diğer bağlamlarınkine DOKUNULMAZ. Bağlam
+  //   değiştiyse (gezinme) hiçbir şey silinmez — yalnız imza/bağlam kaydı güncellenir.
+  function camStaleSweep(sig){
+    const cur=currentCamCtx();
+    if(camList.length && camPlanSig && camPlanSig!==sig
+       && camPlanCtx && camPlanCtx.floor===cur.floor && camPlanCtx.block===cur.block){
+      camList=camList.filter(function(c){ return !camCtxMatch(c); });
+      if(activeCamIdx>=0){ activeCamIdx=-1; pendingPos=null; }
+    }
+    camPlanSig=sig; camPlanCtx=cur;
   }
   // AKIŞ-2 K1: KAMERA ADIMI (yeni adım 3) — 3B mesh TAM ekran + kamera bölümü AÇIK, ama boyalı-referans YOK
   //   (boya artık Kamera'dan SONRA gelen Render adımında). openCompare'in compare-layout'suz ikizi: kamera yerleştir/
@@ -7384,11 +7398,9 @@
       if(!map) return;
       setCamPreview(false);                                  // önizleme kapat (bu adımda TAM kamera UI)
       setCamUI(true); setFurnUI(true); setMatUI(true);       // araçları ETKİNLEŞTİR (rail'de Kamera/Drone/İç Malzeme/Dış Cephe/Mobilya görünür)
-      const sig=planSig(map);
-      if(camList.length && camPlanSig && camPlanSig!==sig) clearCams();
+      camStaleSweep(planSig(map));                           // İş D9: bağlam-farkında bayat-plan süpürmesi (openCompare üstündeki yorum)
       if(!camList.length) deriveShowcaseCameras(map);
       else { renderCamGizmos(); updateCamPanel(); }
-      camPlanSig=sig;
       setPlaceMode(false);
       // NÖTR AÇILIŞ (kullanıcı isteği: plan-boyama açı-kilidi mantığı): kamera adımı HİÇBİR aracı
       //   otomatik seçmez, kuşbakışına kilitlemez. setCamUI camera grubunu+kilidi tetikledi; deriveShowcase
@@ -7697,6 +7709,8 @@
     // İş D8 TEST: şerit görünürlüğü (canlı bağlamın kamera indeksleri) + bağlam-değişimi seçim klempi.
     camVisibleIdxForTest:function(){ return camCtxVisibleIdx(); },
     camClampSelForTest:function(i){ if(i!==undefined) activeCamIdx=i; clampCamSelToCtx(); return activeCamIdx; },
+    // İş D9 TEST: bayat-plan süpürmesi — sig ver, süpürme sonrası kamera sayısı + kayıtlı imza/bağlam dön.
+    camStaleSweepForTest:function(sig){ camStaleSweep(sig); return { n:camList.length, sig:camPlanSig, ctx:Object.assign({},camPlanCtx) }; },
     extCamsForTest:function(arr){ if(arr!==undefined){ extCams=arr; renderExtGizmos(); } return extCams.map(function(c){ return Object.assign({},c); }); },
     // İş D2 TEST: extCtxMatch'i HAM görünüm durumuyla sına. exteriorMode headless'ta GERÇEKTEN açılamaz
     //   (setExteriorMode THREE/kabuk ister) — bu knob YALNIZ bayrağı çevirir (sahne/kabuk KURULMAZ;

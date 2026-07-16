@@ -164,8 +164,25 @@ const selLegacy = run(`window.View3D.camClampSelForTest(2)`);
 chk(selLegacy===2, 'İşD8: legacy (damgasız) kamera seçimi her bağlamda korunur: '+selLegacy);
 run(`window.View3D.camClampSelForTest(-1); window.View3D.camListForTest([]); activeFloor=0; activeBlock=0;`);
 
+/* ═══ İş D9: bayat-plan süpürmesi BAĞLAM-farkında — gezinme SİLMEZ, yalnız aynı bağlamda gerçek plan değişimi süpürür ═══ */
+run(`activeFloor=0; activeBlock=0; window.View3D.camListForTest([
+  {pos:{x:1,y:1.6,z:1}, target:{x:2,y:1,z:2}, lens:24, __floor:0, __block:0},
+  {pos:{x:3,y:1.6,z:3}, target:{x:4,y:1,z:4}, lens:24, __floor:0, __block:1},
+  {pos:{x:5,y:1.6,z:5}, target:{x:6,y:1,z:6}, lens:24}
+]);`);
+const sw0 = run(`window.View3D.camStaleSweepForTest('SIG-A').n`);            // ilk kayıt (önceki sig yok) → silme yok
+chk(sw0===3, 'İşD9: ilk imza kaydı hiçbir şey silmez (3): '+sw0);
+run(`activeBlock=1;`);                                                        // kamera adımında blok çipiyle B'ye geçildi
+const sw1 = run(`window.View3D.camStaleSweepForTest('SIG-B').n`);            // imza farklı AMA bağlam da farklı → GEZİNME
+chk(sw1===3, 'İşD9: blok gezinmesi (imza farklı, bağlam farklı) kamera SİLMEZ (3): '+sw1);
+const sw2 = run(`window.View3D.camStaleSweepForTest('SIG-B2').n`);           // aynı bağlam (B) + imza değişti → B planı GERÇEKTEN değişti
+chk(sw2===1, 'İşD9: aynı bağlamda gerçek plan değişimi yalnız o bağlamın (B+legacy) kameralarını süpürür, A kalır (1): '+sw2);
+const kalan = run(`JSON.stringify(window.View3D.camListForTest().map(c=>(c.__floor==null?'-':c.__floor)+'/'+(c.__block==null?'-':c.__block)))`);
+chk(kalan==='["0/0"]', 'İşD9: kalan kamera A bağlamınınki (0/0) — başka bağlama DOKUNULMADI: '+kalan);
+run(`window.View3D.camListForTest([]); activeFloor=0; activeBlock=0; window.View3D.camStaleSweepForTest(null);`);
+
 function report(){
-  console.log('\nKAMERA-BAGLAM (İş 1+4+D8): '+pass+' geçti, '+fail+' başarısız');
+  console.log('\nKAMERA-BAGLAM (İş 1+4+D8+D9): '+pass+' geçti, '+fail+' başarısız');
 }
 report();
 process.exit(fail?1:0);
