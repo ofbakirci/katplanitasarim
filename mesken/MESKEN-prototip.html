@@ -293,6 +293,8 @@ button{font-family:inherit;cursor:pointer}
 .rgthumb .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#b3a692;font-size:11px;gap:8px}
 .rgcheck{position:absolute;top:9px;right:9px;width:23px;height:23px;border-radius:50%;background:rgba(255,255,255,.85);border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;color:transparent;transition:.14s}
 .rgcard.sel .rgcheck{background:var(--acc);border-color:var(--acc);color:#fff}
+/* KALEM 2: üretilmiş kartta seçim işareti "kilitli" (soluk) — kart seçili kalsa da kuyruğa alınamaz */
+.rgcheck.locked{opacity:.45}
 .rgbadge{position:absolute;top:9px;left:9px;display:flex;gap:6px;align-items:center}
 .rgbadge .b{background:rgba(20,16,12,.62);color:#fff;border-radius:999px;padding:3px 9px;font-size:10px;font-weight:700;letter-spacing:.03em;backdrop-filter:blur(3px)}
 .rgbadge .b.ext{background:rgba(63,125,99,.82)}
@@ -359,8 +361,9 @@ button{font-family:inherit;cursor:pointer}
 .mkt-sw{position:relative;overflow:hidden}
 .mkt-crop{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .mkt-crop.on{display:block}
-.mkt-row.ctx{cursor:default}
-.mkt-row.ctx:hover{transform:none;border-color:var(--line)}
+/* KALEM 4: bağlamsal (iç dahil TÜM ctx) satırlar da genel listedeki hover highlight'ını alır
+   (translateY + accent kenar; base .mkt-row:hover'dan miras) ve tıklanabilir (tıkta ürün-sayfası toast'ı). */
+.mkt-row.ctx{cursor:pointer}
 .mkt-cright{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
 .mkt-spon2{font-size:8px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#fff;background:var(--acc);border-radius:4px;padding:2px 5px}
 .mkt-chg{font:600 10px var(--font);color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;background:var(--panel);cursor:not-allowed;opacity:.65}
@@ -430,12 +433,12 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     {tr:'Sınır + Yerleşim', en:'Plan'}, {tr:'3B', en:'3D'}, {tr:'Kamera', en:'Camera'},
     {tr:'Render', en:'Render'}, {tr:'Döşe', en:'Furnish'}
   ];
-  var CTA = {1:'3B Görüntüle',2:'Kamera Yerleştir',3:'Render Kadrajları',4:'Kareleri Üret',5:'Planı Dışa Aktar'};
+  var CTA = {1:'3B Görüntüle',2:'Kamera Yerleştir',3:'Render Kadrajları',4:'Dekore Et',5:'Planı Dışa Aktar'};
   var HINT = {
     1:'Bina sınırını çizin ve “Yerleşimi Oluştur” ile planı üretin (Profesyonel modda parsel + imar da var). İpucu: boşluk (Space) tuşunu basılı tutarak planı kaydırın. Sonra 3B’de inceleyin.',
     2:'3B dollhouse’u döndürüp yakınlaştırın. Yerleştirilmiş kameralar/drone’lar sahnede görünür (düzenleme Kamera adımında). “Kamera Yerleştir” ile devam edin.',
     3:'Sağ raydan Kamera (İç) ya da Drone (Dış) aracını açın, 3B mesh üstüne tıklayarak yerleştirin. Bakış yönünü küreyle ayarlayın (yatay=yön, dikey=eğim). Sonra “Render Kadrajları”.',
-    4:'Her kamera ve drone bir KADRAJ KARTI — görseli o açının canlı önizlemesi (kredisiz). Kartları seçin, Sadık/Yaratıcı seçin, tek “Üret” ile onay dialoğundan render başlatın.',
+    4:'Her kamera ve drone bir KADRAJ KARTI — görseli o açının canlı önizlemesi (kredisiz). Kartları seçip Sadık/Yaratıcı belirleyin, galerideki “Üret” ile render başlatın; hazır olunca “Dekore Et” ile Döşe adımına geçin.',
     5:'Üretilen iç mekân + dış görünüm render’ları galeride toplanır. Stili seçin, döşeme ürünlerini inceleyin ve pazaryerine aktarın.'
   };
   var STYLES = [
@@ -909,11 +912,17 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
   //   Dış-render artık Render galerisinde (adım 4) bir kart → step-2 "Siteyi/Binayı Boya" CTA'sı EMEKLİ.
   function updateCtaLabel(){
     var s=state.step, txt=CTA[s], btn=$('ctaBtn');
-    // İŞ 5: render adımında üretim sürerken ana CTA pasif + "Üretiliyor… (k/N)" (buildRenderGallery her
-    //   kart bitişinde çağırır → ilerleme canlı akar). Bitince (fin/markDown bayrağı indirir) eski metin.
-    var gen=(s===4 && state.rgGenerating);
-    btn.disabled=!!gen;
-    btn.textContent = gen ? ('Üretiliyor… ('+state.rgProgress.k+'/'+state.rgProgress.n+')') : (txt + (s<5?'  ›':''));
+    // KALEM 3: adım-4 CTA'sı artık ÜRETİM değil ADIM GEÇİŞİ (üretim galerideki "Üret" butonunda). Üretim
+    //   sürerken eski pasif "Üretiliyor… (k/N)" AYNEN (buildRenderGallery her kart bitişinde çağırır →
+    //   ilerleme canlı akar); değilse 'Dekore Et ›' — en az bir kartta sonuç varsa AKTİF, hiç yoksa PASİF
+    //   (önce galeriden üret). Paket açılışında sonuçlar geldiği için doğrudan aktif olur.
+    if(s===4){
+      if(state.rgGenerating){ btn.disabled=true; btn.textContent='Üretiliyor… ('+state.rgProgress.k+'/'+state.rgProgress.n+')'; }
+      else { var anyResult=(state.renderCards||[]).some(function(c){ return c.result; }); btn.disabled=!anyResult; btn.textContent='Dekore Et  ›'; }
+    } else {
+      btn.disabled=false;
+      btn.textContent = txt + (s<5?'  ›':'');
+    }
     var h=HINT[s]||'';
     // Kamera adımında (3) şerite göre kısa ek: Kat=oda kamerası · Bina=drone
     if(s===3){ h += (state.strand==='exterior')
@@ -1452,7 +1461,9 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     return cards;
   }
   function fillRenderThumbs(){ /* thumbnail'ler captureRenderFrames'te yakalandı (3B canlıyken) */ }
-  function selectedRenderCount(){ return (state.renderCards||[]).filter(function(c){ return c.selected; }).length; }
+  // KALEM 2: KREDİ KORUMASI — yalnız ÜRETİLMEMİŞ seçili kartlar sayılır/üretilir (üretilmiş kart selected
+  //   kalsa da kuyruğa girmez → ikinci "Üret" bunları yeniden üretip kredi yakmaz).
+  function selectedRenderCount(){ return (state.renderCards||[]).filter(function(c){ return c.selected && !c.result && !c.pending; }).length; }
   function renderCardMethod(cd){ return (cd.method==='def') ? state.renderGlobalMethod : cd.method; }
   /* ══ İŞ D4: RENDER ADIMI SOL PANELİ — ÖNCE / SONRA SÜRGÜSÜ ══
      Sol boş kolon artık sticky bir karşılaştırma paneli: seçili (yoksa ilk üretilmiş) kartın kadraj
@@ -1472,7 +1483,11 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       if(!before) before=(state.isoSnaps&&state.isoSnaps[cd.block])||null;
     }
     if(!before && cd.thumb && cd.thumb!==cd.result) before=cd.thumb;
-    return { before:before, after:cd.result||null };
+    var after=cd.result||null;
+    // KALEM 1 emniyet kemeri: before===after (eski/bozuk paket — kadraj yerine sonuç kaydedilmiş) ise
+    //   sahte sürgü çıkmasın; before'u yok say → tek görsel modu ("kadraj görseli yok" notu baPanelHTML'de).
+    if(before && after && before===after) before=null;
+    return { before:before, after:after };
   }
   function baPanelHTML(){
     var cards=state.renderCards||[];
@@ -1609,7 +1624,7 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     return '<div class="rgcard'+(cd.selected?' sel':'')+'" data-rgid="'+cd.id+'">'+
       '<div class="rgthumb">'+inner+spin+err+done+
         '<div class="rgbadge"><span class="b '+badgeCls+'">'+cd.badge+'</span>'+lockBadge+'</div>'+
-        '<div class="rgcheck">'+'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'+'</div>'+
+        '<div class="rgcheck'+((cd.result||cd.pending)?' locked':'')+'"'+((cd.result||cd.pending)?' title="Üretildi — seçim kilitli (kuyrukta değil)"':'')+'>'+'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>'+'</div>'+
       '</div>'+
       '<div class="rgmeta">'+
         '<div class="t">'+cd.label+(cd.room?(' <span class="r">· '+cd.room+'</span>'):'')+'</div>'+
@@ -1628,9 +1643,18 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       return '<div class="rgbar"><div class="cnt">Üretiliyor… <small>· '+pr.k+'/'+pr.n+' kare tamamlandı</small></div>'+
         '<button class="go" id="rgGo" disabled>Üretiliyor…</button></div>';
     }
-    var n=selectedRenderCount();
+    var n=selectedRenderCount();   // KALEM 2: üretilecek (yeni) seçili kare sayısı — üretilmişler hariç
+    if(!n){
+      // hiç yeni kare yok: ya seçim yok ya hepsi üretildi — üretilmiş kart varsa kısa "Tümü üretildi" pasif hâli.
+      var anyResult=(state.renderCards||[]).some(function(c){ return c.result; });
+      var lbl=anyResult?'Tümü üretildi':'Üret (0)';
+      var cnt=anyResult?'Tüm seçili kareler üretildi':'0 kare seçili';
+      var sub=anyResult?'yeni üretim yok · “Dekore Et” ile devam':'kare seçin';
+      return '<div class="rgbar"><div class="cnt">'+cnt+' <small>· '+sub+'</small></div>'+
+        '<button class="go" id="rgGo" disabled>'+lbl+'</button></div>';
+    }
     return '<div class="rgbar"><div class="cnt">'+n+' kare seçili <small>· seçilenler sırayla üretilir</small></div>'+
-      '<button class="go" id="rgGo"'+(n?'':' disabled')+'>Üret ('+n+')</button></div>';
+      '<button class="go" id="rgGo">Üret ('+n+')</button></div>';
   }
   function refreshRenderBar(){ var b=document.querySelector('.rgbar'); if(b) b.outerHTML=barHTML(); var go=$('rgGo'); if(go) go.onclick=renderGalleryGenerate; }
   function wireRenderGallery(){
@@ -1642,11 +1666,16 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     document.querySelectorAll('.rgcard').forEach(function(el){
       el.onclick=function(ev){
         if(ev.target.closest && ev.target.closest('.rgchip')) return;   // yöntem chip'i seçimi değiştirmesin
-        if(state.rgGenerating) return;   // İŞ 5: üretim sürerken seçim değişmez (sıradaki kuyrukla yarışmasın)
         var id=el.getAttribute('data-rgid'), cd=cardById(id); if(!cd) return;
-        cd.selected=!cd.selected; el.classList.toggle('sel',cd.selected); refreshRenderBar();
-        refreshChecklistRow(id);   // FAZ 2 İŞ B2: kart → checklist senkronu (tek doğru kaynak kart.selected)
-        state.rgCompareId=id; refreshBAPanel();   // İŞ D4: sol Önce/Sonra paneli tıklanan karta geçer (seç/bırak aynen)
+        // KALEM 2: kart tıkı HER ZAMAN Önce/Sonra panelini o karta geçirir (kuyruğa DOKUNMAZ). Seçim
+        //   toggle YALNIZ üretilmemiş + pending olmayan kartta — üretilmiş/üretimdeki karta tık kuyruğu
+        //   değiştirmesin (kullanıcı yalnız karşılaştırma açmak istedi; ikinci Üret kredi de yakmasın).
+        var toggleable=(!cd.result && !cd.pending && !state.rgGenerating);
+        if(toggleable){
+          cd.selected=!cd.selected; el.classList.toggle('sel',cd.selected); refreshRenderBar();
+          refreshChecklistRow(id);   // FAZ 2 İŞ B2: kart → checklist senkronu (tek doğru kaynak kart.selected)
+        }
+        state.rgCompareId=id; refreshBAPanel();   // İŞ D4: sol Önce/Sonra paneli tıklanan karta geçer
       };
     });
     // kart-başına yöntem chip'i
@@ -1675,8 +1704,10 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     var cards=state.renderCards||[];
     var rows=cards.map(function(cd){
       var st=rgCardStatus(cd);
+      // KALEM 2: üretilmiş/üretimdeki satırın kutusu disabled (kuyruk + kredi koruması; bugün yalnız rgGenerating'de).
+      var chkLock=(cd.result||cd.pending||state.rgGenerating);
       return '<div class="row" data-rgrow="'+cd.id+'" title="Karta git">'+
-        '<input type="checkbox" data-rgchk="'+cd.id+'"'+(cd.selected?' checked':'')+(state.rgGenerating?' disabled':'')+'>'+
+        '<input type="checkbox" data-rgchk="'+cd.id+'"'+(cd.selected?' checked':'')+(chkLock?' disabled':'')+'>'+
         '<span class="lb">'+cd.label+(cd.room?(' · '+cd.room):'')+'</span>'+
         (st?('<span class="st '+st.k+'">'+st.t+'</span>'):'')+
       '</div>';
@@ -1691,7 +1722,8 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     document.querySelectorAll('[data-rgchk]').forEach(function(chk){
       chk.onclick=function(ev){ ev.stopPropagation();   // satır tıkı (karta kaydır) tetiklenmesin
         var id=chk.getAttribute('data-rgchk'), cd=cardById(id); if(!cd) return;
-        if(state.rgGenerating){ chk.checked=!!cd.selected; return; }   // İŞ 5: üretim sürerken seçim kilitli
+        // KALEM 2: üretilmiş/üretimdeki kart + üretim sürerken kutu kilitli (kuyruk + kredi koruması) → geri al.
+        if(state.rgGenerating || cd.result || cd.pending){ chk.checked=!!cd.selected; return; }
         cd.selected=!!chk.checked;   // checklist → kart senkronu
         var el=document.querySelector('.rgcard[data-rgid="'+id+'"]'); if(el) el.classList.toggle('sel', cd.selected);
         refreshRenderBar(); refreshChecklistRow(id);
@@ -1719,8 +1751,9 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
   // "Üret" → ödeme-öncesi ONAY dialoğu (mevcut paintConfirm deseni) → onaylanırsa seçili kartları sırayla üret.
   function renderGalleryGenerate(){
     if(state.rgGenerating){ toast('Üretim sürüyor — bitmesini bekleyin'); return; }   // İŞ 5: çifte kuyruk yok
-    var sel=(state.renderCards||[]).filter(function(c){ return c.selected; });
-    if(!sel.length){ toast('Önce en az bir kare seçin'); return; }
+    // KALEM 2: KREDİ KORUMASI — yalnız üretilmemiş seçili kartlar kuyruğa girer (üretilmiş kart yeniden üretilmez).
+    var sel=(state.renderCards||[]).filter(function(c){ return c.selected && !c.result && !c.pending; });
+    if(!sel.length){ toast('Üretilecek yeni kare yok — seçili kareler zaten üretildi'); return; }
     renderGalleryConfirm(sel);
   }
   // ödeme-öncesi ONAY (paintConfirm/renderConfirm deseni) — seçili kare sayısı + yöntem özeti + Üret. İstek burada ATILMAZ.
@@ -1973,6 +2006,21 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       {cat:'Ankastre Set', brand:'Arçelik', price:'₺32.900', crop:'midRight', icon:'structure', color:'#d8cbb8'},
       {cat:'Dolap', brand:'Kelebek', price:'₺28.500', crop:'topCenter', icon:'structure', color:'#c9a978'} ]}
   };
+  // KALEM 4: DIŞ RENDER bağlamı — dış cepheye uygun sponsorlu ürünler. Kırpım bölgeleri dış görsele mantıklı:
+  //   cephe boyası/doğrama=merkez, mantolama=orta-sağ, peyzaj=alt kenar. Marka adları düz metin; ağ isteği/logo YOK.
+  var MKT_EXT={ items:[
+    {cat:'Dış Cephe Boyası', brand:'Filli Boya', price:'₺3.150 / 15L', crop:'center', icon:'draw', color:'#dfe3e4'},
+    {cat:'Mantolama · Isı Yalıtımı', brand:'İzocam', price:'₺410 / m²', crop:'midRight', icon:'structure', color:'#d8cbb8'},
+    {cat:'Pencere · Doğrama', brand:'Egepen Deceuninck', price:'₺2.900 / adet', crop:'topCenter', icon:'door', color:'#cfd4d6'},
+    {cat:'Peyzaj Aydınlatma', brand:'EGLO', price:'₺1.850', crop:'bottomEdge', icon:'balcony', color:'#ddd2c0'} ]};
+  // KALEM 4: PLAN (Planı Boya) bağlamı — apartman ortak alanı ürünleri. Kırpım plan görselinden: zemin=alt kenar,
+  //   posta kutusu/asansör=orta, aydınlatma=üst-orta, küpeşte=alt-orta. Marka adları düz metin.
+  var MKT_PLAN={ items:[
+    {cat:'Hol Zemin Seramiği', brand:'Kale', price:'₺640 / m²', crop:'bottomEdge', icon:'structure', color:'#dfe3e4'},
+    {cat:'Posta Kutusu Ünitesi', brand:'Arı Metal', price:'₺8.400', crop:'midRight', icon:'structure', color:'#d8cbb8'},
+    {cat:'Hol Aydınlatma', brand:'Philips', price:'₺2.250', crop:'topCenter', icon:'draw', color:'#efe7da'},
+    {cat:'Asansör Kabin Kaplama', brand:'Kabin Sistem', price:'₺14.900', crop:'center', icon:'door', color:'#cfd4d6'},
+    {cat:'Küpeşte · Korkuluk', brand:'İnox Metal', price:'₺780 / m', crop:'bottomCenter', icon:'balcony', color:'#c9a978'} ]};
   // sabit kırpım bölgeleri (kaynak görselin oranı): mobilya=alt-orta, duvar=üst-orta, zemin=alt kenar
   var MKT_CROPS={ bottomCenter:{x:.30,y:.52,w:.40,h:.42}, topCenter:{x:.30,y:.05,w:.40,h:.30},
     bottomEdge:{x:.15,y:.78,w:.70,h:.20}, center:{x:.34,y:.34,w:.32,h:.32}, midRight:{x:.60,y:.28,w:.36,h:.44} };
@@ -2000,18 +2048,29 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
   }
   function mktCtxSectionHTML(){
     var c=state.fnSelId?fnCardById(state.fnSelId):null;
-    var typ=(c&&c.kind==='interior')?fnRoomType(c.room):null;
-    if(!typ){   // seçim yok / plan / dış / tanınmayan oda → mevcut genel liste
-      return '<h2>Pazaryeri</h2><div class="mkt-list">'+mktGeneralRowsHTML()+'</div>'+
-        '<p class="muted" style="font-size:10.5px;margin-top:6px">Bir iç render kartı seçince bu liste o odadaki ürünlere dönüşür.</p>';
+    // KALEM 4: bağlam = İÇ oda türü · DIŞ cephe · PLAN (apartman ortak alanı). Her biri kendi sponsorlu
+    //   ürün listesini + başlığını verir; seçim yoksa/tanınmayan iç oda ise mevcut genel liste kalır.
+    var ctx=null, title=null;
+    if(c && c.kind==='interior'){
+      var typ=fnRoomType(c.room);
+      if(typ){ ctx=MKT_CTX[typ]; title='Bu render’daki ürünler — '+(fnRoomName(c.room)||'Oda'); }
+    } else if(c && c.kind==='exterior'){
+      ctx=MKT_EXT; title='Bu render’daki ürünler — Dış Cephe'+((c.blockName!=null)?(' · Blok '+c.blockName):'');
+    } else if(c && c.kind==='plan'){
+      ctx=MKT_PLAN; title='Plandaki ortak alan ürünleri — Apartman Holü'+((c.blockName!=null)?(' · Blok '+c.blockName):'');
     }
-    var rows=MKT_CTX[typ].items.map(function(p){
-      return '<div class="mkt-row ctx">'+
+    if(!ctx){   // seçim yok / tanınmayan oda → mevcut genel liste
+      return '<h2>Pazaryeri</h2><div class="mkt-list">'+mktGeneralRowsHTML()+'</div>'+
+        '<p class="muted" style="font-size:10.5px;margin-top:6px">Bir render kartı seçince bu liste o render’ın ürünlerine dönüşür.</p>';
+    }
+    // KALEM 4: ctx satırları da data-toast taşır (updateMktContext bağlar) → tık "ürün sayfası açıldı" toast'ı verir.
+    var rows=ctx.items.map(function(p){
+      return '<div class="mkt-row ctx" data-toast="'+p.brand+' · ürün sayfası açıldı">'+
         '<span class="mkt-sw" style="background:'+p.color+'">'+fIcon(p.icon)+'<img class="mkt-crop" data-mkcrop="'+p.crop+'" alt="'+p.cat+'"></span>'+
         '<span class="mkt-t"><span class="cat">'+p.cat+'</span><span class="nm">'+p.brand+'</span><span class="br">'+p.price+'</span></span>'+
         '<span class="mkt-cright"><span class="mkt-spon2">Sponsorlu</span><button class="mkt-chg" disabled title="Yakında">Değiştir</button></span></div>';
     }).join('');
-    return '<h2>Bu render’daki ürünler — '+(fnRoomName(c.room)||'Oda')+'</h2><div class="mkt-list">'+rows+'</div>'+
+    return '<h2>'+title+'</h2><div class="mkt-list">'+rows+'</div>'+
       '<p class="muted" style="font-size:10.5px;margin-top:6px">Ürün görselleri seçili render’dan kırpılmıştır (temsili) · sponsorlu yerleşim.</p>';
   }
   function updateMktContext(){
@@ -2098,7 +2157,9 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     if(s===1){ busyStaged(['Sınır analiz ediliyor…','Daireler yerleştiriliyor…','Yerleşim optimize ediliyor…'], function(){ ensureLayout(); advance(2); }); }   // yerleşim garanti → 3B
     else if(s===2){ step2Proceed(); }   // → Kamera yerleştirme; İŞ 3: açı-kilidi teşviki BİR KEZLİK dialog
     else if(s===3){ step3Proceed(); }   // → Render kadraj galerisi (K2); FAZ 2 İŞ C2: drone yoksa BİR KEZLİK hatırlatma
-    else if(s===4){ if(state.rgGenerating) return; renderGalleryGenerate(); }   // K2: seçili kareleri üret (onay dialoğu içeride); İŞ 5: üretim sürerken ikinci tetik yok
+    // KALEM 3: adım 4 CTA = Döşe'ye geç (üretim artık galerideki "Üret" butonundan). Üretim sürerken bekle;
+    //   sonuçlu kart varsa advance(5); yoksa buton zaten pasif (savunmacı return).
+    else if(s===4){ if(state.rgGenerating) return; if(!(state.renderCards||[]).some(function(c){ return c.result; })) return; advance(5); }
     else { toast('Sunum PDF’i dışa aktarıldı'); }
   };
   /* ══ İŞ 3: PLANI BOYA AÇISI TEŞVİKİ — adım 2→3 CTA kapısı (extNudge deseninin birebir aynası) ══
@@ -2765,11 +2826,12 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     state.isoSnaps = {};
     state.lockedViews = {};   // İş 5: kilit-açı verisi paket şemasında YOK → önceki projeden bayat kalmasın (isoSnaps ile aynı disiplin)
     var iCams=(pkg.cameras&&pkg.cameras.interior)||[], eCams=(pkg.cameras&&pkg.cameras.exterior)||[];
-    var iThumb={}, eThumb={};
-    (R.interior||[]).forEach(function(r){ if(r.id&&r.image) iThumb[r.id]=r.image; });
-    (R.exterior||[]).forEach(function(r){ if(r.id&&r.image) eThumb[r.id]=r.image; });
-    state.rgFrames={ interior:iCams, exterior:eCams, iThumb:iThumb, eThumb:eThumb,
-      planThumbs:plans.map(function(p){ return { block:p.block, name:p.name||null, thumb:p.image }; }), planThumb:state.paintRender };
+    // KALEM 1: paket render SONUÇLARINI iThumb/eThumb/planThumb'a YAZMA — bunlar Önce/Sonra sürgüsünün
+    //   "ÖNCE" (kadraj) kaynağıdır; sonuç yazılırsa iki taraf da "sonra" olur ("demin çalışıyordu şimdi
+    //   çalışmıyor"). Gerçek kadraj thumb'ları aşağıda captureRenderFrames ile 3B viewport'tan KREDİSİZ
+    //   yakalanır. Burada boş bırak (capture atlanırsa emniyet kemeri before===after'ı zaten yakalar).
+    state.rgFrames={ interior:iCams, exterior:eCams, iThumb:{}, eThumb:{},
+      planThumbs:plans.map(function(p){ return { block:p.block, name:p.name||null, thumb:null }; }), planThumb:null };
     state.cameras=iCams;
     // adım-5 galeri kaynakları (fin() çıktı şemasıyla birebir)
     var ridx=mskRoomIndex();
@@ -2784,6 +2846,15 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     (R.exterior||[]).forEach(function(r){ if(r.image) prior.push({ id:r.id, result:r.image }); });
     state.renderCards=prior;
     state.renderCards=collectRenderCards();
+    // KALEM 1: gerçek kadraj (ÖNCE) thumb'larını 3B viewport'tan bir kez yakala. captureRenderFrames
+    //   rgFrames'i (iThumb/eThumb/planThumbs = canlı 3B kadrajları) + cameras'ı tazeler + _rgStale=true
+    //   yapar; sonuç kartları (yukarıda kurulan state.renderCards) prev olarak durur → yeniden toplayınca
+    //   result id ile devralınır, before(kadraj) ile after(render) AYRI olur. Viewport hazır değilse
+    //   (mesh gelmedi) capture ATLANIR — cameras/kartlar/sonuçlar silinmesin (emniyet kemeri devrede).
+    try{
+      var _V=eView3D(), _ready=false; try{ _ready=!!(_V&&_V.getMap&&_V.getMap()); }catch(e){}
+      if(_ready){ captureRenderFrames(); state.renderCards=collectRenderCards(); }
+    }catch(e){}
     state._rgStale=false;
     renderStepper();
   }

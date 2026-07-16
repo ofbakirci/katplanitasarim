@@ -39,7 +39,7 @@ Akış beş adımdır ve hep aynı sırayı izler:
 | 1 | Sınır + Yerleşim | Parsel/imar tanımlar, bina ve daire tiplerini girer, planı ürettirirsin | **"3B Görüntüle"** |
 | 2 | 3B | Planı 3B dollhouse olarak gezer, katmanları açıp kapatırsın | **"Kamera Yerleştir"** |
 | 3 | Kamera | İç ve dış (drone) kameralar yerleştirir, açı/lens/gün saati ayarlarsın | **"Render Kadrajları"** |
-| 4 | Render | Kadrajları seçip yapay zekâ ile üretirsin (tek ücretli adım) | **"Kareleri Üret"** |
+| 4 | Render | Kadrajları seçip yapay zekâ ile üretirsin (tek ücretli adım) | **"Dekore Et"** |
 | 5 | Döşe | Üretilen render'ları toplar, dışa aktarırsın | **"Planı Dışa Aktar"** |
 
 <!-- GORSEL 01: adim-1 genel ekran — sol panel Bina sekmesi acik + uretilmis kat plani tuvalde + panel altinda denetim ozeti; ust seritte 5 adimlik akis gorunur -->
@@ -518,14 +518,14 @@ Plan önce renk-kodlu gerçek 3B mesh'e çevrilir; yapay zekâ yalnız malzeme v
 Galeri üç grupta toplanır: **"Plan Boyama"**, **"İç Kameralar"** ve **"Dış / Drone"** (başlıklarda kart sayısıyla). Çok bloklu sitede İç Kameralar ve Dış / Drone grupları blok alt-başlıklarına ayrılır (**"İç Kameralar — Blok A"**, **"Dış / Drone — Blok B"** gibi); kadraj yakalama tüm blokların kameralı katlarını gezdiğinden farklı katlardaki iç kameralar da eksiksiz gelir. Kart görselleri 3B'den alınan yerel küçük görüntülerdir (kredisiz).
 
 - **"Planı Boya"** kartı izometrik açıdan renk-kodlu bir kadrajdır; çok bloklu sitede **blok başına bir kart** oluşur (**"Planı Boya — Blok A"**, **"— Blok B"**...). Açıyı kendin seçmek istersen: 3B görünümde açını ayarlayıp yön küresinin yanındaki **vizör-kilit düğmesine** (vizör + asma kilit ikonu) bas — kart **"Kilitli açı"** rozeti alır ve kadraj o açıdan üretilir (blok başına ayrı kilit; ikon her zaman **aktif bloğun** kilidini gösterir, blok değiştirince kendini tazeler). Kilitlemezsen **dik izometrik açı** otomatik kullanılır (tepeden bakan, oda-okunur kadraj); düğmeye tekrar basmak kilidi kaldırır.
-- Sağdaki **"Render Listesi"** her kartın satırını gösterir: seçim kutusu (kartla çift yönlü eş), etiket ve durum çipi (bekliyor / üretiliyor / hazır / hata). Satıra tıklamak ilgili karta kaydırır; "Üret" ilerledikçe durumlar burada akar.
+- Sağdaki **"Render Listesi"** her kartın satırını gösterir: seçim kutusu (kartla çift yönlü eş), etiket ve durum çipi (bekliyor / üretiliyor / hazır / hata). Satıra tıklamak ilgili karta kaydırır; "Üret" ilerledikçe durumlar burada akar. **Üretilmiş ya da üretimdeki** kartın kutusu kilitlidir (pasif) — hazır bir kare yanlışlıkla kuyruktan düşürülemez ya da yeniden üretime sokulamaz.
 - Hiç drone yoksa Dış grubunda "Drone yok — dış cephe kareleri için Kamera adımında Drone ekleyin" satırı ve **"Kamera adımına dön"** düğmesi görünür.
 
 Üst şeritteki adım noktaları da durum gösterir: Kamera adımında iç nokta = en az bir iç kamera, dış nokta = en az bir drone; Render adımında noktalar üretim durumunu izler (üzerine gelince ayrıntı yazar). Noktalar canlıdır — 3B içinden kamera/drone ekleyip çıkardıkça birkaç saniye içinde kendiliğinden güncellenir ve dolunca yeşil görünür.
 
 ### Önce / Sonra paneli (sol kolon)
 
-Galerinin solunda sabit (sticky) bir **"Önce / Sonra"** karşılaştırma paneli durur: seçili kartın (bir karta tıklamadıysan ilk üretilmiş kartın) **kadraj görseli (önce)** ile **AI render'ı (sonra)** üst üste bindirilir ve alttaki sürgüyle ikisi arasında gezersin — sol yarı kadraj, sağ yarı render. Herhangi bir karta tıklamak paneli o karta geçirir (kartın seç/bırak davranışı aynen çalışmaya devam eder). Henüz üretilmemiş kartta yalnız kadraj ve "Üretilince karşılaştırma burada" notu görünür. Planı Boya kartında önce = dollhouse izo kadrajı, sonra = boyalı plan; drone kartında önce = 3B snapshot, sonra = dış render. Dar ekranlarda sol kolonla birlikte gizlenir.
+Galerinin solunda sabit (sticky) bir **"Önce / Sonra"** karşılaştırma paneli durur: seçili kartın (bir karta tıklamadıysan ilk üretilmiş kartın) **kadraj görseli (önce)** ile **AI render'ı (sonra)** üst üste bindirilir ve alttaki sürgüyle ikisi arasında gezersin — sol yarı kadraj, sağ yarı render. Herhangi bir karta tıklamak paneli o karta geçirir; seç/bırak yalnız **henüz üretilmemiş** kartta çalışır — üretilmiş ya da üretimdeki karta tıklamak seçime dokunmaz, sadece karşılaştırmayı açar. Henüz üretilmemiş kartta yalnız kadraj ve "Üretilince karşılaştırma burada" notu görünür. Planı Boya kartında önce = dollhouse izo kadrajı, sonra = boyalı plan; drone kartında önce = 3B snapshot, sonra = dış render. Kadraj görseli her zaman 3B önizlemeden kredisiz alınır — paket açılışında da taze yakalanır, sürgünün iki yüzü hiçbir durumda aynı görsele düşmez. Dar ekranlarda sol kolonla birlikte gizlenir.
 
 <!-- GORSEL 13: Adim-4 render galerisi — uc grup basligi (Plan Boyama blok karti x2, Ic Kameralar, Dis/Drone) + sagda Render Listesi checklist'i; alt cubukta "Üret (N)" -->
 
@@ -545,9 +545,9 @@ Dış render'da binanın kütlesi, kat sayısı ve pencere/balkon konumları kor
 
 ### Üretim, kredisiz/ücretli ayrımı
 
-Alt çubukta **"N kare seçili"** ve **"Üret (N)"** bulunur. **"Üret"**e basınca bir onay dialoğu çıkar; onaylarsan seçili kartlar SIRAYLA gerçek render uçlarına gönderilir (ücretli).
+Alt çubukta **"N kare seçili"** ve **"Üret (N)"** bulunur. **"Üret"**e basınca bir onay dialoğu çıkar; onaylarsan seçili kartlar SIRAYLA gerçek render uçlarına gönderilir (ücretli). Sayaç yalnız **henüz üretilmemiş** seçili kareleri sayar — hazır bir kare ikinci bir "Üret"le yeniden üretime girmez (çifte kredi harcaması engellidir). Seçili karelerin hepsi üretildiyse düğme pasif **"Tümü üretildi"** hâline geçer.
 
-Üretim sürerken hem alt çubuktaki **"Üret"** hem sağ alttaki **"Kareleri Üret"** düğmesi pasifleşir; ana düğme **"Üretiliyor… (k/N)"** biçiminde ilerlemeyi gösterir, alt çubukta "k/N kare tamamlandı" akar. Kart seç/bırak tıklamaları ve Render Listesi kutuları da bu sırada kilitlidir — kuyruk çalışırken seçim değişmez. Üretim bitince (başarılı ya da hatalı) düğmeler eski hâline döner ve akış kendiliğinden Döşe adımına geçer.
+Sağ alttaki ana düğme **"Dekore Et"**tir: kareler üretilene kadar pasiftir, en az bir kare hazır olunca aktifleşir ve Döşe adımına geçirir (üretimi tetiklemez — üretim yalnız alt çubuktaki "Üret"ten başlar). Üretim sürerken alt çubuktaki **"Üret"** pasifleşir; ana düğme **"Üretiliyor… (k/N)"** biçiminde ilerlemeyi gösterir, alt çubukta "k/N kare tamamlandı" akar. Kart seç/bırak tıklamaları ve Render Listesi kutuları da bu sırada kilitlidir — kuyruk çalışırken seçim değişmez. Üretim bitince (başarılı ya da hatalı) düğmeler eski hâline döner ve akış kendiliğinden Döşe adımına geçer.
 
 > **Kredisiz kalanlar:** 3B **"Görüntüyü indir (PNG)"**, kadraj kartı küçük görselleri ve kendi-açı önizleme — hepsi tarayıcı içi, kredisiz. **Ücretli olan yalnız:** Render adımındaki **"Üret"** onayından sonraki gerçek yapay zekâ üretimi. Onay pencerelerindeki "Bu işlem render kredisi harcar" metni bilgilendirme amaçlıdır; şu an gerçek bir bakiye/ödeme sistemi bağlı değildir.
 
@@ -578,8 +578,10 @@ Son adım, üretilen render'ları toplar ve sunuma hazırlar. Bu adımın bir k�
 Sol paneldeki **"Pazaryeri"** bölümü seçili karta göre değişir — pazaryeri vizyonunun demosu:
 
 - Bir **iç render kartı** seçince başlık **"Bu render'daki ürünler — <Oda Adı>"** olur ve oda **türüne** göre sponsorlu ürün listesi gelir: yatak odası → Yatak · Yataş / Gardırop · Bellona / Duvar Boyası · Jotun / Zemin · Çamsan; banyo → Lavabo · VitrA / Armatür · GROHE / Fayans · Kale; salon → Koltuk Takımı · Bellona / TV Ünitesi · Vivense / Halı · Stepevi; mutfak → Evye · Franke / Ankastre · Arçelik / Dolap · Kelebek.
-- Her satırın küçük ürün görseli **seçili render'ın kendisinden kırpılır** (mobilya alt-orta, duvar üst-orta, zemin alt kenar — "render'da gerçekten bu ürün var" hissi; kırpım yapılamazsa stilize ikon kalır). Satırda "Sponsorlu" rozeti, örnek fiyat ve pasif bir **"Değiştir"** düğmesi (Yakında) vardır.
-- Plan/dış kartlarda ve seçim yokken genel liste görünür. Ürünler, markalar ve fiyatlar **tamamen örnektir** (placeholder) — gerçek bir katalog/ağ bağlantısı yoktur.
+- Bir **dış (drone) kartı** seçince başlık **"Bu render'daki ürünler — Dış Cephe"** olur (çok blokta blok adıyla, örn. "· Blok B") ve dış cepheye uygun liste gelir: Dış Cephe Boyası · Filli Boya / Mantolama · İzocam / Pencere-Doğrama · Egepen Deceuninck / Peyzaj Aydınlatma · EGLO.
+- Bir **Planı Boya kartı** seçince başlık **"Plandaki ortak alan ürünleri — Apartman Holü"** olur: hol zemin seramiği, posta kutusu ünitesi, hol aydınlatma, asansör kabin kaplama, küpeşte/korkuluk gibi ortak-alan kalemleri listelenir.
+- Her satırın küçük ürün görseli **seçili render'ın kendisinden kırpılır** (mobilya alt-orta, duvar üst-orta, zemin alt kenar — "render'da gerçekten bu ürün var" hissi; kırpım yapılamazsa stilize ikon kalır). Satırda "Sponsorlu" rozeti, örnek fiyat ve pasif bir **"Değiştir"** düğmesi (Yakında) vardır; satırın üzerine gelince tüm listelerde aynı vurgu (hafif kalkma + turuncu çerçeve) görünür.
+- Yalnız hiç seçim yokken (ya da oda türü tanınmadığında) genel liste görünür. Ürünler, markalar ve fiyatlar **tamamen örnektir** (placeholder) — gerçek bir katalog/ağ bağlantısı yoktur.
 
 <!-- GORSEL 14: Adim-5 Döşe ekrani — blok-bölümlü kart grid'i (Planı Boya + Kamera kartlari), sagda Döşeme Özeti; solda seçili yatak odasi render'ina göre sponsorlu ürün listesi -->
 
@@ -587,7 +589,7 @@ Sol paneldeki **"Pazaryeri"** bölümü seçili karta göre değişir — pazary
 
 Aşağıdaki bölümler şu an tamamen **ön-gösterimdir** — arayüzü hazır, ama arkasında gerçek bir sistem yoktur:
 
-- **Pazaryeri** — sabit örnek markalar/fiyatlar (genel liste + oda-türüne göre bağlamsal liste); "Değiştir" pasiftir.
+- **Pazaryeri** — sabit örnek markalar/fiyatlar (genel liste + oda türü / dış cephe / apartman holü bağlamsal listeleri); "Değiştir" pasiftir.
 - **"Döşeme Özeti"** — sabit, örnek bir "Tahmini Toplam" gösterir.
 - **"Pazaryerine Aktar"** ve **"Sunum (PDF) olarak aktar"** düğmeleri yalnız bir bildirim gösterir; gerçek bir aktarım/çıktı yapmaz.
 
