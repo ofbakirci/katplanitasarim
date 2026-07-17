@@ -2886,17 +2886,17 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
   })();
 
   /* ---------- boot ---------- */
-  // DEMO MODU: kalıcı rozet (titlebar sağı) — ziyaretçi üretimlerin örnek çıktı
-  // olduğunu ve kredi harcanmadığını her an görür. Mevcut .tag pill dili +
-  // onay dialoglarındaki vurgu paleti (#c78a4a / #fbf3e8) kullanılır.
+  // DEMO MODU: kalıcı rozet (titlebar sağı) — mod göstergesi. Sade "DEMO" (uzun cümle
+  // titlebar'ı dolduruyordu); ayrıntı title'da + onay dialoglarında zaten yazıyor.
+  // Mevcut .tag pill dili + onay dialoglarındaki vurgu paleti (#c78a4a / #fbf3e8).
   if(DEMO_MODE){
     try{
       var _tbr=document.querySelector('.tbright');
       if(_tbr){
         var _db=document.createElement('span');
         _db.className='tag'; _db.id='demoBadge';
-        _db.textContent='DEMO MODU · üretimler örnek çıktıdır, kredi harcanmaz';
-        _db.title='Demo modu: /render ve /camera uçlarına istek atılmaz; galerilere önceden üretilmiş gerçek örnek render’lar düşer.';
+        _db.textContent='DEMO';
+        _db.title='Demo modu: üretimler örnek çıktıdır, kredi harcanmaz. /render ve /camera uçlarına istek atılmaz; galerilere önceden üretilmiş gerçek örnek render’lar düşer.';
         _db.style.cssText='color:#8a5a20;background:#fbf3e8;border-color:#c78a4a;font-weight:700;white-space:nowrap';
         _tbr.insertBefore(_db, _tbr.firstChild);
       }

@@ -553,7 +553,7 @@ Sağ alttaki ana düğme **"Dekore Et"**tir: kareler üretilene kadar pasiftir, 
 
 ### Demo modu (Ön-gösterim)
 
-URL'ye `?demo=1` (ya da `#demo` / `/demo`) eklersen **demo modu** açılır: paralı uçlara hiç istek gitmeden, önceden üretilmiş gerçek çıktılar 2-4 saniye gecikmeyle gösterilir. Ekranda "DEMO MODU · üretimler örnek çıktıdır, kredi harcanmaz" rozeti durur. Sunum ve deneme için idealdir.
+URL'ye `?demo=1` (ya da `#demo` / `/demo`) eklersen **demo modu** açılır: paralı uçlara hiç istek gitmeden, önceden üretilmiş gerçek çıktılar 2-4 saniye gecikmeyle gösterilir. Başlık çubuğunda sade bir **"DEMO"** rozeti durur (üzerine gelince "üretimler örnek çıktıdır, kredi harcanmaz" ayrıntısını yazar). Sunum ve deneme için idealdir.
 
 ### Render köprü sunucusu notu
 
