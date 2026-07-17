@@ -1863,7 +1863,7 @@
   // etiket metnini değiştir (TR↔EN); eski texture'ı bırak (PNG export'unda kullanılır)
   function setLabelText(spr,txt){ if(spr.material.map) spr.material.map.dispose(); spr.material.map=labelTexture(txt); spr.material.needsUpdate=true; }
 
-  function setView(v){
+  function setView(v,o){
     if(!cam||!controls) return;
     const d=22; controls.target.set(0,0,0);
     if(v==='top'){
@@ -1879,12 +1879,15 @@
       if(v==='isoPlan') cam.position.set(d,d*2.0,d);
       else if(v==='iso') cam.position.set(d,d*0.95,d); else cam.position.set(d*1.3,d*0.5,d*1.3); }
     cam.updateProjectionMatrix(); controls.sync(); controls.update();
-    fitView();   // açıyı koru, modeli ekrana sığdır
+    fitView(!!(o&&o.noInset));   // açıyı koru, modeli ekrana sığdır (noInset: snapshot yolu — UI inseti yok say)
   }
   // mevcut bakış açısını KORUYARAK modeli ekrana SIKICA sığdır.
   // Kuşatan küre değil: 8 köşeyi kamera eksenlerine projekte edip hepsinin
   // çerçeveye girdiği EN YAKIN mesafeyi bulur → gerçek silüete göre, az boşluk.
-  function fitView(){
+  // noInset=true: U6 soft-border telafisi ATLANIR — snapshot/kadraj yakalama tüm framebuffer'ı
+  //   okur, dock/rail diye boşluk bırakmak modeli küçük ve köşede bırakıyordu (Önce/Sonra kadrajı
+  //   + Planı Boya AI girdisi bulgusu). Canlı görünüm çağrıları varsayılanla (telafili) kalır.
+  function fitView(noInset){
     if(!cam||!controls||!scene||scene.__hx==null) return;
     const hx=scene.__hx, hz=scene.__hz, topY=(roofOn?WALL_H:WALL_H*WALL_LOW), cy=topY/2;
     const target=new THREE.Vector3(0,cy,0);
@@ -1907,7 +1910,7 @@
     //   (aktif dock yüksekliği + rail genişliği). (a) Kullanılabilir görüş oranı kadar mesafeyi büyüt (model
     //   daha küçük görünsün ki daralan kutuya sığsın), (b) hedefi kaydır ki model GÖRÜNÜR bölgenin ortasına otursun.
     //   SERT değil: kullanıcı sonra elle zoom/pan ile taşabilir. Export/snapshot yolu kendi kamerasını kurar → DOKUNULMAZ.
-    const ins=uiInsetPx(), vw=(renderer&&renderer.domElement.clientWidth)||overlay&&overlay.clientWidth||1440,
+    const ins=noInset?{right:0,bottom:0}:uiInsetPx(), vw=(renderer&&renderer.domElement.clientWidth)||overlay&&overlay.clientWidth||1440,
           vh=(renderer&&renderer.domElement.clientHeight)||overlay&&overlay.clientHeight||810;
     const visW=Math.max(60, vw-ins.right), visH=Math.max(60, vh-ins.bottom);
     d *= Math.max(vw/visW, vh/visH);                    // daralan görünür kutuya sığacak kadar geri çek
@@ -4061,6 +4064,12 @@
   //   true  = MOBİLYALI mesh gönder (Yüksek Sadakat) — hiç mobilya yoksa otomatik döşe.
   //   false = MOBİLYASIZ mesh gönder (Yaratıcı) — mobilya grubunu GEÇİCİ gizle (kullanıcının mobilyasını SİLMEZ).
   //   undefined = sahne neyse o. Mobilya sekmesindeki checkbox'tan BAĞIMSIZ (bilinçli kullanıcı kararı).
+  // opts.fitPlan (opsiyonel): plan kadrajı SABİT 4:3 (1440×1080) — bakış YÖNÜ (kilitli açı ya da
+  //   isoPlan preset'i) korunur, mesafe+merkez fitView(noInset) ile bu orana YENİDEN kurulur; 8-köşe
+  //   sığdırma bu oranda hesaplandığı için taşma yapısal olarak imkânsız. Kullanıcının elle zoom/pan
+  //   kırpması bilerek KORUNMAZ (plan boyamada tüm plan karede olmalı — kullanıcı kararı). Çözünürlük/
+  //   pixelRatio/aspect/görünüm snapCameraDataURL (C2) disipliniyle try/finally BİREBİR geri yüklenir
+  //   → ekran farkından bağımsız, her makinede aynı oranlı nano girdisi.
   function snapDataURL(opts){
     if(!renderer||!scene||!cam) return null;
     opts=opts||{};
@@ -4072,13 +4081,36 @@
     } else if(opts.furnished===false){
       if(fg){ prevVis=fg.visible; fg.visible=false; }
     }
+    const PW=1440, PH=1080;                                  // fitPlan sabit çözünürlüğü (4:3; kamera ailesi 1440 tabanlı)
+    let doFit=!!opts.fitPlan, savedSize=null, savedView=null, savAspect=null, savPR=null;
+    if(doFit){
+      savedSize=renderer.getSize(new THREE.Vector2());
+      if(savedSize.x<1||savedSize.y<1) doFit=false;          // viewport 0×0 (gizli) → resize/render çöker, düz yola düş
+    }
     const labs=(scene.__labels)?scene.__labels.children:[];
-    labs.forEach(function(s){ if(s.userData&&s.userData.en) setLabelText(s,s.userData.en); });
-    renderer.render(scene,cam);
-    const url=renderer.domElement.toDataURL('image/png');
-    labs.forEach(function(s){ if(s.userData&&s.userData.tr) setLabelText(s,s.userData.tr); });
-    if(fg && prevVis!==null) fg.visible=prevVis;             // görünürlüğü geri yükle (non-destructive)
-    renderer.render(scene,cam);
+    let url=null;
+    if(doFit) _snapBusy=true;                                // R2: resize sırasında loop PiP scissor pass'i ATLA
+    try{
+      if(doFit){
+        savedView=getView(); savAspect=cam.aspect; savPR=renderer.getPixelRatio();
+        renderer.setPixelRatio(1); renderer.setSize(PW,PH,false);   // updateStyle=false ŞART (canvas CSS bozulmasın)
+        cam.aspect=PW/PH; cam.updateProjectionMatrix();
+        fitView(true);                                       // yön aynı, mesafe+merkez 4:3 için baştan (inset'siz)
+      }
+      labs.forEach(function(s){ if(s.userData&&s.userData.en) setLabelText(s,s.userData.en); });
+      renderer.render(scene,cam);
+      url=renderer.domElement.toDataURL('image/png');
+    } finally {
+      labs.forEach(function(s){ if(s.userData&&s.userData.tr) setLabelText(s,s.userData.tr); });
+      if(fg && prevVis!==null) fg.visible=prevVis;           // görünürlüğü geri yükle (non-destructive)
+      if(doFit){
+        renderer.setPixelRatio(savPR); renderer.setSize(savedSize.x,savedSize.y,false);
+        cam.aspect=savAspect;
+        if(savedView) restoreView(savedView); else cam.updateProjectionMatrix();
+        _snapBusy=false;
+      }
+      renderer.render(scene,cam);
+    }
     return url;
   }
 
