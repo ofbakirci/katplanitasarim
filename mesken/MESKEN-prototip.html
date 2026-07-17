@@ -541,6 +541,16 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     }catch(e){}
     return false;
   })();
+  /* İKİ DEMO VARYANTI (kullanıcı kararı — canlı /demo geri bildirimi: "demo başlamıyor, direkt planı
+     görüyorum; koordinat yapıştırmayla başlayacaktık, her şeyi tek tek yerleştirtecektik"):
+       · DEMO_PKG      = ?paket=1 (/demo?paket=1 · ?demo=1&paket=1) → ESKİ VİTRİN: demo paketini SESSİZCE
+         otomatik yükle (bitmiş proje + gerçek render'lar) + yükleme örtüsü + Akış Turu boot'ta başlar.
+       · DEMO_HANDSON  = bayraksız demo → ELLE ÇİZDİRTEN akış: paket YÜKLENMEZ, motor boş/normal başlar,
+         motorun HEDEFLİ ANA TURU (onboarding.js 'ana' — parsel koordinatı yapıştır, sınır çizdir, blok aç...)
+         kabuktan tetiklenir. Akış Turu boot'ta DEĞİL, ziyaretçi 3B'ye (adım 2) geçince devralır.
+     demoLoadPackage/demoFallbackToMaster/demoLoadMasterPlan kodu SİLİNMEZ; yalnız DEMO_PKG'ye koşullanır. */
+  var DEMO_PKG    = DEMO_MODE && (function(){ try{ return /[?&]paket=1\b/.test(location.search||''); }catch(e){ return false; } })();
+  var DEMO_HANDSON= DEMO_MODE && !DEMO_PKG;
   // Demo varlık kökü: canlıda MUTLAK /mesken/demo-assets/ (sayfa /demo gibi
   // yeniden yazılmış bir path'ten servis edilse de kırılmaz); yerel file://
   // açılışta dosyanın yanındaki demo-assets/ klasörü (göreli).
@@ -1098,6 +1108,83 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       try{ var d=eDoc(), b=d&&d.getElementById('tFit'); if(b){ b.click(); } else { engineFit(); } }catch(e){ engineFit(); }
     }, 120);
   }
+
+  /* ══════════ DEMO MODU: kullanıcının GERÇEK demo paketini otomatik yükle ══════════════════════
+     Kullanıcı kararı: "demo = input/proje-20260716-4.mskpkg, render'lar falan orada". Bunun
+     JPEG-sıkıştırılmış kopyası mesken/demo-assets/demo-proje.mskpkg (aynı şema; plan+parsel+kameralar+
+     mobilya+GERÇEK render'lar). ?demo=1 açılışında bu paket SESSİZCE (onay dialoğu OLMADAN) uygulanır:
+     taze boot'ta kaybedilecek ilerleme yok → pkgConfirmOverwrite atlanır (importPackageText doğrudan).
+     applyPackageOnReady TAM zinciri koşar (plan importu → adım-3 3B'de kameraları mesh'e bindir + kadraj
+     karelerini KREDİSİZ yakala → galeri rehydrate) ve landStep:1 ile ziyaretçiyi 2B editöre indirir
+     (maxStep 5 açık — Akış Turu 5 adımı gezdirir, her adım önceden dolu). FETCH/PARSE/UYGULAMA
+     BAŞARISIZSA (offline, file://, bozuk dosya) küratörlü demoLoadMasterPlan() yoluna AYNEN geri düşülür;
+     kullanıcıya hata gösterilmez (yalnız konsola kısa uyarı). MSK_DEMO/master1 kodu SİLİNMEZ. */
+  var _demoFellBack=false;
+  function demoFallbackToMaster(reason){
+    if(_demoFellBack) return; _demoFellBack=true;
+    try{ console.warn('[demo] paket yüklenemedi → küratörlü master plan:', (reason&&(reason.message||reason))||reason); }catch(e){}
+    try{ demoLoadMasterPlan(); }catch(e){ try{ ensureLayout(); setTimeout(engineFit,80); }catch(_){} }
+    demoLoadingHide();
+  }
+  function demoLoadPackage(){
+    if(_demoFellBack) return;   // (savunmacı) zaten master'a düşülmüşse tekrar deneme
+    demoLoadingShow();
+    var url=DEMO_ASSETS+'demo-proje.mskpkg';
+    var p;
+    // file:// açılışta fetch başarısız olur (CORS/scheme) → catch → master plan fallback (sorun değil).
+    try{ p=fetch(url); }catch(e){ demoFallbackToMaster(e); return; }
+    p.then(function(r){ if(!r || !r.ok) throw new Error('HTTP '+(r&&r.status)); return r.text(); })
+     .then(function(txt){
+       importPackageText(txt, {
+         silent:true, landStep:1,
+         onFail:function(msg){ demoFallbackToMaster(msg); },
+         onDone:function(){ demoLoadingHide(); try{ toast('Demo projesi hazır'); }catch(e){} }
+       });
+     })
+     .catch(function(e){ demoFallbackToMaster(e); });
+  }
+  /* DEMO paketi yüklenirken tam-ekran örtü: 27.8MB fetch + sessiz uygulama + kısa (overlay altında maskeli)
+     3B kadraj-yakalama flash'ını örter; ziyaretçi ölü sayfa görmez. Kabuk dili + mevcut .spin görseli
+     (global @keyframes sp). fixed z-index 600 → tur (260)/dialoglar (300-320)/busy (30) üstünde. */
+  var _demoLoadingEl=null, _demoLoadingT=0;
+  function demoLoadingShow(){
+    if(_demoLoadingEl || _demoFellBack) return;
+    var d=document.createElement('div'); d.id='demoLoading';
+    d.style.cssText='position:fixed;inset:0;z-index:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;'+
+      'background:var(--bg,#f4f1ec);color:var(--ink,#2a2118);text-align:center;padding:24px;transition:opacity .3s ease';
+    d.innerHTML='<div class="spin" style="width:38px;height:38px"></div>'+
+      '<div style="font-size:15px;font-weight:600">Demo projesi yükleniyor…</div>'+
+      '<div style="font-size:12.5px;color:var(--muted,#6b5e4d);max-width:320px;line-height:1.5">Plan, parsel, kameralar ve örnek render’lar hazırlanıyor.</div>';
+    document.body.appendChild(d);
+    _demoLoadingEl=d;
+    // SON EMNİYET: uygulama beklenmedik şekilde takılırsa örtü sonsuza kalmasın (fallback/onDone zaten kaldırır).
+    _demoLoadingT=setTimeout(demoLoadingHide, 30000);
+  }
+  function demoLoadingHide(){
+    if(_demoLoadingT){ clearTimeout(_demoLoadingT); _demoLoadingT=0; }
+    if(_demoLoadingEl){ var el=_demoLoadingEl; _demoLoadingEl=null;
+      el.style.opacity='0'; setTimeout(function(){ try{ el.remove(); }catch(e){} }, 340); }
+  }
+  /* ══════════ DEMO_HANDSON: ziyaretçiye motorun HEDEFLİ ANA TURUNU yaşat ═════════════════════════
+     Paket YÜKLENMEZ (boş/normal motor). Motor iframe'i onboarding.js 'ana' turunu iframe içinde
+     KENDİLİĞİNDEN başlatmaz (tour.iframeAuto=false — gömülü bağlamda oto-start yok). Kabuktan ELLE
+     başlatırız: srcdoc iframe AYNI ORIGIN → localStorage PAYLAŞILIR; onb.ana.status null ise (ziyaretçi
+     turu daha önce görmemiş/kapatmamış) iframe belgesindeki #onbStart düğmesine programatik tık atarız
+     (onbBoot'un bağladığı handler → onbLaunch(true) → 'ana' tur 0'dan; iframe guard'ını #onbStart yolu
+     BİLİNÇLİ aşar — kullanıcı kararı). Motor boot'u otursun diye ~1.2sn aralıkla birkaç deneme; status
+     kurulunca ya da düğme hiç yoksa SESSİZCE vazgeç. Tur; Profesyonel moda geçirtme, parsel sekmesi,
+     TKGM koordinat yapıştırma (41.08046386954354, 29.022807303237602), sınır çizdirme... kendisi yönetir. */
+  function demoHandsOnStartTour(){
+    var tries=0, MAX=6;
+    (function attempt(){
+      tries++;
+      var done=false;
+      try{ if(localStorage.getItem('onb.ana.status')!=null) return; }catch(e){}   // tur zaten başlamış/görülmüş → dokunma
+      try{ var d=eDoc(), b=d&&d.getElementById('onbStart'); if(b){ b.click(); } }catch(e){}
+      try{ done=(localStorage.getItem('onb.ana.status')!=null); }catch(e){}
+      if(!done && tries<MAX) setTimeout(attempt, 1200);
+    })();
+  }
   function openView3D(){ var w=eWin(); if(w && w.View3D && w.View3D.open){ try{ w.View3D.open({embedded:true}); wireStrandSync(); wireViewLockSync(); }catch(e){} } }   // akış adımı → Kapat X yok
   // A1: 3B #v3dViewSeg (Kat/Bina) → prototip strand İKİ YÖNLÜ senkron. Ayrıca açılışta strand'e göre modu uygula.
   function wireStrandSync(){
@@ -1223,10 +1310,14 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       // Yoksa N>=2'de motor plansiz kalir → View3D.open() "Once bir yerlesim olusturun"
       // alert'ine carpar (adim atlama sekeri boş adimda patlar). Yalniz dev/demo yolu.
       if(_devStep>1){ try{ ensureLayout(); }catch(e){} showStep(); }
-      // DEMO MODU: ziyaretçi boş tuvale değil KÜRATÖRLÜ MASTER PLANA insin —
-      // MSK_DEMO.layout (master1.svg, kpState'li) motora içe aktarılır (demoLoadMasterPlan);
-      // yüklenemezse örnek sınır + otomatik yerleşime geri düşer. ?adim=N verildiyse o yol öncelikli.
-      else if(DEMO_MODE){ try{ demoLoadMasterPlan(); }catch(e){ try{ ensureLayout(); setTimeout(engineFit,80); }catch(_){} } }
+      // DEMO_PKG (vitrin): ziyaretçi boş tuvale değil kullanıcının GERÇEK demo PAKETİNE insin —
+      // demo-proje.mskpkg fetch → sessiz uygula (plan+parsel+kameralar+mobilya+GERÇEK render'lar),
+      // landStep 1 (2B editör, maxStep 5 açık). BAŞARISIZSA (offline/file:///bozuk) demoLoadPackage
+      // içindeki fallback küratörlü demoLoadMasterPlan()'a AYNEN düşer. ?adim=N verildiyse o yol öncelikli.
+      else if(DEMO_PKG){ try{ demoLoadPackage(); }catch(e){ demoFallbackToMaster(e); } }
+      // DEMO_HANDSON (elle çizdirt): paket YÜKLENMEZ; motor boş/normal kalır (ziyaretçi kendi çizer).
+      // Motorun hedefli 'ana' turunu kabuktan tetikle (aşağıda demoHandsOnStartTour — #onbStart tıkı).
+      else if(DEMO_HANDSON){ try{ demoHandsOnStartTour(); }catch(e){} }
     });
     f.srcdoc = ENGINE;
   }
@@ -2729,6 +2820,9 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
   // Paket hata dialoğu — renderErrorDialog'un varsayılan "Tekrar dene"si startPaintRender'dır (yanlış);
   //   paket akışında "Tekrar dene" dosya seçiciyi yeniden açar.
   function pkgErr(msg){ renderErrorDialog(msg, function(){ var fi=$('pkgFileInput'); if(fi){ fi.value=''; fi.click(); } }); }
+  // DEMO BOOT (sessiz uygulama): hata halinde görünür pkgErr dialoğu YERİNE opts.onFail (fallback) çağrılır.
+  //   Kullanıcı-tetikli paket açılışında opts yok/onFail yok → mevcut pkgErr davranışı AYNEN.
+  function pkgFail(opts, msg){ if(opts && typeof opts.onFail==='function'){ opts.onFail(msg); return; } pkgErr(msg); }
   function importPackageFile(file){
     if(!file) return;
     var proceed=function(){
@@ -2758,25 +2852,30 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     $('pkgoGo').onclick=function(){ d.remove(); onYes&&onYes(); };
   }
   // [A] parse + format/version/kpState doğrula (state'e dokunma; hatada dialog).
-  function importPackageText(txt){
+  // opts (DEMO boot, opsiyonel): { silent, landStep, onFail, onDone } — bkz. demoLoadPackage.
+  //   Yoksa kullanıcı-tetikli akış: dialoglu hata + adım-3 iniş + "Paket açıldı" toast'ı AYNEN.
+  function importPackageText(txt, opts){
+    opts=opts||{};
     var pkg;
-    try{ pkg=JSON.parse(txt); }catch(e){ pkgErr('Paket dosyası bozuk (geçersiz JSON).'); return; }
-    if(!pkg || pkg.format!=='mesken-proje-paketi'){ pkgErr('Bu bir MESKEN proje paketi (.mskpkg) değil.'); return; }
-    if(pkg.version!==1){ pkgErr('Paket sürümü desteklenmiyor (v'+pkg.version+'). Bu prototip yalnız v1 paketleri açar.'); return; }
-    if(!pkg.kpState || pkg.kpState.v!==1){ pkgErr('Paketteki plan verisi uyumsuz (kpState sürümü v1 değil).'); return; }
-    applyPackage(pkg);
+    try{ pkg=JSON.parse(txt); }catch(e){ pkgFail(opts,'Paket dosyası bozuk (geçersiz JSON).'); return; }
+    if(!pkg || pkg.format!=='mesken-proje-paketi'){ pkgFail(opts,'Bu bir MESKEN proje paketi (.mskpkg) değil.'); return; }
+    if(pkg.version!==1){ pkgFail(opts,'Paket sürümü desteklenmiyor (v'+pkg.version+'). Bu prototip yalnız v1 paketleri açar.'); return; }
+    if(!pkg.kpState || pkg.kpState.v!==1){ pkgFail(opts,'Paketteki plan verisi uyumsuz (kpState sürümü v1 değil).'); return; }
+    applyPackage(pkg, opts);
   }
   // [B] motor hazır (importPlanText + buildFloorplanMap) olana dek bekle (soğuk motor); ~3sn timeout.
-  function applyPackage(pkg){
+  function applyPackage(pkg, opts){
+    opts=opts||{};
     var t0=Date.now();
     (function waitEngine(){
       var w=eWin();
-      if(w && typeof w.importPlanText==='function' && typeof w.buildFloorplanMap==='function'){ applyPackageOnReady(pkg); return; }
-      if(Date.now()-t0>3000){ pkgErr('Motor hazır değil (zaman aşımı). Sayfayı yenileyip tekrar deneyin.'); return; }
+      if(w && typeof w.importPlanText==='function' && typeof w.buildFloorplanMap==='function'){ applyPackageOnReady(pkg, opts); return; }
+      if(Date.now()-t0>3000){ pkgFail(opts,'Motor hazır değil (zaman aşımı). Sayfayı yenileyip tekrar deneyin.'); return; }
       setTimeout(waitEngine, 100);
     })();
   }
-  function applyPackageOnReady(pkg){
+  function applyPackageOnReady(pkg, opts){
+    opts=opts||{};
     var w=eWin();
     // İş A2: KAT-AYRI mobilya/malzeme depoları — importPlanText'ten (restoreState) ÖNCE kurulur. Store
     //   anahtarları 'roomId@@floorLayoutSig' bileşiği taşıyabilir; floorLayoutSig plan/doors/windows'tan
@@ -2798,17 +2897,26 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       var map=(typeof w.buildFloorplanMap==='function') ? w.buildFloorplanMap() : null;
       ok=!!(map && map.units && map.units.length);
     }catch(e){ ok=false; }
-    if(!ok){ pkgErr('Paketteki plan yüklenemedi (geçersiz yerleşim verisi).'); return; }
+    if(!ok){ pkgFail(opts,'Paketteki plan yüklenemedi (geçersiz yerleşim verisi).'); return; }
     // görünümü sığdır (motorun kendi Sığdır düğmesi; yoksa fitView)
     setTimeout(function(){ try{ var d=eDoc(), b=d&&d.getElementById('tFit'); if(b){ b.click(); } else { engineFit(); } }catch(e){ engineFit(); } }, 120);
     // [D] tüm adımları aç (render'lar var) + galeriyi paketten yeniden kurmaya işaretle → Kamera adımı + 3B.
     state.maxStep=Math.max(state.maxStep, 5);
     state.renderCards=[]; state._rgStale=true;
-    goStep(3);   // Kamera adımı — openCameraStep 3B'yi (openPlace) açar
+    goStep(3);   // Kamera adımı — openCameraStep 3B'yi (openPlace) açar (kameralar mesh'e BAĞLANIR + kadraj YAKALANIR)
     // [E]-[G] mesh hazır olunca kameraları mesh'e bindir → [H] galeri rehydrate.
     pkgApplyCamerasWhenReady(pkg, function(){
       rehydrateGallery(pkg);
-      toast('Paket açıldı');
+      // İNİŞ ADIMI (DEMO boot): kamera bağlama + kadraj-yakalama (rehydrate) adım-3 3B'de KOŞTU (before-frame'ler
+      //   hazır); ziyaretçi şimdi istenen adıma iner. landStep 1 = 2B editörde başla (maxStep 5 açık kalır);
+      //   kullanıcı-tetikli açılışta landStep yok → adım-3'te kalır (mevcut davranış). Adım 1'e inişte 2B'yi sığdır.
+      var ls=opts.landStep;
+      if(ls && ls!==3){
+        goStep(ls);
+        if(ls===1) setTimeout(function(){ try{ var d=eDoc(), b=d&&d.getElementById('tFit'); if(b){ b.click(); } else { engineFit(); } }catch(e){ engineFit(); } }, 80);
+      }
+      if(!opts.silent) toast('Paket açıldı');
+      if(typeof opts.onDone==='function'){ try{ opts.onDone(); }catch(e){} }
     });
   }
   // [E]/[F]/[G] View3D.getMap() non-null (mesh hazır) olana dek poll → iç kameraları setCameras +
@@ -2936,6 +3044,11 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       }
       // NOT: #modeTag'e dokunma — applyEngineMode() onu Basit/Profesyonel ile yeniden yazar.
     }catch(e){}
+    // YÜKLEME HİSSİ (YALNIZ DEMO_PKG vitrini): demo paketi (motor iframe load handler'ında) fetch edilene
+    //   kadar örtüyü ŞİMDİDEN göster — ziyaretçi t=0'da boş editör değil "Demo projesi yükleniyor…" görsün.
+    //   HANDS-ON'da paket YOK → örtü HİÇ görünmez (ziyaretçi boş motora inip turla çizer). ?adim=N (N>1)
+    //   dev-atlama yolunda da demoLoadPackage koşmaz → örtüyü açma (30sn emniyet zaten var, gereksiz gösterme).
+    if(DEMO_PKG && !(_devStep>1)){ try{ demoLoadingShow(); }catch(e){} }
   }
   // _devStep (yukarıda ?adim'den çözüldü) N>=2 ise motor plani initEngine() load handler'inda
   // ensureLayout() ile otomatik uretilip showStep() tekrar cagrilir (bkz. initEngine). Burada
@@ -2960,9 +3073,9 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
         text:'Beş adımda ilerlersin: <em>çiz</em>, 3B’de gör, kamera koy, render üret, döşe. Hadi başlayalım.' },
       { id:'proje', title:'Projen', target:'#pkgImportBtn', manual:true,
         check:function(s){ return s.maxStep>=2; },
-        text:function(){ return DEMO_MODE
+        text:function(){ return DEMO_PKG
           ? 'Demo proje hazır yüklü. <em>Paket Aç</em> ile kendi <em>.mskpkg</em> dosyanı da açabilirsin. 2B editördeki <em>Tur</em> düğmesi çizim turunu başlatır.'
-          : 'Bina sınırını çiz ya da <em>Paket Aç</em> ile demo paketini yükle. 2B editördeki <em>Tur</em> düğmesi çizim turunu başlatır.'; } },
+          : 'Bina sınırını 2B editörde çiz — oradaki <em>Tur</em>, parsel koordinatından başlayıp her şeyi tek tek çizdirir. İstersen <em>Paket Aç</em> ile hazır bir <em>.mskpkg</em> açarsın.'; } },
       { id:'go3d', title:'3B’ye geç', target:'#ctaBtn',
         check:function(s){ return s.step>=2; },
         text:'Aşağıdaki <em>3B Görüntüle</em> düğmesine bas; planın dollhouse olarak açılır.' },
@@ -3067,9 +3180,15 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
     }
     function sync(){
       if(!active || status!=='running') return;
+      // ARDIŞIK KAPI: İLK sağlanMAYAN check'te dur — "en ileri sağlanan check" DEĞİL. Böylece ÖNCEDEN
+      //   DOLU demo projesinde (kameralar bağlı → camCounts>=1 ama ziyaretçi henüz adım 1'de) tur, kamera
+      //   kapısını erken sağlanmış görüp go3d'yi ATLAYIP "Render adımı"na fırlamaz; ziyaretçi CTA'larla
+      //   ilerledikçe kapılar sırayla açılır ("5 adımı baştan gezdir"). Adımların doğal sırası kademeli
+      //   (adım-2'ye çıkmadan goRender/dekore sağlanamaz) → normal ileri akışta boşluk yok, davranış AYNI;
+      //   fark yalnız BİR SONRAKİ kapı sağlanmışken ÖNCEKİ sağlanmamışsa (demo ön-yükleme / adım-1'e geri dönüş).
       var hi=-1;
-      for(var i=0;i<TS.length;i++){ if(TS[i].check && safeCheck(TS[i].check)) hi=i; }
-      var desired=hi+1;                    // en ileri sağlanan check’in bir sonrası
+      for(var i=0;i<TS.length;i++){ if(!TS[i].check) continue; if(safeCheck(TS[i].check)) hi=i; else break; }
+      var desired=hi+1;
       if(desired>cur) setCur(desired);
     }
     function onNext(){ if(cur>=TS.length-1){ finish(); return; } setCur(cur+1); render(); }
@@ -3101,9 +3220,22 @@ window.MSK_DEMO = {"boundary":"<svg id=\"svg\" xmlns=\"http://www.w3.org/2000/sv
       }catch(e){}
     })();
 
-    // TETİK: DEMO modunda ilk ziyarette (status yoksa) otomatik başla — demo planı otursun diye kısa gecikme.
+    // TETİK — İKİ AYRI YOL:
+    //  · DEMO_PKG (vitrin): ilk ziyarette (status yoksa) boot'ta otomatik başla — demo planı otursun diye kısa gecikme.
+    //  · DEMO_HANDSON (elle çizdirt): boot'ta BAŞLAMA — motorun 'ana' turu 2B'yi (adım 1) yönetir, iki kart
+    //    birden ziyaretçiyi karıştırmasın. Ziyaretçi 3B'ye (state.step>=2) geçtiğinde — motorun ana turu o
+    //    noktada bitmiş/geride kalmış olur — Akış Turu DEVRALIR (adım 2'den). status kurulunca watcher susar;
+    //    ziyaretçi araya girip Tur düğmesiyle elle başlatmışsa da (status!=null) tekrar tetiklemez.
     load();
-    if(DEMO_MODE && status==null){ setTimeout(function(){ if(status==null && !active) start(); }, 900); }
+    if(DEMO_PKG && status==null){ setTimeout(function(){ if(status==null && !active) start(); }, 900); }
+    else if(DEMO_HANDSON){
+      var _hoWatch=setInterval(function(){
+        try{
+          if(status!=null){ clearInterval(_hoWatch); return; }   // elle başlatıldı/kapatıldı → bırak
+          if(state.step>=2 && !active){ clearInterval(_hoWatch); start(); }
+        }catch(e){ clearInterval(_hoWatch); }
+      }, 400);
+    }
 
     // TEST KANCASI: window.__msk.tour
     try{ if(window.__msk) window.__msk.tour={ start:start, stop:stop,

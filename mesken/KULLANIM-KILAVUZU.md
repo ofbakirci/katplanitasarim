@@ -554,7 +554,12 @@ Sağ alttaki ana düğme **"Dekore Et"**tir: kareler üretilene kadar pasiftir, 
 
 ### Demo modu (Ön-gösterim)
 
-URL'ye `?demo=1` (ya da `#demo` / `/demo`) eklersen **demo modu** açılır: paralı uçlara hiç istek gitmeden, önceden üretilmiş gerçek çıktılar 2-4 saniye gecikmeyle gösterilir. Başlık çubuğunda sade bir **"DEMO"** rozeti durur (üzerine gelince "üretimler örnek çıktıdır, kredi harcanmaz" ayrıntısını yazar). İlk ziyarette **Akış Turu** kendiliğinden açılır (Bölüm 2); kapatırsan başlık çubuğundaki "Tur" düğmesiyle dilediğin an geri çağırırsın. Sunum ve deneme için idealdir.
+URL'ye `?demo=1` (ya da `#demo` / `/demo`) eklersen **demo modu** açılır. İki tadı var:
+
+- **Varsayılan (elle çizdirten):** boş tuvalle başlarsın; 2B editörün içinde **hedefli ana tur** kendiliğinden açılır ve örnek projeyi sana adım adım yaptırır — TKGM'ye gerçek koordinatı yapıştırtır, sınırı çizdirir, blok açtırır. Sen 3B'ye geçince kabuk **Akış Turu** devralır.
+- **`?paket=1` eklersen (hazır vitrin):** örnek demo projesi kendiliğinden yüklenir — parselli, iki bloklu, site imkanlı; kameraları, mobilyası ve **önceden üretilmiş gerçek render'ları** paketten hazır gelir (Adım 1'den Döşe'ye her adım dolu), Akış Turu açılışta karşılar.
+
+Her iki tatta da paralı uçlara hiç istek gitmez; yeni bir üretim denersen önceden üretilmiş örnek çıktılar 2-4 saniye gecikmeyle gösterilir. Başlık çubuğunda sade bir **"DEMO"** rozeti durur (üzerine gelince "üretimler örnek çıktıdır, kredi harcanmaz" ayrıntısını yazar). İlk ziyarette **Akış Turu** kendiliğinden açılır (Bölüm 2); kapatırsan başlık çubuğundaki "Tur" düğmesiyle dilediğin an geri çağırırsın. Sunum ve deneme için idealdir.
 
 ### Render köprü sunucusu notu
 
