@@ -156,17 +156,38 @@ const asserts = `
     global.window=w;
   })();
 
-  /* (8) ornek parsel — tkgmLoadParcel cagrisi + applyData esdegeri #psImar reveal */
+  /* (8) ornek parsel — BIZIM parsel (ONB_TARGETS.parsel.geo) motor globallerine DOGRUDAN kurulur
+     + motor hatti (psComputeSetback/imarRender/render/fitView) + applyData esdegeri #psImar reveal.
+     tkgmLoadParcel ARTIK CAGRILMAZ: geo.pts zaten eksene-hizali FINAL koordinat oldugundan direct-set
+     parcelPts'i verilen 5 nokta ile BIREBIR birakir (auto-align/grid-snap deger kaydirmaz). */
   (function(){ const d=global.document;
-    const els={}; const mk=()=>({style:{display:'none'}, className:'', innerHTML:''});
+    const els={}; const mk=()=>({style:{display:'none'}, className:'', innerHTML:'', value:''});
     global.document={getElementById:id=>(els[id]=els[id]||mk())};
-    let called=0, ring=null;
-    global.tkgmLoadParcel=function(w){ called++; ring=w; };
+    /* motorun bir gercek TKGM yuklemede yazdigi globaller + hat fonksiyonlari (mock) */
+    global.parcelPts=[]; global.parcelClosed=false; global.parcelRot=0; global.psFrontEdge=99; global.parcelImar=null;
+    let setbackCalls=0, renderCalls=0, fitCalls=0, syncCalls=0, imarArg='__none__';
+    global.psComputeSetback=function(){ setbackCalls++; };
+    global.imarRender=function(im){ imarArg=im; };
+    global.psSyncRotUI=function(){ syncCalls++; };
+    global.render=function(){ renderCalls++; };
+    global.fitView=function(){ fitCalls++; };
     onbDemoParcel();
-    T('demo parsel: tkgmLoadParcel 4 koseyle cagrildi', called===1 && Array.isArray(ring) && ring.length===4);
+    const geo=ONB_TARGETS.parsel.geo;
+    T('demo parsel: parcelPts = geo.pts 5 nokta BIREBIR', Array.isArray(global.parcelPts) && global.parcelPts.length===5 &&
+        global.parcelPts.every((p,i)=>p.x===geo.pts[i].x && p.y===geo.pts[i].y));
+    T('demo parsel: parcelClosed=true', global.parcelClosed===true);
+    T('demo parsel: parcelRot = geo.rot (-1.5153..)', global.parcelRot===geo.rot && global.parcelRot===-1.5153036887208142);
+    T('demo parsel: psFrontEdge sifirlandi (-1)', global.psFrontEdge===-1);
+    T('demo parsel: parcelImar ada/emsal/taks/hmax/provider', !!global.parcelImar && global.parcelImar.ada==='2010' &&
+        global.parcelImar.emsal===3 && global.parcelImar.maksTaks===0.75 && global.parcelImar.hmax===15.5 && global.parcelImar.provider==='istanbul');
+    T('demo parsel: parcelImar KOPYA (sabit ONB_TARGETS.geo.imar mutasyona ugramaz)', global.parcelImar!==geo.imar);
+    T('demo parsel: imarRender parcelImar ile cagrildi', imarArg===global.parcelImar);
+    T('demo parsel: motor hatti (setback/render/fitView/syncRotUI) cagrildi', setbackCalls===1 && renderCalls===1 && fitCalls===1 && syncCalls===1);
     T('demo parsel: #psImar reveal edildi', els.psImar && els.psImar.style.display==='block');
-    T('demo parsel: #psMsg bilgi mesaji', els.psMsg && els.psMsg.style.display==='block' && /ps-ok/.test(els.psMsg.className));
-    delete global.tkgmLoadParcel; global.document=d;
+    T('demo parsel: #psMsg bilgi mesaji (ada 2010)', els.psMsg && els.psMsg.style.display==='block' && /ps-ok/.test(els.psMsg.className) && /ada 2010/.test(els.psMsg.innerHTML));
+    delete global.psComputeSetback; delete global.imarRender; delete global.psSyncRotUI; delete global.render; delete global.fitView;
+    delete global.parcelPts; delete global.parcelClosed; delete global.parcelRot; delete global.psFrontEdge; delete global.parcelImar;
+    global.document=d;
   })();
 
   /* (9) kart isaretlemesi CSS sozlesmesine uygun — kaynak-smoke */
@@ -221,6 +242,14 @@ const asserts = `
   T('ONB_TARGETS daireler karmasi + toplam 3', ONB_TARGETS.daireler.length===2 && ONB_TARGETS.daireler[0].acikMutfak===true && ONB_TARGETS.daireler[1].ensuite===true && ONB_TARGETS.daireler.reduce((a,d)=>a+d.adet,0)===3);
   T('ONB_TARGETS kamera 7 ic 3 drone', ONB_TARGETS.kamera.ic===7 && ONB_TARGETS.kamera.drone===3);
   T('ONB.TARGETS export = ONB_TARGETS', ONB.TARGETS===ONB_TARGETS);
+  /* GERCEK parsel geo gomulusu (onbDemoParcel'in yukledigi) */
+  T('ONB_TARGETS.parsel.geo 5 nokta + kapali + rot', (function(){ const g=ONB_TARGETS.parsel.geo;
+      return g && Array.isArray(g.pts) && g.pts.length===5 && g.closed===true && g.rot===-1.5153036887208142; })());
+  T('ONB_TARGETS.parsel.geo pts eksene-hizali (ilk/son nokta)', (function(){ const p=ONB_TARGETS.parsel.geo.pts;
+      return p[0].x===43 && p[0].y===12.5 && p[4].x===-27 && p[4].y===11; })());
+  T('ONB_TARGETS.parsel.geo.imar KIRPILMIS (scan/snippet YOK) + provider', (function(){ const im=ONB_TARGETS.parsel.geo.imar;
+      return im && im.ada==='2010' && im.parsel==='257' && im.emsal===3 && im.maksTaks===0.75 && im.hmax===15.5 &&
+             im.provider==='istanbul' && im.scan===null && !('snippet' in im); })());
 
   /* (12b) GERIYE-UYUM: targets'siz stub ctx'te HEDEFLI check'ler BUGUNKU davranista */
   T('GERIYE-UYUM sinir-ciz hedefsiz: yalniz closed', step('sinir-ciz').check(baseCtx({closed:()=>true}))===true && step('sinir-ciz').check(baseCtx())===false);
@@ -228,15 +257,16 @@ const asserts = `
   T('GERIYE-UYUM blok-ekle hedefsiz: base ustu buyume', step('blok-ekle').check(baseCtx({blocksLen:()=>2}),1)===true && step('blok-ekle').check(baseCtx({blocksLen:()=>1}),1)===false);
   T('GERIYE-UYUM: fullCtx (targets yok) hala 13', ONB.computeTarget(ONB_STEPS, fullCtx(), FULL_BASES)===13);
 
-  /* (12c) HEDEFLI toleranslar — targets bagli ctx (sinir-ciz>=6, blok-ekle>=2) */
+  /* (12c) TARGETS VARKEN DE JENERIK — hedefli-tolerans KALDIRILDI (canli /demo takilma fix).
+     ctx'te targets olsa bile sinir-ciz yalniz KAPALI sinir okur (kose sayisina ZORLAMAZ),
+     blok-ekle base'e gore buyume okur (2 bloga ZORLAMAZ). 4-kose ve tek-blok artik gecer. */
   const tgCtx = over => baseCtx(Object.assign({ targets:ONB_TARGETS, ptsLen:()=>0 }, over));
-  T('HEDEFLI sinir-ciz: closed + pts>=6 -> true', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>6}))===true);
-  T('HEDEFLI sinir-ciz: closed + pts=8 -> true', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>8}))===true);
-  T('HEDEFLI sinir-ciz: closed + pts=5 -> false (8 kose -> >=6)', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>5}))===false);
-  T('HEDEFLI sinir-ciz: kapali degil -> false', step('sinir-ciz').check(tgCtx({closed:()=>false, ptsLen:()=>9}))===false);
-  T('HEDEFLI sinir-ciz: targets var ama ptsLen yoksa closed yeterli', step('sinir-ciz').check(baseCtx({targets:ONB_TARGETS, closed:()=>true}))===true);
-  T('HEDEFLI blok-ekle: >=2 -> true, 1 -> false', step('blok-ekle').check(tgCtx({blocksLen:()=>2}))===true && step('blok-ekle').check(tgCtx({blocksLen:()=>1}))===false);
-  T('HEDEFLI blok-ekle: 3 blok da gecerli', step('blok-ekle').check(tgCtx({blocksLen:()=>3}))===true);
+  T('JENERIK sinir-ciz (targets var): closed + 4 kose -> true (4 kose TAKILMAZ)', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>4}))===true);
+  T('JENERIK sinir-ciz (targets var): closed + 8 kose -> true', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>8}))===true);
+  T('JENERIK sinir-ciz (targets var): kapali degil -> false', step('sinir-ciz').check(tgCtx({closed:()=>false, ptsLen:()=>9}))===false);
+  T('JENERIK sinir-ciz (targets var): ptsLen tamamen yok sayilir', step('sinir-ciz').check(baseCtx({targets:ONB_TARGETS, closed:()=>true}))===true);
+  T('JENERIK blok-ekle (targets var): tek blok base 0 -> true (2 bloga ZORLAMAZ)', step('blok-ekle').check(tgCtx({blocksLen:()=>1}),0)===true);
+  T('JENERIK blok-ekle (targets var): base-goreli (2>base1 true, 1>base1 false)', step('blok-ekle').check(tgCtx({blocksLen:()=>2}),1)===true && step('blok-ekle').check(tgCtx({blocksLen:()=>1}),1)===false);
 
   /* (12d) render-isaret iframe metin dali (onbStepBody saf helper) */
   T('onbStepBody: iframe disi -> body', onbStepBody(kstep('render-isaret'), false)===kstep('render-isaret').body);

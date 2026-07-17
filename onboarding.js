@@ -40,16 +40,28 @@ const ONB_KAM_VERSION = 1;    // 'kamera3d' turu
    v2 vizyonu: "paketi vereceğim, onboarding onu kullanıcıya elle çizdirtecek —
    tüm özelliklerini kullanacak." input/proje-20260716-4.mskpkg paketinin olculen
    degerleri INLINE sabit (tekdosya build fetch YAPAMAZ -> ayri JSON YASAK).
-   Adim METINLERI buradan turer (koordinat, blok/kose/kat sayilari...) ve HEDEFLI
-   check'ler buna gore tolerans kurar.
-   SOZLESME (geriye-uyum KUTSAL): check'ler yalniz ctx uzerinden okur; ctx.targets
-   ya da ilgili alan YOKSA her check BUGUNKU jenerik davranisina duser. targets'siz
-   stub ctx'ler (mevcut testler) DAVRANIS DEGISMEDEN gecer. */
+   Adim METINLERI buradan turer (koordinat, blok/kose/kat sayilari...).
+   ONEMLI (canli /demo geri bildirimi): check'ler ASLA hedef sayiya ZORLAMAZ.
+   Hedefler YALNIZ YONLENDIREN METIN; check'lerin tamami JENERIKtir (kapali sinir,
+   base'e gore buyume...). Tur kullaniciyi hicbir adimda takili birakmaz.
+   parsel.geo = paketten cikan GERCEK parselin motor durumu (parcelPts FINAL/dondurulmus
+   yerel koordinat + parcelRot + KIRPILMIS imar); "Ornek parselle devam" bunu yukler. */
 const ONB_TARGETS = {
   kaynak:'proje-20260716-4.mskpkg', baslik:'3 daire',
   parsel:{ koordinat:'41.08046386954354, 29.022807303237602',   // TKGM sorgusuna yapistirilacak Google Maps koordinati
            ilce:'BEŞİKTAŞ', mahalle:'AKAT', ada:'2010', parsel:'257', alan:2058,
-           imar:{ emsal:3, maksTaks:0.75, hmax:15.5 } },
+           imar:{ emsal:3, maksTaks:0.75, hmax:15.5 },
+           /* GERCEK parsel — motorun bir TKGM yuklemesinden sonra tuttugu (ve .mskpkg'e
+              serilestirdigi) durumun BIREBIR aynisi: parcelPts zaten eksene-hizali FINAL
+              koordinat (psAutoAngle(pts)=0), parcelRot uygulanan donme (rad). imar KIRPILMIS
+              (scan/snippet blobu YOK) — imarRender tum alanlari null-guard'li okur. */
+           geo:{ pts:[{x:43,y:12.5},{x:44.5,y:-16},{x:-31,y:-16},{x:-30,y:8.5},{x:-27,y:11}],
+                 closed:true, rot:-1.5153036887208142,
+                 imar:{ ada:'2010', parsel:'257', mahalle:'AKAT', ilce:'BEŞİKTAŞ', alan:2058,
+                        fonksiyon:'YUKSEK YOGUNLUKTA KONUT ALANI', yogunluk:350,
+                        minTaks:null, maksTaks:0.75, emsal:3, hmax:15.5, katAdedi:null,
+                        planAdi:'BESIKTAS GERI GORUNUM VE ETKILENME BOLGESI RNIP',
+                        planNotuId:null, scan:null, deferred:false, provider:'istanbul' } } },
   bina:{ tip:'apartman', kat:4, bodrum:2, cati:'kirma' },
   sinir:{ kose:8, sekil:'L' },
   bloklar:2,
@@ -115,16 +127,12 @@ const ONB_STEPS = [
 
   { id:'sinir-ciz', needsPro:false, skippable:false,
     title:'Yapı sınırını çiz',
-    body:'"Parsele yapı sınırı çiz" düğmesine bas, sonra tuvalde bina dış hattını tıklayarak kapat. Örnek projedeki blok '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+'.',
+    body:'"Parsele yapı sınırı çiz" düğmesine bas, sonra tuvalde köşeleri tıklayıp başlangıç noktasına dönerek kapat. Basit bir dörtgen yeter; istersen örnekteki gibi '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+' de deneyebilirsin.',
     target:{type:'dom', sel:'#psDrawBld'},
-    /* HEDEFLI: hedef varken kapali sinir + en az (kose-2) nokta beklenir (8 kose -> >=6);
-       hedef/ptsLen yoksa BUGUNKU davranis (yalniz kapali sinir). */
-    check:function(ctx){
-      const cl = !!ctx.closed();
-      const tg = ctx.targets;
-      if(cl && tg && tg.sinir && typeof tg.sinir.kose==='number' && typeof ctx.ptsLen==='function')
-        return ctx.ptsLen() >= Math.max(3, tg.sinir.kose - 2);
-      return cl; } },
+    /* JENERIK: sinir KAPANDI mi (kapali poligon). Hedef kose/sekil YALNIZ metinde;
+       kullaniciyi belli bir kose sayisina ZORLAMAZ (canli /demo'da 4 kose cizince
+       takiliyordu -> hedefli >=6 dali KALDIRILDI). */
+    check:function(ctx){ return !!ctx.closed(); } },
 
   { id:'yerlesim', needsPro:false, skippable:false,
     title:'Yerleşimi oluştur',
@@ -157,12 +165,9 @@ const ONB_STEPS = [
     body:'Yeni blok ekleyip her birini ayrı planlayabilirsin. Blok sekmelerinden ekle. Örnek projede '+ONB_TARGETS.bloklar+' blok (A+B).',
     target:{type:'dom', sel:'#blockTabs'},
     baseline:function(ctx){ return ctx.blocksLen(); },
-    /* HEDEFLI: hedef varken en az ONB_TARGETS.bloklar blok beklenir; hedef yoksa BUGUNKU
-       davranis (base'e gore buyume). */
-    check:function(ctx, base){
-      const tg = ctx.targets;
-      if(tg && typeof tg.bloklar==='number') return ctx.blocksLen() >= tg.bloklar;
-      return ctx.blocksLen() > (base||0); } },
+    /* JENERIK: bloga en az bir YENI blok eklendi mi (base'e gore buyume). Hedef "2 blok"
+       YALNIZ metinde; kullaniciyi 2 bloga ZORLAMAZ (takilma riski -> hedefli >=2 dali KALDIRILDI). */
+    check:function(ctx, base){ return ctx.blocksLen() > (base||0); } },
 
   { id:'kat-ayri', needsPro:true, skippable:true,
     title:'Katları ayrı planla',
@@ -326,16 +331,17 @@ function onbFloorSig(){
   const kk = onbEl('katKullanim');
   return f + '|' + (kk ? String(kk.value) : 'konut');
 }
+/* CTX = check'lerin okudugu CANLI durum. check'ler JENERIK -> ONB_TARGETS'i (hedefleri)
+   OKUMAZ; hedefler yalniz adim METINLERINDE gecer (ONB_TARGETS'tan dogrudan). Bu yuzden
+   ctx'te 'targets' ya da 'ptsLen' YOK (hedef-bagli tolerans kaldirildi). */
 function onbLiveCtx(){
   return {
-    targets:      ONB_TARGETS,          // demo-paket hedefleri (HEDEFLI check'ler burdan okur; yoksa jenerik dalar)
     modePro:      function(){ return onbHasBodyClass('mode-pro'); },
     tabActive:    function(){ const e=onbSel('.ptab[data-tab="parsel"]'); return !!(e && e.classList && e.classList.contains('active')); },
     parcelLen:    function(){ return (typeof parcelPts!=='undefined' && parcelPts) ? parcelPts.length : 0; },
     frontEdge:    function(){ return (typeof psFrontEdge!=='undefined') ? psFrontEdge : -1; },
     cekme:        function(){ return onbCekmeSig(); },
     closed:       function(){ return (typeof closed!=='undefined') ? !!closed : false; },
-    ptsLen:       function(){ return (typeof pts!=='undefined' && pts) ? pts.length : 0; },   // yapi sinir noktalari (sinir-ciz HEDEFLI kontrolu)
     plan:         function(){ return (typeof plan!=='undefined') ? plan : null; },
     editCount:    function(){ return (typeof editHistory!=='undefined' && editHistory) ? editHistory.length : 0; },
     doorWinCount: function(){ return onbDoorWinCount(); },
@@ -357,8 +363,8 @@ function onbKamCams(){ const v=onbV3d(); try{ return (v && typeof v.getCameras==
 function onbKamExt(){ const v=onbV3d(); try{ return (v && typeof v.getExteriorCameras==='function') ? (v.getExteriorCameras()||[]) : []; }catch(e){ return []; } }
 function onbKamCtx(){
   return {
-    targets:ONB_TARGETS,          // demo-paket hedefleri (kamera3d check'leri >=1 KALIR; targets yalniz metin dokusu icin)
-    /* resmi bayrak isCamUIEnabled; eski motor gomulmusse camPreviewForTest'e (teshis ucu) dusulur */
+    /* kamera3d check'leri >=1 (jenerik); ONB_TARGETS yalniz metinde. resmi bayrak
+       isCamUIEnabled; eski motor gomulmusse camPreviewForTest'e (teshis ucu) dusulur */
     camUI:function(){ const v=onbV3d();
       try{
         if(v && typeof v.isCamUIEnabled==='function') return !!v.isCamUIEnabled();
@@ -378,20 +384,38 @@ function onbKamCtx(){
   };
 }
 
-/* ornek (statik) parsel — AG CAGRISIZ demo ring'i tkgmLoadParcel yoluyla yukle
-   (psProj yoksa savunmaci yol parcelPts'i dogrudan yazar). ~32x22 m dikdortgen.
-   ONEMLI: parsel.js applyData() (gercek TKGM akisi) parseli yukledikten sonra
-   #psImar blogunu acar (display:block) — adim 5'in hedefi #psDrawBld o blogun
-   ICINDE. applyData initParselSorgu closure'i (disaridan cagirilamaz), bu yuzden
-   esdeger reveal'i burada yapariz; imarLoad (ag) bilincli atlanir. */
+/* "Ornek parselle devam" -> AG CAGRISIZ demo parseli yukle = BIZIM parsel
+   (ONB_TARGETS.parsel.geo, proje-20260716-4.mskpkg'den; Besiktas/Akat ada 2010 parsel 257).
+   YAKLASIM: statik dikdortgen + tkgmLoadParcel YERINE, motorun bir GERCEK TKGM yuklemesinden
+   sonra tuttugu durumu (parcelPts=FINAL koordinat, parcelRot, parcelImar) DOGRUDAN kur —
+   geo.pts zaten eksene-hizali (psAutoAngle=0) oldugundan tkgmLoadParcel'i taklit etmeye gerek yok;
+   bu yol parcelPts'i verilen 5 nokta ile BIREBIR birakir (aksi halde auto-align + grid-snap ile
+   deger kayabilirdi). Butun motor globalleri/fonksiyonlari typeof-guard'li -> headless test guvenli.
+   ONEMLI: parsel.js applyData() (gercek TKGM akisi) parseli yukledikten sonra #psImar blogunu
+   acar (display:block) — adim 5'in hedefi #psDrawBld o blogun ICINDE; applyData closure'i
+   disaridan cagirilamadigindan esdeger reveal'i + imarRender'i burada yapariz; imarLoad (ag) atlanir. */
 function onbDemoParcel(){
-  if(typeof tkgmLoadParcel!=='function') return;
-  const world=[{x:-16,y:-11},{x:16,y:-11},{x:16,y:11},{x:-16,y:11}];
-  try{ tkgmLoadParcel(world.map(function(p){ return {x:p.x, y:p.y}; })); }catch(e){ return; }
+  const geo = ONB_TARGETS && ONB_TARGETS.parsel && ONB_TARGETS.parsel.geo;
+  if(!geo || !Array.isArray(geo.pts) || geo.pts.length<3) return;
+  /* 1) geometri + imar durumu: motor globallerini GERCEK yuklemenin birakacagi hale kur */
+  try{ if(typeof parcelPts!=='undefined')    parcelPts    = geo.pts.map(function(p){ return {x:p.x, y:p.y}; }); }catch(e){}
+  try{ if(typeof parcelClosed!=='undefined') parcelClosed = geo.closed!==false; }catch(e){}
+  try{ if(typeof parcelRot!=='undefined')    parcelRot    = (typeof geo.rot==='number') ? geo.rot : 0; }catch(e){}
+  try{ if(typeof psFrontEdge!=='undefined')  psFrontEdge  = -1; }catch(e){}   // yeni parsel -> yol cephesi secimi sifir
+  try{ if(typeof parcelImar!=='undefined')   parcelImar   = geo.imar ? Object.assign({}, geo.imar) : null; }catch(e){}
+  /* 2) motorun kendi hattini calistir (hepsi guard'li): cekme zarfi + imar paneli + kadraj */
+  try{ if(typeof psComputeSetback==='function') psComputeSetback(); }catch(e){}
+  try{ if(typeof imarRender==='function') imarRender((typeof parcelImar!=='undefined') ? parcelImar : null); }catch(e){}   // #psImarBilgi doldurur
+  try{ if(typeof psSyncRotUI==='function') psSyncRotUI(); }catch(e){}
+  /* 3) #psImar blogunu ac (applyData esdegeri reveal) -> #psDrawBld gorunur */
   const imar=onbEl('psImar'); if(imar && imar.style) imar.style.display='block';
+  /* 4) tuval + kadraj */
+  try{ if(typeof render==='function') render(); }catch(e){}
+  try{ if(typeof fitView==='function') fitView(); }catch(e){}
+  /* 5) bilgi mesaji */
   const msg=onbEl('psMsg');
   if(msg && msg.style){ msg.style.display='block'; msg.className='ps-msg ps-ok';
-    msg.innerHTML='Örnek parsel yüklendi <span class="ps-dim">(demo — TKGM sorgusu yapılmadı)</span>'; }
+    msg.innerHTML='Örnek parsel yüklendi <span class="ps-dim">('+onbEsc(onbTr(ONB_TARGETS.parsel.ilce))+'/'+onbEsc(onbTr(ONB_TARGETS.parsel.mahalle))+', ada '+onbEsc(ONB_TARGETS.parsel.ada)+' parsel '+onbEsc(ONB_TARGETS.parsel.parsel)+' — demo, TKGM sorgusu yapılmadı)</span>'; }
 }
 
 /* ================= calisma zamani denetleyicisi (yalniz tarayici) ================= */
@@ -612,7 +636,11 @@ function onbStop(status){
   onbActive=false; onbTour=null; onbHidden=false; onbClearTimers(); onbTeardown();
 }
 
-/* reset=true -> 0'dan tam tur; degilse depolanmis adim + saglanmislari otomatik gec */
+/* reset=true -> tam tur (ama depolanmis adimi yok say); degilse depolanmis adim + saglanmislari
+   otomatik gec. HER IKI DALDA da ilk boyamadan ONCE computeTarget ile "ilk saglanmayan adim"
+   hesaplanir: tur, boot'ta ZATEN saglanmis bas adimlari (or. Pro mod acik) gostermeden dogrudan
+   dogru adimdan baslar -> "1/13 goz kirpmasi" (canli /demo raporu) YOK. reset yalniz DEPOLANMIS
+   adimi (onbStepStored) yok sayar; saglanmislari atlamak ortak. */
 function onbLaunchTour(tour, reset){
   if(!tour || !onbBrowser() || !document.body) return;
   if(onbActive) onbStop('dismissed');          // ayni anda tek tur
@@ -620,7 +648,8 @@ function onbLaunchTour(tour, reset){
   if(tour.id==='ana') onbExportFlag=false;
   if(tour.id==='kamera3d') onbExtRenderFlag=false;
   onbSet('onb.'+tour.id+'.status','active'); onbSet('onb.'+tour.id+'.v', String(tour.version));
-  let idx = reset ? 0 : Math.max(onbStepStored(tour), onbComputeTarget(tour.steps, tour.ctx(), {}));
+  const auto = onbComputeTarget(tour.steps, tour.ctx(), {});   // ilk saglanmayan adim (flash-onleyici)
+  let idx = reset ? auto : Math.max(onbStepStored(tour), auto);
   if(idx>=tour.steps.length){ onbFinish(); return; }
   onbBuildUI();
   onbApplyZBoost(!!tour.zBoost);
