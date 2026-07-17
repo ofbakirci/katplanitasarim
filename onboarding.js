@@ -36,6 +36,52 @@
 const ONB_VERSION = 1;        // 'ana' turu
 const ONB_KAM_VERSION = 1;    // 'kamera3d' turu
 
+/* ================= DEMO PAKET HEDEFLERI (ONB_TARGETS) =================
+   v2 vizyonu: "paketi vereceğim, onboarding onu kullanıcıya elle çizdirtecek —
+   tüm özelliklerini kullanacak." input/proje-20260716-4.mskpkg paketinin olculen
+   degerleri INLINE sabit (tekdosya build fetch YAPAMAZ -> ayri JSON YASAK).
+   Adim METINLERI buradan turer (koordinat, blok/kose/kat sayilari...) ve HEDEFLI
+   check'ler buna gore tolerans kurar.
+   SOZLESME (geriye-uyum KUTSAL): check'ler yalniz ctx uzerinden okur; ctx.targets
+   ya da ilgili alan YOKSA her check BUGUNKU jenerik davranisina duser. targets'siz
+   stub ctx'ler (mevcut testler) DAVRANIS DEGISMEDEN gecer. */
+const ONB_TARGETS = {
+  kaynak:'proje-20260716-4.mskpkg', baslik:'3 daire',
+  parsel:{ koordinat:'41.08046386954354, 29.022807303237602',   // TKGM sorgusuna yapistirilacak Google Maps koordinati
+           ilce:'BEŞİKTAŞ', mahalle:'AKAT', ada:'2010', parsel:'257', alan:2058,
+           imar:{ emsal:3, maksTaks:0.75, hmax:15.5 } },
+  bina:{ tip:'apartman', kat:4, bodrum:2, cati:'kirma' },
+  sinir:{ kose:8, sekil:'L' },
+  bloklar:2,
+  daireler:[ {oda:2, salon:1, acikMutfak:true, adet:1}, {oda:3, salon:1, ensuite:true, adet:2} ],
+  balkon:10, kesme:3,
+  kamera:{ ic:7, drone:3 }
+};
+
+/* TUMU-BUYUK il/mahalle adini baslik-harfe cevirir (Turkce-farkinda; toLowerCase'in
+   'İ' -> 'i̇' bozulmasindan kacinmak icin ozel harfler ONCE elle map'lenir):
+   'BEŞİKTAŞ' -> 'Beşiktaş', 'AKAT' -> 'Akat'. Saf; metin uretiminde kullanilir. */
+function onbTr(s){
+  s = String(s==null ? '' : s);
+  if(!s) return s;
+  const rest = s.slice(1)
+    .replace(/İ/g,'i').replace(/I/g,'ı').replace(/Ş/g,'ş').replace(/Ğ/g,'ğ')
+    .replace(/Ü/g,'ü').replace(/Ö/g,'ö').replace(/Ç/g,'ç').toLowerCase();
+  return s.charAt(0) + rest;
+}
+/* daire karmasini okunur metne cevirir:
+   "1 daire 2+1 açık mutfak + 2 daire 3+1 ensuite" (ONB_TARGETS.daireler'den turer). */
+function onbDaireOzet(){
+  try{
+    return ONB_TARGETS.daireler.map(function(d){
+      let t = d.adet+' daire '+d.oda+'+'+d.salon;
+      if(d.acikMutfak) t += ' açık mutfak';
+      if(d.ensuite)    t += ' ensuite';
+      return t;
+    }).join(' + ');
+  }catch(e){ return ''; }
+}
+
 /* ================= ANA TUR — 13 adim =================
    Adim semasi: {id, title, body, target:{type:'dom',sel}|{type:'canvas'[,sel]},
    needsPro, skippable, baseline?(ctx)->v, check(ctx, base)->bool, action?:{label,run}}
@@ -49,46 +95,53 @@ const ONB_STEPS = [
 
   { id:'parsel-sekme', needsPro:true, skippable:false,
     title:'Parsel/İmar sekmesi',
-    body:'Sol paneldeki Parsel/İmar sekmesini aç — parseli buradan getireceğiz.',
+    body:'Sol paneldeki Parsel/İmar sekmesini aç — parseli buradan getireceğiz. Örnek: ada '+ONB_TARGETS.parsel.ada+' parsel '+ONB_TARGETS.parsel.parsel+', emsal '+ONB_TARGETS.parsel.imar.emsal+'.',
     target:{type:'dom', sel:'.ptab[data-tab="parsel"]'},
     check:function(ctx){ return ctx.tabActive(); } },
 
   { id:'parsel-getir', needsPro:true, skippable:true,
     title:'Parseli getir',
-    body:'Koordinat ya da Google Maps bağlantısıyla gerçek parseli çek. Denemek istersen örnek parselle de devam edebilirsin.',
+    body:'Koordinat ya da Google Maps bağlantısıyla gerçek parseli çek. Örnek projenin parseli: '+onbTr(ONB_TARGETS.parsel.ilce)+'/'+onbTr(ONB_TARGETS.parsel.mahalle)+', ada '+ONB_TARGETS.parsel.ada+' parsel '+ONB_TARGETS.parsel.parsel+' ('+ONB_TARGETS.parsel.alan+' m2). TKGM sorgusuna şu koordinatı yapıştır: '+ONB_TARGETS.parsel.koordinat+'. Denemek istersen örnek parselle de devam edebilirsin.',
     target:{type:'dom', sel:'#psFetch'},
     action:{ label:'Örnek parselle devam', run:function(){ onbDemoParcel(); } },
     check:function(ctx){ return ctx.parcelLen() >= 3; } },
 
   { id:'cekme-yol', needsPro:true, skippable:true,
     title:'Çekme ve yol cephesi',
-    body:'İmar çekme mesafelerini gir ya da yola bakan cepheyi seç. Yapı sınırı bunlara göre içerlek çizilir.',
+    body:'İmar çekme mesafelerini gir ya da yola bakan cepheyi seç. Yapı sınırı bunlara göre içerlek çizilir. Örnek imar: emsal '+ONB_TARGETS.parsel.imar.emsal+', TAKS '+ONB_TARGETS.parsel.imar.maksTaks+', Hmax '+ONB_TARGETS.parsel.imar.hmax+' m.',
     target:{type:'dom', sel:'.ps-cekme-grid'},
     baseline:function(ctx){ return ctx.cekme(); },
     check:function(ctx, base){ return ctx.frontEdge() >= 0 || ctx.cekme() !== base; } },
 
   { id:'sinir-ciz', needsPro:false, skippable:false,
     title:'Yapı sınırını çiz',
-    body:'"Parsele yapı sınırı çiz" düğmesine bas, sonra tuvalde bina dış hattını tıklayarak kapat.',
+    body:'"Parsele yapı sınırı çiz" düğmesine bas, sonra tuvalde bina dış hattını tıklayarak kapat. Örnek projedeki blok '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+'.',
     target:{type:'dom', sel:'#psDrawBld'},
-    check:function(ctx){ return ctx.closed(); } },
+    /* HEDEFLI: hedef varken kapali sinir + en az (kose-2) nokta beklenir (8 kose -> >=6);
+       hedef/ptsLen yoksa BUGUNKU davranis (yalniz kapali sinir). */
+    check:function(ctx){
+      const cl = !!ctx.closed();
+      const tg = ctx.targets;
+      if(cl && tg && tg.sinir && typeof tg.sinir.kose==='number' && typeof ctx.ptsLen==='function')
+        return ctx.ptsLen() >= Math.max(3, tg.sinir.kose - 2);
+      return cl; } },
 
   { id:'yerlesim', needsPro:false, skippable:false,
     title:'Yerleşimi oluştur',
-    body:'"Yerleşimi Oluştur" düğmesi daireleri otomatik yerleştirir.',
+    body:'"Yerleşimi Oluştur" düğmesi daireleri otomatik yerleştirir. Örnek projede katta '+ONB_TARGETS.baslik+': '+onbDaireOzet()+'.',
     target:{type:'dom', sel:'#genBtn'},
     check:function(ctx){ return !!ctx.plan(); } },
 
   { id:'oda-duzenle', needsPro:false, skippable:false,
     title:'Odaları düzenle',
-    body:'Tuvalde duvarları sürükle, oda tiplerini değiştir — plan senin elinde şekillenir.',
+    body:'Tuvalde duvarları sürükle, oda tiplerini değiştir — plan senin elinde şekillenir. Örnek projede '+ONB_TARGETS.kesme+' kesme ile daireler ayrıldı.',
     target:{type:'canvas'},
     baseline:function(ctx){ return ctx.editCount(); },
     check:function(ctx, base){ return ctx.editCount() > (base||0); } },
 
   { id:'kapi-pencere', needsPro:false, skippable:true,
     title:'Kapı ve pencere',
-    body:'Kapı ya da Pencere aracını seç, duvara tıklayarak ekle veya taşı.',
+    body:'Kapı ya da Pencere aracını seç, duvara tıklayarak ekle veya taşı. Örnek projede '+ONB_TARGETS.balkon+' balkon var.',
     target:{type:'dom', sel:'#tDoor'},
     baseline:function(ctx){ return ctx.doorWinCount(); },
     check:function(ctx, base){ return ctx.doorWinCount() > (base||0); } },
@@ -101,20 +154,25 @@ const ONB_STEPS = [
 
   { id:'blok-ekle', needsPro:false, skippable:true,
     title:'Blok ekle',
-    body:'Yeni blok ekleyip her birini ayrı planlayabilirsin. Blok sekmelerinden ekle.',
+    body:'Yeni blok ekleyip her birini ayrı planlayabilirsin. Blok sekmelerinden ekle. Örnek projede '+ONB_TARGETS.bloklar+' blok (A+B).',
     target:{type:'dom', sel:'#blockTabs'},
     baseline:function(ctx){ return ctx.blocksLen(); },
-    check:function(ctx, base){ return ctx.blocksLen() > (base||0); } },
+    /* HEDEFLI: hedef varken en az ONB_TARGETS.bloklar blok beklenir; hedef yoksa BUGUNKU
+       davranis (base'e gore buyume). */
+    check:function(ctx, base){
+      const tg = ctx.targets;
+      if(tg && typeof tg.bloklar==='number') return ctx.blocksLen() >= tg.bloklar;
+      return ctx.blocksLen() > (base||0); } },
 
   { id:'kat-ayri', needsPro:true, skippable:true,
     title:'Katları ayrı planla',
-    body:'Her katı bağımsız planlamak için "Katları ayrı planla" anahtarını aç.',
+    body:'Her katı bağımsız planlamak için "Katları ayrı planla" anahtarını aç. Örnek projede '+ONB_TARGETS.bina.kat+' normal kat + '+ONB_TARGETS.bina.bodrum+' bodrum var.',
     target:{type:'dom', sel:'#katAyri'},
     check:function(ctx){ return ctx.katAyri(); } },
 
   { id:'kat-gez', needsPro:false, skippable:true,
     title:'Katlarda gez',
-    body:'Kat sekmelerinden katlar arasında geç; kat kullanımını (konut, ticari, otopark) seç.',
+    body:'Kat sekmelerinden katlar arasında geç; kat kullanımını (konut, ticari, otopark) seç. Örnek projede '+ONB_TARGETS.bina.kat+' kat + '+ONB_TARGETS.bina.bodrum+' bodrum.',
     target:{type:'dom', sel:'#floorTabs'},
     baseline:function(ctx){ return ctx.floorSig(); },
     check:function(ctx, base){ return ctx.floorSig() !== base; } },
@@ -133,7 +191,7 @@ const ONB_STEPS = [
 const ONB_KAM_STEPS = [
   { id:'kamera-koy', skippable:true,
     title:'Kamera yerleştir',
-    body:'Kamera aracı raydan açıldı. Dock\'taki Ekle ile plana iç kamera koy — tıkladığın nokta kameranın yeri olur.',
+    body:'Kamera aracı raydan açıldı. Dock\'taki Ekle ile plana iç kamera koy — tıkladığın nokta kameranın yeri olur. Örnek projede '+ONB_TARGETS.kamera.ic+' iç kamera var.',
     target:{type:'dom', sel:'#v3dPlaceBtn'},
     baseline:function(ctx){ return ctx.camCount(); },
     check:function(ctx, base){ return ctx.camCount() > (base||0); } },
@@ -160,14 +218,17 @@ const ONB_KAM_STEPS = [
 
   { id:'drone-ekle', skippable:true,
     title:'Drone kamerası ekle',
-    body:'"+ Drone Ekle" ile binanın etrafına dış kamera yerleştir.',
+    body:'"+ Drone Ekle" ile binanın etrafına dış kamera yerleştir. Örnek projede '+ONB_TARGETS.kamera.drone+' drone açısı var.',
     target:{type:'dom', sel:'[data-v3d="extadd"]'},
     baseline:function(ctx){ return ctx.extCount(); },
     check:function(ctx, base){ return ctx.extCount() > (base||0); } },
 
   { id:'render-isaret', skippable:false,
     title:'Dış Render',
+    /* ana KPTA'da mevcut metin AYNEN; gomulu mesken prototipinde (onbInIframe) akis
+       turu kabukta surer -> bodyIframe dali onbStepBody ile secilir. */
     body:'Hazır! Dış Render düğmesi yerleştirdiğin drone açılarından görsel üretir. İstediğin zaman buradan devam edebilirsin.',
+    bodyIframe:'Sağ alttaki \'Render Kadrajları\' düğmesiyle Render adımına geç — akış turu kabukta devam eder.',
     target:{type:'dom', sel:'[data-v3d="extrender"]'},
     action:{ label:'Bitir', run:function(){ onbFinish(); } },
     check:function(ctx){ return ctx.extRenderClicked(); } }
@@ -267,12 +328,14 @@ function onbFloorSig(){
 }
 function onbLiveCtx(){
   return {
+    targets:      ONB_TARGETS,          // demo-paket hedefleri (HEDEFLI check'ler burdan okur; yoksa jenerik dalar)
     modePro:      function(){ return onbHasBodyClass('mode-pro'); },
     tabActive:    function(){ const e=onbSel('.ptab[data-tab="parsel"]'); return !!(e && e.classList && e.classList.contains('active')); },
     parcelLen:    function(){ return (typeof parcelPts!=='undefined' && parcelPts) ? parcelPts.length : 0; },
     frontEdge:    function(){ return (typeof psFrontEdge!=='undefined') ? psFrontEdge : -1; },
     cekme:        function(){ return onbCekmeSig(); },
     closed:       function(){ return (typeof closed!=='undefined') ? !!closed : false; },
+    ptsLen:       function(){ return (typeof pts!=='undefined' && pts) ? pts.length : 0; },   // yapi sinir noktalari (sinir-ciz HEDEFLI kontrolu)
     plan:         function(){ return (typeof plan!=='undefined') ? plan : null; },
     editCount:    function(){ return (typeof editHistory!=='undefined' && editHistory) ? editHistory.length : 0; },
     doorWinCount: function(){ return onbDoorWinCount(); },
@@ -294,6 +357,7 @@ function onbKamCams(){ const v=onbV3d(); try{ return (v && typeof v.getCameras==
 function onbKamExt(){ const v=onbV3d(); try{ return (v && typeof v.getExteriorCameras==='function') ? (v.getExteriorCameras()||[]) : []; }catch(e){ return []; } }
 function onbKamCtx(){
   return {
+    targets:ONB_TARGETS,          // demo-paket hedefleri (kamera3d check'leri >=1 KALIR; targets yalniz metin dokusu icin)
     /* resmi bayrak isCamUIEnabled; eski motor gomulmusse camPreviewForTest'e (teshis ucu) dusulur */
     camUI:function(){ const v=onbV3d();
       try{
@@ -416,6 +480,13 @@ function onbCardClick(e){
   else if(a==='pro'){ const m=onbEl('modePro'); if(m && m.click) m.click(); }
   else if(a==='act'){ const s=onbTour && onbTour.steps[onbIdx]; if(s && s.action && typeof s.action.run==='function') s.action.run(); }
 }
+/* adim govde metni: gomulu iframe (mesken prototipi) baglaminda alternatif metin
+   (step.bodyIframe) varsa onu, yoksa standart step.body'yi doner. SAF (arg olarak
+   inIframe alir) -> headless test edilebilir. */
+function onbStepBody(step, inIframe){
+  if(step && inIframe && step.bodyIframe) return step.bodyIframe;
+  return (step && step.body) || '';
+}
 function onbRenderCard(){
   if(!onbUI || !onbUI.card || !onbTour) return;
   const s=onbTour.steps[onbIdx]; if(!s) return;
@@ -427,7 +498,7 @@ function onbRenderCard(){
   else if(s.action && s.action.label) btns += '<button type="button" class="onbAct onbNext" data-onb="act">'+onbEsc(s.action.label)+'</button>';
   const text = onbPaused
     ? 'Bu adım Profesyonel modda çalışır. Devam etmek için Profesyonel moda geç.'
-    : onbEsc(s.body);
+    : onbEsc(onbStepBody(s, onbInIframe()));
   /* CSS sozlesmesi (styles.css): baslik=h3, metin=p, sayac=.prog,
      ilerleme cubugu=.progBar>i, kapat=24x24 ikon-buton (.onbClose, absolute kose). */
   onbUI.card.innerHTML =
@@ -602,10 +673,12 @@ function onbBoot(){
 var ONB = {
   VERSION: ONB_VERSION,
   KAM_VERSION: ONB_KAM_VERSION,
+  TARGETS: ONB_TARGETS,           // demo-paket hedefleri (proje-20260716-4.mskpkg)
   STEPS: ONB_STEPS,               // geriye-uyum: 'ana' adimlari
   KAM_STEPS: ONB_KAM_STEPS,
   TOURS: ONB_TOURS,
   tourById: onbTourById,
+  stepBody: onbStepBody,
   computeTarget: onbComputeTarget,
   decideStart: onbDecideStart,
   watchDecision: onbWatchDecision,

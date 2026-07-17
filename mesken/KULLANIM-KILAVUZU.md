@@ -96,12 +96,13 @@ Sağ üstteki mod seçicide iki düğme vardır:
 
 Seçimin `localStorage`'da hatırlanır; varsayılan **Basit**'tir. Bu kılavuzdaki parsel/imar anlatımı Profesyonel modu varsayar.
 
-### "Tur" düğmesi — iki rehberli tur
+### "Tur" düğmeleri — üç rehberli tur
 
-Mesken'de ekranı karartıp hedef öğeye spotlight tutan, açıklama kartıyla ilerleyen iki onboarding turu vardır. Her kartta başlık, metin, "n / toplam" sayacı, ilerleme çubuğu, atlanabilir adımlarda **"Atla"** düğmesi, varsa bir aksiyon düğmesi ve kapat bulunur. İlgili UI etkileşimini yaptığında tur kendiliğinden bir sonraki adıma geçer.
+Mesken'de ekranı karartıp hedef öğeye spotlight tutan, açıklama kartıyla ilerleyen üç onboarding turu vardır. Her kartta başlık, metin, "n / toplam" sayacı, atlanabilir adımlarda **"Atla"**/**"Turu atla"** düğmesi ve kapat bulunur. İlgili UI etkileşimini yaptığında tur kendiliğinden bir sonraki adıma geçer; karartma tıklamayı engellemez.
 
-- **Ana tur (13 adım)** — başlık çubuğundaki **"Tur"** düğmesiyle elle başlatılır (ilk açılışta da gelebilir). Profesyonel moda geçişten planı dışa aktarmaya kadar tüm akışı gezdirir. Basit moddayken Profesyonel gerektiren bir adıma gelince kart "Bu adım Profesyonel modda çalışır" uyarısı ve bir **"Profesyonel moda geç"** düğmesi gösterir.
-- **Kamera 3B mini-turu (6 adım)** — 3B görünümde kamera aracını açtığında kendiliğinden başlar. Kamera yerleştirmeden dış render'a kadar kamera panelini tanıtır (ayrıntı Bölüm 8).
+- **Akış Turu (10 adım, kabuk)** — üst başlık çubuğundaki **"Tur"** düğmesiyle başlar; demo modunda (`?demo=1`) ilk ziyarette kendiliğinden açılır. Beş adımlık Mesken akışını uçtan uca gezdirir: proje yükle/çiz → 3B → kamera → render üretimi (Önce/Sonra dahil) → Döşe/pazaryeri. Kamera evresinde karartma kalkar ve kart köşeye çekilir — 3B içindeki kamera mini-turuyla çakışmaz.
+- **Ana tur (13 adım, 2B editör)** — 2B editörün kendi başlık çubuğundaki **"Tur"** düğmesiyle elle başlatılır. Profesyonel moda geçişten planı dışa aktarmaya kadar çizim akışını gezdirir ve **örnek demo projeyi hedef alır**: adım metinleri gerçek hedeflerle konuşur — "TKGM sorgusuna şu koordinatı yapıştır: 41.0804..., ada 2010 parsel 257 (Beşiktaş/Akat)", "8 köşeli L-sınır", "2 blok", "1 daire 2+1 açık mutfak + 2 daire 3+1 ensuite". Basit moddayken Profesyonel gerektiren adımda **"Profesyonel moda geç"** düğmesi gösterir.
+- **Kamera 3B mini-turu (6 adım)** — 3B görünümde kamera aracını açtığında kendiliğinden başlar. Kamera yerleştirmeden dış render'a kadar kamera panelini tanıtır; Mesken akışındayken son adımı seni sağ alttaki "Render Kadrajları" düğmesine yönlendirir ve zincir Akış Turu'yla devam eder (ayrıntı Bölüm 8).
 
 <!-- GORSEL 02: ana tur spotlight — ekran karartilmis, "Profesyonel moda gec" adimi vurgulu, aciklama karti "1 / 13" sayaci ve ilerleme cubugu ile -->
 
@@ -436,14 +437,14 @@ Her kamerada, konum + yön + lens bilgisinden bir görüş konisi kurulur. Konin
 
 ### Kamera mini-turu (6 adım)
 
-3B'de kamera aracını ilk açtığında kendiliğinden başlar:
+3B'de kamera aracını ilk açtığında kendiliğinden başlar (kartlarda örnek projenin hedefleri de yazar: 7 iç kamera, 3 drone):
 
 1. **"Kamera yerleştir"** — Dock'taki Ekle ile plana iç kamera koy.
 2. **"Açıyı ayarla"** — sürükle ya da Yön ile bakış noktası.
 3. **"Lens seç"** — 16-24-35-50 mm.
 4. **"Drone moduna geç".**
 5. **"Drone kamerası ekle"** — "+ Drone Ekle".
-6. **"Dış Render"** (zorunlu) — aksiyon "Bitir"; tıklayınca "Dış render başlatılsın mı? … Bu işlem render kredisi harcar" onayı çıkar.
+6. **"Dış Render"** (zorunlu) — aksiyon "Bitir". Mesken akışındayken (Kamera adımı) bu kart seni sağ alttaki **"Render Kadrajları"** düğmesine yönlendirir — üretim oradan sürer ve Akış Turu devralır; 2B editörü tek başına kullanıyorsan tıklayınca "Dış render başlatılsın mı? … Bu işlem render kredisi harcar" onayı çıkar.
 
 ---
 
@@ -553,7 +554,7 @@ Sağ alttaki ana düğme **"Dekore Et"**tir: kareler üretilene kadar pasiftir, 
 
 ### Demo modu (Ön-gösterim)
 
-URL'ye `?demo=1` (ya da `#demo` / `/demo`) eklersen **demo modu** açılır: paralı uçlara hiç istek gitmeden, önceden üretilmiş gerçek çıktılar 2-4 saniye gecikmeyle gösterilir. Başlık çubuğunda sade bir **"DEMO"** rozeti durur (üzerine gelince "üretimler örnek çıktıdır, kredi harcanmaz" ayrıntısını yazar). Sunum ve deneme için idealdir.
+URL'ye `?demo=1` (ya da `#demo` / `/demo`) eklersen **demo modu** açılır: paralı uçlara hiç istek gitmeden, önceden üretilmiş gerçek çıktılar 2-4 saniye gecikmeyle gösterilir. Başlık çubuğunda sade bir **"DEMO"** rozeti durur (üzerine gelince "üretimler örnek çıktıdır, kredi harcanmaz" ayrıntısını yazar). İlk ziyarette **Akış Turu** kendiliğinden açılır (Bölüm 2); kapatırsan başlık çubuğundaki "Tur" düğmesiyle dilediğin an geri çağırırsın. Sunum ve deneme için idealdir.
 
 ### Render köprü sunucusu notu
 

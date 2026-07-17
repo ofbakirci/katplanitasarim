@@ -19,6 +19,7 @@ const strictTests = [
   'tests/parsel-kat-invariant.js',
   'tests/otopark-kat-site.js',
   'tests/paket-geo.js',
+  'tests/paket-parsel-geo.js',
   'tests/import.js',
   'tests/dxf-import.js',
   'tests/dxf-roundtrip.js',

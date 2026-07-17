@@ -210,6 +210,64 @@ const asserts = `
   T('watch: watch=false tur -> null', onbWatchDecision(anaT, env(), {status:null,v:0})===null);
   T('watch: iframeAuto=false hipotetik tur iframede null', onbWatchDecision({watch:true,iframeAuto:false,version:1}, env({inIframe:true}), {status:null,v:0})===null);
 
+  /* (12a) ONB_TARGETS demo-paket hedef butunlugu */
+  T('ONB_TARGETS tanimli + kaynak/baslik', typeof ONB_TARGETS==='object' && ONB_TARGETS.kaynak==='proje-20260716-4.mskpkg' && ONB_TARGETS.baslik==='3 daire');
+  T('ONB_TARGETS parsel koordinat (Google Maps)', ONB_TARGETS.parsel.koordinat==='41.08046386954354, 29.022807303237602');
+  T('ONB_TARGETS parsel ilce/mahalle/ada/parsel/alan', ONB_TARGETS.parsel.ilce==='BEŞİKTAŞ' && ONB_TARGETS.parsel.mahalle==='AKAT' && ONB_TARGETS.parsel.ada==='2010' && ONB_TARGETS.parsel.parsel==='257' && ONB_TARGETS.parsel.alan===2058);
+  T('ONB_TARGETS imar emsal/taks/hmax', ONB_TARGETS.parsel.imar.emsal===3 && ONB_TARGETS.parsel.imar.maksTaks===0.75 && ONB_TARGETS.parsel.imar.hmax===15.5);
+  T('ONB_TARGETS bina tip/kat/bodrum/cati', ONB_TARGETS.bina.tip==='apartman' && ONB_TARGETS.bina.kat===4 && ONB_TARGETS.bina.bodrum===2 && ONB_TARGETS.bina.cati==='kirma');
+  T('ONB_TARGETS sinir 8 kose L', ONB_TARGETS.sinir.kose===8 && ONB_TARGETS.sinir.sekil==='L');
+  T('ONB_TARGETS bloklar/balkon/kesme', ONB_TARGETS.bloklar===2 && ONB_TARGETS.balkon===10 && ONB_TARGETS.kesme===3);
+  T('ONB_TARGETS daireler karmasi + toplam 3', ONB_TARGETS.daireler.length===2 && ONB_TARGETS.daireler[0].acikMutfak===true && ONB_TARGETS.daireler[1].ensuite===true && ONB_TARGETS.daireler.reduce((a,d)=>a+d.adet,0)===3);
+  T('ONB_TARGETS kamera 7 ic 3 drone', ONB_TARGETS.kamera.ic===7 && ONB_TARGETS.kamera.drone===3);
+  T('ONB.TARGETS export = ONB_TARGETS', ONB.TARGETS===ONB_TARGETS);
+
+  /* (12b) GERIYE-UYUM: targets'siz stub ctx'te HEDEFLI check'ler BUGUNKU davranista */
+  T('GERIYE-UYUM sinir-ciz hedefsiz: yalniz closed', step('sinir-ciz').check(baseCtx({closed:()=>true}))===true && step('sinir-ciz').check(baseCtx())===false);
+  T('GERIYE-UYUM sinir-ciz hedefsiz: ptsLen yok sayilir', step('sinir-ciz').check(baseCtx({closed:()=>true, ptsLen:()=>0}))===true);
+  T('GERIYE-UYUM blok-ekle hedefsiz: base ustu buyume', step('blok-ekle').check(baseCtx({blocksLen:()=>2}),1)===true && step('blok-ekle').check(baseCtx({blocksLen:()=>1}),1)===false);
+  T('GERIYE-UYUM: fullCtx (targets yok) hala 13', ONB.computeTarget(ONB_STEPS, fullCtx(), FULL_BASES)===13);
+
+  /* (12c) HEDEFLI toleranslar — targets bagli ctx (sinir-ciz>=6, blok-ekle>=2) */
+  const tgCtx = over => baseCtx(Object.assign({ targets:ONB_TARGETS, ptsLen:()=>0 }, over));
+  T('HEDEFLI sinir-ciz: closed + pts>=6 -> true', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>6}))===true);
+  T('HEDEFLI sinir-ciz: closed + pts=8 -> true', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>8}))===true);
+  T('HEDEFLI sinir-ciz: closed + pts=5 -> false (8 kose -> >=6)', step('sinir-ciz').check(tgCtx({closed:()=>true, ptsLen:()=>5}))===false);
+  T('HEDEFLI sinir-ciz: kapali degil -> false', step('sinir-ciz').check(tgCtx({closed:()=>false, ptsLen:()=>9}))===false);
+  T('HEDEFLI sinir-ciz: targets var ama ptsLen yoksa closed yeterli', step('sinir-ciz').check(baseCtx({targets:ONB_TARGETS, closed:()=>true}))===true);
+  T('HEDEFLI blok-ekle: >=2 -> true, 1 -> false', step('blok-ekle').check(tgCtx({blocksLen:()=>2}))===true && step('blok-ekle').check(tgCtx({blocksLen:()=>1}))===false);
+  T('HEDEFLI blok-ekle: 3 blok da gecerli', step('blok-ekle').check(tgCtx({blocksLen:()=>3}))===true);
+
+  /* (12d) render-isaret iframe metin dali (onbStepBody saf helper) */
+  T('onbStepBody: iframe disi -> body', onbStepBody(kstep('render-isaret'), false)===kstep('render-isaret').body);
+  T('onbStepBody: iframe ici -> bodyIframe', onbStepBody(kstep('render-isaret'), true)===kstep('render-isaret').bodyIframe);
+  T('render-isaret bodyIframe var + Render Kadraj vurgusu', typeof kstep('render-isaret').bodyIframe==='string' && kstep('render-isaret').bodyIframe.indexOf('Render Kadrajları')>=0 && kstep('render-isaret').bodyIframe.indexOf('kabukta')>=0);
+  T('render-isaret ana metin AYNEN (Dış Render)', kstep('render-isaret').body.indexOf('Dış Render düğmesi')>=0);
+  T('onbStepBody: bodyIframe olmayan adim iframede de body', onbStepBody(kstep('kamera-koy'), true)===kstep('kamera-koy').body);
+  T('ONB.stepBody export', ONB.stepBody===onbStepBody);
+
+  /* (12e) DINAMIK metinler ONB_TARGETS'tan turer (koordinat, '2 blok', '8', daire karmasi...) */
+  T('DINAMIK parsel-getir: koordinat metinde', step('parsel-getir').body.indexOf(ONB_TARGETS.parsel.koordinat)>=0);
+  T('DINAMIK parsel-getir: ilce/mahalle baslik-harf', step('parsel-getir').body.indexOf('Beşiktaş/Akat')>=0);
+  T('DINAMIK parsel-getir: ada/parsel/alan', step('parsel-getir').body.indexOf('ada '+ONB_TARGETS.parsel.ada)>=0 && step('parsel-getir').body.indexOf('parsel '+ONB_TARGETS.parsel.parsel)>=0 && step('parsel-getir').body.indexOf(String(ONB_TARGETS.parsel.alan))>=0);
+  T('DINAMIK parsel-sekme: ada/emsal dokusu', step('parsel-sekme').body.indexOf(ONB_TARGETS.parsel.ada)>=0 && step('parsel-sekme').body.indexOf('emsal '+ONB_TARGETS.parsel.imar.emsal)>=0);
+  T('DINAMIK cekme-yol: TAKS/Hmax', step('cekme-yol').body.indexOf('TAKS '+ONB_TARGETS.parsel.imar.maksTaks)>=0 && step('cekme-yol').body.indexOf('Hmax '+ONB_TARGETS.parsel.imar.hmax)>=0);
+  T('DINAMIK sinir-ciz: kose sayisi + sekil', step('sinir-ciz').body.indexOf(String(ONB_TARGETS.sinir.kose))>=0 && step('sinir-ciz').body.indexOf(ONB_TARGETS.sinir.sekil)>=0);
+  T('DINAMIK yerlesim: daire karmasi 2+1/3+1', step('yerlesim').body.indexOf('2+1')>=0 && step('yerlesim').body.indexOf('3+1')>=0 && step('yerlesim').body.indexOf(ONB_TARGETS.baslik)>=0);
+  T('DINAMIK blok-ekle: "2 blok"', step('blok-ekle').body.indexOf(ONB_TARGETS.bloklar+' blok')>=0);
+  T('DINAMIK kat-ayri: kat+bodrum', step('kat-ayri').body.indexOf(String(ONB_TARGETS.bina.kat))>=0 && step('kat-ayri').body.indexOf(ONB_TARGETS.bina.bodrum+' bodrum')>=0);
+  T('DINAMIK kat-gez: kat+bodrum', step('kat-gez').body.indexOf(String(ONB_TARGETS.bina.kat))>=0 && step('kat-gez').body.indexOf('bodrum')>=0);
+  T('DINAMIK kamera-koy: 7 ic kamera', kstep('kamera-koy').body.indexOf(String(ONB_TARGETS.kamera.ic))>=0 && kstep('kamera-koy').body.indexOf('iç kamera')>=0);
+  T('DINAMIK drone-ekle: 3 drone', kstep('drone-ekle').body.indexOf(String(ONB_TARGETS.kamera.drone))>=0 && kstep('drone-ekle').body.indexOf('drone')>=0);
+  T('onbTr Turkce baslik-harf (BESIKTAS/AKAT)', onbTr('BEŞİKTAŞ')==='Beşiktaş' && onbTr('AKAT')==='Akat');
+  T('onbTr bos/kenar durumlari', onbTr('')==='' && onbTr(null)==='' && onbTr('A')==='A');
+  T('onbDaireOzet formati', onbDaireOzet().indexOf('1 daire 2+1 açık mutfak')>=0 && onbDaireOzet().indexOf('2 daire 3+1 ensuite')>=0);
+  /* dinamik metin GERCEKTEN targets'tan turuyor: adim body'leri, sabit degerler ONB_TARGETS'tan uretilebiliyor */
+  T('DINAMIK turetim: blok metni sayidan bagimsiz degil', step('blok-ekle').body.indexOf(String(ONB_TARGETS.bloklar))>=0);
+
+  /* eklenen adim alanlari 'tum title/body dolu' + 'emoji yok' sozlesmesini bozmaz */
+  T('render-isaret bodyIframe emoji yok', !/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(kstep('render-isaret').bodyIframe));
+
   /* ENV GUARD: tarayici degil -> denetleyici duragan (setInterval/watcher kurulmadi) */
   T('onbBrowser()=false (headless)', onbBrowser()===false);
   T('onbActive baslangicta false', onbActive===false && onbTimer===null && onbWatchTimer===null && onbTour===null);
