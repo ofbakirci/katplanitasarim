@@ -88,6 +88,14 @@ const asserts = `
   T('kamera3d cogu skippable (5/6)', ONB_KAM_STEPS.filter(s=>s.skippable).length===5);
   T('render-isaret Bitir action', typeof kstep('render-isaret').action.run==='function' && kstep('render-isaret').action.label==='Bitir');
   T('aci-ayarla canvas hedefi 3B tuval', kstep('aci-ayarla').target.type==='canvas' && kstep('aci-ayarla').target.sel==='#view3dOverlay canvas');
+  /* FIX A: pro-mod giris-saglanmis (Pro zaten acik) uyarlanabilir metin (bodyDone) */
+  T('pro-mod bodyDone var + "zaten açık" + İleri', typeof step('pro-mod').bodyDone==='string' && step('pro-mod').bodyDone.indexOf('zaten açık')>=0 && step('pro-mod').bodyDone.indexOf('İleri')>=0);
+  T('pro-mod bodyDone emoji yok', !/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(step('pro-mod').bodyDone));
+  /* FIX C: sinir-ciz ELLE cizdir -> hedef Çiz araci (#tDraw), oto-cizen #psDrawBld DEGIL */
+  T('sinir-ciz hedefi Çiz araci (#tDraw)', step('sinir-ciz').target.type==='dom' && step('sinir-ciz').target.sel==='#tDraw');
+  T('sinir-ciz body elle cizim tarifi', step('sinir-ciz').body.indexOf('Çiz aracıyla')>=0 && step('sinir-ciz').body.indexOf('köşe köşe')>=0 && step('sinir-ciz').body.indexOf('ilk köşeye')>=0);
+  T('sinir-ciz body psDrawBld kisayol notu', step('sinir-ciz').body.indexOf('Parsele yapı sınırı çiz')>=0);
+  T('sinir-ciz check DEGISMEDI (yalniz closed)', step('sinir-ciz').check(baseCtx({closed:()=>true}))===true && step('sinir-ciz').check(baseCtx())===false);
 
   /* (2) ana check dogruluklari — stub ctx */
   T('pro-mod: modePro', step('pro-mod').check(baseCtx({modePro:()=>true}))===true && step('pro-mod').check(baseCtx())===false);
@@ -109,12 +117,20 @@ const asserts = `
   T('blok-ekle: blocksLen>base', step('blok-ekle').check(baseCtx({blocksLen:()=>2}),1)===true && step('blok-ekle').check(baseCtx({blocksLen:()=>1}),1)===false);
   T('kat-gez: floorSig degisti', step('kat-gez').check(baseCtx({floorSig:()=>'2|ticari'}),'0|konut')===true && step('kat-gez').check(baseCtx(),'0|konut')===false);
 
-  /* (4) computeTarget + sira-atlama senkronu (yeni imza: steps, ctx, bases) */
+  /* (4) computeTarget = ARDISIK KAPI: ilk saglanmayan VEYA giris-saglanmis-İleri-bekleyen adimda durur
+     (yeni imza: steps, ctx, bases, gate). ESKI "en ileri saglanan+1" (gap firlatma) KALDIRILDI. */
   T('bos ctx -> 0', ONB.computeTarget(ONB_STEPS, baseCtx(), {})===0);
   T('yalniz adim1 -> 1', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true}), {})===1);
   T('tumu saglandi -> 13 (bitti)', ONB.computeTarget(ONB_STEPS, fullCtx(), FULL_BASES)===13);
-  T('skip-ahead: plan var -> >=6', ONB.computeTarget(ONB_STEPS, baseCtx({plan:()=>({})}), {})>=6);
+  /* ARDISIK: plan(adim5) saglanmis ama pro-mod(adim0) degil -> ILK saglanmayanda (0) durur (eski >=6 firlatma yok) */
+  T('ardisik kapi: gap yutmaz (plan var, pro yok -> 0)', ONB.computeTarget(ONB_STEPS, baseCtx({plan:()=>({})}), {})===0);
+  T('ardisik kapi: gap yutmaz (adim0-1 ok, adim2 degil, plan ok -> 2)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true,tabActive:()=>true,plan:()=>({})}), {})===2);
   T('baseline aktif adim senkronu', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true,tabActive:()=>true,parcelLen:()=>4,frontEdge:()=>2,closed:()=>true,plan:()=>({}),editCount:()=>5}), {6:2})===7);
+  /* GATE (giris-saglanmis-İleri-bekleyen): saglanmis adim gate[i] ise ORADA durur (oto-atlama yok) */
+  T('gate: adim0 saglanmis+gate -> 0 (İleri bekler, atlamaz)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true}), {}, {0:true})===0);
+  T('gate: adim0 saglanmis+gate YOK -> 1 (oto gecer)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true}), {}, {})===1);
+  T('gate: adim1 gate -> 1 (adim0 gecti, adim1 İleri bekler)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true,tabActive:()=>true}), {}, {1:true})===1);
+  T('gate: gate=false adim atlanir', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true,tabActive:()=>true}), {}, {0:false,1:false})===2);
 
   /* (5) decideStart durum makinesi — tur-surumlu (3. parametre) */
   T('force -> start', ONB.decideStart({status:'done',v:1}, true, 1)==='start');

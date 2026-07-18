@@ -102,6 +102,9 @@ const ONB_STEPS = [
   { id:'pro-mod', needsPro:false, skippable:false,
     title:'Profesyonel moda geç',
     body:'Parsel ve imar araçları Profesyonel modda açılır. Üst köşedeki Profesyonel düğmesine dokun.',
+    /* GIRIS-SAGLANMIS (Pro zaten acik) durumda kartta gosterilen uyarlanabilir metin —
+       oto-atlama YOK, İleri ile gecilir (canli /demo: "1. adimi atliyor" fix). */
+    bodyDone:'Profesyonel mod zaten açık — İleri ile devam et.',
     target:{type:'dom', sel:'#modePro'},
     check:function(ctx){ return ctx.modePro(); } },
 
@@ -127,11 +130,15 @@ const ONB_STEPS = [
 
   { id:'sinir-ciz', needsPro:false, skippable:false,
     title:'Yapı sınırını çiz',
-    body:'"Parsele yapı sınırı çiz" düğmesine bas, sonra tuvalde köşeleri tıklayıp başlangıç noktasına dönerek kapat. Basit bir dörtgen yeter; istersen örnekteki gibi '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+' de deneyebilirsin.',
-    target:{type:'dom', sel:'#psDrawBld'},
+    /* ELLE CIZDIR (canli /demo: "parsele tek bina siniri ciziyor" fix). Hedef ARTIK
+       #psDrawBld (oto-cizen kisayol) DEGIL, Çiz araci (#tDraw): kullanici kose kose cizer.
+       #psDrawBld hala mesru kisayol (govdede anlatilir; basilirsa check yine gecer). */
+    body:'Çiz aracıyla kesikli çekme sınırının içine köşe köşe tıkla, ilk köşeye dönerek kapat. Basit bir dörtgen yeter; istersen örnekteki gibi '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+' de deneyebilirsin. Acelen varsa "Parsele yapı sınırı çiz" düğmesi senin yerine çizer.',
+    target:{type:'dom', sel:'#tDraw'},
     /* JENERIK: sinir KAPANDI mi (kapali poligon). Hedef kose/sekil YALNIZ metinde;
        kullaniciyi belli bir kose sayisina ZORLAMAZ (canli /demo'da 4 kose cizince
-       takiliyordu -> hedefli >=6 dali KALDIRILDI). */
+       takiliyordu -> hedefli >=6 dali KALDIRILDI). Hangi yoldan gelirse gecer:
+       elle Çiz, ya da #psDrawBld kisayolu. */
     check:function(ctx){ return !!ctx.closed(); } },
 
   { id:'yerlesim', needsPro:false, skippable:false,
@@ -253,12 +260,16 @@ function onbTourById(id){ for(let i=0;i<ONB_TOURS.length;i++) if(ONB_TOURS[i].id
 
 /* ================= saf durum makinesi (her ortamda) ================= */
 
-/* Verili adim dizisi + ctx icin gosterilecek adim indeksi: EN ILERI saglanan adimin
-   BIR SONRASI (kullanici sirayi atladiysa oraya senkronlan). Tumu saglandiysa
-   steps.length doner (= tur bitti). bases: {idx:baseline} — ziyaret edilmis
-   baseline'li adimlarin yakalanmis taban degerleri; yoksa taze hesaplanir. */
-function onbComputeTarget(steps, ctx, bases){
-  let far = -1;
+/* ARDISIK KAPI: 0'dan tarar, ILK "duracak" adimin indeksini doner. Adim durur ise:
+     (a) check SAGLANMIYOR (kullanici o adimi yapmali), VEYA
+     (b) check saglaniyor AMA giris-saglanmis-İleri-bekliyor (gate[i]) — oto-atlama yok.
+   Tumu gecer (hicbiri durmaz) -> steps.length (= tur bitti).
+   ESKI davranis "en ileri saglanan+1" (gap'te ileri firlatirdi) DEGISTI: canli /demo
+   raporu "1. adimi atliyor" -> saglanmis bas adimlari sessizce yutmak YASAK; tur
+   ADIM ADIM ilerler, giris-saglanmis adimda İleri düğmesiyle durur.
+   bases: {idx:baseline} — ziyaret edilmis baseline'li adimlarin yakalanmis tabanlari.
+   gate:  {idx:bool}     — o adima GIRISTE check zaten saglaniyordu (İleri bekliyor). */
+function onbComputeTarget(steps, ctx, bases, gate){
   for(let i=0; i<steps.length; i++){
     const s = steps[i];
     let base;
@@ -266,9 +277,10 @@ function onbComputeTarget(steps, ctx, bases){
     else if(s.baseline){ try{ base = s.baseline(ctx); }catch(e){ base = undefined; } }
     let ok = false;
     try{ ok = !!s.check(ctx, base); }catch(e){ ok = false; }
-    if(ok) far = i;
+    if(!ok) return i;                 // ilk saglanmayan -> burada dur
+    if(gate && gate[i]) return i;     // giris-saglanmis ama İleri bekliyor -> burada dur
   }
-  return far + 1;   // >= steps.length => tur bitti
+  return steps.length;                // tumu gecti => tur bitti
 }
 
 /* Depolanmis duruma gore baslatma karari: 'start' | 'resume' | 'idle'.
@@ -425,6 +437,7 @@ let onbIdx      = 0;
 let onbPaused   = false;         // needsPro adiminda Basit moda dusuldu -> duraklat karti
 let onbHidden   = false;         // tur.visible() false (3B kapandi) -> UI gizli, bekle
 let onbBases    = {};            // {idx: yakalanmis baseline}
+let onbGate     = {};            // {idx: bool} — o adima GIRISTE check saglaniyordu -> İleri bekliyor (oto-atlama yok)
 let onbTimer    = null;          // ~250ms algilama dongusu (tur aktifken)
 let onbWatchTimer = null;        // ~750ms tetik watcher'i (kamera3d)
 let onbRaf      = 0;             // spotlight takip rAF
@@ -501,6 +514,7 @@ function onbCardClick(e){
   const a=b.getAttribute('data-onb');
   if(a==='close') onbStop('dismissed');
   else if(a==='skip') onbSkip();
+  else if(a==='next') onbNext();
   else if(a==='pro'){ const m=onbEl('modePro'); if(m && m.click) m.click(); }
   else if(a==='act'){ const s=onbTour && onbTour.steps[onbIdx]; if(s && s.action && typeof s.action.run==='function') s.action.run(); }
 }
@@ -516,13 +530,19 @@ function onbRenderCard(){
   const s=onbTour.steps[onbIdx]; if(!s) return;
   const total=onbTour.steps.length, n=onbIdx+1, pct=Math.round(n/total*100);
   const ic=(typeof icon==='function') ? icon('bulb','inl') : '';
+  /* GIRIS-SAGLANMIS adim (onbGate[onbIdx]) -> oto-atlama YOK; kartta İleri düğmesi
+     (kullanici elle gecer). Oncelik: paused > gate(İleri) > action. */
+  const gated = !onbPaused && !!onbGate[onbIdx];
   let btns='';
-  if(s.skippable) btns += '<button type="button" class="onbSkip" data-onb="skip">Atla</button>';
+  if(s.skippable && !gated) btns += '<button type="button" class="onbSkip" data-onb="skip">Atla</button>';
   if(onbPaused) btns += '<button type="button" class="onbAct onbNext" data-onb="pro">Profesyonel moda geç</button>';
+  else if(gated) btns += '<button type="button" class="onbAct onbNext" data-onb="next">İleri</button>';
   else if(s.action && s.action.label) btns += '<button type="button" class="onbAct onbNext" data-onb="act">'+onbEsc(s.action.label)+'</button>';
   const text = onbPaused
     ? 'Bu adım Profesyonel modda çalışır. Devam etmek için Profesyonel moda geç.'
-    : onbEsc(onbStepBody(s, onbInIframe()));
+    : gated
+      ? onbEsc(s.bodyDone || 'Bu adım zaten tamamlanmış görünüyor — İleri ile devam et.')
+      : onbEsc(onbStepBody(s, onbInIframe()));
   /* CSS sozlesmesi (styles.css): baslik=h3, metin=p, sayac=.prog,
      ilerleme cubugu=.progBar>i, kapat=24x24 ikon-buton (.onbClose, absolute kose). */
   onbUI.card.innerHTML =
@@ -598,12 +618,26 @@ function onbGoto(idx){
   if(s.baseline && !(onbIdx in onbBases)){
     try{ onbBases[onbIdx]=s.baseline(onbTour.ctx()); }catch(e){ onbBases[onbIdx]=undefined; }
   }
+  /* GIRIS-SAGLANMISLIK: bu adima GIRERKEN check zaten saglaniyor mu? -> onbGate[idx].
+     Evetse tur burada durur ve İleri düğmesi cikar (oto-atlama yok). baseline'li
+     adimlarda base=giris-degeri oldugundan "buyume" check'leri girişte HEP false
+     (editCount>editCount) -> onlar hicbir zaman İleri-kapisi olmaz, kullanici hareketini bekler. */
+  let entryOk=false;
+  try{ entryOk=!!s.check(onbTour.ctx(), onbBases[onbIdx]); }catch(e){ entryOk=false; }
+  onbGate[onbIdx]=entryOk;
   onbSet('onb.'+onbTour.id+'.step', String(onbIdx));
   onbPaused = !!s.needsPro && !onbLiveCtx().modePro();
   onbRenderCard();
   onbReposition();
 }
-function onbSkip(){ if(!onbTour) return; if(onbIdx>=onbTour.steps.length-1){ onbFinish(); return; } onbGoto(onbIdx+1); }
+/* İleri: giris-saglanmis adimi elle gec (kapiyi ac + bir sonraki adima) */
+function onbNext(){
+  if(!onbTour) return;
+  onbGate[onbIdx]=false;                                    // bu adim İleri ile gecildi -> kapi burada durmaz
+  if(onbIdx>=onbTour.steps.length-1){ onbFinish(); return; }
+  onbGoto(onbIdx+1);
+}
+function onbSkip(){ if(!onbTour) return; onbGate[onbIdx]=false; if(onbIdx>=onbTour.steps.length-1){ onbFinish(); return; } onbGoto(onbIdx+1); }
 function onbTick(){
   if(!onbActive || !onbTour) return;
   /* 3B-baglantili tur: overlay kapaliysa gizle+duraklat, acilinca surdur */
@@ -612,13 +646,21 @@ function onbTick(){
     if(!vis){ if(!onbHidden){ onbHidden=true; onbSetHidden(true); } return; }
     if(onbHidden){ onbHidden=false; onbSetHidden(false); onbReposition(); }
   }
-  const s=onbTour.steps[onbIdx], ctx=onbTour.ctx();
+  const steps=onbTour.steps, s=steps[onbIdx], ctx=onbTour.ctx();
   const nowPaused = !!s.needsPro && !onbLiveCtx().modePro();
   if(nowPaused!==onbPaused){ onbPaused=nowPaused; onbRenderCard(); }
   if(onbPaused) return;                       // Pro gerekli ama kapali -> ilerleme yok
-  const t=onbComputeTarget(onbTour.steps, ctx, onbBases);   // skip-ahead sync
-  if(t>=onbTour.steps.length){ onbFinish(); return; }
-  if(t>onbIdx){ onbGoto(t); return; }
+  /* GIRIS-SAGLANMIS adim -> İleri bekliyor: oto-ilerleme YOK (kullanici İleri'ye basacak). */
+  if(onbGate[onbIdx]){ onbReposition(); return; }
+  /* ARDISIK KAPI (adim adim): mevcut adim saglandiysa BIR sonraki adima gec. onbGoto o
+     adimin giris-saglanmisligini yakalar -> giris-saglanmis ise orada İleri kapisiyla durur;
+     degilse kullanici hareketini bekler (bugunku oto-ilerleme). "Skip-ahead" (birden cok
+     adimi tek tikta yutma) BILEREK kaldirildi: canli /demo "1. adimi atliyor" raporu. */
+  let ok=false; try{ ok=!!s.check(ctx, onbBases[onbIdx]); }catch(e){ ok=false; }
+  if(ok){
+    if(onbIdx>=steps.length-1){ onbFinish(); return; }
+    onbGoto(onbIdx+1); return;
+  }
   /* rAF-bagimsiz konum tazeleme: gizli/gomulu baglamlarda (ornek: arka plan sekmesi,
      mesken iframe'i) tarayici rAF'i ASKIYA ALIR — spotlight takibi tick'ten de surer. */
   onbReposition();
@@ -636,20 +678,20 @@ function onbStop(status){
   onbActive=false; onbTour=null; onbHidden=false; onbClearTimers(); onbTeardown();
 }
 
-/* reset=true -> tam tur (ama depolanmis adimi yok say); degilse depolanmis adim + saglanmislari
-   otomatik gec. HER IKI DALDA da ilk boyamadan ONCE computeTarget ile "ilk saglanmayan adim"
-   hesaplanir: tur, boot'ta ZATEN saglanmis bas adimlari (or. Pro mod acik) gostermeden dogrudan
-   dogru adimdan baslar -> "1/13 goz kirpmasi" (canli /demo raporu) YOK. reset yalniz DEPOLANMIS
-   adimi (onbStepStored) yok sayar; saglanmislari atlamak ortak. */
+/* reset=true -> TAZE tur: HER ZAMAN 0. adimdan basla (Pro mod acik olsa bile) — canli /demo
+   "yine 1. adimi atliyor" raporu: kullanici 1/13'u GORMEK istiyor. Onceki "flash-onleyici"
+   (computeTarget ile saglanmis bas adimlari atla) BILEREK kaldirildi; artik giris-saglanmis
+   0. adim (or. Pro zaten acik) atlanmaz, kartta İleri düğmesiyle DURUR (onbGate + onbTick).
+   reset degilse (DEVAM): depolanmis adim + ardisik-kapi (ilk saglanmayan) senkronu ile surdur. */
 function onbLaunchTour(tour, reset){
   if(!tour || !onbBrowser() || !document.body) return;
   if(onbActive) onbStop('dismissed');          // ayni anda tek tur
-  onbTour=tour; onbActive=true; onbPaused=false; onbHidden=false; onbBases={};
+  onbTour=tour; onbActive=true; onbPaused=false; onbHidden=false; onbBases={}; onbGate={};
   if(tour.id==='ana') onbExportFlag=false;
   if(tour.id==='kamera3d') onbExtRenderFlag=false;
   onbSet('onb.'+tour.id+'.status','active'); onbSet('onb.'+tour.id+'.v', String(tour.version));
-  const auto = onbComputeTarget(tour.steps, tour.ctx(), {});   // ilk saglanmayan adim (flash-onleyici)
-  let idx = reset ? auto : Math.max(onbStepStored(tour), auto);
+  const auto = onbComputeTarget(tour.steps, tour.ctx(), {}, {});   // DEVAM icin ilk saglanmayan adim
+  let idx = reset ? 0 : Math.max(onbStepStored(tour), auto);
   if(idx>=tour.steps.length){ onbFinish(); return; }
   onbBuildUI();
   onbApplyZBoost(!!tour.zBoost);
