@@ -31,7 +31,7 @@ function baseCtx(over){
   const c={
     modePro:()=>false, tabActive:()=>false, parcelLen:()=>0, frontEdge:()=>-1,
     cekme:()=>'|||', closed:()=>false, plan:()=>null, editCount:()=>0,
-    doorWinCount:()=>0, siteOn:()=>false, blocksLen:()=>0, katAyri:()=>false,
+    doorWinCount:()=>0, siteOn:()=>false, blocksLen:()=>0, amenitiesLen:()=>0, katAyri:()=>false,
     floorSig:()=>'0|konut', exportClicked:()=>false
   };
   return Object.assign(c, over||{});
@@ -42,11 +42,13 @@ function fullCtx(){
   return baseCtx({
     modePro:()=>true, tabActive:()=>true, parcelLen:()=>4, frontEdge:()=>2,
     closed:()=>true, plan:()=>({}), editCount:()=>5, doorWinCount:()=>2,
-    siteOn:()=>true, blocksLen:()=>2, katAyri:()=>true, exportClicked:()=>true,
+    siteOn:()=>true, blocksLen:()=>2, amenitiesLen:()=>1, katAyri:()=>true, exportClicked:()=>true,
     floorSig:()=>'2|ticari'
   });
 }
-const FULL_BASES = {6:0, 7:0, 9:0, 11:'0|konut'};   // oda(6) kapi(7) blok(9) kat-gez(11)
+/* baseline'li adim indeksleri (14 adim): oda-duzenle(5) kapi(6) blok-ekle(8) imkan-koy(10) kat-gez(12).
+   blok-b-ciz(9) baseline'siz (check=closed). */
+const FULL_BASES = {5:0, 6:0, 8:0, 10:0, 12:'0|konut'};
 
 /* KAMERA3D ctx stub'u */
 function kamCtx(over){
@@ -70,11 +72,12 @@ const asserts = `
   T('registry: ana iframeAuto/zBoost/watch kapali', (function(){ const a=onbTourById('ana');
       return a.iframeAuto===false && a.zBoost===false && a.watch===false && a.visible===null; })());
   T('VERSION=1 / KAM_VERSION=1', ONB.VERSION===1 && ONB.KAM_VERSION===1);
-  T('ana 13 adim', ONB_STEPS.length===13);
+  T('ana 14 adim', ONB_STEPS.length===14);
   T('kamera3d 6 adim', ONB_KAM_STEPS.length===6);
   const allIds=ONB_STEPS.map(s=>s.id).concat(ONB_KAM_STEPS.map(s=>s.id));
   T('tum adim id benzersiz (turlar arasi dahil)', new Set(allIds).size===allIds.length);
-  T('ana id sirasi', ONB_STEPS.map(s=>s.id).join(',')==='pro-mod,parsel-sekme,parsel-getir,cekme-yol,sinir-ciz,yerlesim,oda-duzenle,kapi-pencere,site-ac,blok-ekle,kat-ayri,kat-gez,export');
+  T('ana id sirasi (cekme-yol yok; blok-b-ciz+imkan-koy eklendi)', ONB_STEPS.map(s=>s.id).join(',')==='pro-mod,parsel-sekme,parsel-getir,sinir-ciz,yerlesim,oda-duzenle,kapi-pencere,site-ac,blok-ekle,blok-b-ciz,imkan-koy,kat-ayri,kat-gez,export');
+  T('cekme-yol adimi KALDIRILDI', !ONB_STEPS.find(s=>s.id==='cekme-yol'));
   T('kamera3d id sirasi', ONB_KAM_STEPS.map(s=>s.id).join(',')==='kamera-koy,aci-ayarla,lens-sec,drone-gec,drone-ekle,render-isaret');
   T('tum check fonksiyon', ONB_STEPS.concat(ONB_KAM_STEPS).every(s=>typeof s.check==='function'));
   T('tum title/body dolu', ONB_STEPS.concat(ONB_KAM_STEPS).every(s=>typeof s.title==='string' && s.title && typeof s.body==='string' && s.body));
@@ -83,19 +86,37 @@ const asserts = `
   const step=id=>ONB_STEPS.find(s=>s.id===id);
   const kstep=id=>ONB_KAM_STEPS.find(s=>s.id===id);
   T('parsel-getir action var', typeof step('parsel-getir').action.run==='function' && step('parsel-getir').action.label==='Örnek parselle devam');
-  T('skippable 3,4,8 isaretli', step('parsel-getir').skippable && step('cekme-yol').skippable && step('kapi-pencere').skippable);
-  T('needsPro parsel adimlarinda', step('parsel-sekme').needsPro && step('parsel-getir').needsPro && step('cekme-yol').needsPro);
+  T('parsel-getir govde: otomatik cekme notu', step('parsel-getir').body.indexOf('Çekme sınırı')>=0 && step('parsel-getir').body.indexOf('otomatik')>=0);
+  T('skippable isaretli (parsel-getir/kapi-pencere/site-ac/blok-ekle/blok-b-ciz/imkan-koy)', step('parsel-getir').skippable && step('kapi-pencere').skippable && step('site-ac').skippable && step('blok-ekle').skippable && step('blok-b-ciz').skippable && step('imkan-koy').skippable);
+  T('cizim adimlari skippable degil (sinir-ciz zorunlu, blok-b-ciz opsiyonel)', step('sinir-ciz').skippable===false && step('blok-b-ciz').skippable===true);
+  T('needsPro parsel adimlarinda', step('parsel-sekme').needsPro && step('parsel-getir').needsPro);
   T('kamera3d cogu skippable (5/6)', ONB_KAM_STEPS.filter(s=>s.skippable).length===5);
   T('render-isaret Bitir action', typeof kstep('render-isaret').action.run==='function' && kstep('render-isaret').action.label==='Bitir');
   T('aci-ayarla canvas hedefi 3B tuval', kstep('aci-ayarla').target.type==='canvas' && kstep('aci-ayarla').target.sel==='#view3dOverlay canvas');
   /* FIX A: pro-mod giris-saglanmis (Pro zaten acik) uyarlanabilir metin (bodyDone) */
   T('pro-mod bodyDone var + "zaten açık" + İleri', typeof step('pro-mod').bodyDone==='string' && step('pro-mod').bodyDone.indexOf('zaten açık')>=0 && step('pro-mod').bodyDone.indexOf('İleri')>=0);
   T('pro-mod bodyDone emoji yok', !/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(step('pro-mod').bodyDone));
-  /* FIX C: sinir-ciz ELLE cizdir -> hedef Çiz araci (#tDraw), oto-cizen #psDrawBld DEGIL */
+  /* v3: sinir-ciz -> "Blok A'yi ciz" HAYALET; hedef Çiz araci (#tDraw); psDrawBld kisayol notu KALKTI */
+  T('sinir-ciz title Blok A', step('sinir-ciz').title.indexOf('Blok A')>=0);
   T('sinir-ciz hedefi Çiz araci (#tDraw)', step('sinir-ciz').target.type==='dom' && step('sinir-ciz').target.sel==='#tDraw');
   T('sinir-ciz body elle cizim tarifi', step('sinir-ciz').body.indexOf('Çiz aracıyla')>=0 && step('sinir-ciz').body.indexOf('köşe köşe')>=0 && step('sinir-ciz').body.indexOf('ilk köşeye')>=0);
-  T('sinir-ciz body psDrawBld kisayol notu', step('sinir-ciz').body.indexOf('Parsele yapı sınırı çiz')>=0);
+  T('sinir-ciz body HAYALET vurgusu', step('sinir-ciz').body.indexOf('hayalet')>=0);
+  T('sinir-ciz psDrawBld kisayol notu KALKTI', step('sinir-ciz').body.indexOf('Parsele yapı sınırı çiz')<0);
+  T('sinir-ciz ghost = blokA', step('sinir-ciz').ghost && step('sinir-ciz').ghost.blocks && step('sinir-ciz').ghost.blocks[0]==='blokA');
   T('sinir-ciz check DEGISMEDI (yalniz closed)', step('sinir-ciz').check(baseCtx({closed:()=>true}))===true && step('sinir-ciz').check(baseCtx())===false);
+  /* v3: blok-b-ciz (yeni) -> Blok B L HAYALET; hedef #tDraw; check global closed */
+  T('blok-b-ciz var + title Blok B', !!step('blok-b-ciz') && step('blok-b-ciz').title.indexOf('Blok B')>=0);
+  T('blok-b-ciz hedefi Çiz araci (#tDraw)', step('blok-b-ciz').target.type==='dom' && step('blok-b-ciz').target.sel==='#tDraw');
+  T('blok-b-ciz ghost = blokB', step('blok-b-ciz').ghost && step('blok-b-ciz').ghost.blocks && step('blok-b-ciz').ghost.blocks[0]==='blokB');
+  T('blok-b-ciz body elle cizim + L + hayalet', step('blok-b-ciz').body.indexOf('köşe köşe')>=0 && step('blok-b-ciz').body.indexOf(ONB_TARGETS.sinir.sekil)>=0 && step('blok-b-ciz').body.indexOf('hayalet')>=0);
+  T('blok-b-ciz check = closed (jenerik)', step('blok-b-ciz').check(baseCtx({closed:()=>true}))===true && step('blok-b-ciz').check(baseCtx())===false);
+  /* v3: imkan-koy (yeni) -> 9 imkan HAYALET; hedef #tAmenity; check amenities buyume */
+  T('imkan-koy var + title', !!step('imkan-koy') && step('imkan-koy').title.indexOf('imkan')>=0);
+  T('imkan-koy hedefi #tAmenity', step('imkan-koy').target.type==='dom' && step('imkan-koy').target.sel==='#tAmenity');
+  T('imkan-koy ghost = amenities', step('imkan-koy').ghost && step('imkan-koy').ghost.amenities===true);
+  T('imkan-koy baseline getter', step('imkan-koy').baseline(baseCtx({amenitiesLen:()=>3}))===3);
+  T('imkan-koy check = amenities>base (jenerik)', step('imkan-koy').check(baseCtx({amenitiesLen:()=>1}),0)===true && step('imkan-koy').check(baseCtx({amenitiesLen:()=>0}),0)===false);
+  T('imkan-koy body imkan ozeti (havuz)', step('imkan-koy').body.indexOf('havuz')>=0);
 
   /* (2) ana check dogruluklari — stub ctx */
   T('pro-mod: modePro', step('pro-mod').check(baseCtx({modePro:()=>true}))===true && step('pro-mod').check(baseCtx())===false);
@@ -106,9 +127,6 @@ const asserts = `
   T('site-ac: siteOn', step('site-ac').check(baseCtx({siteOn:()=>true}))===true);
   T('kat-ayri: katAyri', step('kat-ayri').check(baseCtx({katAyri:()=>true}))===true);
   T('export: exportClicked', step('export').check(baseCtx({exportClicked:()=>true}))===true && step('export').check(baseCtx())===false);
-  T('cekme-yol: frontEdge>=0', step('cekme-yol').check(baseCtx({frontEdge:()=>0}), '|||')===true);
-  T('cekme-yol: cekme degisti', step('cekme-yol').check(baseCtx({cekme:()=>'|5||'}), '|||')===true);
-  T('cekme-yol: degismemis -> false', step('cekme-yol').check(baseCtx(), '|||')===false);
 
   /* (3) baseline'li adimlar — buyume kontrolu */
   T('oda-duzenle: editCount>base', step('oda-duzenle').check(baseCtx({editCount:()=>3}),2)===true && step('oda-duzenle').check(baseCtx({editCount:()=>2}),2)===false);
@@ -121,11 +139,12 @@ const asserts = `
      (yeni imza: steps, ctx, bases, gate). ESKI "en ileri saglanan+1" (gap firlatma) KALDIRILDI. */
   T('bos ctx -> 0', ONB.computeTarget(ONB_STEPS, baseCtx(), {})===0);
   T('yalniz adim1 -> 1', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true}), {})===1);
-  T('tumu saglandi -> 13 (bitti)', ONB.computeTarget(ONB_STEPS, fullCtx(), FULL_BASES)===13);
-  /* ARDISIK: plan(adim5) saglanmis ama pro-mod(adim0) degil -> ILK saglanmayanda (0) durur (eski >=6 firlatma yok) */
+  T('tumu saglandi -> 14 (bitti)', ONB.computeTarget(ONB_STEPS, fullCtx(), FULL_BASES)===14);
+  /* ARDISIK: plan(adim4) saglanmis ama pro-mod(adim0) degil -> ILK saglanmayanda (0) durur (eski firlatma yok) */
   T('ardisik kapi: gap yutmaz (plan var, pro yok -> 0)', ONB.computeTarget(ONB_STEPS, baseCtx({plan:()=>({})}), {})===0);
   T('ardisik kapi: gap yutmaz (adim0-1 ok, adim2 degil, plan ok -> 2)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true,tabActive:()=>true,plan:()=>({})}), {})===2);
-  T('baseline aktif adim senkronu', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true,tabActive:()=>true,parcelLen:()=>4,frontEdge:()=>2,closed:()=>true,plan:()=>({}),editCount:()=>5}), {6:2})===7);
+  /* baseline aktif adim senkronu: oda-duzenle(5) gecti (editCount 5>base2), kapi-pencere(6) bekliyor -> 6 */
+  T('baseline aktif adim senkronu (oda-duzenle->kapi-pencere -> 6)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true,tabActive:()=>true,parcelLen:()=>4,closed:()=>true,plan:()=>({}),editCount:()=>5}), {5:2})===6);
   /* GATE (giris-saglanmis-İleri-bekleyen): saglanmis adim gate[i] ise ORADA durur (oto-atlama yok) */
   T('gate: adim0 saglanmis+gate -> 0 (İleri bekler, atlamaz)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true}), {}, {0:true})===0);
   T('gate: adim0 saglanmis+gate YOK -> 1 (oto gecer)', ONB.computeTarget(ONB_STEPS, baseCtx({modePro:()=>true}), {}, {})===1);
@@ -267,11 +286,44 @@ const asserts = `
       return im && im.ada==='2010' && im.parsel==='257' && im.emsal===3 && im.maksTaks===0.75 && im.hmax===15.5 &&
              im.provider==='istanbul' && im.scan===null && !('snippet' in im); })());
 
+  /* (12a-2) GHOST hedef geometrileri (demo paketin blok+imkanlari; parselle ayni yerel metre uzayi) */
+  T('ONB_TARGETS.blokA 4 kose dikdortgen + label A + alan', (function(){ const b=ONB_TARGETS.blokA;
+      return b && Array.isArray(b.pts) && b.pts.length===4 && b.label==='A' && b.alan===240 &&
+             b.pts[0].x===-25 && b.pts[0].y===-10 && b.pts[2].x===-5 && b.pts[2].y===2; })());
+  T('ONB_TARGETS.blokB 8 kose L + label B + alan', (function(){ const b=ONB_TARGETS.blokB;
+      return b && Array.isArray(b.pts) && b.pts.length===8 && b.label==='B' && b.alan===420 &&
+             b.pts[0].x===38.5 && b.pts[0].y===-11.5 && b.pts[7].x===28.5 && b.pts[7].y===-11.5; })());
+  T('ONB_TARGETS.imkanlar 9 kutu {type,x,y,w,h}', (function(){ const a=ONB_TARGETS.imkanlar;
+      return Array.isArray(a) && a.length===9 && a.every(o=>typeof o.type==='string' && ['green','playground','pool','ornament','seating'].indexOf(o.type)>=0 &&
+             typeof o.x==='number' && typeof o.y==='number' && o.w>0 && o.h>0); })());
+  T('ONB_TARGETS.imkanlar tip dagilimi (havuz1 oyun1 sus2 yesil5)', (function(){ const c={}; ONB_TARGETS.imkanlar.forEach(a=>c[a.type]=(c[a.type]||0)+1);
+      return c.pool===1 && c.playground===1 && c.ornament===2 && c.green===5; })());
+
+  /* (12a-3) onbGhostPolys SAF cozucu (DOM'suz; onbDrawGhosts bunu W2Sx/W2Sy ile tuvale cizer) */
+  T('onbGhostPolys blokA -> 1 poligon 4 nokta + label', (function(){ const r=onbGhostPolys({blocks:['blokA']});
+      return r.polys.length===1 && r.rects.length===0 && r.polys[0].pts.length===4 && r.polys[0].label==='A'; })());
+  T('onbGhostPolys blokB -> 1 poligon 8 nokta + label', (function(){ const r=onbGhostPolys({blocks:['blokB']});
+      return r.polys.length===1 && r.polys[0].pts.length===8 && r.polys[0].label==='B'; })());
+  T('onbGhostPolys amenities -> 9 kutu', (function(){ const r=onbGhostPolys({amenities:true});
+      return r.rects.length===9 && r.polys.length===0; })());
+  T('onbGhostPolys bos spec -> bos', (function(){ const r=onbGhostPolys(null); return r.polys.length===0 && r.rects.length===0; })());
+  T('ONB.ghostPolys export', ONB.ghostPolys===onbGhostPolys);
+  /* adim ghost spec'leri onbGhostPolys ile birebir */
+  T('sinir-ciz ghost cozumu = blokA poligon', onbGhostPolys(step('sinir-ciz').ghost).polys.length===1);
+  T('blok-b-ciz ghost cozumu = blokB poligon', onbGhostPolys(step('blok-b-ciz').ghost).polys[0].pts.length===8);
+  T('imkan-koy ghost cozumu = 9 imkan', onbGhostPolys(step('imkan-koy').ghost).rects.length===9);
+
+  /* (12a-4) onbImkanOzet + amenitiesLen ctx */
+  T('onbImkanOzet okunur ozet (havuz + park + 5 yesil + 2 sus)', (function(){ const s=onbImkanOzet();
+      return s.indexOf('yüzme havuzu')>=0 && s.indexOf('çocuk parkı')>=0 && s.indexOf('5 yeşil alan')>=0 && s.indexOf('2 süs havuzu')>=0; })());
+  T('ONB.imkanOzet export', ONB.imkanOzet===onbImkanOzet);
+  T('onbLiveCtx amenitiesLen headless -> 0 (amenities tanimsiz)', onbLiveCtx().amenitiesLen()===0);
+
   /* (12b) GERIYE-UYUM: targets'siz stub ctx'te HEDEFLI check'ler BUGUNKU davranista */
   T('GERIYE-UYUM sinir-ciz hedefsiz: yalniz closed', step('sinir-ciz').check(baseCtx({closed:()=>true}))===true && step('sinir-ciz').check(baseCtx())===false);
   T('GERIYE-UYUM sinir-ciz hedefsiz: ptsLen yok sayilir', step('sinir-ciz').check(baseCtx({closed:()=>true, ptsLen:()=>0}))===true);
   T('GERIYE-UYUM blok-ekle hedefsiz: base ustu buyume', step('blok-ekle').check(baseCtx({blocksLen:()=>2}),1)===true && step('blok-ekle').check(baseCtx({blocksLen:()=>1}),1)===false);
-  T('GERIYE-UYUM: fullCtx (targets yok) hala 13', ONB.computeTarget(ONB_STEPS, fullCtx(), FULL_BASES)===13);
+  T('GERIYE-UYUM: fullCtx (targets yok) hala 14', ONB.computeTarget(ONB_STEPS, fullCtx(), FULL_BASES)===14);
 
   /* (12c) TARGETS VARKEN DE JENERIK — hedefli-tolerans KALDIRILDI (canli /demo takilma fix).
      ctx'te targets olsa bile sinir-ciz yalniz KAPALI sinir okur (kose sayisina ZORLAMAZ),
@@ -297,8 +349,8 @@ const asserts = `
   T('DINAMIK parsel-getir: ilce/mahalle baslik-harf', step('parsel-getir').body.indexOf('Beşiktaş/Akat')>=0);
   T('DINAMIK parsel-getir: ada/parsel/alan', step('parsel-getir').body.indexOf('ada '+ONB_TARGETS.parsel.ada)>=0 && step('parsel-getir').body.indexOf('parsel '+ONB_TARGETS.parsel.parsel)>=0 && step('parsel-getir').body.indexOf(String(ONB_TARGETS.parsel.alan))>=0);
   T('DINAMIK parsel-sekme: ada/emsal dokusu', step('parsel-sekme').body.indexOf(ONB_TARGETS.parsel.ada)>=0 && step('parsel-sekme').body.indexOf('emsal '+ONB_TARGETS.parsel.imar.emsal)>=0);
-  T('DINAMIK cekme-yol: TAKS/Hmax', step('cekme-yol').body.indexOf('TAKS '+ONB_TARGETS.parsel.imar.maksTaks)>=0 && step('cekme-yol').body.indexOf('Hmax '+ONB_TARGETS.parsel.imar.hmax)>=0);
-  T('DINAMIK sinir-ciz: kose sayisi + sekil', step('sinir-ciz').body.indexOf(String(ONB_TARGETS.sinir.kose))>=0 && step('sinir-ciz').body.indexOf(ONB_TARGETS.sinir.sekil)>=0);
+  T('DINAMIK blok-b-ciz: L kose sayisi + sekil + alan', step('blok-b-ciz').body.indexOf(String(ONB_TARGETS.sinir.kose))>=0 && step('blok-b-ciz').body.indexOf(ONB_TARGETS.sinir.sekil)>=0 && step('blok-b-ciz').body.indexOf(String(ONB_TARGETS.blokB.alan))>=0);
+  T('DINAMIK sinir-ciz: Blok A alan', step('sinir-ciz').body.indexOf(String(ONB_TARGETS.blokA.alan))>=0);
   T('DINAMIK yerlesim: daire karmasi 2+1/3+1', step('yerlesim').body.indexOf('2+1')>=0 && step('yerlesim').body.indexOf('3+1')>=0 && step('yerlesim').body.indexOf(ONB_TARGETS.baslik)>=0);
   T('DINAMIK blok-ekle: "2 blok"', step('blok-ekle').body.indexOf(ONB_TARGETS.bloklar+' blok')>=0);
   T('DINAMIK kat-ayri: kat+bodrum', step('kat-ayri').body.indexOf(String(ONB_TARGETS.bina.kat))>=0 && step('kat-ayri').body.indexOf(ONB_TARGETS.bina.bodrum+' bodrum')>=0);

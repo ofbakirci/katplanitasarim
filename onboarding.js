@@ -67,7 +67,28 @@ const ONB_TARGETS = {
   bloklar:2,
   daireler:[ {oda:2, salon:1, acikMutfak:true, adet:1}, {oda:3, salon:1, ensuite:true, adet:2} ],
   balkon:10, kesme:3,
-  kamera:{ ic:7, drone:3 }
+  kamera:{ ic:7, drone:3 },
+  /* ================= GHOST (hayalet) HEDEF AYAK IZLERI =================
+     demo paketin GERCEK blok + site-imkan geometrileri, parselle AYNI yerel metre
+     uzayinda (onbDemoParcel direct-set bu uzayi yukler -> ghost'lar parselin uzerine
+     birebir oturur). Cizim adimlarinda tuvale SOLUK KESIKLI poligon/kutu olarak enjekte
+     edilir; ziyaretci ustunden kose kose cizer ("birebir bizim blogu cizdirmeli").
+     ONEMLI: check'ler YINE JENERIK (kapali sinir / sayi artisi) — hayalet YALNIZ
+     yonlendirir, birebir oturtma DENETIMI YOK. */
+  blokA:{ label:'A', alan:240,
+          pts:[{x:-25,y:-10},{x:-25,y:2},{x:-5,y:2},{x:-5,y:-10}] },
+  blokB:{ label:'B', alan:420,
+          pts:[{x:38.5,y:-11.5},{x:38.5,y:8.5},{x:28.5,y:8.5},{x:28.5,y:4.5},
+               {x:28.5,y:-1.5},{x:6.5,y:-1.5},{x:6.5,y:-11.5},{x:28.5,y:-11.5}] },
+  imkanlar:[ {type:'green',      x:-30.5, y:-16,  w:37,   h:6},
+             {type:'playground', x:-5,    y:-10,  w:8.5,  h:5},
+             {type:'pool',       x:0,     y:-0.5, w:21.5, h:8},
+             {type:'green',      x:6.5,   y:-16,  w:37.5, h:4.5},
+             {type:'ornament',   x:-23,   y:4.5,  w:4,    h:3},
+             {type:'ornament',   x:-11.5, y:4.5,  w:4,    h:3},
+             {type:'green',      x:-19,   y:4,    w:7.5,  h:4},
+             {type:'green',      x:21.5,  y:-1.5, w:7,    h:4},
+             {type:'green',      x:23,    y:4.5,  w:5.5,  h:7.5} ]
 };
 
 /* TUMU-BUYUK il/mahalle adini baslik-harfe cevirir (Turkce-farkinda; toLowerCase'in
@@ -93,10 +114,48 @@ function onbDaireOzet(){
     }).join(' + ');
   }catch(e){ return ''; }
 }
+/* Site imkanlarini okunur ozete cevirir (ONB_TARGETS.imkanlar tiplerini sayarak):
+   "yüzme havuzu, çocuk parkı, 5 yeşil alan, 2 süs havuzu". Tekil ad; >1'de sayi oneki.
+   imkan-koy adim metni buradan turer -> gercek pakette kac tane varsa metin ONU soyler. */
+const ONB_IMKAN_AD = { pool:'yüzme havuzu', playground:'çocuk parkı', green:'yeşil alan', ornament:'süs havuzu', seating:'oturma alanı' };
+function onbImkanOzet(){
+  try{
+    const order=['pool','playground','green','ornament','seating'], cnt={};
+    ONB_TARGETS.imkanlar.forEach(function(a){ cnt[a.type]=(cnt[a.type]||0)+1; });
+    return order.filter(function(t){ return cnt[t]; }).map(function(t){
+      const ad=ONB_IMKAN_AD[t]||t; return cnt[t]>1 ? (cnt[t]+' '+ad) : ad;
+    }).join(', ');
+  }catch(e){ return ''; }
+}
+/* SAF (DOM YOK): aktif adimin ghost spec'inden cizilecek {polys, rects} uretir.
+   spec.blocks:['blokA'|'blokB'] -> ONB_TARGETS[k].pts poligonlari (+label harfi);
+   spec.amenities:true -> ONB_TARGETS.imkanlar dikdortgenleri. onbDrawGhosts bunu
+   W2Sx/W2Sy ile tuvale cizer; headless test dogrudan cagirir (DOM'suz). */
+function onbGhostPolys(spec){
+  const out={ polys:[], rects:[] };
+  if(!spec || typeof ONB_TARGETS!=='object' || !ONB_TARGETS) return out;
+  if(Array.isArray(spec.blocks)){
+    for(let i=0;i<spec.blocks.length;i++){
+      const geo=ONB_TARGETS[spec.blocks[i]];
+      if(geo && Array.isArray(geo.pts) && geo.pts.length>=3) out.polys.push({ pts:geo.pts, label:geo.label||'' });
+    }
+  }
+  if(spec.amenities && Array.isArray(ONB_TARGETS.imkanlar)){
+    for(let i=0;i<ONB_TARGETS.imkanlar.length;i++) out.rects.push(ONB_TARGETS.imkanlar[i]);
+  }
+  return out;
+}
 
-/* ================= ANA TUR — 13 adim =================
+/* ================= ANA TUR — 14 adim =================
+   v3 (canli /demo: "birebir bizim demodaki iki bloku cizdirmeli, site imkanlarini
+   koymali; cekme mesafesi cizdirmesin"): tur artik ORNEK-PROJE rehberi. cekme-yol
+   adimi GOREV OLMAKTAN CIKTI (parsel-getir govdesinde "otomatik uygulanir" notu);
+   sinir-ciz -> "Blok A'yi ciz" (HAYALET), blok-ekle sonrasi "blok-b-ciz" (L HAYALET)
+   ve "imkan-koy" (9 imkan HAYALETI) adimlari eklendi.
    Adim semasi: {id, title, body, target:{type:'dom',sel}|{type:'canvas'[,sel]},
-   needsPro, skippable, baseline?(ctx)->v, check(ctx, base)->bool, action?:{label,run}}
+   needsPro, skippable, baseline?(ctx)->v, check(ctx, base)->bool, action?:{label,run},
+   ghost?:{blocks:['blokA'|'blokB'], amenities:bool}} — ghost = cizim adiminda tuvale
+   enjekte edilen SOLUK KESIKLI hedef ayak izi (onbDrawGhosts; check'i ETKILEMEZ, JENERIK kalir).
    check() YALNIZ ctx uzerinden okur (canli: onbLiveCtx; test: stub). */
 const ONB_STEPS = [
   { id:'pro-mod', needsPro:false, skippable:false,
@@ -116,29 +175,23 @@ const ONB_STEPS = [
 
   { id:'parsel-getir', needsPro:true, skippable:true,
     title:'Parseli getir',
-    body:'Koordinat ya da Google Maps bağlantısıyla gerçek parseli çek. Örnek projenin parseli: '+onbTr(ONB_TARGETS.parsel.ilce)+'/'+onbTr(ONB_TARGETS.parsel.mahalle)+', ada '+ONB_TARGETS.parsel.ada+' parsel '+ONB_TARGETS.parsel.parsel+' ('+ONB_TARGETS.parsel.alan+' m2). TKGM sorgusuna şu koordinatı yapıştır: '+ONB_TARGETS.parsel.koordinat+'. Denemek istersen örnek parselle de devam edebilirsin.',
+    /* cekme-yol adimi KALKTI (canli /demo: "cekme mesafesi cizdirmesin") -> cekme
+       sinirinin otomatik oldugu tek cumleyle burada anlatilir. */
+    body:'Koordinat ya da Google Maps bağlantısıyla gerçek parseli çek. Örnek projenin parseli: '+onbTr(ONB_TARGETS.parsel.ilce)+'/'+onbTr(ONB_TARGETS.parsel.mahalle)+', ada '+ONB_TARGETS.parsel.ada+' parsel '+ONB_TARGETS.parsel.parsel+' ('+ONB_TARGETS.parsel.alan+' m2). TKGM sorgusuna şu koordinatı yapıştır: '+ONB_TARGETS.parsel.koordinat+'. Denemek istersen örnek parselle de devam edebilirsin. Çekme sınırı örnek imardan otomatik uygulanır (kesikli çizgi).',
     target:{type:'dom', sel:'#psFetch'},
     action:{ label:'Örnek parselle devam', run:function(){ onbDemoParcel(); } },
     check:function(ctx){ return ctx.parcelLen() >= 3; } },
 
-  { id:'cekme-yol', needsPro:true, skippable:true,
-    title:'Çekme ve yol cephesi',
-    body:'İmar çekme mesafelerini gir ya da yola bakan cepheyi seç. Yapı sınırı bunlara göre içerlek çizilir. Örnek imar: emsal '+ONB_TARGETS.parsel.imar.emsal+', TAKS '+ONB_TARGETS.parsel.imar.maksTaks+', Hmax '+ONB_TARGETS.parsel.imar.hmax+' m.',
-    target:{type:'dom', sel:'.ps-cekme-grid'},
-    baseline:function(ctx){ return ctx.cekme(); },
-    check:function(ctx, base){ return ctx.frontEdge() >= 0 || ctx.cekme() !== base; } },
-
   { id:'sinir-ciz', needsPro:false, skippable:false,
-    title:'Yapı sınırını çiz',
-    /* ELLE CIZDIR (canli /demo: "parsele tek bina siniri ciziyor" fix). Hedef ARTIK
-       #psDrawBld (oto-cizen kisayol) DEGIL, Çiz araci (#tDraw): kullanici kose kose cizer.
-       #psDrawBld hala mesru kisayol (govdede anlatilir; basilirsa check yine gecer). */
-    body:'Çiz aracıyla kesikli çekme sınırının içine köşe köşe tıkla, ilk köşeye dönerek kapat. Basit bir dörtgen yeter; istersen örnekteki gibi '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+' de deneyebilirsin. Acelen varsa "Parsele yapı sınırı çiz" düğmesi senin yerine çizer.',
+    title:'Blok A\'yı çiz',
+    /* HAYALET + ELLE CIZDIR (canli /demo: "birebir bizim blogu cizdirmeli"): tuvalde
+       soluk kesikli Blok A ayak izi (ghost) gorunur, ziyaretci Çiz araciyla ustunden
+       kose kose gider. psDrawBld oto-cizen kisayol notu KALKTI (hayaletle celisirdi). */
+    ghost:{ blocks:['blokA'] },
+    body:'Çiz aracıyla tuvaldeki soluk kesikli Blok A hayaletinin üstünden köşe köşe tıkla, ilk köşeye dönerek kapat. Örnek Blok A basit bir dörtgen ('+ONB_TARGETS.blokA.alan+' m2).',
     target:{type:'dom', sel:'#tDraw'},
-    /* JENERIK: sinir KAPANDI mi (kapali poligon). Hedef kose/sekil YALNIZ metinde;
-       kullaniciyi belli bir kose sayisina ZORLAMAZ (canli /demo'da 4 kose cizince
-       takiliyordu -> hedefli >=6 dali KALDIRILDI). Hangi yoldan gelirse gecer:
-       elle Çiz, ya da #psDrawBld kisayolu. */
+    /* JENERIK: sinir KAPANDI mi (kapali poligon). Hayalet YALNIZ yonlendirir;
+       kullaniciyi belli bir kose sayisina/konuma ZORLAMAZ. */
     check:function(ctx){ return !!ctx.closed(); } },
 
   { id:'yerlesim', needsPro:false, skippable:false,
@@ -169,12 +222,36 @@ const ONB_STEPS = [
 
   { id:'blok-ekle', needsPro:false, skippable:true,
     title:'Blok ekle',
-    body:'Yeni blok ekleyip her birini ayrı planlayabilirsin. Blok sekmelerinden ekle. Örnek projede '+ONB_TARGETS.bloklar+' blok (A+B).',
+    body:'Yeni blok ekleyip her birini ayrı planlayabilirsin. Blok sekmelerinden "+ Blok" ile ekle. Örnek projede '+ONB_TARGETS.bloklar+' blok (A+B).',
     target:{type:'dom', sel:'#blockTabs'},
     baseline:function(ctx){ return ctx.blocksLen(); },
     /* JENERIK: bloga en az bir YENI blok eklendi mi (base'e gore buyume). Hedef "2 blok"
        YALNIZ metinde; kullaniciyi 2 bloga ZORLAMAZ (takilma riski -> hedefli >=2 dali KALDIRILDI). */
     check:function(ctx, base){ return ctx.blocksLen() > (base||0); } },
+
+  { id:'blok-b-ciz', needsPro:false, skippable:true,
+    title:'Blok B\'yi çiz',
+    /* +Blok yeni blogu BOS getirir (app.js clearCanvasForNewBlock: pts=[], closed=false)
+       ve otomatik Çiz moduna dusurur. Tuvalde Blok B'nin L hayaleti gorunur; ziyaretci
+       ustunden kose kose cizer ("birebir bizim bloku"). */
+    ghost:{ blocks:['blokB'] },
+    body:'Yeni blok boş geldi. Çiz aracıyla soluk kesikli Blok B hayaletinin üstünden köşe köşe git, ilk köşeye dönerek kapat. Örnek Blok B '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+' ('+ONB_TARGETS.blokB.alan+' m2).',
+    target:{type:'dom', sel:'#tDraw'},
+    /* JENERIK: yeni blogun sinir KAPANDI mi (global closed — sinir-ciz ile AYNI sinyal;
+       taze blokta girişte false). L kose sayisina ZORLAMAZ. */
+    check:function(ctx){ return !!ctx.closed(); } },
+
+  { id:'imkan-koy', needsPro:false, skippable:true,
+    title:'Site imkanlarını yerleştir',
+    /* Site imkan araci (#tAmenity) bir sinir cizilince gorunur. Tuvalde 9 imkan hayaleti
+       (havuz/yesil/oyun/sus) kesikli kutu + tip etiketiyle gorunur; ziyaretci ustlerine
+       yerlestirir. amenities MUTLAK dunya-metre (parsel-ortak). */
+    ghost:{ amenities:true },
+    body:'Site imkanları aracını (ağaç ikonu) aç. Örnek sitede '+onbImkanOzet()+' var — havuzdan başla, hayalet kutuların üstüne yerleştir.',
+    target:{type:'dom', sel:'#tAmenity'},
+    baseline:function(ctx){ return ctx.amenitiesLen(); },
+    /* JENERIK: en az BIR yeni imkan eklendi mi (base'e gore buyume). 9'a ZORLAMAZ. */
+    check:function(ctx, base){ return ctx.amenitiesLen() > (base||0); } },
 
   { id:'kat-ayri', needsPro:true, skippable:true,
     title:'Katları ayrı planla',
@@ -359,6 +436,7 @@ function onbLiveCtx(){
     doorWinCount: function(){ return onbDoorWinCount(); },
     siteOn:       function(){ return (typeof siteOn==='function') ? !!siteOn() : false; },
     blocksLen:    function(){ return (typeof blocks!=='undefined' && blocks) ? blocks.length : 0; },
+    amenitiesLen: function(){ return (typeof amenities!=='undefined' && amenities) ? amenities.length : 0; },
     katAyri:      function(){ const e=onbEl('katAyri'); return !!(e && e.checked); },
     floorSig:     function(){ return onbFloorSig(); },
     exportClicked:function(){ return !!onbExportFlag; }
@@ -495,7 +573,7 @@ function onbBuildUI(){
     window.addEventListener('scroll', function(){ if(onbActive) onbReposition(); }, {passive:true, capture:true});
   }
 }
-function onbTeardown(){ if(onbUI){ try{ onbUI.svg.remove(); onbUI.card.remove(); }catch(e){} onbUI=null; } }
+function onbTeardown(){ onbGhostRemove(); if(onbUI){ try{ onbUI.svg.remove(); onbUI.card.remove(); }catch(e){} onbUI=null; } }
 /* z-boost: 3B overlay (inline z-index:9999) ustunde kalmak icin 'onb3d' sinifi */
 function onbApplyZBoost(on){
   if(!onbUI) return;
@@ -607,8 +685,58 @@ function onbReposition(){
     onbUI.hole.setAttribute('width',0); onbUI.hole.setAttribute('height',0); onbUI.holeC.setAttribute('r',0);
     onbPositionCard(null);
   }
+  onbDrawGhosts();   // ghost'u ayni cagride idempotent yeniden enjekte -> render() sildiyse geri gelir
 }
 function onbFrame(){ if(!onbActive){ onbRaf=0; return; } onbReposition(); onbRaf=requestAnimationFrame(onbFrame); }
+
+/* ================= HAYALET (ghost) cizim katmani (YALNIZ tarayici) =================
+   Cizim adimlarinda (sinir-ciz/blok-b-ciz/imkan-koy) hedef ayak izini ana tuvale (#svg)
+   SOLUK KESIKLI poligon/kutu olarak enjekte eder; ziyaretci ustunden kose kose cizer
+   ("birebir bizim blogu cizdirmeli"). Dunya-metre {x,y} -> W2Sx/W2Sy ile cizilir =>
+   pan/zoom OTOMATIK izlenir (ayri transform grubu YOK; motor da boyle cizer). render()
+   her karede svg.innerHTML'i siler -> ghost onbReposition (rAF ~60fps + 250ms poll +
+   resize/scroll) her cagrisinda IDEMPOTENT yeniden enjekte edilir (svg.appendChild var
+   olan <g>'yi en uste tasir, cocuk cogaltmaz). check'ler JENERIK, hayalet YALNIZ yonlendirir. */
+const ONB_SVGNS='http://www.w3.org/2000/svg';
+const ONB_GHOST_STROKE='#b35a2e';   // soluk turuncu vurgu (--acc); motor mavisi/yesilinden ayrisir
+const ONB_GHOST_LBL={ green:'Yeşil', pool:'Havuz', playground:'Oyun', ornament:'Süs', seating:'Oturma' };
+function onbGRound(n){ n=+n; if(!isFinite(n)) n=0; return Math.round(n*10)/10; }
+function onbW2S(){
+  try{ if(typeof W2Sx==='function' && typeof W2Sy==='function') return { x:W2Sx, y:W2Sy }; }catch(e){}
+  return null;
+}
+function onbGhostRemove(){ try{ const g=onbEl('onbGhost'); if(g && g.parentNode) g.parentNode.removeChild(g); }catch(e){} }
+function onbDrawGhosts(){
+  const s=onbTour && onbTour.steps[onbIdx];
+  const spec=(s && s.ghost) ? s.ghost : null;
+  if(!spec || onbHidden){ onbGhostRemove(); return; }
+  const conv=onbW2S(), svgEl=onbEl('svg');
+  if(!conv || !svgEl){ onbGhostRemove(); return; }          // motor/tuval yok (headless) -> ghost yok
+  const data=onbGhostPolys(spec);
+  if(!data.polys.length && !data.rects.length){ onbGhostRemove(); return; }
+  let g=onbEl('onbGhost');
+  if(!g){ try{ g=document.createElementNS(ONB_SVGNS,'g'); g.setAttribute('id','onbGhost'); g.setAttribute('pointer-events','none'); }catch(e){ return; } }
+  try{ svgEl.appendChild(g); }catch(e){ return; }            // render() sildiyse en uste geri ekle
+  const Wx=conv.x, Wy=conv.y, R=onbGRound; let out='';
+  /* bloklar: soluk kesikli poligon + kose noktalari + harf etiketi (kose kose cizmeyi kolaylastir) */
+  for(let i=0;i<data.polys.length;i++){
+    const p=data.polys[i].pts; let d='M', cx=0, cy=0;
+    for(let j=0;j<p.length;j++){ const X=R(Wx(p[j].x)), Y=R(Wy(p[j].y)); d+=(j?'L':'')+X+','+Y; cx+=X; cy+=Y; }
+    d+='Z'; cx/=p.length; cy/=p.length;
+    out+='<path d="'+d+'" fill="rgba(179,90,46,0.06)" stroke="'+ONB_GHOST_STROKE+'" stroke-width="2.2" stroke-dasharray="8 5" stroke-linejoin="round" stroke-linecap="round"/>';
+    for(let j=0;j<p.length;j++) out+='<circle cx="'+R(Wx(p[j].x))+'" cy="'+R(Wy(p[j].y))+'" r="3.5" fill="'+ONB_GHOST_STROKE+'" fill-opacity="0.55"/>';
+    if(data.polys[i].label) out+='<text x="'+R(cx)+'" y="'+R(cy)+'" text-anchor="middle" dominant-baseline="middle" font-size="16" font-weight="700" fill="'+ONB_GHOST_STROKE+'" fill-opacity="0.5">'+onbEsc(data.polys[i].label)+'</text>';
+  }
+  /* imkanlar: kesikli kutu + tip etiketi */
+  for(let i=0;i<data.rects.length;i++){ const a=data.rects[i];
+    const x0=Wx(a.x), y0=Wy(a.y), x1=Wx(a.x+a.w), y1=Wy(a.y+a.h);
+    const rx=Math.min(x0,x1), ry=Math.min(y0,y1), rw=Math.abs(x1-x0), rh=Math.abs(y1-y0);
+    out+='<rect x="'+R(rx)+'" y="'+R(ry)+'" width="'+R(rw)+'" height="'+R(rh)+'" rx="3" fill="rgba(179,90,46,0.05)" stroke="'+ONB_GHOST_STROKE+'" stroke-width="1.6" stroke-dasharray="6 4"/>';
+    const lbl=ONB_GHOST_LBL[a.type]||'';
+    if(lbl) out+='<text x="'+R(rx+rw/2)+'" y="'+R(ry+rh/2)+'" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="'+ONB_GHOST_STROKE+'" fill-opacity="0.8">'+onbEsc(lbl)+'</text>';
+  }
+  g.innerHTML=out;
+}
 
 /* --- adim gecisleri --- */
 function onbGoto(idx){
@@ -628,7 +756,29 @@ function onbGoto(idx){
   onbSet('onb.'+onbTour.id+'.step', String(onbIdx));
   onbPaused = !!s.needsPro && !onbLiveCtx().modePro();
   onbRenderCard();
+  onbScrollTargetIntoView();   // IS 3: hedef viewport disindaysa ortala (adim basina bir kez)
   onbReposition();
+}
+/* IS 3 — HEDEFE OTOMATIK KAYDIRMA (canli /demo: "4/13 asagida kaliyor, kullanici
+   kaydirmayabilir"): adim aktiflesince hedef DOM elemani viewport'ta TAM gorunur degilse
+   en yakin scrollable ata icinde ortala (scrollIntoView block:'center'). GENEL mekanizma:
+   tum dom-hedefli adimlar (sol panel ici dahil). Yumusak kaydirma -> scroll event ->
+   onbReposition spotlight'i takip eder (mevcut resize/scroll dinleyicisi + rAF). */
+function onbScrollTargetIntoView(){
+  const s=onbTour && onbTour.steps[onbIdx];
+  if(!s || !s.target || s.target.type!=='dom') return;      // canvas hedefi kaydirilmaz
+  const el=onbSel(s.target.sel);
+  if(!el || !el.getBoundingClientRect || !el.scrollIntoView) return;
+  try{
+    const vh=(typeof window!=='undefined' && window.innerHeight) ? window.innerHeight : 0;
+    const vw=(typeof window!=='undefined' && window.innerWidth) ? window.innerWidth : 0;
+    if(!vh || !vw) return;
+    const r=el.getBoundingClientRect();
+    if(r.width<=0 && r.height<=0) return;                    // gizli eleman -> kaydirma yok
+    const M=24;                                              // kenar payi; tam gorunur degilse ortala
+    if(r.top<M || r.bottom>vh-M || r.left<0 || r.right>vw)
+      el.scrollIntoView({block:'center', inline:'nearest', behavior:'smooth'});
+  }catch(e){}
 }
 /* İleri: giris-saglanmis adimi elle gec (kapiyi ac + bir sonraki adima) */
 function onbNext(){
@@ -750,6 +900,8 @@ var ONB = {
   TOURS: ONB_TOURS,
   tourById: onbTourById,
   stepBody: onbStepBody,
+  ghostPolys: onbGhostPolys,        // SAF ghost cozucu (headless test)
+  imkanOzet: onbImkanOzet,
   computeTarget: onbComputeTarget,
   decideStart: onbDecideStart,
   watchDecision: onbWatchDecision,
