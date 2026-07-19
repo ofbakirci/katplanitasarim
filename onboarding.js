@@ -4,7 +4,7 @@
    v2: TEK tur -> TUR REGISTRY'si (ONB_TOURS). Her turun kendi adimlari, kendi
    localStorage anahtarlari (onb.<turId>.status/.step/.v), kendi ctx getter'i,
    kendi tetikleyicisi var. Su an iki tur:
-     - 'ana'      : 15 adimlik genel KPTA turu (#onbStart / ?onb=1 / ilk acilis)
+     - 'ana'      : 16 adimlik genel KPTA turu (#onbStart / ?onb=1 / ilk acilis)
      - 'kamera3d' : 3B kamera yerlestirme mini-turu (kamera UI'i acilinca watcher tetikler)
 
    MIMARI NOTLARI
@@ -33,7 +33,7 @@
    - EMOJI YASAK: ikon gerekirse icons.js icon() (typeof-guard'li) ya da duz metin. */
 
 /* ---- senaryo surumleri: adimlar degisince ARTIR -> done/dismissed kullanici yeniden gezer ---- */
-const ONB_VERSION = 2;        // 'ana' turu (v2: "bir kez yaptir gerisi otomatik" revizyonu — 15 adim + normalizasyon)
+const ONB_VERSION = 3;        // 'ana' turu (v3: sabah-testi rev — 16 adim: BLOK-FARKINDA daire karmasi + Blok B yerlesimi ayri adim + Daireler sekmesi + export paket-odakli + cizim karartisiz; done/dismissed ziyaretci yeniden gezer)
 const ONB_KAM_VERSION = 2;    // 'kamera3d' turu (v2: kamera-koy oto-yerlestir aksiyonu + drone-ekle mutlak check)
 
 /* ================= DEMO PAKET HEDEFLERI (ONB_TARGETS) =================
@@ -98,9 +98,16 @@ const ONB_TARGETS = {
      edilir; ziyaretci ustunden kose kose cizer ("birebir bizim blogu cizdirmeli").
      ONEMLI: check'ler YINE JENERIK (kapali sinir / sayi artisi) — hayalet YALNIZ
      yonlendirir, birebir oturtma DENETIMI YOK. */
+  /* BLOK-FARKINDA daire karmasi (proje-20260716-4.mskpkg block0/block1 specs teyitli):
+     A = TEK daire 3+1 ensuite; B = 1x 2+1 acik mutfak + 2x 3+1 ensuite (toplam 3 daire).
+     Eskiden top-level 'daireler' (=B aynasi) her yere basiliyordu -> kullanicinin yakaladigi
+     VERI HATASI. Normalizasyon artik BLOK-FARKINDA: A yerlesiminde A karmasi, B'ninkinde B.
+     Semasi top-level 'daireler' ile ayni (acikMutfak/ensuite); onbDemoUnitSpecs motor 'acik'e cevirir. */
   blokA:{ label:'A', alan:240,
+          daireler:[ {oda:3, salon:1, ensuite:true, adet:1} ],
           pts:[{x:-25,y:-10},{x:-25,y:2},{x:-5,y:2},{x:-5,y:-10}] },
   blokB:{ label:'B', alan:420,
+          daireler:[ {oda:2, salon:1, acikMutfak:true, adet:1}, {oda:3, salon:1, ensuite:true, adet:2} ],
           pts:[{x:38.5,y:-11.5},{x:38.5,y:8.5},{x:28.5,y:8.5},{x:28.5,y:4.5},
                {x:28.5,y:-1.5},{x:6.5,y:-1.5},{x:6.5,y:-11.5},{x:28.5,y:-11.5}] },
   imkanlar:[ {type:'green',      x:-30.5, y:-16,  w:37,   h:6},
@@ -126,10 +133,15 @@ function onbTr(s){
   return s.charAt(0) + rest;
 }
 /* daire karmasini okunur metne cevirir:
-   "1 daire 2+1 açık mutfak + 2 daire 3+1 ensuite" (ONB_TARGETS.daireler'den turer). */
-function onbDaireOzet(){
+   "1 daire 2+1 açık mutfak + 2 daire 3+1 ensuite". which='blokA'|'blokB' verilirse O blogun
+   karmasi (ONB_TARGETS[which].daireler); yoksa top-level (geriye-uyum). BLOK-FARKINDA metin
+   (kullanici: her blok kendi daire karmasini konussun). */
+function onbDaireOzet(which){
   try{
-    return ONB_TARGETS.daireler.map(function(d){
+    const src = (which && ONB_TARGETS && ONB_TARGETS[which] && Array.isArray(ONB_TARGETS[which].daireler))
+      ? ONB_TARGETS[which].daireler
+      : ONB_TARGETS.daireler;
+    return src.map(function(d){
       let t = d.adet+' daire '+d.oda+'+'+d.salon;
       if(d.acikMutfak) t += ' açık mutfak';
       if(d.ensuite)    t += ' ensuite';
@@ -175,10 +187,16 @@ function onbGhostPolys(spec){
    typeof-guard). Boylece adim gecislerinde plan state'i demo ornekine cekilir, render'la zit dusmez. */
 
 /* daire karmasi — DIKKAT: motor anahtari 'acik' (acik mutfak), ONB_TARGETS'taki 'acikMutfak' DEGIL.
-   1x 2+1 acik mutfak + 2x 3+1 ensuite (toplam 3 daire). */
-function onbDemoUnitSpecs(){
-  return [ {oda:2, salon:1, ensuite:false, acik:true,  adet:1},
-           {oda:3, salon:1, ensuite:true,  acik:false, adet:2} ];
+   BLOK-FARKINDA: which='blokA'|'blokB' verilirse O blogun karmasi (ONB_TARGETS[which].daireler),
+   yoksa top-level (geriye-uyum: 1x 2+1 acik + 2x 3+1 ensuite = B aynasi). Semayi motor formatina
+   cevirir (acikMutfak -> acik). A = TEK daire 3+1 ensuite; B = 1x 2+1 acik + 2x 3+1 ensuite. */
+function onbDemoUnitSpecs(which){
+  const src = (which && ONB_TARGETS && ONB_TARGETS[which] && Array.isArray(ONB_TARGETS[which].daireler))
+    ? ONB_TARGETS[which].daireler
+    : (ONB_TARGETS && Array.isArray(ONB_TARGETS.daireler) ? ONB_TARGETS.daireler : []);
+  return src.map(function(d){
+    return { oda:d.oda, salon:d.salon, ensuite:!!d.ensuite, acik:!!d.acikMutfak, adet:d.adet };
+  });
 }
 /* aktif blogun (blok A) demo balkon seti kopyasi (ONB_TARGETS.balkonlar) */
 function onbDemoBalconies(){
@@ -280,11 +298,15 @@ function onbSnapBlock(which){
   try{ if(typeof plan!=='undefined' && plan && typeof safeGen==='function') safeGen(); }catch(e){}
   onbToast('Örneğe hizalandı');
 }
-/* daire karmasini demo mixe cek (unitSpecs) + panel tazele. safeGen YALNIZ plan varsa
-   (yeni karmayla yeniden uret); YOKSA generate ETMEZ -> "Yerlesimi Olustur" tiklamasi korunur. */
-function onbSetDemoUnits(){
+/* Daireler sekmesini goster (kullanici: "yerlestirme yaptirirken Daireler'e gidip gorsek keske")
+   -> otomatik kurulan karma #unitList'te GORUNUR. Hedef #genBtn panel altinda (sekmeden bagimsiz). */
+function onbOpenDaireTab(){ try{ if(typeof window!=='undefined' && typeof window.showPanelTab==='function') window.showPanelTab('daireler'); }catch(e){} }
+/* daire karmasini BLOK-FARKINDA demo mixe cek (unitSpecs) + panel tazele. which='blokA'|'blokB'.
+   safeGen YALNIZ plan varsa (yeni karmayla yeniden uret); YOKSA generate ETMEZ -> "Yerlesimi
+   Olustur" tiklamasi korunur. */
+function onbSetDemoUnits(which){
   let ok=false;
-  try{ if(typeof unitSpecs!=='undefined'){ unitSpecs=onbDemoUnitSpecs(); ok=true; } }catch(e){}
+  try{ if(typeof unitSpecs!=='undefined'){ unitSpecs=onbDemoUnitSpecs(which); ok=true; } }catch(e){}
   if(!ok) return;
   try{ if(typeof renderUnits==='function') renderUnits(); }catch(e){}
   try{ if(typeof resetCuts==='function') resetCuts(); }catch(e){}
@@ -320,13 +342,15 @@ function onbPlaceDemoCameras(){
   onbToast('Kalan kameraları yerleştirdim');
 }
 
-/* ================= ANA TUR — 15 adim =================
-   v4 "BIR KEZ YAPTIR, GERISI OTOMATIK" (kullanici: "Dose'ye kadar elinden tut AMA
-   tricky yerde tur otomatik yapar"): her etkilesim tipinden BIR tat, kalanini tur
-   tamamlar. NORMALIZASYON (onbStepEnter): adim gecislerinde plan state'i demo ornekine
-   cekilir -> kullanici ne yaparsa yapsin sonraki adimda DEMO DEFAULTU (render'la zit dusmez).
+/* ================= ANA TUR — 16 adim =================
+   v5 "BIR KEZ YAPTIR, GERISI OTOMATIK" + sabah-testi rev (BLOK-FARKINDA karma + Blok B
+   yerlesimi ayri adim + Daireler sekmesi gorunur + export paket-odakli + cizim karartisiz):
+   her etkilesim tipinden BIR tat, kalanini tur tamamlar. NORMALIZASYON (onbStepEnter): adim
+   gecislerinde plan state'i demo ornekine cekilir -> DEMO DEFAULTU (render'la zit dusmez).
      - blokA-ciz/blokB-ciz kapaninca pts := demo ayak izi (onbSnapBlock, "Ornege hizalandi")
-     - yerlesim'e girerken unitSpecs := demo karmasi (onbSetDemoUnits)
+     - yerlesim'e girerken unitSpecs := BLOK A karmasi (onbSetDemoUnits('blokA'), TEK daire)
+     - blokB-yerlesim'e girerken unitSpecs := BLOK B karmasi (1x 2+1 acik + 2x 3+1 ensuite)
+     - iki yerlesim adiminda Daireler sekmesi acilir (kullanici karmayi GORUR)
      - site-ac'a girerken balconies := demo set (onbSetDemoBalconies)
      - imkan-koy: HAVUZU cizdir + "Kalan imkanlari otomatik yerlestir" aksiyonu (>=9)
    Adim semasi: {id, title, body, target:{type,sel}|fn(ctx)->{type,sel}, needsPro, skippable,
@@ -363,18 +387,20 @@ const ONB_STEPS = [
     title:'Blok A\'yı çiz',
     /* HAYALET + ELLE CIZDIR (en keyifli an): tuvalde soluk kesikli Blok A ayak izi gorunur,
        ziyaretci Çiz araciyla ustunden kose kose gider. Kapaninca onSnapBlock demo ayak izine
-       hizalar (yerlesim'e girerken) -> "birebir tutana kadar" garantisi snap'le saglanir. */
-    ghost:{ blocks:['blokA'] },
+       hizalar (yerlesim'e girerken) -> "birebir tutana kadar" garantisi snap'le saglanir.
+       fullCanvasHole: cizim adiminda tuvalin TAMAMI spotlight deligi (karartisiz) — kullanici
+       "bina siniri cizdirirken arkada canvas gölgeli" sikayeti; ghost + kart parlak tuval ustunde. */
+    ghost:{ blocks:['blokA'] }, fullCanvasHole:true,
     body:'Çiz aracıyla tuvaldeki soluk kesikli Blok A hayaletinin üstünden köşe köşe tıkla, ilk köşeye dönerek kapat. Kapatınca örneğe hizalarım. Örnek Blok A basit bir dörtgen ('+ONB_TARGETS.blokA.alan+' m2).',
     target:{type:'dom', sel:'#tDraw'},
     /* JENERIK: sinir KAPANDI mi (kapali poligon). Hayalet YALNIZ yonlendirir. */
     check:function(ctx){ return !!ctx.closed(); } },
 
   { id:'yerlesim', needsPro:false, skippable:false,
-    title:'Yerleşimi oluştur',
-    /* onStepEnter: unitSpecs := demo karmasi (kart bunu soyler). "Yerlesimi Olustur" tek tik ->
-       motor otomatik yerlesim (otomasyonun vitrini). */
-    body:'Daire karmasını örnekten ayarladım ('+ONB_TARGETS.baslik+': '+onbDaireOzet()+'). Tek tık "Yerleşimi Oluştur" daireleri mevzuata uygun otomatik yerleştirir — otomasyonun vitrini.',
+    title:'Blok A yerleşimi',
+    /* onStepEnter: unitSpecs := BLOK A demo karmasi (TEK daire 3+1 ensuite) + Daireler sekmesi
+       gosterilir (kullanici otomatik karmayi GORUR). "Yerlesimi Olustur" tek tik -> motor otomatik. */
+    body:'Blok A daire karmasını Daireler sekmesinde örnekten ayarladım ('+onbDaireOzet('blokA')+' — Blok A tek daire). Tek tık "Yerleşimi Oluştur" daireyi mevzuata uygun otomatik yerleştirir — otomasyonun vitrini.',
     target:{type:'dom', sel:'#genBtn'},
     check:function(ctx){ return !!ctx.plan(); } },
 
@@ -425,19 +451,30 @@ const ONB_STEPS = [
   { id:'blokB-ciz', needsPro:false, skippable:true,
     title:'Blok B\'yi çiz',
     /* +Blok yeni blogu BOS getirir ve otomatik Çiz moduna dusurur. Blok B'nin L hayaleti
-       gorunur; ziyaretci ustunden kose kose cizer. Kapaninca imkan-koy'a girerken snap. */
-    ghost:{ blocks:['blokB'] },
+       gorunur; ziyaretci ustunden kose kose cizer. Kapaninca blokB-yerlesim'e girerken snap.
+       fullCanvasHole: cizim tuvali karartisiz (fix 5). */
+    ghost:{ blocks:['blokB'] }, fullCanvasHole:true,
     body:'Yeni blok boş geldi. Çiz aracıyla soluk kesikli Blok B hayaletinin üstünden köşe köşe git, ilk köşeye dönerek kapat. Kapatınca örneğe hizalarım. Örnek Blok B '+ONB_TARGETS.sinir.kose+' köşeli bir '+ONB_TARGETS.sinir.sekil+' ('+ONB_TARGETS.blokB.alan+' m2).',
     target:{type:'dom', sel:'#tDraw'},
     /* JENERIK: yeni blogun sinir KAPANDI mi (global closed; taze blokta girişte false). */
     check:function(ctx){ return !!ctx.closed(); } },
 
+  { id:'blokB-yerlesim', needsPro:false, skippable:false,
+    title:'Blok B yerleşimi',
+    /* YENI ADIM (kullanici: "B bloku cizdik, yerlestirme yaptirtmadin"): Blok B icin de
+       "Yerlesimi Olustur". Giriste (onStepEnter): B siniri demo ayak izine snap + unitSpecs :=
+       BLOK B demo karmasi (1x 2+1 acik + 2x 3+1 ensuite) + Daireler sekmesi. Tek tik -> B plani. */
+    body:'Blok B daire karmasını Daireler sekmesinde örnekten ayarladım ('+onbDaireOzet('blokB')+'). Tek tık "Yerleşimi Oluştur" Blok B dairelerini otomatik yerleştirir.',
+    target:{type:'dom', sel:'#genBtn'},
+    check:function(ctx){ return !!ctx.plan(); } },
+
   { id:'imkan-koy', needsPro:false, skippable:true,
     title:'Site imkanlarını yerleştir',
     /* HAVUZU cizdir (poligon; ucgen bile olur espri) + AKSIYON "Kalan imkanlari otomatik
        yerlestir" -> kalan 8 imkan ONB_TARGETS.imkanlar pts'lerinden amenities.push (M1 semasi).
-       Hayaletler TEKER SONER (onbImkanPlaced eslesmesi). check: amenities.length>=9. */
-    ghost:{ amenities:true },
+       Hayaletler TEKER SONER (onbImkanPlaced eslesmesi). check: amenities.length>=9.
+       fullCanvasHole: imkan poligonu cizerken tuval karartisiz (fix 5). */
+    ghost:{ amenities:true }, fullCanvasHole:true,
     body:'Site imkanları aracını (ağaç ikonu) aç, üstteki dock\'tan Havuz tipini seç ve hayalet kutunun üstünden köşe köşe bir poligon çiz (üçgen bile olur). Örnek sitede '+onbImkanOzet()+' var; kalanını tek düğmeyle tamamlarım.',
     target:{type:'dom', sel:'#tAmenity'},
     action:{ label:'Kalan imkanları otomatik yerleştir', run:function(){ onbPlaceRemainingImkanlar(); } },
@@ -462,8 +499,15 @@ const ONB_STEPS = [
 
   { id:'export', needsPro:false, skippable:false,
     title:'Planı dışa aktar',
+    /* IFRAME (Mesken kabugu): SVG indir/yukle GEREKMEZ — proje paket olarak saklanir (kullanici:
+       "paket aktarma olmali"). Hedefsiz bitis karti + Bitir (onbFinish). target FONKSIYON: iframe'de
+       {type:'none'} (hedef yok, karartma yok), standalone KPTA'da #svgBtn AYNEN. bodyIframe finish
+       metni. action iframe'de gorunur (actionIframeOnly) -> standalone davranis (exportClicked ile
+       oto-bitis) DEGISMEZ. */
     body:'Hazır! Planı SVG olarak indir ya da daha sonra "İçe aktar" ile geri yükle.',
-    target:{type:'dom', sel:'#svgBtn'},
+    bodyIframe:'Projen hazır. Kabuğun üstündeki Paket İndir projeyi tek dosya olarak saklar. Sağ alttaki 3B Görüntüle ile akışa devam et.',
+    target:function(){ return onbInIframe() ? {type:'none'} : {type:'dom', sel:'#svgBtn'}; },
+    action:{ label:'Bitir', run:function(){ onbFinish(); } }, actionIframeOnly:true,
     check:function(ctx){ return ctx.exportClicked(); } }
 ];
 
@@ -472,14 +516,15 @@ const ONB_STEPS = [
    Hepsi typeof-guard'li (onbApply* icinde) -> headless'te no-op, guvenli. */
 function onbStepEnter(id){
   switch(id){
-    case 'blokA-ciz': onbFit(); break;                                  // parsel + blok A hayaleti tam gorunur
-    case 'yerlesim':  onbSnapBlock('blokA'); onbSetDemoUnits(); break;  // blok A -> demo ayak izi + daire karmasi
+    case 'blokA-ciz': onbFit(); break;                                                       // parsel + blok A hayaleti tam gorunur
+    case 'yerlesim':  onbSnapBlock('blokA'); onbSetDemoUnits('blokA'); onbOpenDaireTab(); break;  // blok A -> demo ayak izi + A karmasi (TEK daire) + Daireler sekmesi
     case 'balkon-ekle': onbFit(); break;
-    case 'site-ac':   onbOpenBinaTab(); onbSetDemoBalconies(); break;   // Bina sekmesi + balkonlar demo set
-    case 'blokB-ciz': onbFit(); break;                                  // blok B hayaleti tam gorunur
-    case 'imkan-koy': onbSnapBlock('blokB'); onbFit(); break;           // blok B -> demo ayak izi + imkan hayaletleri
-    case 'kat-ayri':  onbExitAmenityMode(); onbFocusBuiltBlock(); onbOpenBinaTab(); break;   // amenity modundan cik + planli bloga (A) gec + Bina sekmesi
-    case 'kamera-koy': onbOpenCameraTool(); break;                     // kamera3d: raydan Kamera aracini ac (dock + Ekle gorunur)
+    case 'site-ac':   onbOpenBinaTab(); onbSetDemoBalconies(); break;                         // Bina sekmesi + balkonlar demo set
+    case 'blokB-ciz': onbFit(); break;                                                        // blok B hayaleti tam gorunur
+    case 'blokB-yerlesim': onbSnapBlock('blokB'); onbSetDemoUnits('blokB'); onbOpenDaireTab(); break;  // blok B -> demo ayak izi + B karmasi + Daireler sekmesi
+    case 'imkan-koy': onbFit(); break;                                                        // blok B artik planli (blokB-yerlesim) -> yalniz kadraj + imkan hayaletleri
+    case 'kat-ayri':  onbExitAmenityMode(); onbFocusBuiltBlock(); onbOpenBinaTab(); break;    // amenity modundan cik + planli bloga gec (guard; iki blok da planli) + Bina sekmesi
+    case 'kamera-koy': onbOpenCameraTool(); break;                                            // kamera3d: raydan Kamera aracini ac (dock + Ekle gorunur)
   }
 }
 /* target FONKSIYON olabilir (site-ac akilli hedef) -> {type,sel} coz. SAF (ctx alir). */
@@ -866,11 +911,14 @@ function onbRenderCard(){
   /* GIRIS-SAGLANMIS adim (onbGate[onbIdx]) -> oto-atlama YOK; kartta İleri düğmesi
      (kullanici elle gecer). Oncelik: paused > gate(İleri) > action. */
   const gated = !onbPaused && !!onbGate[onbIdx];
+  /* actionIframeOnly: aksiyon dugmesi (or. export 'Bitir') YALNIZ gomulu iframe'de gorunur;
+     standalone KPTA'da adim mevcut davranisini korur (export: exportClicked ile oto-bitis). */
+  const actionOK = s.action && s.action.label && (!s.actionIframeOnly || onbInIframe());
   let btns='';
   if(s.skippable && !gated) btns += '<button type="button" class="onbSkip" data-onb="skip">Atla</button>';
   if(onbPaused) btns += '<button type="button" class="onbAct onbNext" data-onb="pro">Profesyonel moda geç</button>';
   else if(gated) btns += '<button type="button" class="onbAct onbNext" data-onb="next">İleri</button>';
-  else if(s.action && s.action.label) btns += '<button type="button" class="onbAct onbNext" data-onb="act">'+onbEsc(s.action.label)+'</button>';
+  else if(actionOK) btns += '<button type="button" class="onbAct onbNext" data-onb="act">'+onbEsc(s.action.label)+'</button>';
   const text = onbPaused
     ? 'Bu adım Profesyonel modda çalışır. Devam etmek için Profesyonel moda geç.'
     : gated
@@ -903,6 +951,15 @@ function onbTargetRect(){
     return {kind:'none'};
   }
   return {kind:'none'};
+}
+/* FIX 5 — CIZIM ADIMINDA KARARTMA KALKSIN: fullCanvasHole'lu adimlarda (blokA-ciz/blokB-ciz/
+   imkan-koy) spotlight deligi = TUM tuval (canvasWrap) bbox -> canvas HIC kararmaz; ghost + kart
+   parlak tuval ustunde. canvasWrap ici #toolbar/#amenityBar/#blockTabs/#floorTabs de delikte
+   kalir (araclar gorunur). Gorunmezse null (delik normal hedefe duser). */
+function onbCanvasRect(){
+  const w=onbEl('canvasWrap');
+  if(w && w.getBoundingClientRect && onbVisible(w)) return w.getBoundingClientRect();
+  return null;
 }
 function onbPositionCard(rect){
   if(!onbUI || !onbUI.card) return;
@@ -955,8 +1012,16 @@ function onbReposition(){
   onbUI.bg.setAttribute('width',vw); onbUI.bg.setAttribute('height',vh);
   onbUI.dim.setAttribute('width',vw); onbUI.dim.setAttribute('height',vh);
   const t=onbTargetRect();
-  /* spotlight delik: hedef DOM/canvas — ghost olsa da hedef (or. #tDraw dugmesi) isaretlenir */
-  if(t.kind==='dom'){ const r=t.rect, pad=6;
+  const s0=onbTour && onbTour.steps[onbIdx];
+  const cvRect=(s0 && s0.fullCanvasHole) ? onbCanvasRect() : null;
+  /* spotlight delik: hedef DOM/canvas — ghost olsa da hedef (or. #tDraw dugmesi) isaretlenir.
+     FIX 5: fullCanvasHole -> delik TUM tuval (cvRect); araclar da tuval icinde oldugundan
+     ayrica isaretlemeye gerek yok (circle r=0). cvRect yoksa normal hedef mantigina duser. */
+  if(cvRect){ const pad=2;
+    onbUI.hole.setAttribute('x', cvRect.left-pad); onbUI.hole.setAttribute('y', cvRect.top-pad);
+    onbUI.hole.setAttribute('width', Math.max(0, cvRect.width+pad*2)); onbUI.hole.setAttribute('height', Math.max(0, cvRect.height+pad*2));
+    onbUI.holeC.setAttribute('r', 0);
+  } else if(t.kind==='dom'){ const r=t.rect, pad=6;
     onbUI.hole.setAttribute('x', r.left-pad); onbUI.hole.setAttribute('y', r.top-pad);
     onbUI.hole.setAttribute('width', Math.max(0, r.width+pad*2)); onbUI.hole.setAttribute('height', Math.max(0, r.height+pad*2));
     onbUI.holeC.setAttribute('r', 0);
