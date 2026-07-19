@@ -2212,8 +2212,13 @@
   //   bahçesinde hafif temsil (çim plakası / oyun ekipmanı / su havuzu). İç modda görünmez (yalnız dış).
   function extAmenities(){
     try{ if(typeof amenities!=='undefined' && Array.isArray(amenities)){
-      return amenities.filter(function(a){ return a && a.w>0 && a.h>0; })
-                      .map(function(a){ return {type:a.type, x:a.x, y:a.y, w:a.w, h:a.h, ang:(a.ang||0)*Math.PI/180}; }); } }catch(e){}
+      return amenities.filter(function(a){ return a && ((a.pts&&a.pts.length>=3) || (a.w>0&&a.h>0)); })
+                      .map(function(a){
+                        // POLİGON: pts varsa dünya-metre köşeler; yoksa eski dikdörtgenden köşe türet (io köprüsü yüklemede zaten üretir)
+                        var poly = (a.pts&&a.pts.length>=3)
+                          ? a.pts.map(function(p){ return [p.x,p.y]; })
+                          : (typeof amenityRectToPts==='function'? amenityRectToPts(a).map(function(p){ return [p.x,p.y]; }) : []);
+                        return {type:a.type, poly:poly, x:a.x, y:a.y, w:a.w, h:a.h}; }); } }catch(e){}
     return [];
   }
   // F4: dış modda TAM kabuk gösterilecek blok = 2B-aktif blok, ya da extBlockView seçimi. Site kapalıysa
@@ -2287,46 +2292,47 @@
     const list=extAmenities(); if(!list.length) return 0;
     let meshes=0;
     list.forEach(function(a){
-      const cx=a.x+a.w/2, cz=a.y+a.h/2, ang=-a.ang;   // plan y → 3B z; dönüş işareti kabuk konvansiyonuyla uyumlu
-      const holder=new THREE.Group(); holder.position.set(cx,0,cz); holder.rotation.y=ang; grp.add(holder);
-      const add=function(mesh){ mesh.castShadow=true; mesh.receiveShadow=true; holder.add(mesh); meshes++; };
-      if(a.type==='green'||a.type==='seating'){
-        // çim/zemin plakası + (seating) ahşap deck bandı
-        const base=new THREE.Mesh(new THREE.BoxGeometry(a.w,0.08,a.h), a.type==='seating'?mats.amDeck:mats.amGrass);
-        base.position.y=0.02; add(base);
-        if(a.type==='seating'){ // pergola: 4 direk + üst kiriş çerçevesi (2 mesh: direkler birleşik değil ama düşük)
-          const postH=2.2, pg=new THREE.Group(); holder.add(pg);
-          [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(function(s){
-            const p=new THREE.Mesh(new THREE.BoxGeometry(0.12,postH,0.12),mats.amDeck);
-            p.position.set(s[0]*(a.w/2-0.3),postH/2,s[1]*(a.h/2-0.3)); p.castShadow=true; pg.add(p); meshes++; });
-          const beam=new THREE.Mesh(new THREE.BoxGeometry(a.w-0.4,0.12,a.h-0.4),mats.amDeck);
-          beam.position.y=postH; beam.castShadow=true; pg.add(beam); meshes++;
-        } else {
-          // yeşil alan: 1-2 basit ağaç (gövde + küre yaprak) — abartısız
-          const nT=a.w*a.h>40?2:1;
-          for(let i=0;i<nT;i++){ const tg=new THREE.Group(); holder.add(tg);
-            const ox=(i? a.w*0.22 : -a.w*0.2), oz=(i? -a.h*0.15 : a.h*0.12);
-            const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,1.4,6),mats.amDeck); tr.position.set(ox,0.7,oz); tr.castShadow=true; tg.add(tr); meshes++;
-            const cr=new THREE.Mesh(new THREE.SphereGeometry(0.85,8,6),mats.amGrass); cr.position.set(ox,1.9,oz); cr.castShadow=true; tg.add(cr); meshes++; }
-        }
+      const polyM=a.poly; if(!polyM || polyM.length<3) return;
+      // bbox + centroid (dünya-metre; plan y → 3B z). Dekor bbox referanslı yerleşir; TABAN poligonun birebir biçimi.
+      let mnx=1e9,mnz=1e9,mxx=-1e9,mxz=-1e9;
+      polyM.forEach(function(p){ mnx=Math.min(mnx,p[0]); mnz=Math.min(mnz,p[1]); mxx=Math.max(mxx,p[0]); mxz=Math.max(mxz,p[1]); });
+      const w=mxx-mnx, h=mxz-mnz, cx=(mnx+mxx)/2, cz=(mnz+mxz)/2;
+      const isWater=(a.type==='pool'||a.type==='ornament');
+      // 1) TABAN PLAKASI — imkan POLİGONUNDAN (üçgen/serbest biçim birebir); extShape+ExtrudeGeometry (döşeme deseni).
+      const baseMat = a.type==='seating'?mats.amDeck : a.type==='playground'?mats.amPlay : isWater?mats.amWater : mats.amGrass;
+      const slabGeo=new THREE.ExtrudeGeometry(extShape(polyM),{depth:0.12,bevelEnabled:false}); slabGeo.rotateX(Math.PI/2);
+      const base=new THREE.Mesh(slabGeo, baseMat);
+      base.position.y = isWater? 0.10 : 0.06;   // su hafif yüksek (bordür içinde su çukuru hissi)
+      base.receiveShadow=true; if(!isWater) base.castShadow=true; grp.add(base); meshes++;
+      // havuz/süs: bbox tabanlı bordür çerçevesi (poligon outline'ı değil — brief onaylı bbox fallback) + (yüzme) merdiven
+      if(isWater){
+        const curb=new THREE.Mesh(new THREE.BoxGeometry(w+0.5,0.16,h+0.5),mats.amCurb);
+        curb.position.set(cx,0.06,cz); curb.castShadow=true; curb.receiveShadow=true; grp.add(curb); meshes++;
+        if(a.type==='pool'){ const step=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.05,0.5),mats.amCurb);
+          step.position.set(mxx-0.5,0.14,cz); step.castShadow=true; grp.add(step); meshes++; }
+      }
+      // 2) DEKOR — centroid'e holder; bbox (w/h) referanslı basit kütleler
+      const holder=new THREE.Group(); holder.position.set(cx,0,cz); grp.add(holder);
+      if(a.type==='green'){
+        const nT=w*h>40?2:1;
+        for(let i=0;i<nT;i++){ const tg=new THREE.Group(); holder.add(tg);
+          const ox=(i? w*0.22 : -w*0.2), oz=(i? -h*0.15 : h*0.12);
+          const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.16,1.4,6),mats.amDeck); tr.position.set(ox,0.7,oz); tr.castShadow=true; tg.add(tr); meshes++;
+          const cr=new THREE.Mesh(new THREE.SphereGeometry(0.85,8,6),mats.amGrass); cr.position.set(ox,1.9,oz); cr.castShadow=true; tg.add(cr); meshes++; }
+      } else if(a.type==='seating'){
+        const postH=2.2, pg=new THREE.Group(); holder.add(pg);
+        [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(function(s){
+          const p=new THREE.Mesh(new THREE.BoxGeometry(0.12,postH,0.12),mats.amDeck);
+          p.position.set(s[0]*Math.max(0.2,w/2-0.4),postH/2,s[1]*Math.max(0.2,h/2-0.4)); p.castShadow=true; pg.add(p); meshes++; });
+        const beam=new THREE.Mesh(new THREE.BoxGeometry(Math.max(0.4,w-0.6),0.12,Math.max(0.4,h-0.6)),mats.amDeck);
+        beam.position.y=postH; beam.castShadow=true; pg.add(beam); meshes++;
       } else if(a.type==='playground'){
-        const base=new THREE.Mesh(new THREE.BoxGeometry(a.w,0.1,a.h),mats.amPlay); base.position.y=0.02; add(base);
-        // A-çerçeve salıncak: iki yan üçgen (kutu) + üst kiriş
-        const H=1.9, halfw=Math.min(a.w,a.h)*0.32;
+        // A-çerçeve salıncak + kaydırak iması (bbox referanslı)
+        const H=1.9, halfw=Math.min(w,h)*0.32;
         [-1,1].forEach(function(sgn){ const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,H,0.1),mats.amCurb);
           leg.position.set(sgn*halfw*0.9,H/2,0); leg.rotation.z=sgn*0.18; leg.castShadow=true; holder.add(leg); meshes++; });
         const bar=new THREE.Mesh(new THREE.BoxGeometry(halfw*2,0.1,0.1),mats.amCurb); bar.position.y=H; bar.castShadow=true; holder.add(bar); meshes++;
-        // kaydırak iması: eğik plaka
-        const sl=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,a.h*0.4),mats.amCurb); sl.position.set(-a.w*0.28,0.5,a.h*0.05); sl.rotation.x=0.5; sl.castShadow=true; holder.add(sl); meshes++;
-      } else if(a.type==='pool'||a.type==='ornament'){
-        // çökük su plakası + çevre bordür + (yüzme) merdiven iması
-        const water=new THREE.Mesh(new THREE.BoxGeometry(a.w-0.3,0.12,a.h-0.3),mats.amWater); water.position.y=-0.02; water.receiveShadow=true; holder.add(water); meshes++;
-        // bordür çerçevesi: tek ince kutu-halka yerine 4 kenar birleşik değil ama düşük mesh — üst yüzey plakası
-        const curb=new THREE.Mesh(new THREE.BoxGeometry(a.w,0.16,a.h),mats.amCurb); curb.position.y=0.06; curb.castShadow=true; holder.add(curb);
-        // suyu bordürün üstüne getir (bordür kutusu suyu sarar → görsel çukur): bordürü hafif küçült yerine su daha yüksek
-        water.position.y=0.09; meshes++;
-        if(a.type==='pool'){ const step=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.05,0.5),mats.amCurb);
-          step.position.set(a.w/2-0.5,0.12,0); step.castShadow=true; holder.add(step); meshes++; }
+        const sl=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,h*0.4),mats.amCurb); sl.position.set(-w*0.28,0.5,h*0.05); sl.rotation.x=0.5; sl.castShadow=true; holder.add(sl); meshes++;
       }
     });
     grp.userData.amenityMeshes=meshes;

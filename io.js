@@ -132,7 +132,7 @@ function stateSnapshot(bare, withBlocks){
       dx:psProj.dx||0, dy:psProj.dy||0, rot:psProj.rot||0, ring:psProj.ring} : null,   // TKGM geo-referansı (uydu/yeniden-projeksiyon için); eski kayıtta yok → null
     balconies:balconies.map(b=>({...b})),
     courtyards:courtyards.map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})),
-    amenities:(typeof amenities!=='undefined'?amenities:[]).map(a=>({...a})),   // S3: site imkanları (parsel-katmanı, site-ORTAK — her snapshot aynı global kopyayı taşır)
+    amenities:(typeof amenities!=='undefined'?amenities:[]).map(amenityClone),   // S3: site imkanları (parsel-katmanı, site-ORTAK). POLİGON: pts DERİN kopya (snapshot'lar arası paylaşım yok)
     specs:unitSpecs.map(s=>({...s})), cuts:customCutsZ?customCutsZ.map(a=>a?a.slice():null):null, unitLayout:Object.assign({},unitLayout),
     doors:{ov:doorOverrides, extra:extraDoors, hidden:doorHidden},
     windows:{ov:windowOverrides, extra:extraWindows, hidden:windowHidden},
@@ -236,7 +236,7 @@ function restoreState(st, opt){
     if(typeof psComputeSetback==='function') psComputeSetback();
     if(parcelPts.length>=3 && parcelClosed){ const imar=document.getElementById('psImar'); if(imar) imar.style.display='block'; if(typeof imarRender==='function') imarRender(parcelImar); }
     if(typeof psSyncRotUI==='function') psSyncRotUI();
-    amenities=(st.amenities||[]).map(a=>({...a}));               // S3: site imkanları parsel-katmanı/site-ORTAK → parsel-ailesiyle birlikte
+    amenities=(st.amenities||[]).map(amenityLoad);              // S3: parsel-ailesiyle birlikte. POLİGON: derin kopya + pts KÖPRÜSÜ (eski dikdörtgen kaydı → 4-köşe) TEK yerde
   }
   balconies=(st.balconies||[]).map(b=>({...b}));
   courtyards=(st.courtyards||[]).map(av=>({poly:(av.poly||[]).map(p=>({x:p.x,y:p.y}))})); avluGhost=null;
@@ -1405,7 +1405,7 @@ function normalizeFloorParcels(st){
     f.parcelRot=(typeof src.parcelRot==='number'&&isFinite(src.parcelRot))?src.parcelRot:0;
     f.parcelImar=src.parcelImar||null;
     f.geo=src.geo? JSON.parse(JSON.stringify(src.geo)) : null;   // TKGM geo-referansı da parsel-ailesiyle damgalanır (derin kopya — ring paylaşımı olmasın)
-    f.amenities=(src.amenities||[]).map(a=>({...a}));
+    f.amenities=(src.amenities||[]).map(amenityClone);   // POLİGON: pts derin kopya (kat/blok damgaları arası paylaşım yok)
   };
   if(st.katAyri&&Array.isArray(st.floors)) st.floors.forEach(stampFrom(st));
   /* bloklar-arası da eşitlenir (parsel SİTE-ortak): üst-seviye (aktif bloğun) parseli tüm blok

@@ -193,10 +193,16 @@ function drawWallEdgeMask(r){
     fill:'none',stroke:'#000','stroke-width':Math.max(4,wallThickM('dis')*pxPerM),'stroke-linejoin':'miter','shape-rendering':'crispEdges'}));
 }
 /* S3: imkan tipine özgü ayırt edici doku — yeşil noktalar (çim/ağaç), su dalgası, oyun izi.
+   POLİGON: doku, imkan poligonuna clipPath ile kırpılır (üçgen havuz vb. şeklin dışına taşmaz).
    Ucuz şematik işaretler (dolgu rengi zaten tipi belli eder; doku okunurluğu güçlendirir). */
-function amenityTexture(g, a, def, cx, cy){
-  const x0=W2Sx(a.x), y0=W2Sy(a.y), w=a.w*pxPerM, h=a.h*pxPerM;
-  const clip=el('g',{}); if(a.ang) clip.setAttribute('transform',`rotate(${a.ang} ${cx} ${cy})`); g.appendChild(clip);
+function amenityTexture(g, a, def, i){
+  const poly=amenityPolyPts(a), bb=bboxOf(poly);
+  const x0=W2Sx(bb.minX), y0=W2Sy(bb.minY), w=(bb.maxX-bb.minX)*pxPerM, h=(bb.maxY-bb.minY)*pxPerM;
+  const cid='amClip'+i;
+  const cp=el('clipPath',{id:cid, clipPathUnits:'userSpaceOnUse'});
+  cp.appendChild(el('path',{d:'M'+poly.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z'}));
+  g.appendChild(cp);
+  const clip=el('g',{'clip-path':'url(#'+cid+')'}); g.appendChild(clip);
   const col=def.color;
   if(a.type==='green'||a.type==='seating'){
     const step=Math.max(14,pxPerM*0.9);
@@ -307,36 +313,39 @@ function render(){
     const drawAmenity=(a,i)=>{
       const def=defs[a.type]||{name:a.type,color:'#6a994e',fill:'rgba(106,153,78,.28)'};
       const hov = mode==='amenity' && hoverAmenity===i;
-      const cx=W2Sx(a.x+a.w/2), cy=W2Sy(a.y+a.h/2);
-      const r=el('rect',{x:W2Sx(a.x), y:W2Sy(a.y), width:a.w*pxPerM, height:a.h*pxPerM, rx:Math.min(8,pxPerM*0.3),
-        fill:def.fill, stroke:def.color, 'stroke-width':hov?3:2, 'stroke-opacity':hov?1:0.9});
-      if(a.ang) r.setAttribute('transform',`rotate(${a.ang} ${cx} ${cy})`);
-      g.appendChild(r);
-      amenityTexture(g, a, def, cx, cy);
-      if(pxPerM*Math.min(a.w,a.h) > 26){   // etiket yalnız yeterince büyük çizildiğinde
+      const poly=amenityPolyPts(a);
+      const d='M'+poly.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L')+'Z';
+      g.appendChild(el('path',{d, fill:def.fill, stroke:def.color, 'stroke-width':hov?3:2, 'stroke-opacity':hov?1:0.9, 'stroke-linejoin':'round'}));
+      amenityTexture(g, a, def, i);
+      const c=amenityCentroid(poly), cx=W2Sx(c.x), cy=W2Sy(c.y);
+      if(pxPerM*Math.min(a.w,a.h) > 26){   // etiket yalnız yeterince büyük çizildiğinde — poligon centroid'ine
         const t=el('text',{x:cx, y:cy, 'text-anchor':'middle','dominant-baseline':'middle',
           'font-size':Math.max(9,Math.min(13,pxPerM*0.8)), fill:def.color, 'font-weight':'700'});
-        if(a.ang) t.setAttribute('transform',`rotate(${a.ang} ${cx} ${cy})`);
         t.textContent=def.name; g.appendChild(t);
       }
-      /* H1b: hover'daki eksen-hizalı imkanda köşe/kenar BOYUT tutamaçları (avlu tutamaç dili). Döndürülmüşte yok. */
-      if(hov && !a.ang){
-        const x0=W2Sx(a.x), y0=W2Sy(a.y), x1=W2Sx(a.x+a.w), y1=W2Sy(a.y+a.h), mx=(x0+x1)/2, my=(y0+y1)/2;
+      /* POLİGON: hover'daki imkanın KÖŞE tutamaçları (tek-köşe sürükle) — üstünde olan köşe vurgulu (bvert dili). */
+      if(hov){
         const hs=Math.max(4,Math.min(7,pxPerM*0.28));
-        [[x0,y0],[x1,y0],[x1,y1],[x0,y1],[mx,y0],[mx,y1],[x0,my],[x1,my]].forEach(([hx,hy])=>{
-          g.appendChild(el('rect',{x:hx-hs, y:hy-hs, width:hs*2, height:hs*2, rx:2,
-            fill:'#fff', stroke:def.color, 'stroke-width':2}));
+        poly.forEach((p,vi)=>{ const sel=hoverAmenityVert && hoverAmenityVert.i===i && hoverAmenityVert.vi===vi;
+          g.appendChild(el('rect',{x:W2Sx(p.x)-hs, y:W2Sy(p.y)-hs, width:hs*2, height:hs*2, rx:2,
+            fill:sel?def.color:'#fff', stroke:def.color, 'stroke-width':2}));
         });
       }
     };
     if(typeof amenities!=='undefined') amenities.forEach(drawAmenity);
-    /* hayalet önizleme (yerleştirme) — park bay deseni: geçerli=yeşil kesikli, geçersiz=kırmızı */
-    if(mode==='amenity' && typeof amenityGhost!=='undefined' && amenityGhost){
-      const gh=amenityGhost, col=gh.invalid?'#c0392b':'#2e7d32', cx=W2Sx(gh.x+gh.w/2), cy=W2Sy(gh.y+gh.h/2);
-      const r=el('rect',{x:W2Sx(gh.x), y:W2Sy(gh.y), width:gh.w*pxPerM, height:gh.h*pxPerM, rx:Math.min(8,pxPerM*0.3),
-        fill:col, 'fill-opacity':gh.invalid?0.20:0.16, stroke:col, 'stroke-width':2, 'stroke-dasharray':(pxPerM*0.4)+' '+(pxPerM*0.3)});
-      if(gh.ang) r.setAttribute('transform',`rotate(${gh.ang} ${cx} ${cy})`);
-      g.appendChild(r);
+    /* ÇİZİM önizlemesi (yapı sınırı deseni): şu ana kadarki köşeler + imlece kadar kesikli çizgi;
+       ilk köşe büyük düğüm (kapatma hedefi), imleç ilk köşeye yaklaşınca kapalı poligon dolgusu. */
+    if(mode==='amenity' && typeof amenityDrawPts!=='undefined' && amenityDrawPts.length){
+      const dp=amenityDrawPts, def=amenityDef(amenityType), col=def.color;
+      const hv=(typeof amenityDrawHover!=='undefined')?amenityDrawHover:null, closing=!!(hv&&hv.closing);
+      let d='M'+dp.map(p=>W2Sx(p.x)+','+W2Sy(p.y)).join('L');
+      if(hv && !closing) d+='L'+W2Sx(hv.x)+','+W2Sy(hv.y);
+      if(closing) d+='Z';
+      g.appendChild(el('path',{d, fill:closing?def.fill:'none', 'fill-opacity':closing?0.5:0,
+        stroke:col, 'stroke-width':2, 'stroke-dasharray':(pxPerM*0.4)+' '+(pxPerM*0.3), 'stroke-linejoin':'round'}));
+      dp.forEach((p,idx)=>{ const first=idx===0;
+        g.appendChild(el('circle',{cx:W2Sx(p.x), cy:W2Sy(p.y), r:first?6:4,
+          fill:(first&&closing)?col:'#fff', stroke:col, 'stroke-width':2})); });
     }
   }
 

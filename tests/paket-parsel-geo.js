@@ -118,6 +118,19 @@ eval(src+`
     blocks:[ {pts:F.block0.slice(), geo:{lng0:1,lat0:1,mLng:1,mLat:1,dx:0,dy:0,rot:0,ring:RING}} ] };
   normalizeFloorParcels(w3);
   ok(w3.blocks[0].geo===null, 'c2: üst geo yoksa blok geo null damgalanır (SVG-dönemi geriye-uyum)');
+
+  /* --- (d) POLİGON imkan round-trip + pts DERİN kopya + eski dikdörtgen köprüsü --- */
+  amenities=[{type:'pool', pts:[{x:0,y:-0.5},{x:21.5,y:-0.5},{x:10.75,y:7.5}]}]; amenities.forEach(amenityBBoxSync);
+  const stp=stateSnapshot(false);
+  ok(stp.amenities[0].pts.length===3, 'd: stateSnapshot poligon pts taşır (üçgen=3)');
+  ok(stp.amenities[0].pts!==amenities[0].pts, 'd: state pts DERİN kopya (referans paylaşımı yok)');
+  amenities=[];
+  restoreState(JSON.parse(JSON.stringify(stp)), {fit:false});
+  ok(amenities.length===1 && amenities[0].pts.length===3 && amenities[0].pts[1].x===21.5, 'd: restoreState poligon pts birebir geri getirir');
+  const legacy=JSON.parse(JSON.stringify(stp)); legacy.amenities=[{type:'green', x:-30.5, y:-16, w:37, h:6, ang:0}];
+  amenities=[];
+  restoreState(legacy, {fit:false});
+  ok(amenities[0].pts.length===4 && amenities[0].x===-30.5 && amenities[0].w===37, 'd: eski dikdörtgen kaydı (pts YOK) → yükleme köprüsü 4-köşe + bbox birebir');
 })();
 `);
 console.log(pass+' geçti, '+fail+' kaldı');

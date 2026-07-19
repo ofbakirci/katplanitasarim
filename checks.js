@@ -124,6 +124,7 @@ function ruleImportRepair(add,p){
     add('info','İçe aktarılan düzen bozuktu (apartman holü bağımsız bölüm alanını yutmuştu, odalar hücresiz kalmıştı) → spec ve ayırıcılardan otomatik yeniden üretildi. Elle yapılmış oda düzenlemeleri korunamadı.');
 }
 function ruleUnitRooms(add,p){
+  if(!p || !Array.isArray(p.unitObjs)) return;   // yerleşimsiz blok (boş tuval, sınır çizili) → daire kuralı yok (runChecks çökmesin)
   /* piyes ölçüleri — Planlı Alanlar İmar Yönetmeliği md.30.
      add'in 6. argümanı = ince kural id'si (SALON_MIN, YATAK_MIN, ...) — mevzuat filtresi/
      DXF tüketicisi piyes başına tanısın diye; UNIT_ROOMS registry entry'sinin subIds'inde
@@ -227,6 +228,7 @@ function ruleDoors(add,p){
   });
 }
 function ruleFloor(add,p){
+  if(!p) return;   // yerleşimsiz blok (boş tuval) → kat/koridor kuralı yok (runChecks çökmesin)
   if(p.katKullanim && p.katKullanim!=='konut'){
     collectUsageChecks(add, p);
   } else if(!p.villa){
@@ -401,6 +403,7 @@ function ruleFloor(add,p){
   }
 }
 function ruleCore(add,p){
+  if(!p) return;   // yerleşimsiz blok (boş tuval) → çekirdek/yükseklik kuralı yok (runChecks çökmesin)
   /* çekirdek ölçü + yükseklik-sınıfı denetimi (yangin-merdiven-kurallari.json → FIRE) */
   collectCoreDimChecks(add, p);
   collectCoreHeightChecks(add, p);
@@ -410,7 +413,7 @@ function ruleParsel(add,p){
   if(parcelClosed && parcelPts.length>=3 && closed){
     const site=(typeof siteOn==='function')&&siteOn();
     /* katları ayrı planlanan villada taban alanı = ZEMİN kat oturumu (aktif kat değil) */
-    const zf=(p.villa&&floorsOn())? floorState(zeminIdx()) : null;
+    const zf=(p&&p.villa&&floorsOn())? floorState(zeminIdx()) : null;   // plansiz blok (sinir cizili, yerlesim yok): p null olabilir
     const pa=shoelace(parcelPts);
     const ba=site? siteFootprintTotal() : shoelace(zf?zf.pts:pts);
     add('info', site

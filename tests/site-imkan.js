@@ -1,9 +1,12 @@
-/* SITE-IMKAN (S3) — SİTE İMKANLARI (yeşil alan / çocuk parkı / havuzlar / oturma).
-   Park yeri (bay) ailesinin PARSEL-katmanı akrabası; motor (oda/daire/duvar) DEĞİŞMEZ. Bu test
-   THREE'siz SALT-VERİ mantığını doğrular: (1) yerleşim kuralları (parsel içi + bina dışı + SAT
-   çakışma reddi), (2) durum roundtrip (stateSnapshot↔restoreState imkanları taşır), (3) drone
-   prompt peyzaj sinyali (yalnız VAR olan imkanları adlandırır). WebGL yolu (3B mesh/preview) burada
-   test edilmez — o preview kanıtında doğrulanır.
+/* SITE-IMKAN (S3) — SİTE İMKANLARI (yeşil alan / çocuk parkı / havuzlar / oturma), POLİGON MODELİ.
+   Park yeri (bay) ailesinin PARSEL-katmanı akrabası ama artık VEKTÖR DİKDÖRTGEN değil, YAPI SINIRI
+   deseninde POLİGON: tip seç → köşe köşe çiz → ilk köşeye dönerek kapat → o alan imkan (üçgen havuz
+   serbest). Şema {type, pts:[{x,y}...]}, x/y/w/h = pts'ten türetilen bbox. Bu test THREE'siz SALT-VERİ
+   mantığını doğrular: (1) poligon yerleşim kuralları (parsel içi + bina dışı + poligon-poligon çakışma
+   reddi), (2) çizim/kapatma akışı (amenitySnapPoint + amenityFinishDraw), (3) tek-köşe + gövde
+   düzenleme veri yolu, (4) durum roundtrip + pts DERİN kopya (paylaşım yok), (5) eski dikdörtgen
+   kaydı yükleme köprüsü (pts yoksa 4-köşe), (6) drone prompt peyzaj sinyali (yalnız VAR olan tipler).
+   WebGL yolu (3B mesh/preview) burada test edilmez — o preview kanıtında doğrulanır.
 
    Kullanım: node tests/site-imkan.js */
 'use strict';
@@ -41,216 +44,154 @@ run(`
   pts=[{x:0,y:0},{x:32,y:0},{x:32,y:16},{x:0,y:16}]; closed=true;
   parcelPts=[{x:-14,y:-12},{x:46,y:-12},{x:46,y:28},{x:-14,y:28}]; parcelClosed=true;
   amenities=[]; balconies=[]; doorOverrides={}; extraDoors=[]; doorHidden={}; editHistory=[]; redoHistory=[];
+  mode='draw'; amenityDrawPts=[]; amenityDrawHover=null; hoverAmenity=null; hoverAmenityVert=null;
+  pxPerM=1; panX=0; panY=0;
   generate();
 `);
 
-/* ---- 1) KATALOG + VARSAYILAN BOYUTLAR ---- */
+/* ---- 1) KATALOG + VARSAYILAN BOYUTLAR (REG.amenities değişmedi) ---- */
 chk(run(`typeof REG.amenities==='object' && !!REG.amenities.green && !!REG.amenities.pool`), 'imkan kataloğu (REG.amenities) mevcut');
 chk(run(`REG.amenities.playground.w===8 && REG.amenities.playground.h===6`), 'çocuk parkı varsayılan 8×6 m');
 chk(run(`REG.amenities.pool.w===12 && REG.amenities.pool.h===6`), 'yüzme havuzu varsayılan 12×6 m');
-chk(run(`REG.amenities.ornament.w===4 && REG.amenities.ornament.h===3`), 'süs havuzu varsayılan 4×3 m');
 chk(run(`REG.amenities.green.w===10 && REG.amenities.green.h===8`), 'yeşil alan varsayılan 10×8 m');
-chk(run(`typeof amenityGhostAt==='function' && typeof hitAmenity==='function' && typeof amenityAreaOk==='function'`), 'imkan yardımcıları (ghost/hit/areaOk) tanımlı');
 
-/* ---- 2) YERLEŞİM: bahçede (parsel içi, bina dışı) GEÇERLİ ---- */
-// bina 0..32 × 0..16; bahçe kuzeyinde y<0 boşluk (parsel -12..28). Yeşil alan (-8..2 x, -10..-2 y) bahçede.
-const okGarden = run(`amenityAreaOk({type:'green', x:-8, y:-10, w:10, h:8, ang:0})`);
-chk(okGarden===true, 'bahçedeki (parsel içi, bina dışı) yeşil alan GEÇERLİ');
+/* ---- 2) POLİGON YARDIMCILARI tanımlı ---- */
+chk(run(`typeof amenityClone==='function' && typeof amenityBBoxSync==='function' && typeof amenityRectToPts==='function' && typeof amenityLoad==='function' && typeof amenityCentroid==='function'`),
+  'poligon veri yardımcıları (clone/bboxSync/rectToPts/load/centroid) tanımlı');
+chk(run(`typeof amenityPolyPts==='function' && typeof amenityPolysOverlap==='function' && typeof hitAmenity==='function' && typeof hitAmenityVert==='function' && typeof amenityAreaOk==='function' && typeof amenitySnapPoint==='function' && typeof amenityFinishDraw==='function'`),
+  'poligon etkileşim yardımcıları (polyPts/polysOverlap/hit/hitVert/areaOk/snapPoint/finishDraw) tanımlı');
 
-/* ---- 3) YERLEŞİM: bina footprint'i ÜSTÜNDE GEÇERSİZ ---- */
-// bina merkezi (16,8) → oraya konan imkan reddedilmeli
-const onBuilding = run(`amenityAreaOk({type:'green', x:11, y:4, w:10, h:8, ang:0})`);
-chk(onBuilding===false, 'bina footprint\'i üstündeki imkan GEÇERSİZ (bina dışına konmalı)');
+/* ---- 3) amenityBBoxSync: pts → eksen-hizalı bbox türetir (x/y/w/h) ---- */
+chk(run(`(function(){ var a={type:'green', pts:[{x:-8,y:-10},{x:4,y:-10},{x:4,y:-2},{x:-8,y:-2}]};
+  amenityBBoxSync(a); return a.x===-8 && a.y===-10 && a.w===12 && a.h===8 && a.ang===0; })()`), 'amenityBBoxSync bbox türetir (x/y/w/h + ang=0)');
 
-/* ---- 4) YERLEŞİM: parsel DIŞINDA GEÇERSİZ ---- */
-const outParcel = run(`amenityAreaOk({type:'green', x:60, y:60, w:10, h:8, ang:0})`);
-chk(outParcel===false, 'parsel dışındaki imkan GEÇERSİZ');
+/* ---- 4) YÜKLEME KÖPRÜSÜ: eski dikdörtgen {x,y,w,h,ang:0} → 4-köşe pts, bbox birebir korunur ---- */
+chk(run(`(function(){ var p=amenityRectToPts({x:5,y:6,w:10,h:8,ang:0});
+  return p.length===4 && p[0].x===5 && p[0].y===6 && p[2].x===15 && p[2].y===14; })()`), 'amenityRectToPts 4-köşe üretir (eksen-hizalı)');
+chk(run(`(function(){ var c=amenityLoad({type:'pool', x:0, y:-0.5, w:21.5, h:8, ang:0});
+  return c.pts.length===4 && c.x===0 && c.y===-0.5 && c.w===21.5 && c.h===8; })()`), 'amenityLoad: pts yoksa köprü kurar + bbox birebir korunur (round-trip güvenli)');
 
-/* ---- 5) SAT ÇAKIŞMA: iki imkan üst üste → reddedilir (park bay ile ORTAK bayCorners/polyOverlapSAT) ---- */
-run(`amenities=[{type:'green', x:-8, y:-10, w:10, h:8, ang:0}]`);
-const overlap = run(`amenityOverlapsExisting({type:'pool', x:-6, y:-9, w:12, h:6, ang:0}, -1)`);
-chk(overlap===true, 'mevcut imkanla çakışan yeni imkan SAT ile reddedilir');
-const noOverlap = run(`amenityOverlapsExisting({type:'ornament', x:20, y:-8, w:4, h:3, ang:0}, -1)`);
-chk(noOverlap===false, 'ayrık konumdaki imkan çakışma vermez');
+/* ---- 5) amenityCentroid: üçgen alan-ağırlıklı centroid ---- */
+chk(run(`(function(){ var c=amenityCentroid([{x:0,y:0},{x:6,y:0},{x:0,y:6}]);
+  return Math.abs(c.x-2)<1e-9 && Math.abs(c.y-2)<1e-9; })()`), 'amenityCentroid üçgen centroid (2,2)');
 
-/* ---- 6) GHOST: geçersiz konumda invalid:true (kırmızı hayalet), geçerli konumda temiz ---- */
-// ghost dünya→ekran S2W kullanır; snapG global. Doğrudan amenityGhostAt yerine kuralları ayrı doğruladık;
-// burada ghost sonucu invalid bayrağını park deseniyle üretir mi (çakışan konum) — amenityOverlapsExisting üstünden.
-run(`amenities=[{type:'green', x:-8, y:-10, w:10, h:8, ang:0}]`);
-const ghInvalid = run(`(function(){ var a={type:'pool',x:-6,y:-9,w:12,h:6,ang:0};
-  return (!amenityAreaOk(a) || amenityOverlapsExisting(a,-1)); })()`);
-chk(ghInvalid===true, 'çakışan/geçersiz konum invalid işaretlenir (kırmızı hayalet mantığı)');
+/* ---- 6) YERLEŞİM: bahçede (parsel içi, bina dışı) poligon GEÇERLİ ---- */
+chk(run(`amenityAreaOk({type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]})`), 'bahçedeki dörtgen imkan GEÇERLİ');
+chk(run(`amenityAreaOk({type:'pool', pts:[{x:-8,y:-10},{x:2,y:-10},{x:-3,y:-3}]})`), 'bahçedeki ÜÇGEN havuz GEÇERLİ (üçgen serbest)');
 
-/* ---- 7) DURUM ROUNDTRIP: stateSnapshot → restoreState imkanları taşır ---- */
+/* ---- 7) YERLEŞİM: bina footprint'i ÜSTÜNDE GEÇERSİZ ---- */
+chk(run(`amenityAreaOk({type:'green', pts:[{x:8,y:4},{x:24,y:4},{x:24,y:12},{x:8,y:12}]})===false`), 'bina footprint\'i üstündeki imkan GEÇERSİZ');
+// köşeleri bina dışı ama ORTASI binaya taşan poligon → ızgara örneği yakalar
+chk(run(`amenityAreaOk({type:'green', pts:[{x:-2,y:8},{x:34,y:8},{x:34,y:9},{x:-2,y:9}]})===false`), 'ortası binaya taşan ince şerit GEÇERSİZ (ızgara örneği yakalar)');
+
+/* ---- 8) YERLEŞİM: parsel DIŞINDA GEÇERSİZ ---- */
+chk(run(`amenityAreaOk({type:'green', pts:[{x:60,y:60},{x:70,y:60},{x:70,y:68},{x:60,y:68}]})===false`), 'parsel dışındaki imkan GEÇERSİZ');
+
+/* ---- 9) POLİGON ÇAKIŞMA: üst üste iki poligon → reddedilir; ayrık → geçer; üçgen kapsanır ---- */
+run(`amenities=[{type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]}]; amenities.forEach(amenityBBoxSync);`);
+chk(run(`amenityOverlapsExisting({type:'pool', pts:[{x:-6,y:-9},{x:6,y:-9},{x:6,y:-3},{x:-6,y:-3}]}, -1)===true`), 'çakışan yeni poligon reddedilir');
+chk(run(`amenityOverlapsExisting({type:'ornament', pts:[{x:20,y:-8},{x:24,y:-8},{x:24,y:-5},{x:20,y:-5}]}, -1)===false`), 'ayrık poligon çakışma vermez');
+chk(run(`amenityPolysOverlap([{x:0,y:0},{x:10,y:0},{x:0,y:10}],[{x:2,y:2},{x:8,y:2},{x:2,y:8}])===true`), 'iç içe üçgen çakışması yakalanır');
+chk(run(`amenityPolysOverlap([{x:0,y:0},{x:4,y:0},{x:0,y:4}],[{x:10,y:10},{x:14,y:10},{x:10,y:14}])===false`), 'ayrık üçgenler çakışmaz');
+
+/* ---- 10) hitAmenity: poligon içi dünya noktası → index; hitAmenityVert: köşe tutamacı ---- */
+run(`amenities=[{type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]}]; amenities.forEach(amenityBBoxSync);`);
+chk(run(`(function(){ pxPerM=1; panX=0; panY=0; return hitAmenity(-3,-6)===0; })()`), 'hitAmenity poligon içi noktayı bulur (index 0)');
+chk(run(`hitAmenity(30,30)===null`), 'hitAmenity poligon dışını null döner');
+chk(run(`(function(){ var v=hitAmenityVert(-8,-10); return v && v.i===0 && v.vi===0; })()`), 'hitAmenityVert köşe tutamacını bulur (i0,vi0)');
+chk(run(`hitAmenityVert(30,30)===null`), 'hitAmenityVert köşe uzağında null');
+
+/* ---- 11) ÇİZİM AKIŞI: amenitySnapPoint (0,5 ızgara + kapatma) ---- */
+run(`mode='amenity'; amenityType='green'; amenityDrawPts=[]; pxPerM=1; panX=0; panY=0;`);
+chk(run(`(function(){ var p=amenitySnapPoint(4.3,5.7); return p.x===4.5 && p.y===5.5 && !p.closing; })()`), 'amenitySnapPoint 0,5 m ızgaraya yapışır');
+chk(run(`(function(){ amenityDrawPts=[{x:0,y:0},{x:6,y:0},{x:6,y:6}]; var p=amenitySnapPoint(0.2,0.1);
+  return p.closing===true && p.x===0 && p.y===0; })()`), 'amenitySnapPoint ilk köşeye yakın → closing (kapat)');
+chk(run(`(function(){ amenityDrawPts=[{x:0,y:0},{x:6,y:0}]; var p=amenitySnapPoint(0.1,0.1); return !p.closing; })()`), 'amenitySnapPoint 3 köşeden az → closing YOK');
+
+/* ---- 12) amenityFinishDraw: geçerli poligon eklenir (pushEdit), geçersiz iptal ---- */
+run(`amenities=[]; editHistory=[]; redoHistory=[]; mode='amenity'; amenityType='pool';
+  amenityDrawPts=[{x:-8,y:-10},{x:2,y:-10},{x:-3,y:-3}];`);   // üçgen havuz, bahçede
+run(`amenityFinishDraw();`);
+chk(run(`amenities.length===1 && amenities[0].type==='pool' && amenities[0].pts.length===3`), 'amenityFinishDraw geçerli ÜÇGEN havuzu ekler (pts=3)');
+chk(run(`amenities[0].w>0 && amenities[0].h>0`), 'eklenen imkan bbox türevi güncel (w/h>0)');
+chk(run(`editHistory.length===1 && editHistory[0].type==='amenity'`), 'amenityFinishDraw pushEdit(type:amenity) yazar');
+chk(run(`amenityDrawPts.length===0`), 'kapatınca çizim state sıfırlanır');
+// geçersiz: bina üstüne çizilen poligon eklenmez
+run(`amenities=[]; editHistory=[]; mode='amenity'; amenityType='green';
+  amenityDrawPts=[{x:8,y:4},{x:24,y:4},{x:24,y:12},{x:8,y:12}]; amenityFinishDraw();`);
+chk(run(`amenities.length===0 && editHistory.length===0 && amenityDrawPts.length===0`), 'bina üstü poligon eklenmez + çizim sıfırlanır (geçersiz iptal)');
+
+/* ---- 13) DURUM ROUNDTRIP: stateSnapshot → restoreState pts taşır ---- */
 run(`amenities=[
-  {type:'green', x:-8, y:-10, w:10, h:8, ang:0},
-  {type:'playground', x:34, y:-9, w:8, h:6, ang:0},
-  {type:'pool', x:-12, y:18, w:12, h:6, ang:90}
-];`);
+  {type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]},
+  {type:'pool',  pts:[{x:-12,y:18},{x:0,y:18},{x:-6,y:26}]},
+  {type:'playground', pts:[{x:34,y:-9},{x:42,y:-9},{x:42,y:-3},{x:34,y:-3}]}
+]; amenities.forEach(amenityBBoxSync);`);
 const snapN = run(`(function(){ var st=stateSnapshot(false); return st.amenities? st.amenities.length : -1; })()`);
 chk(snapN===3, 'stateSnapshot imkanları içerir (3): '+snapN);
 const rt = run(`(function(){
   var st=stateSnapshot(false);
-  amenities=[];                               // temizle
+  amenities=[];
   restoreState(st, {fit:false});
-  return { n:amenities.length, t0:amenities[0]&&amenities[0].type, ang2:amenities[2]&&amenities[2].ang };
+  return { n:amenities.length, t0:amenities[0]&&amenities[0].type,
+           tri:amenities[1]&&amenities[1].pts.length, p0:amenities[0].pts[0] };
 })()`);
 chk(rt.n===3, 'restoreState imkanları geri yükler (3): '+rt.n);
 chk(rt.t0==='green', 'imkan tipi korunur (ilk = green)');
-chk(rt.ang2===90, 'imkan döndürmesi (ang) korunur (90)');
+chk(rt.tri===3, 'üçgen havuz köşe sayısı korunur (pts=3)');
+chk(rt.p0.x===-8 && rt.p0.y===-10, 'poligon köşe koordinatı birebir korunur');
 
-/* ---- 8) UNDO: imkan ekleme/silme geri alınabilir (pushEdit type:'amenity') ---- */
+/* ---- 14) DERİN KOPYA TUZAĞI: snapshot pts, canlı imkanla REFERANS paylaşmaz ---- */
+chk(run(`(function(){
+  amenities=[{type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]}]; amenities.forEach(amenityBBoxSync);
+  var snap=amenitySnapshot();
+  snap[0].pts[0].x=999;
+  return amenities[0].pts[0].x===-8;   // canlı DEĞİŞMEDİ → paylaşım yok
+})()`), 'amenitySnapshot pts DERİN kopya (snapshot düzenlemesi canlıyı bozmaz)');
+chk(run(`(function(){
+  amenities=[{type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]}]; amenities.forEach(amenityBBoxSync);
+  var st=stateSnapshot(false);
+  st.amenities[0].pts[0].y=777;
+  return amenities[0].pts[0].y===-10;  // state kopyası ayrı
+})()`), 'stateSnapshot pts DERİN kopya (io yaz dalı paylaşım yapmaz)');
+
+/* ---- 15) UNDO: gövde tık silme + tek-köşe düzenleme geri alınır (type:'amenity') ---- */
 run(`amenities=[]; editHistory=[]; redoHistory=[];
   pushEdit({type:'amenity', prev:amenitySnapshot()});
-  amenities.push({type:'green', x:-8, y:-10, w:10, h:8, ang:0});`);
+  amenities.push(amenityBBoxSync({type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]}));`);
 chk(run(`amenities.length===1 && editHistory.length===1 && editHistory[0].type==='amenity'`), 'imkan ekleme pushEdit(type:amenity) yazar');
 run(`undoEdit()`);
 chk(run(`amenities.length===0`), 'geri al imkan eklemeyi çözer (amenities boş)');
+// tek-köşe düzenleme undo: pts derin geri gelir
+run(`amenities=[amenityBBoxSync({type:'green', pts:[{x:-8,y:-10},{x:2,y:-10},{x:2,y:-2},{x:-8,y:-2}]})]; editHistory=[]; redoHistory=[];
+  pushEdit({type:'amenity', prev:amenitySnapshot()});
+  amenities[0].pts[1].x=5; amenityBBoxSync(amenities[0]);`);
+run(`undoEdit()`);
+chk(run(`amenities[0].pts[1].x===2 && amenities[0].w===10`), 'geri al köşe düzenlemeyi çözer (pts + bbox eski hâle)');
 
-/* ---- 9) DRONE PROMPT SİNYALİ (view3d headless): yalnız VAR olan imkanları adlandırır ---- */
+/* ---- 16) DRONE PROMPT SİNYALİ (view3d headless): yalnız VAR olan imkanları adlandırır (DEĞİŞMEDİ) ---- */
 const hasApi = run(`!!(window.View3D && window.View3D.buildExteriorPrompt && window.View3D.amenityPromptSignal && window.View3D.amenityTypesPresent)`);
 chk(hasApi, 'View3D S3 API (amenityPromptSignal/buildExteriorPrompt) erişilebilir');
 if(hasApi){
-  // hiç imkan yok → sinyal BOŞ (prompt peyzaj cümlesi eklemez)
   const empty = run(`window.View3D.amenityPromptSignal({amenities:[]})`);
   chk(empty==='', 'imkan yokken peyzaj sinyali boş (uydurma yapmaz)');
-  const pEmpty = run(`window.View3D.buildExteriorPrompt({facade:'neutral', amenities:[]})`);
-  chk(!/playground|swimming pool|ornamental/i.test(pEmpty), 'imkan yok → prompt havuz/park adlandırmaz');
-
-  // yeşil + çocuk parkı + yüzme havuzu VAR → hepsi adlandırılır
   const sig = run(`window.View3D.amenityPromptSignal({amenities:['green','playground','pool']})`);
   chk(/green lawn|landscaped/i.test(sig), 'sinyal: yeşil alan adlandırılır');
   chk(/playground/i.test(sig), 'sinyal: çocuk parkı adlandırılır');
   chk(/swimming pool/i.test(sig), 'sinyal: yüzme havuzu adlandırılır');
   chk(/keep these site features/i.test(sig), 'sinyal: LOCK disiplini ("keep these site features")');
   chk(!/ornamental|pergola/i.test(sig), 'sinyal: VAR OLMAYAN imkan (süs havuzu/pergola) adlandırılmaz');
-
-  const pFull = run(`window.View3D.buildExteriorPrompt({facade:'brick', amenities:['green','playground','pool','ornament']})`);
-  chk(/drone/i.test(pFull) && /EXACTLY/.test(pFull), 'S3 prompt S2 LOCK/drone iskeletini korur');
-  chk(/playground/i.test(pFull) && /swimming pool/i.test(pFull) && /ornamental/i.test(pFull), 'tam prompt tüm mevcut imkanları içerir');
-  chk(/no people, no text/i.test(pFull), 'S3 prompt "no people, no text" kuyruğunu korur');
-
-  // tip listesi katalog sırasında + tekilleştirilmiş
   const types = run(`window.View3D.amenityTypesPresent({amenities:['pool','green','pool','playground']})`);
   chk(JSON.stringify(types)==='["green","playground","pool"]', 'tipler katalog sırasında + tekil: '+JSON.stringify(types));
 }
 
-/* ---- 10) İÇ MOTOR DOKUNULMADI: imkan eklemek plan bölge/daire sayısını DEĞİŞTİRMEZ ---- */
+/* ---- 17) İÇ MOTOR DOKUNULMADI: imkan eklemek plan bölge/daire sayısını DEĞİŞTİRMEZ ---- */
 const regBefore = run(`plan.regions.length`);
-run(`amenities.push({type:'pool', x:34, y:18, w:12, h:6, ang:0})`);
+run(`amenities.push(amenityBBoxSync({type:'pool', pts:[{x:34,y:18},{x:44,y:18},{x:44,y:24},{x:34,y:24}]}))`);
 chk(run(`plan.regions.length`)===regBefore, 'imkan eklemek plan bölge sayısını değiştirmez (motor ayrık)');
 
-/* ---- 11) H1b: İMKAN BOYUTLANDIRMA (tutamaç + Büyüt/Küçült) — SALT-VERİ mantığı ---- */
-chk(run(`typeof hitAmenityHandle==='function' && typeof amenityResizeBox==='function' && typeof amenityResizeStep==='function' && typeof amenityBBox==='function'`), 'H1b: boyutlandırma yardımcıları tanımlı (hit/box/step/bbox)');
-chk(run(`AMENITY_MIN===2`), 'H1b: asgari boyut 2 m (brief 2×2)');
-// bbox
-chk(run(`(function(){ var b=amenityBBox({x:5,y:6,w:10,h:8}); return b.minX===5&&b.minY===6&&b.maxX===15&&b.maxY===14; })()`), 'H1b: amenityBBox köşeleri doğru');
-// SE köşe drag → dışa büyür, min-köşe (x,y) sabit
-chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'se',20,22); return nb.x===5&&nb.y===6&&nb.w===15&&nb.h===16; })()`), 'H1b: SE köşe dışa sürükle büyütür, min-köşe çapalı');
-// NW köşe drag → sol/üstten büyür, max-köşe sabit
-chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'nw',2,3); return nb.x===2&&nb.y===3&&nb.w===13&&nb.h===11; })()`), 'H1b: NW köşe sürükle max-köşeyi çapalar');
-// min clamp: SE'yi min-köşenin içine sürükle → 2×2'de durur
-chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'se',5.1,6.1); return nb.w===2&&nb.h===2; })()`), 'H1b: min 2×2 korunur (SE içeri sürüklense de)');
-// kenar (n) tek eksen
-chk(run(`(function(){ var nb=amenityResizeBox({minX:5,minY:6,maxX:15,maxY:14},'n',99,2); return nb.x===5&&nb.w===10&&nb.y===2&&nb.h===12; })()`), 'H1b: kenar tutamacı (n) yalnız bir ekseni boyutlandırır');
-// amenityResizeStep: adım büyüt + min clamp + çakışma reddi
-run(`amenities=[{type:'ornament', x:-10, y:-8, w:4, h:3, ang:0}]; editHistory=[]; redoHistory=[];`);
-chk(run(`(function(){ var ok=amenityResizeStep(0,1); return ok&&Math.abs(amenities[0].w-4.5)<1e-6&&Math.abs(amenities[0].h-3.5)<1e-6; })()`), 'H1b: Büyüt +step (0.5) genişletir + merkez korunur');
-chk(run(`(function(){ for(var i=0;i<20;i++) amenityResizeStep(0,-1); return amenities[0].w>=2&&amenities[0].h>=2; })()`), 'H1b: tekrar Küçült min 2 m altına inmez');
-// çakışma reddi: iki komşu imkan, birini diğerine doğru büyüt → reddedilir (boyut değişmez)
-run(`amenities=[{type:'ornament', x:-14, y:-8, w:4, h:3, ang:0},{type:'ornament', x:-9.9, y:-8, w:4, h:3, ang:0}]; editHistory=[];`);
-chk(run(`(function(){ var w0=amenities[0].w; var ok=amenityResizeStep(0,1); return ok===false && amenities[0].w===w0; })()`), 'H1b: komşuya taşacak büyütme reddedilir (SAT), boyut korunur');
-// döndürülmüş imkanda köşe tutamacı yok (hitAmenityHandle ang!=0 atlar) — S2Wx global gerekiyor; doğrudan mantık:
-chk(run(`(function(){ amenities=[{type:'green',x:-8,y:-10,w:10,h:8,ang:90}]; return typeof hitAmenityHandle==='function'; })()`), 'H1b: döndürülmüş imkan güvenli (hitAmenityHandle ang!=0 köşe döndürmez)');
-// undo: boyutlandırma pushEdit(type:amenity) → geri alınır
-run(`amenities=[{type:'ornament', x:-10, y:-8, w:4, h:3, ang:0}]; editHistory=[]; redoHistory=[];`);
-run(`amenityResizeStep(0,1);`);
-chk(run(`editHistory.length===1 && editHistory[0].type==='amenity'`), 'H1b: boyutlandırma pushEdit(type:amenity) yazar');
-run(`undoEdit()`);
-chk(run(`amenities[0].w===4 && amenities[0].h===3`), 'H1b: geri al boyutlandırmayı çözer (4×3)');
-
-/* ---- 12) İMKAN-BOYUT: YERLEŞTİRME HAYALETİ boyutlandırma (koymadan ÖNCE) ---- */
-chk(run(`typeof amenityGhostResizeStep==='function' && typeof amenityBaseSize==='function' && typeof amenityBarResize==='function' && typeof amenityRememberSize==='function' && typeof amenityGhostSize==='object'`),
-  'İMKAN-BOYUT: hayalet-boyut yardımcıları tanımlı (ghostResizeStep/baseSize/barResize/rememberSize)');
-
-// hayalet modu, tip=playground (8×6, step 0.5). Hatırlanmış boyut YOK → baz = katalog varsayılanı.
-run(`mode='amenity'; amenityType='playground'; amenityGhostSize={}; amenityGhostVert=null; hoverAmenity=null; amenityLastSx=null; amenityLastSy=null;`);
-chk(run(`(function(){ var b=amenityBaseSize('playground'); return b.w===8 && b.h===6; })()`), 'İMKAN-BOYUT: hatırlanmamış tip baz = katalog varsayılanı (8×6)');
-// hayaleti KÜÇÜLT ×2 (−0.5 ×2 = −1) → tip-başına hatırlanır 7×5
-chk(run(`amenityGhostResizeStep(-1) && amenityGhostResizeStep(-1)`), 'İMKAN-BOYUT: hayalet küçültme başarılı (yerleşmiş imkan yokken de çalışır)');
-chk(run(`amenityGhostSize.playground.w===7 && amenityGhostSize.playground.h===5`), 'İMKAN-BOYUT: küçültülen boyut tip-başına hatırlanır (7×5)');
-// sonraki aynı-tip hayalet o boyda başlar (amenityBaseSize)
-chk(run(`(function(){ var b=amenityBaseSize('playground'); return b.w===7 && b.h===5; })()`), 'İMKAN-BOYUT: sonraki çocuk-parkı hayaleti hatırlanan boyda başlar (7×5)');
-// başka tip ETKİLENMEZ (tip-başına izole)
-chk(run(`(function(){ var b=amenityBaseSize('pool'); return b.w===12 && b.h===6; })()`), 'İMKAN-BOYUT: boyut TİP-BAŞINA — başka tip (havuz) varsayılan kalır (12×6)');
-// min clamp: çok küçült → 2×2 altına inmez
-run(`amenityGhostSize={}; amenityType='ornament';`);  // 4×3, step 0.5
-run(`for(var i=0;i<20;i++) amenityGhostResizeStep(-1);`);
-chk(run(`amenityGhostSize.ornament.w>=2 && amenityGhostSize.ornament.h>=2 && amenityGhostSize.ornament.w<3`), 'İMKAN-BOYUT: hayalet min 2×2 clamp (defalarca küçültülse de <2 olmaz)');
-
-/* ---- 13) İMKAN-BOYUT: DAR-ALAN senaryosu — varsayılan sığmaz(KIRMIZI/red), küçültülmüş sığar(kabul) ---- */
-// Dar bir cep kur: bina 0..32 × 0..16; iki komşu imkanla DAR bir boşluk bırak.
-// Bahçe kuzeyinde y=-10..-2 bandı; x eksende (-6..14) arası boş kalsın, kenarları imkanla doldur.
-run(`amenities=[
-  {type:'green', x:-14, y:-10, w:8, h:8, ang:0},     // sol blok: x -14..-6
-  {type:'green', x:14, y:-10, w:8, h:8, ang:0}        // sağ blok: x 14..22
-]; editHistory=[]; redoHistory=[];`);
-// Boşluk: x -6..14 = 20 m geniş DEĞİL — parsel -14..46 ama komşularla SAT. Daha dar bir cep:
-// Aslında merkezde x=4, y=-8 civarına konacak imkanı komşulara YAKIN yap → 10 genişlik SAT'a çarpar, 4 çarpmaz.
-run(`amenities=[
-  {type:'green', x:-14, y:-10, w:9.5, h:8, ang:0},    // sol: x -14..-4.5
-  {type:'green', x:4.5, y:-10, w:9.5, h:8, ang:0}      // sağ: x 4.5..14
-]; editHistory=[]; redoHistory=[];`);
-// cep: x -4.5..4.5 = 9 m; merkez x=0. Varsayılan yeşil 10 genişlik → SAT'a çarpar (KIRMIZI). Küçük süs (4) sığar.
-run(`mode='amenity'; amenityType='ornament'; amenityGhostSize={}; amenityGhostVert=null;`);
-// varsayılan süs 4×3 aslında cebe sığar; senaryoyu net kur: cebi süs varsayılanından DAR yap (3 m).
-run(`amenities=[
-  {type:'green', x:-14, y:-10, w:12.5, h:8, ang:0},   // sol: x -14..-1.5
-  {type:'green', x:1.5, y:-10, w:12.5, h:8, ang:0}      // sağ: x 1.5..14
-]; editHistory=[]; redoHistory=[];`);
-// cep: x -1.5..1.5 = 3 m; merkez x=0, y merkez=-6. Varsayılan süs 4 genişlik → çarpar. 2×2'ye küçültülmüş sığar.
-const defOrn = run(`(function(){ var cx=0,cy=-6,def=amenityDef('ornament');
-  var a={type:'ornament', x:cx-def.w/2, y:cy-def.h/2, w:def.w, h:def.h, ang:0};
-  return { areaOk:amenityAreaOk(a), overlap:amenityOverlapsExisting(a,-1) }; })()`);
-chk(defOrn.areaOk===true && defOrn.overlap===true, 'İMKAN-BOYUT dar-alan: VARSAYILAN süs (4 gen.) komşuya çarpar → geçersiz (kırmızı) — çakışma:'+defOrn.overlap);
-// küçült: hayaleti 2×2'ye indir → aynı merkez artık SIĞAR (kabul)
-run(`amenityType='ornament'; amenityGhostSize={ornament:{w:2,h:2}};`);
-const shrunkOrn = run(`(function(){ var cx=0,cy=-6,b=amenityBaseSize('ornament');
-  var a={type:'ornament', x:cx-b.w/2, y:cy-b.h/2, w:b.w, h:b.h, ang:0};
-  return { areaOk:amenityAreaOk(a), overlap:amenityOverlapsExisting(a,-1) }; })()`);
-chk(shrunkOrn.areaOk===true && shrunkOrn.overlap===false, 'İMKAN-BOYUT dar-alan: KÜÇÜLTÜLMÜŞ süs (2×2) cebe SIĞAR → geçerli (kabul)');
-
-/* ---- 14) İMKAN-BOYUT: YERLEŞEN imkan hatırlanan boyda DOĞAR (buton yolu = hayaleti koyma) ---- */
-// hayalet boyutu 7×5 hatırlanmış → o merkeze konan imkanın w/h = 7×5 (amenityGhostAt üzerinden).
-run(`mode='amenity'; amenityType='playground'; amenityGhostSize={playground:{w:7,h:5}}; amenityGhostVert=null;
-  amenities=[]; editHistory=[]; redoHistory=[];`);
-const born = run(`(function(){ var cx=30,cy=-6,b=amenityBaseSize('playground');
-  // hayalet yerleştirmeyi taklit et: ghost {w,h}=baz → amenities.push
-  var g={type:'playground', x:cx-b.w/2, y:cy-b.h/2, w:b.w, h:b.h, ang:0};
-  amenities.push({type:g.type,x:g.x,y:g.y,w:g.w,h:g.h,ang:g.ang});
-  return { w:amenities[amenities.length-1].w, h:amenities[amenities.length-1].h }; })()`);
-chk(born.w===7 && born.h===5, 'İMKAN-BOYUT: yerleşen imkan hatırlanan hayalet boyunda doğar (7×5)');
-
-/* ---- 15) İMKAN-BOYUT: R DÖNDÜRME hatırlanan boyu korur (yatay taban swap) ---- */
-run(`mode='amenity'; amenityType='pool'; amenityGhostSize={pool:{w:9,h:4}}; amenityGhostVert=true;`);
-const rotBase = run(`(function(){ var vert=(amenityGhostVert!=null)?amenityGhostVert:false, b=amenityBaseSize('pool');
-  var w=vert?b.h:b.w, h=vert?b.w:b.h; return {w:w,h:h}; })()`);
-chk(rotBase.w===4 && rotBase.h===9, 'İMKAN-BOYUT: R dikeyde hatırlanan baz (9×4) swap edilir (4×9), boy korunur');
-// yerleşmiş DÖNDÜRÜLMÜŞ imkanı hatırlarken YATAY tabana normalize
-run(`amenityGhostSize={};`);
-run(`amenityRememberSize({type:'pool', x:0, y:0, w:4, h:9, ang:90})`);
-chk(run(`amenityGhostSize.pool.w===9 && amenityGhostSize.pool.h===4`), 'İMKAN-BOYUT: döndürülmüş imkan boyu YATAY tabana normalize hatırlanır (4×9 ang90 → 9×4)');
-
-/* ---- 16) İMKAN-BOYUT: buton yolu (amenityBarResize) — hover varsa yerleşmiş, yoksa hayalet ---- */
-// hover=null + imkan modu → hayalet boyutlanır
-run(`mode='amenity'; amenityType='seating'; amenityGhostSize={}; amenityGhostVert=null; hoverAmenity=null; amenityLastSx=null; amenityLastSy=null; amenities=[];`);
-chk(run(`amenityBarResize(-1) && amenityGhostSize.seating && amenityGhostSize.seating.w<amenityDef('seating').w`), 'İMKAN-BOYUT: amenityBarResize hover yokken HAYALETİ küçültür');
-// hover=yerleşmiş imkan → o imkan boyutlanır (hayalet-boyut haritası da tipe göre güncellenir)
-run(`amenities=[{type:'seating', x:30, y:-6, w:5, h:4, ang:0}]; hoverAmenity=0; editHistory=[];`);
-chk(run(`(function(){ var w0=amenities[0].w; var ok=amenityBarResize(1); return ok && amenities[0].w>w0; })()`), 'İMKAN-BOYUT: amenityBarResize hover varken YERLEŞMİŞ imkanı büyütür');
-
 function report(){
-  console.log('\nSITE-IMKAN (S3): '+pass+' geçti, '+fail+' başarısız');
+  console.log('\nSITE-IMKAN (S3, poligon): '+pass+' geçti, '+fail+' başarısız');
 }
 report();
 process.exit(fail?1:0);

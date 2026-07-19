@@ -212,12 +212,13 @@ svg.addEventListener('mousemove',e=>{
     if(dragging.type==='park'){ const b=plan&&plan.parking&&plan.parking.bays[dragging.idx];
       if(b){ const nx=snapG(S2Wx(sx)-dragging.gx), ny=snapG(S2Wy(sy)-dragging.gy);
         if(nx!==b.x||ny!==b.y){ b.x=nx; b.y=ny; dragging.moved=true; render(); } } }
-    if(dragging.type==='amenity'){ const a=amenities[dragging.idx];
-      if(a){ const nx=snapG(S2Wx(sx)-dragging.gx), ny=snapG(S2Wy(sy)-dragging.gy);
-        if(nx!==a.x||ny!==a.y){ a.x=nx; a.y=ny; dragging.moved=true; render(); } } }
-    if(dragging.type==='amenityResize'){ const a=amenities[dragging.idx];   // H1b: köşe/kenar sürükle → boyutlandır
-      if(a){ const nb=amenityResizeBox(dragging.box0, dragging.part, snapG(S2Wx(sx)), snapG(S2Wy(sy)));
-        if(nb.x!==a.x||nb.y!==a.y||nb.w!==a.w||nb.h!==a.h){ a.x=nb.x; a.y=nb.y; a.w=nb.w; a.h=nb.h; dragging.moved=true; render(); } } }
+    if(dragging.type==='amenity'){ const a=amenities[dragging.idx];   // POLİGON: gövde sürükle → tüm köşeleri ötele
+      if(a&&a.pts){ const dx=snapG(S2Wx(sx)-dragging.ox), dy=snapG(S2Wy(sy)-dragging.oy);
+        if(dx!==dragging.dx||dy!==dragging.dy){ dragging.dx=dx; dragging.dy=dy; if(dx||dy) dragging.moved=true;
+          a.pts=dragging.base.map(p=>({x:p.x+dx, y:p.y+dy})); amenityBBoxSync(a); render(); } } }
+    if(dragging.type==='amenityVert'){ const a=amenities[dragging.idx];   // POLİGON: tek köşe sürükle
+      if(a&&a.pts&&a.pts[dragging.vi]){ const nx=snapG(S2Wx(sx)), ny=snapG(S2Wy(sy)), v=a.pts[dragging.vi];
+        if(nx!==v.x||ny!==v.y){ v.x=nx; v.y=ny; dragging.moved=true; amenityBBoxSync(a); render(); } } }
     if(dragging.type==='bvert'){ pts[dragging.idx]={x:snapG(S2Wx(sx)), y:snapG(S2Wy(sy))};
       document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
       document.getElementById('stPerim').textContent=fmt(perim(pts))+' m'; render(); }
@@ -337,15 +338,21 @@ svg.addEventListener('mousemove',e=>{
     }
   }
   else if(mode==='amenity'){
-    amenityLastSx=sx; amenityLastSy=sy;                    // R basınca önizleme aynı noktada dönsün
-    const rh=hitAmenityHandle(sx,sy);                      // H1b: tutamaç üstünde resize imleci + hover kilidi
-    const ha=(rh? rh.i : hitAmenity(sx,sy));
-    const ghost = (ha==null)? amenityGhostAt(sx,sy) : null;
-    const gKey=g=>g?g.type+','+g.x+','+g.y+','+g.w+','+(g.invalid?'x':''):'';
-    if(ha!==hoverAmenity || gKey(ghost)!==gKey(amenityGhost)){
-      hoverAmenity=ha; amenityGhost=ghost; render();
+    amenityLastSx=sx; amenityLastSy=sy;
+    if(amenityDrawPts.length){                             // ÇİZİM sürüyor → canlı polyline önizlemesi
+      const sp=amenitySnapPoint(sx,sy);
+      const key=g=>g?g.x+','+g.y+','+(g.closing?'c':''):'';
+      if(key(sp)!==key(amenityDrawHover)){ amenityDrawHover=sp; render(); }
+      svg.style.cursor = sp.closing? 'pointer' : 'crosshair';
+      return;
     }
-    svg.style.cursor = rh? amenityCursor[rh.part] : (ha!=null? 'pointer' : ((ghost&&!ghost.invalid)?'copy':'not-allowed'));
+    const vh=hitAmenityVert(sx,sy);                        // köşe tutamacı (tek-köşe sürükle)
+    const ha=(vh? vh.i : hitAmenity(sx,sy));
+    const vKey=v=>v?v.i+','+v.vi:'';
+    if(ha!==hoverAmenity || vKey(vh)!==vKey(hoverAmenityVert)){
+      hoverAmenity=ha; hoverAmenityVert=vh; render();
+    }
+    svg.style.cursor = vh? 'move' : (ha!=null? 'move' : 'crosshair');
   }
   else if(mode==='avlu'){
     if(!closed){ svg.style.cursor=''; return; }
@@ -475,18 +482,24 @@ svg.addEventListener('mousedown',e=>{
   }
   if(mode==='amenity'){
     if(e.button!==0) return;
-    const hh=hitAmenityHandle(sx,sy);   // H1b: köşe/kenar tutamacı → boyutlandır (taşımadan ÖNCE)
-    if(hh){ const a=amenities[hh.i];
-      dragging={type:'amenityResize', idx:hh.i, part:hh.part, box0:amenityBBox(a), undo:amenitySnapshot(), moved:false};
-      hoverAmenity=hh.i; e.preventDefault(); render(); return;
+    /* ÇİZİM AKIŞI (yapı sınırı deseni): köşe köşe tıkla, ilk köşeye dönerek kapat.
+       Çizim SÜRERKEN düzenleme/silme devre dışı — tık = köşe ekle / kapat. */
+    if(amenityDrawPts.length){
+      const sp=amenitySnapPoint(sx,sy);
+      if(sp.closing){ amenityFinishDraw(); return; }
+      amenityDrawPts.push({x:sp.x, y:sp.y}); amenityDrawHover=null; render(); return;
     }
+    /* çizim YOK: köşe tutamacı (tek-köşe sürükle) → gövde sürükle/sil → boş yer = yeni çizime başla */
+    const vh=hitAmenityVert(sx,sy);
+    if(vh){ dragging={type:'amenityVert', idx:vh.i, vi:vh.vi, undo:amenitySnapshot(), moved:false};
+      hoverAmenity=vh.i; e.preventDefault(); render(); return; }
     const ha=hitAmenity(sx,sy);
     if(ha!=null){ const a=amenities[ha];   // mevcut imkan → sürükle (taşı) ya da hareketsiz tık = sil
-      dragging={type:'amenity', idx:ha, gx:S2Wx(sx)-a.x, gy:S2Wy(sy)-a.y, undo:amenitySnapshot(), moved:false};
+      dragging={type:'amenity', idx:ha, ox:S2Wx(sx), oy:S2Wy(sy), dx:0, dy:0, base:(a.pts||[]).map(p=>({x:p.x,y:p.y})), undo:amenitySnapshot(), moved:false};
       e.preventDefault();
-    } else { const g=amenityGhostAt(sx,sy);   // boş yer → yeni imkan ekle (geçersiz hayalet eklenmez)
-      if(g && !g.invalid){ pushEdit({type:'amenity', prev:amenitySnapshot()});
-        amenities.push({type:g.type, x:g.x, y:g.y, w:g.w, h:g.h, ang:g.ang}); amenityGhost=null; amenityEditRefresh(); }
+    } else {   // boş yere tık → yeni imkan poligonu çizmeye başla (ilk köşe)
+      const p=amenitySnapPoint(sx,sy);
+      amenityDrawPts=[{x:p.x, y:p.y}]; amenityDrawHover=null; render();
     }
     return;
   }
@@ -704,24 +717,24 @@ function finishDrag(){
     if(!dragging.moved){ /* hareketsiz = tık → imkanı sil */
       amenities.splice(dragging.idx,1);
       pushEdit({type:'amenity', prev:dragging.undo});
-      hoverAmenity=null; amenityEditRefresh();
+      hoverAmenity=null; hoverAmenityVert=null; amenityEditRefresh();
     } else if(a && (!amenityAreaOk(a) || amenityOverlapsExisting(a, dragging.idx))){
       /* geçersiz konuma bırakıldı (parsel dışı / bina üstü / çakışma) → eski hâle dön */
-      amenities=dragging.undo;
+      amenities=dragging.undo.map(amenityClone);
       setStatusHint('İmkan parsel içinde, bina dışında ve boş bir yere konmalı — eski konuma dönüldü.','#b35a2e');
-      hoverAmenity=null; amenityEditRefresh();
+      hoverAmenity=null; hoverAmenityVert=null; amenityEditRefresh();
     } else { /* geçerli taşıma → geçmişe yaz */
       pushEdit({type:'amenity', prev:dragging.undo});
       amenityEditRefresh();
     }
-  } else if(dragging.type==='amenityResize'){   // H1b: boyutlandırma bitir → geçerliyse geçmişe, değilse geri al
+  } else if(dragging.type==='amenityVert'){   // POLİGON: tek köşe sürükle bitir → geçerliyse geçmişe, değilse geri al
     const a=amenities[dragging.idx];
-    if(!dragging.moved){ hoverAmenity=dragging.idx; render(); }   // salt tık = boyut değişmedi (sil DEĞİL — köşe tık)
+    if(!dragging.moved){ hoverAmenity=dragging.idx; render(); }   // salt köşe tık = değişiklik yok
     else if(a && (!amenityAreaOk(a) || amenityOverlapsExisting(a, dragging.idx))){
-      amenities=dragging.undo;
-      setStatusHint('İmkan bu boyutta parsel dışına/başka öğeye taşıyor — eski boyuta dönüldü.','#b35a2e');
-      hoverAmenity=null; amenityEditRefresh();
-    } else { amenityRememberSize(a); pushEdit({type:'amenity', prev:dragging.undo}); amenityEditRefresh(); }
+      amenities=dragging.undo.map(amenityClone);
+      setStatusHint('Köşe bu konumda parsel dışına/bina üstüne/başka öğeye taşıyor — eski hâle dönüldü.','#b35a2e');
+      hoverAmenity=null; hoverAmenityVert=null; amenityEditRefresh();
+    } else { pushEdit({type:'amenity', prev:dragging.undo}); amenityEditRefresh(); }
   } else if(dragging.type==='siteMove'){
     const d=dragging; dragging=null;
     if(d.moved){
@@ -821,22 +834,11 @@ window.addEventListener('keydown',e=>{
     svg.style.cursor = hoverBay!=null? 'pointer' : ((parkGhost&&!parkGhost.invalid)?'copy':'not-allowed'); }
   render();
 });
-/* CEPHE-2 C4: İMKAN yatay/dikey döndürme — masaüstü R + dokunmatik "Döndür" butonu ORTAK yolu.
-   Amenity bar placeholder'ı R diyordu ama handler yoktu (masaüstü açığı). Buton olayı (interaction.js
-   bind) ve R tuşu ikisi de bunu çağırır → dokunmatik parite (touch'ta R tuşu yok). */
-function toggleAmenityOrient(){
-  if(mode!=='amenity') return;
-  amenityGhostVert = !(amenityGhostVert!=null? amenityGhostVert : false);
-  if(amenityLastSx!=null){ hoverAmenity=hitAmenity(amenityLastSx,amenityLastSy);
-    amenityGhost = hoverAmenity==null? amenityGhostAt(amenityLastSx,amenityLastSy) : null; }
-  render();
-}
+/* POLİGON İMKAN: yatay/dikey döndürme (R + "Döndür" butonu) EMEKLİ — poligon köşe köşe çizilir,
+   dikdörtgen yönü kavramı yok. Esc = yarım çizilen imkan poligonunu iptal et (roomdraw Esc deseni). */
 window.addEventListener('keydown',e=>{
-  if(mode!=='amenity' || (e.key||'').toLowerCase()!=='r') return;
-  if(e.ctrlKey||e.metaKey||e.altKey) return;
-  const t=e.target, tag=t&&t.tagName;
-  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||(t&&t.isContentEditable)) return;
-  e.preventDefault(); toggleAmenityOrient();
+  if(e.key!=='Escape' || mode!=='amenity' || !amenityDrawPts.length) return;
+  amenityDrawPts=[]; amenityDrawHover=null; setStatusHint(''); render();
 });
 /* B3: modlara tek-tuş kısayol (modifier'sız). İlgili araç düğmesini tıklar →
    pro-only/site/park görünürlüğü ve tSite toggle mantığı otomatik korunur.
@@ -871,7 +873,7 @@ function undoEdit(){
   if(e.type==='window'){ windowRestore(e.prev); hoverWindow=null; if(typeof updateWindowPanel==='function') updateWindowPanel(); render(); return true; }
   if(e.type==='park'){ if(plan&&e.prev){ plan.parking=e.prev; hoverBay=null; parkGhost=null;
     runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); } return true; }
-  if(e.type==='amenity'){ amenities=(e.prev||[]).map(a=>({...a})); hoverAmenity=null; amenityGhost=null;
+  if(e.type==='amenity'){ amenities=(e.prev||[]).map(amenityClone); hoverAmenity=null; hoverAmenityVert=null; amenityGhost=null;
     if(plan) runChecks(); render(); if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); return true; }
   if(e.type==='avlu'){ courtyards=(e.prev||[]).map(av=>({poly:av.poly.map(p=>({x:p.x,y:p.y}))})); avluGhost=null; avluChanged(); return true; }
   if(e.type==='sitemove'){
@@ -1157,24 +1159,48 @@ function updateParkBtn(){
   if(!ok && mode==='park') setMode('draw');
 }
 
-/* ===================== S3: SİTE İMKANLARI (parsel-katmanı) =====================
-   Park yeri (bay) ailesinin PARSEL-katmanı akrabası: aynı vektör dikdörtgen + SAT çakışma
-   (bayCorners/polyOverlapSAT ORTAK) + R döndürme + kırmızı hayalet deseni. FARK: park yeri
-   plan ızgarasında (bina içi) yaşar; imkan PARSEL bahçesinde (bina footprint'i DIŞI) dünya
+/* ===================== S3: SİTE İMKANLARI (parsel-katmanı, POLİGON MODELİ) =====================
+   Park yeri (bay) ailesinin PARSEL-katmanı akrabası ama artık VEKTÖR DİKDÖRTGEN değil, YAPI SINIRI
+   deseninde POLİGON: kullanıcı tipi seçer, tuvalde köşe köşe tıklayarak çizer, ilk köşeye dönerek
+   kapatır → o kapalı alan o tip imkan olur (üçgen havuz serbest). Şema {type, pts:[{x,y}...]}, x/y/w/h
+   pts'ten türetilen bbox (amenityBBoxSync). İmkan PARSEL bahçesinde (bina footprint'i DIŞI) dünya
    koordinatında yaşar → site-ORTAK (blocks[] snapshot'larına değil global amenities[]'e). */
-function amenitySnapshot(){ return amenities.map(a=>({...a})); }
+function amenitySnapshot(){ return amenities.map(amenityClone); }
 function amenityDef(t){ return (REG.amenities&&REG.amenities[t])||REG.amenities.green; }
+/* imkanın poligon köşeleri (pts varsa o; eski dikdörtgen kaydı için köşe türet). */
+function amenityPolyPts(a){ return (a&&a.pts&&a.pts.length>=3)? a.pts : amenityRectToPts(a||{}); }
+/* iki poligon çakışıyor mu (konveks OLMAYAN L/üçgen de kapsanır): (1) A'nın bir köşesi B içinde,
+   (2) B'nin bir köşesi A içinde, (3) herhangi iki kenar kesişiyor. */
+function amenitySegInt(A,B,C,D){
+  const ccw=(P,Q,R)=>(R.y-P.y)*(Q.x-P.x) > (Q.y-P.y)*(R.x-P.x);
+  return ccw(A,C,D)!==ccw(B,C,D) && ccw(A,B,C)!==ccw(A,B,D);
+}
+function amenityPolysOverlap(P,Q){
+  for(let i=0;i<P.length;i++) if(pip(P[i].x,P[i].y,Q)) return true;
+  for(let i=0;i<Q.length;i++) if(pip(Q[i].x,Q[i].y,P)) return true;
+  for(let i=0;i<P.length;i++){ const a=P[i],b=P[(i+1)%P.length];
+    for(let j=0;j<Q.length;j++){ const c=Q[j],d=Q[(j+1)%Q.length];
+      if(amenitySegInt(a,b,c,d)) return true; } }
+  return false;
+}
 /* imkan yerleşim geçerli mi: (1) parsel İÇİNDE (parsel çizilmemişse serbest), (2) TÜM bina
-   footprint'lerinin DIŞINDA (site modunda tüm bloklar), (3) örneklenen tüm noktalar sağlar. */
+   footprint'lerinin DIŞINDA (site modunda tüm bloklar). Köşeler + poligon-içi 0.8 m ızgara örneklenir
+   (ince bina çıkıntıları köşe-arası kaçmasın). */
 function amenityAreaOk(a){
-  const cx=a.x+a.w/2, cy=a.y+a.h/2, ang=(a.ang||0)*Math.PI/180, c=Math.cos(ang), s=Math.sin(ang);
+  const poly=amenityPolyPts(a); if(!poly||poly.length<3) return false;
   const foots=buildingFootprints();
   const haveParcel = parcelClosed && parcelPts.length>=3;
-  for(let dx=-a.w/2+0.4; dx<a.w/2; dx+=0.8)
-    for(let dy=-a.h/2+0.4; dy<a.h/2; dy+=0.8){
-      const wx=cx+dx*c-dy*s, wy=cy+dx*s+dy*c;
-      if(haveParcel && !pip(wx,wy,parcelPts)) return false;   // parsel dışına taşamaz
-      for(let i=0;i<foots.length;i++){ if(pip(wx,wy,foots[i])) return false; } // bina üstüne konamaz
+  const okPt=(wx,wy)=>{
+    if(haveParcel && !pip(wx,wy,parcelPts)) return false;              // parsel dışına taşamaz
+    for(let i=0;i<foots.length;i++){ if(pip(wx,wy,foots[i])) return false; } // bina üstüne konamaz
+    return true;
+  };
+  for(let i=0;i<poly.length;i++){ if(!okPt(poly[i].x,poly[i].y)) return false; }   // her köşe
+  const bb=bboxOf(poly);
+  for(let wx=bb.minX+0.4; wx<bb.maxX; wx+=0.8)
+    for(let wy=bb.minY+0.4; wy<bb.maxY; wy+=0.8){
+      if(!pip(wx,wy,poly)) continue;                                   // yalnız imkan İÇİ örnekleri
+      if(!okPt(wx,wy)) return false;
     }
   return true;
 }
@@ -1188,132 +1214,62 @@ function buildingFootprints(){
 }
 /* imkan merkezi parsel içinde mi (kırmızı uyarıyı yalnız parsele yakınken göster) */
 function amenityTouchesSite(a){
-  const cx=a.x+a.w/2, cy=a.y+a.h/2;
-  if(parcelClosed && parcelPts.length>=3) return pip(cx,cy,parcelPts);
+  const c=amenityCentroid(amenityPolyPts(a));
+  if(parcelClosed && parcelPts.length>=3) return pip(c.x,c.y,parcelPts);
   return true;   // parsel yok → her yerde serbest (kırmızı yalnız çakışmadan gelir)
 }
-/* imkan başka bir imkanla çakışıyor mu (SAT — park yeriyle ORTAK bayCorners/polyOverlapSAT). skip=kendi index'i */
+/* imkan başka bir imkanla ya da park yeriyle çakışıyor mu (poligon-poligon). skip=kendi index'i */
 function amenityOverlapsExisting(a, skip){
-  const A=bayCorners(a);
+  const A=amenityPolyPts(a);
   for(let i=0;i<amenities.length;i++){ if(i===skip) continue;
-    if(polyOverlapSAT(A, bayCorners(amenities[i]))) return true; }
+    if(amenityPolysOverlap(A, amenityPolyPts(amenities[i]))) return true; }
   // park yerleriyle de çakışmasın (bina içi park kat-özel, ama parsel görünümünde üst üste binmesin)
   if(plan && plan.parking && plan.parking.bays){
-    for(let i=0;i<plan.parking.bays.length;i++){ if(polyOverlapSAT(A, bayCorners(plan.parking.bays[i]))) return true; }
+    for(let i=0;i<plan.parking.bays.length;i++){ if(amenityPolysOverlap(A, bayCorners(plan.parking.bays[i]))) return true; }
   }
   return false;
 }
-/* dünya noktası imkan dikdörtgeni içinde mi → index | null (park hitBay ile aynı ang-unrotate mantığı) */
+/* dünya noktası hangi imkan poligonu içinde → index | null */
 function hitAmenity(sx,sy){
   const wx=S2Wx(sx), wy=S2Wy(sy);
-  for(let i=amenities.length-1;i>=0;i--){ const a=amenities[i];
-    let px=wx-(a.x+a.w/2), py=wy-(a.y+a.h/2);
-    if(a.ang){ const t=-a.ang*Math.PI/180, c=Math.cos(t), s=Math.sin(t); const nx=px*c-py*s, ny=px*s+py*c; px=nx; py=ny; }
-    if(Math.abs(px)<=a.w/2+0.02 && Math.abs(py)<=a.h/2+0.02) return i;
-  }
+  for(let i=amenities.length-1;i>=0;i--){ if(pip(wx,wy,amenityPolyPts(amenities[i]))) return i; }
   return null;
 }
-/* İMKAN-BOYUT: aktif tipin YATAY (eksen-hizalı, ang 0) taban boyutu — tip-başına hatırlanmış
-   varsa o, yoksa katalog varsayılanı (def.w/def.h). Hayalet + döndürme bu tabandan türer. */
-function amenityBaseSize(t){
-  const def=amenityDef(t), r=amenityGhostSize[t];
-  return { w:(r&&r.w)||def.w, h:(r&&r.h)||def.h };
-}
-/* imleç altında eklenebilecek imkan önizlemesi (aktif tip + R yönü + HATIRLANAN boyut).
-   Geçersizse (parsel dışı / bina üstü / çakışma) KIRMIZI hayalet; parsele hiç yaklaşmadıysa gizle
-   (null) — park deseniyle bir. */
-function amenityGhostAt(sx,sy){
-  const base=amenityBaseSize(amenityType);
-  const vert = (amenityGhostVert!=null)? amenityGhostVert : false;
-  const w = vert? base.h : base.w, h = vert? base.w : base.h;
-  const a={type:amenityType, x:snapG(S2Wx(sx)-w/2), y:snapG(S2Wy(sy)-h/2), w, h, ang:0};
-  if(!amenityAreaOk(a)) return amenityTouchesSite(a)? {...a, invalid:true} : null;
-  if(amenityOverlapsExisting(a, -1)) return {...a, invalid:true};
-  return a;
+/* imleç altındaki imkan KÖŞE tutamacı (tek-köşe sürükle) → {i, vi} | null (bvert deseni) */
+function amenityVertTol(){ return Math.max(0.3, 8*HITSC/pxPerM); }
+function hitAmenityVert(sx,sy){
+  const wx=S2Wx(sx), wy=S2Wy(sy), tol=amenityVertTol();
+  for(let i=amenities.length-1;i>=0;i--){ const p=amenityPolyPts(amenities[i]);
+    for(let vi=0;vi<p.length;vi++){ if(Math.abs(wx-p[vi].x)<tol && Math.abs(wy-p[vi].y)<tol) return {i, vi}; } }
+  return null;
 }
 function amenityEditRefresh(){ runChecks(); render();
   if(floorsOn()) villaFloors[activeFloor]=stateSnapshot(true); }
-/* H1b: imkan BOYUTLANDIRMA — seçili/hover imkanın köşe/kenar tutamaçları (avlu hitAvluHandle deseni).
-   Yalnız ang===0 (eksen-hizalı) imkanlarda; döndürülmüş (R ile 90°) imkan yine w/h swap'lı kalır ama
-   köşe boyutlandırma eksen-hizalıya odaklanır (basit + güvenli). part: nw/ne/se/sw · n/s/e/w · body. */
-const AMENITY_MIN=2;   // brief: asgari 2×2 m (tip min'i daha küçük olsa da bu taban uygulanır)
-function amenityHandleTol(){ return Math.max(0.3, 7*HITSC/pxPerM); }
-function amenityBBox(a){ return { minX:a.x, minY:a.y, maxX:a.x+a.w, maxY:a.y+a.h }; }
-function hitAmenityHandle(sx,sy){
-  if(typeof amenities==='undefined' || !amenities.length) return null;
-  const wx=S2Wx(sx), wy=S2Wy(sy), tol=amenityHandleTol();
-  for(let i=amenities.length-1;i>=0;i--){ const a=amenities[i];
-    if(a.ang) continue;   // döndürülmüş imkan: köşe tutamacı yok (taşı/sil + bar +/- ile boyutlanır)
-    const bb=amenityBBox(a);
-    const corners=[['nw',bb.minX,bb.minY],['ne',bb.maxX,bb.minY],['se',bb.maxX,bb.maxY],['sw',bb.minX,bb.maxY]];
-    for(const [part,cx,cy] of corners){ if(Math.abs(wx-cx)<tol && Math.abs(wy-cy)<tol) return {i,part}; }
-    const onX = wx>bb.minX-tol && wx<bb.maxX+tol, onY = wy>bb.minY-tol && wy<bb.maxY+tol;
-    if(onX && Math.abs(wy-bb.minY)<tol) return {i,part:'n'};
-    if(onX && Math.abs(wy-bb.maxY)<tol) return {i,part:'s'};
-    if(onY && Math.abs(wx-bb.minX)<tol) return {i,part:'w'};
-    if(onY && Math.abs(wx-bb.maxX)<tol) return {i,part:'e'};
-  }
-  return null;
+/* ÇİZİM snap: 0,5 m ızgara + ilk köşeye dönerek kapat (yapı sınırı snapPoint deseni). */
+function amenitySnapPoint(sx,sy){
+  const x=snapG(S2Wx(sx)), y=snapG(S2Wy(sy));
+  if(amenityDrawPts.length>=3){ const f=amenityDrawPts[0];
+    if(Math.hypot(x-f.x, y-f.y) < 0.7) return {x:f.x, y:f.y, closing:true}; }
+  return {x, y};
 }
-const amenityCursor={n:'ns-resize',s:'ns-resize',e:'ew-resize',w:'ew-resize',nw:'nwse-resize',se:'nwse-resize',ne:'nesw-resize',sw:'nesw-resize'};
-/* boyutlandırma uygular: box0'dan part yönünde min AMENITY_MIN korunarak yeni x/y/w/h; imkan dünya-koord {x,y,w,h}. */
-function amenityResizeBox(box0, part, wx, wy){
-  let {minX,minY,maxX,maxY}=box0;
-  if(part.indexOf('n')>=0) minY=Math.min(wy, maxY-AMENITY_MIN);
-  if(part.indexOf('s')>=0) maxY=Math.max(wy, minY+AMENITY_MIN);
-  if(part.indexOf('w')>=0) minX=Math.min(wx, maxX-AMENITY_MIN);
-  if(part.indexOf('e')>=0) maxX=Math.max(wx, minX+AMENITY_MIN);
-  return { x:minX, y:minY, w:maxX-minX, h:maxY-minY };
-}
-/* H1b: dokunmatik/kesin +/- boyut — seçili (son eklenen ya da hover) imkanı adımlı büyüt/küçült.
-   delta: her eksende ±step (tip step'i); merkez sabit kalır; min AMENITY_MIN; çakışma/parsel guard'lı. */
-function amenityResizeStep(idx, sign){
-  if(typeof amenities==='undefined' || idx<0 || idx>=amenities.length) return false;
-  const a=amenities[idx], def=amenityDef(a.type), step=(def&&def.step)||0.5;
-  const prev=amenitySnapshot();
-  const cx=a.x+a.w/2, cy=a.y+a.h/2;
-  const nw=Math.max(AMENITY_MIN, a.w+sign*step), nh=Math.max(AMENITY_MIN, a.h+sign*step);
-  const cand={type:a.type, x:snapG(cx-nw/2), y:snapG(cy-nh/2), w:nw, h:nh, ang:a.ang||0};
-  if(!amenityAreaOk(cand) || amenityOverlapsExisting(cand, idx)){
-    setStatusHint('İmkan bu boyutta parsel dışına/başka öğeye taşıyor — değiştirilmedi.','#b35a2e'); return false;
-  }
-  a.x=cand.x; a.y=cand.y; a.w=cand.w; a.h=cand.h;
-  amenityRememberSize(a);
-  pushEdit({type:'amenity', prev}); amenityEditRefresh(); return true;
-}
-/* İMKAN-BOYUT: yerleşmiş bir imkanın boyutunu o tipin HAYALET tabanı olarak hatırla (sonraki aynı-tip
-   hayalet + yerleşen o boyda başlasın). Döndürülmüşte (ang≈90) on-screen w/h swap'lı → YATAY tabana
-   normalize (h→w) çevirerek sakla. Min AMENITY_MIN taban. */
-function amenityRememberSize(a){
-  if(!a||!a.type) return;
-  const rot = Math.abs(((a.ang||0)%180))===90;
-  const w = Math.max(AMENITY_MIN, rot? a.h : a.w), h = Math.max(AMENITY_MIN, rot? a.w : a.h);
-  amenityGhostSize[a.type]={ w:+w.toFixed(3), h:+h.toFixed(3) };
-}
-/* +/- bar için seçili imkan index'i: hover varsa o, yoksa son eklenen (varsa). */
-function amenitySelIdx(){ if(hoverAmenity!=null) return hoverAmenity;
-  return (typeof amenities!=='undefined' && amenities.length)? amenities.length-1 : -1; }
-/* İMKAN-BOYUT: henüz yerleştirilmemiş HAYALETİ adımlı büyüt/küçült. Boyut aktif TİP için hatırlanır
-   (amenityGhostSize) → sonraki aynı-tip hayalet + yerleşen imkan o boyda doğar. R döndürme tabanı
-   YATAY (ang 0) w/h olarak tutar; hayalet vert ise ekranda swap edilir. Min AMENITY_MIN taban.
-   Geçerlilik (kırmızı/normal) hayalet yeniden türetilerek ANINDA güncellenir. */
-function amenityGhostResizeStep(sign){
-  if(mode!=='amenity') return false;
-  const def=amenityDef(amenityType), step=(def&&def.step)||0.5;
-  const base=amenityBaseSize(amenityType);
-  const nw=Math.max(AMENITY_MIN, +(base.w+sign*step).toFixed(3));
-  const nh=Math.max(AMENITY_MIN, +(base.h+sign*step).toFixed(3));
-  amenityGhostSize[amenityType]={w:nw, h:nh};
-  if(amenityLastSx!=null){ hoverAmenity=hitAmenity(amenityLastSx,amenityLastSy);
-    amenityGhost = hoverAmenity==null? amenityGhostAt(amenityLastSx,amenityLastSy) : null; }
-  render(); return true;
+/* çizilen poligonu kapat: geçerliyse amenities'e ekle (pushEdit), değilse kısa toast + iptal. */
+function amenityFinishDraw(){
+  const raw=amenityDrawPts.slice();
+  amenityDrawPts=[]; amenityDrawHover=null;
+  if(raw.length<3){ setStatusHint('İmkan için en az 3 köşe gerekir — yeniden çiz.','#b35a2e'); render(); return; }
+  const a={type:amenityType, pts:raw.map(p=>({x:p.x,y:p.y}))}; amenityBBoxSync(a);
+  if(shoelace(a.pts) < 1){ setStatusHint('Çizilen alan çok küçük — birkaç m²lik bir bölge çiz.','#b35a2e'); render(); return; }
+  if(!amenityAreaOk(a)){ setStatusHint('İmkan parsel İÇİNDE ve bina DIŞINDA olmalı — çizim iptal edildi.','#b35a2e'); render(); return; }
+  if(amenityOverlapsExisting(a, -1)){ setStatusHint('Bu alan başka bir imkanla/park yeriyle çakışıyor — çizim iptal edildi.','#b35a2e'); render(); return; }
+  pushEdit({type:'amenity', prev:amenitySnapshot()});
+  amenities.push(a);
+  setStatusHint(amenityDef(a.type).name+' eklendi.','#2e7d32');
+  amenityEditRefresh();
 }
 function setAmenityType(t){
   if(!REG.amenities[t]) return;
-  amenityType=t; amenityGhost=null; amenityGhostVert=null;
+  amenityType=t;
   showAmenityBar();
-  if(amenityLastSx!=null){ hoverAmenity=hitAmenity(amenityLastSx,amenityLastSy);
-    amenityGhost = hoverAmenity==null? amenityGhostAt(amenityLastSx,amenityLastSy) : null; }
   render();
 }
 function showAmenityBar(){
@@ -1360,7 +1316,7 @@ function updateModeBadge(m){
   const shown=id=>{ const e=document.getElementById(id); return e && getComputedStyle(e).display!=='none'; };
   bg.classList.toggle('shifted', shown('floorTabs')||shown('blockTabs'));
 }
-const setMode=m=>{ mode=m; hoverP=null; blockDrawBad=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; hoverAmenity=null; amenityGhost=null; amenityGhostVert=null; measureStart=null; measureEnd=null; measureHover=null; setStatusHint('');
+const setMode=m=>{ mode=m; hoverP=null; blockDrawBad=null; hoverBalk=null; hoverDoor=null; hoverWindow=null; selWindow=null; hoverStruct=null; hoverBay=null; parkGhost=null; parkGhostVert=null; avluGhost=null; avluDragIdx=-1; roomPts=[]; hoverCut=null; hoverStructH=null; hoverAmenity=null; hoverAmenityVert=null; amenityGhost=null; amenityDrawPts=[]; amenityDrawHover=null; measureStart=null; measureEnd=null; measureHover=null; setStatusHint('');
   /* OTO-AVLU (avlu-rework): avlu moduna girince derin/karanlık footprint için nazik öneri hesapla.
      Dayatma YOK — statusHint + tıkla-yerleştir aday ghost; başka moda geçince temizlenir. */
   avluSuggestion=null;
@@ -1505,25 +1461,11 @@ if(typeof document.querySelectorAll==='function')
 /* S3: site imkanları çubuğu — tip seçimi (data-am) */
 if(typeof document.querySelectorAll==='function')
   document.querySelectorAll('#amenityBar button[data-am]').forEach(b=>b.onclick=()=>setAmenityType(b.dataset.am));
-/* C4: imkan Döndür butonu (dokunmatik parite — R tuşunun buton karşılığı) */
-{ const ar=document.getElementById('amenityRot'); if(ar) ar.onclick=()=>toggleAmenityOrient(); }
-/* H1b + İMKAN-BOYUT: imkan Büyüt/Küçült — dokunmatik/kesin boyutlandırma (köşe tutamacının buton
-   karşılığı). İKİ durumu da boyutlandırır:
-     (1) imleç YERLEŞMİŞ bir imkanın üstündeyse (hover) → o imkanı boyutlandırır (H1b);
-     (2) aksi halde (imkan modunda, hayalet varken) → YERLEŞTİRME HAYALETİNİ boyutlandırır
-         → tip-başına hatırlanır, sonraki hayalet + yerleşen imkan o boyda doğar (İMKAN-BOYUT).
-   Kök neden düzeltmesi: buton eskiden yalnız amenitySelIdx()>=0 (yerleşmiş) yola bağlıydı →
-   yerleştirmeden ÖNCE küçültme yapılamıyordu. */
-function amenityBarResize(sign){
-  if(hoverAmenity!=null) return amenityResizeStep(hoverAmenity, sign);   // yerleşmiş imkan (hover)
-  if(mode==='amenity') return amenityGhostResizeStep(sign);               // yerleştirme hayaleti
-  const i=amenitySelIdx();                                                // düşüş: son eklenen
-  if(i<0){ setStatusHint('Önce bir imkan ekleyip üstüne gel (ya da hayaleti bahçeye getir).','#b35a2e'); return false; }
-  return amenityResizeStep(i,sign);
-}
-{ const ab=document.getElementById('amenityBigger'); if(ab) ab.onclick=()=>amenityBarResize(+1); }
-{ const as=document.getElementById('amenitySmaller'); if(as) as.onclick=()=>amenityBarResize(-1); }
+/* POLİGON İMKAN: "İptal" butonu — yarım çizilen poligonu at (Esc'in buton karşılığı, dokunmatik parite). */
+{ const ac=document.getElementById('amenityCancel');
+  if(ac) ac.onclick=()=>{ if(amenityDrawPts.length){ amenityDrawPts=[]; amenityDrawHover=null; setStatusHint(''); render(); } }; }
 document.getElementById('tUndo').onclick=()=>{
+  if(mode==='amenity' && amenityDrawPts.length){ amenityDrawPts.pop(); amenityDrawHover=null; render(); return; } // yarım imkan çizimi: son köşeyi sil
   if(mode==='parcel'){ if(parcelClosed){ parcelClosed=false; } else parcelPts.pop(); balkChecksRefresh(); render(); return; }
   if(undoEdit()) return; // önce elle duvar/ayırıcı/balkon düzenlemeleri
   if(closed&&plan&&!confirm('Geri alınacak düzenleme kalmadı. Plan SİLİNİP çizim aşamasına dönülsün mü?')) return; // emniyet: saatlik emek tek tıkla gitmesin
@@ -1533,7 +1475,7 @@ document.getElementById('tHist').onclick=()=>{ const p=document.getElementById('
   if(p){ const open=p.style.display==='none'||!p.style.display; p.style.display=open?'flex':'none'; if(open) refreshHistoryUI(true); } };
 document.getElementById('tClear').onclick=()=>{ pts=[];roomPts=[];closed=false;plan=null;editHistory=[];redoHistory=[];resetCuts();
   parcelPts=[];parcelClosed=false;balconies=[];courtyards=[];avluGhost=null;hoverBalk=null;doorOverrides={};extraDoors=[];doorHidden={};hoverDoor=null;windowOverrides={};extraWindows=[];windowHidden={};hoverWindow=null;
-  amenities=[];hoverAmenity=null;amenityGhost=null;
+  amenities=[];hoverAmenity=null;hoverAmenityVert=null;amenityGhost=null;amenityDrawPts=[];amenityDrawHover=null;
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
   updateStructResetBtn();

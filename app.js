@@ -23,13 +23,42 @@ let hoverBay = null;          // park modunda imleç altındaki park yeri index'
 let parkGhost = null;         // park modunda eklenecek boş park yeri önizlemesi {x,y,w,h,ang} | null
 let parkGhostVert = null;     // U3: R ile çevrilen yerleştirme yönü override'ı (null=çubuk yönü) | true(dikey)/false(yatay)
 let parkLastSx = null, parkLastSy = null; // son imleç (park modu) — R basınca önizleme aynı noktada anında dönsün
-let amenities = [];           // S3: site imkanları (parsel-katmanı, dünya koord): {type,x,y,w,h,ang}. Bina footprint'i DIŞINA konur; parsel-ORTAK (blok başına değil). 2D bahçede + 3B dış görünümde + drone prompt sinyalinde görünür.
+let amenities = [];           // S3: site imkanları (parsel-katmanı, dünya koord): {type, pts:[{x,y}...], x,y,w,h,ang}.
+                              //   POLİGON MODELİ: pts = birincil şekil (yapı sınırı gibi köşe köşe çizilir); x/y/w/h = pts'ten TÜRETİLEN
+                              //   eksen-hizalı bbox (3B dekor/etiket/hit kolaylığı için güncel tutulur — amenityBBoxSync). ang=0 (poligon dünya
+                              //   yöneliminde; eski dikdörtgen kayıtları yüklemede ang'lı 4-köşeye çevrilir → io.js oku dalı). Bina footprint'i
+                              //   DIŞINA konur; parsel-ORTAK (blok başına değil). 2D bahçede + 3B dış görünümde + drone prompt sinyalinde görünür.
 let hoverAmenity = null;      // imkan modunda imleç altındaki imkan index'i | null
-let amenityGhost = null;      // imkan modunda eklenecek imkan önizlemesi {type,x,y,w,h,ang,invalid?} | null
+let hoverAmenityVert = null;  // imkan modunda imleç altındaki köşe tutamacı {i, vi} (tek-köşe sürükle) | null
+let amenityGhost = null;      // (poligon modelinde kullanılmaz — geriye-uyum için tutulur)
 let amenityType = 'green';    // aktif imkan tipi (çubuktan seçilir): green|playground|pool|ornament|seating
-let amenityGhostVert = null;  // R ile çevrilen yerleştirme yönü override'ı (null=varsayılan yatay) | true(dikey)/false(yatay)
-let amenityGhostSize = {};    // İMKAN-BOYUT: tip-başına HATIRLANAN hayalet boyutu {type:{w,h}} — Büyüt/Küçült henüz yerleştirilmemiş hayalete uygulanınca burada tutulur (oturum içi; sayfa yenilemede varsayılana döner, kalıcılaştırma YOK)
-let amenityLastSx = null, amenityLastSy = null; // son imleç (imkan modu) — R basınca önizleme aynı noktada anında dönsün
+let amenityDrawPts = [];      // çizilmekte olan imkan poligonu (dünya koord köşeleri; yapı sınırı çizim deseni)
+let amenityDrawHover = null;  // çizim önizlemesi: sonraki köşe adayı {x,y,closing?} | null
+let amenityLastSx = null, amenityLastSy = null; // son imleç (imkan modu) — hover/önizleme aynı noktada tazelensin
+/* ── POLİGON İMKAN geometri yardımcıları (io.js + interaction.js + view3d ORTAK; saf-veri, THREE'siz) ── */
+function amenityClone(a){ const c=Object.assign({},a); if(a&&a.pts&&a.pts.map) c.pts=a.pts.map(p=>({x:p.x,y:p.y})); return c; }
+/* eksen-hizalı bbox'ı pts'ten türet + x/y/w/h'yi güncelle (ang poligonda 0). pts yoksa dokunmaz. */
+function amenityBBoxSync(a){
+  if(a && a.pts && a.pts.length){ const bb=bboxOf(a.pts); a.x=bb.minX; a.y=bb.minY; a.w=bb.maxX-bb.minX; a.h=bb.maxY-bb.minY; }
+  if(a && a.ang==null) a.ang=0;
+  return a;
+}
+/* YÜKLEME KÖPRÜSÜ (TEK yer): eski dikdörtgen kayıt {x,y,w,h,ang} → 4-köşe pts (ang'lı döndürülmüş). */
+function amenityRectToPts(a){
+  const w=a.w||0, h=a.h||0, ang=(a.ang||0)*Math.PI/180, cx=a.x+w/2, cy=a.y+h/2, c=Math.cos(ang), s=Math.sin(ang);
+  return [[-w/2,-h/2],[w/2,-h/2],[w/2,h/2],[-w/2,h/2]].map(d=>({x:cx+d[0]*c-d[1]*s, y:cy+d[0]*s+d[1]*c}));
+}
+/* deep-clone + pts garantisi + bbox eşitle (io oku dalı). */
+function amenityLoad(a){ const c=amenityClone(a);
+  if(!(c.pts && c.pts.length>=3)) c.pts=amenityRectToPts(c);
+  amenityBBoxSync(c); return c; }
+/* poligon alan-ağırlıklı centroid (etiket/dekor için); dejenere → bbox merkezi. */
+function amenityCentroid(pts){
+  if(!pts||pts.length<3) return pts&&pts.length? {x:pts[0].x,y:pts[0].y}:{x:0,y:0};
+  let a=0,cx=0,cy=0; for(let i=0;i<pts.length;i++){ const p=pts[i],q=pts[(i+1)%pts.length]; const cr=p.x*q.y-q.x*p.y; a+=cr; cx+=(p.x+q.x)*cr; cy+=(p.y+q.y)*cr; }
+  if(Math.abs(a)<1e-9){ const bb=bboxOf(pts); return {x:(bb.minX+bb.maxX)/2, y:(bb.minY+bb.maxY)/2}; }
+  a*=0.5; return {x:cx/(6*a), y:cy/(6*a)};
+}
 let editHistory = [];         // elle düzenleme geçmişi (geri al): {type, ...} — pushEdit() ile yazılır
 let redoHistory = [];         // ileri al yığını: undoEdit her geri almada o anki TAM durumu buraya iter; redoEdit geri yükler
 const HIST_CAP = 100;         // geçmiş üst sınırı (en eski adım düşürülür)
@@ -622,7 +651,7 @@ function positionOnb(){
   // yoksa blok/kat şeritleri altında kalıyor (site switch şikayeti, 2026-07-06)
   const mb=document.getElementById('modeBadge');
   if(mb && seen(mb)){ mb.style.top=top+'px'; top+=mb.offsetHeight+6; }
-  ['blockTabs','floorTabs','parkBar'].forEach(id=>{
+  ['blockTabs','floorTabs','parkBar','amenityBar'].forEach(id=>{
     const e=document.getElementById(id);
     if(!(e && e.style && seen(e))) return;
     if(e.dataset && e.dataset.moved) return;         // kullanıcı sürükledi → otomatik yığından çıkar

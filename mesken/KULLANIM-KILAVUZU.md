@@ -100,8 +100,8 @@ Seçimin `localStorage`'da hatırlanır; varsayılan **Basit**'tir. Bu kılavuzd
 
 Mesken'de ekranı karartıp hedef öğeye spotlight tutan, açıklama kartıyla ilerleyen üç onboarding turu vardır. Her kartta başlık, metin, "n / toplam" sayacı, atlanabilir adımlarda **"Atla"**/**"Turu atla"** düğmesi ve kapat bulunur. İlgili UI etkileşimini yaptığında tur kendiliğinden bir sonraki adıma geçer; bir adımın koşulu tura başlarken zaten sağlanmışsa kart yine görünür ve **"İleri"** düğmesiyle geçilir — hiçbir adım sessizce atlanmaz. Karartma tıklamayı engellemez.
 
-- **Akış Turu (10 adım, kabuk)** — üst başlık çubuğundaki **"Tur"** düğmesiyle başlar; demo modunda (`?demo=1`) ilk ziyarette kendiliğinden açılır. Beş adımlık Mesken akışını uçtan uca gezdirir: proje yükle/çiz → 3B → kamera → render üretimi (Önce/Sonra dahil) → Döşe/pazaryeri. Kamera evresinde karartma kalkar ve kart köşeye çekilir — 3B içindeki kamera mini-turuyla çakışmaz.
-- **Ana tur (13 adım, 2B editör)** — 2B editörün kendi başlık çubuğundaki **"Tur"** düğmesiyle elle başlatılır. Profesyonel moda geçişten planı dışa aktarmaya kadar çizim akışını gezdirir ve **örnek demo projeyi hedef alır**: adım metinleri gerçek hedeflerle konuşur — "TKGM sorgusuna şu koordinatı yapıştır: 41.0804..., ada 2010 parsel 257 (Beşiktaş/Akat)", "8 köşeli L-sınır", "2 blok", "1 daire 2+1 açık mutfak + 2 daire 3+1 ensuite". Basit moddayken Profesyonel gerektiren adımda **"Profesyonel moda geç"** düğmesi gösterir.
+- **Akış Turu (10 adım, kabuk)** — üst başlık çubuğundaki **"Tur"** düğmesiyle başlar; demo modunda (`?demo=1`) ilk ziyarette kendiliğinden açılır. Karşılama ve proje adımlarından sonra sözü 2B editördeki ana tura devreder (kendi kartı o sırada gizlenir), sen 3B'ye geçince kaldığı yerden sürer: 3B → kamera → render üretimi (Önce/Sonra dahil) → Döşe/pazaryeri. Kamera evresinde karartma kalkar ve kart köşeye çekilir — 3B içindeki kamera mini-turuyla çakışmaz. "Tur" düğmesi faz-farkındadır: 2B'de ana tur yarımken ona devreder.
+- **Ana tur (15 adım, 2B editör)** — 2B editörün kendi başlık çubuğundaki **"Tur"** düğmesiyle elle başlatılır; demo akışında kabuk devriyle kendiliğinden açılır. **Örnek demo projeyi sana adım adım kurdurur** ve "bir kez yap, gerisi otomatik" ilkesiyle akar: parseli koordinatla çektirir (ağsız "örnek parselle devam" kısayolu bizim gerçek Akat parselini yükler), Blok A ve Blok B sınırlarını tuvaldeki **soluk hayalet çizgilerin** üstünden köşe köşe çizdirir (kapatınca örneğe hizalar), daire karmasını senin yerine ayarlar, bir duvar çektirtir, bir balkon ekletir (kalanını tamamlar), havuzu poligon aracıyla çizdirip **"Kalan imkanları otomatik yerleştir"** düğmesiyle site imkanlarını indirir, katları gezdirir ve dışa aktarmayla biter. Basit moddayken Profesyonel gerektiren adımda **"Profesyonel moda geç"** düğmesi gösterir.
 - **Kamera 3B mini-turu (6 adım)** — 3B görünümde kamera aracını açtığında kendiliğinden başlar. Kamera yerleştirmeden dış render'a kadar kamera panelini tanıtır; Mesken akışındayken son adımı seni sağ alttaki "Render Kadrajları" düğmesine yönlendirir ve zincir Akış Turu'yla devam eder (ayrıntı Bölüm 8).
 
 <!-- GORSEL 02: ana tur spotlight — ekran karartilmis, "Profesyonel moda gec" adimi vurgulu, aciklama karti "1 / 13" sayaci ve ilerleme cubugu ile -->
@@ -217,7 +217,7 @@ Plan üretildikten sonra araç çubuğundaki araçlarla her ayrıntıyı elle d�
 | **"Parsel"** (Pro) | P | Parsel poligonunu elle çizmek için. |
 | **"Site görünümü"** (Site açıkken) | S | Tüm bloklar parselde; bloğa tıkla = düzenle, sürükle = taşı. |
 | **"Park düzeni"** (otopark katında) | T | Alt çubuk: "Oto"/"Yatay"/"Dikey" yön, "Sıfırla"; tıkla = park yeri ekle/sil, sürükle = taşı, R = yön çevir. |
-| **"Site imkanları"** (parsel/bahçe varken) | I | Alt çubuk: "Yeşil Alan"/"Çocuk Parkı"/"Yüzme Havuzu"/"Süs Havuzu"/"Oturma / Pergola", "Döndür" (R), "Büyüt +"/"Küçült −"; tıkla = ekle/sil, sürükle = taşı; bahçeye yerleşir. |
+| **"Site imkanları"** (parsel/bahçe varken) | I | Alt çubuk: "Yeşil Alan"/"Çocuk Parkı"/"Yüzme Havuzu"/"Süs Havuzu"/"Oturma / Pergola" + "İptal". Tip seçip **sınırını çizersin** — yapı sınırı gibi köşe köşe tıkla, ilk köşeye dönerek kapat; kapanan alan o imkan olur (üçgen havuz serbest). Üstüne tıkla-sürükle = taşı, köşe tutamacı = biçimlendir, hareketsiz tık = sil, Esc = yarım çizimi iptal. |
 | **"Ölçü"** | M | İki noktaya tıkla = aradaki mesafeyi ölç. İlk tıktan sonra imleci izleyen canlı önizleme; ikinci tıkla ölçüm ekranda kalır, yeni tık eskisini siler; Esc = temizle. Noktalar 0,5 m ızgaraya yapışır; ölçüm dışa aktarılan görsele girmez. |
 
 **"Yapı, çekirdek"** aracının tutamaç dili: mavi kare tutamaç boyutlandırır, mavi daire ve artı taşır; turuncu tutamaçlar bina sınırının köşe/kenarlarıdır (kenara tıklayınca yeni köşe açılır). Eleman ekleme/silme sağ tık menüsündendir: **"Yapı elemanı ekle"** → **+ Merdiven** / **+ Asansör** / **+ Yangın merdiveni** / **+ Teknik-şaft**; mevcut bir öğeye sağ tık → sil.
@@ -439,11 +439,11 @@ Her kamerada, konum + yön + lens bilgisinden bir görüş konisi kurulur. Konin
 
 3B'de kamera aracını ilk açtığında kendiliğinden başlar (kartlarda örnek projenin hedefleri de yazar: 7 iç kamera, 3 drone):
 
-1. **"Kamera yerleştir"** — Dock'taki Ekle ile plana iç kamera koy.
+1. **"Kamera yerleştir"** — mesh'e tıklayıp BİR iç kamera koy; ardından karttaki **"Kalan kameraları otomatik yerleştir"** düğmesi örnek projenin 7 iç kamerasını ve 3 drone'unu senin yerine indirir (adım, tam set kurulunca geçer — Mesken akışında render çıktılarının kadrajlarla birebir eşleşmesini bu garanti eder).
 2. **"Açıyı ayarla"** — sürükle ya da Yön ile bakış noktası.
 3. **"Lens seç"** — 16-24-35-50 mm.
 4. **"Drone moduna geç".**
-5. **"Drone kamerası ekle"** — "+ Drone Ekle".
+5. **"Drone kamerası ekle"** — otomatik yerleştirme kullanıldıysa bu iki adım hazır gelir ve İleri ile geçilir.
 6. **"Dış Render"** (zorunlu) — aksiyon "Bitir". Mesken akışındayken (Kamera adımı) bu kart seni sağ alttaki **"Render Kadrajları"** düğmesine yönlendirir — üretim oradan sürer ve Akış Turu devralır; 2B editörü tek başına kullanıyorsan tıklayınca "Dış render başlatılsın mı? … Bu işlem render kredisi harcar" onayı çıkar.
 
 ---
@@ -653,7 +653,7 @@ En altta tek yatay şerit hâlinde iki küçük düğme vardır — **"Daire Tur
 | Ctrl/Cmd+Shift+Z veya Ctrl/Cmd+Y | İleri al | 2B |
 | Esc | Yarım poligonu / menüyü iptal; FPV'den çık | 2B / FPV |
 | Del / Backspace | Balkon modunda hover'daki balkonu sil; mobilyayı sil | 2B / mobilya |
-| R | Park yönü çevir; site imkanı döndür; mobilyayı 15° döndür | 2B / mobilya |
+| R | Park yönü çevir; mobilyayı 15° döndür | 2B / mobilya |
 | Shift + duvar sürükleme | Aynı hizadaki tüm parçaları birlikte taşı | 2B |
 | Çift tık | Kapı/Pencere modunda ekle/sil | 2B |
 | Sağ tık | Oda bağlam menüsü | 2B |
