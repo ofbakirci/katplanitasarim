@@ -478,6 +478,11 @@ const ONB_STEPS = [
     body:'Site imkanları aracını (ağaç ikonu) aç, üstteki dock\'tan Havuz tipini seç ve hayalet kutunun üstünden köşe köşe bir poligon çiz (üçgen bile olur). Örnek sitede '+onbImkanOzet()+' var; kalanını tek düğmeyle tamamlarım.',
     target:{type:'dom', sel:'#tAmenity'},
     action:{ label:'Kalan imkanları otomatik yerleştir', run:function(){ onbPlaceRemainingImkanlar(); } },
+    /* IS 5 — SIRA: aksiyon dugmesi ("Kalan imkanlari otomatik yerlestir") giriste GORUNMEZ; once
+       kullanici #tAmenity aracini acip hayalet ustunden BIR imkan cizmeli (amenitiesLen>base).
+       Ancak ilk imkan konunca kartta belirir (onbActionReadyFor + onbTick tazeleme). Aksi halde
+       kullanici araca hic dokunmadan autofill'i tikliyordu (canli /demo raporu). */
+    actionAfterFirst:true,
     baseline:function(ctx){ return ctx.amenitiesLen(); },
     /* HEDEFLI: tum imkanlar (9) yerlesti mi — aksiyonla ya da elle. Skippable (takilmaz). */
     check:function(ctx){ return ctx.amenitiesLen() >= 9; } },
@@ -804,6 +809,7 @@ let onbExtRenderFlag = false;    // [data-v3d="extrender"] tiklandi (kamera3d ad
 let onbUI       = null;          // {svg,bg,hole,holeC,dim,card}
 let onbWired    = false;         // resize/scroll dinleyicisi bir kez
 let onbToastTimer = null;        // gecici tost zamanlayicisi
+let onbActionReady = false;      // IS 5: actionAfterFirst adiminda aksiyon dugmesi gorunur mu (ilk imkan konuldu mu)
 
 function onbBrowser(){ return typeof window!=='undefined' && typeof window.innerWidth==='number' && typeof document!=='undefined'; }
 
@@ -903,6 +909,20 @@ function onbStepBody(step, inIframe){
   if(step && inIframe && step.bodyIframe) return step.bodyIframe;
   return (step && step.body) || '';
 }
+/* IS 5 — AKSIYON DUGMESI GORUNURLUK KAPISI: aksiyonu (or. imkan-koy "Kalan imkanlari otomatik
+   yerlestir") render etmeli miyiz? label + actionIframeOnly kosulu + actionAfterFirst (ilk eylem
+   yapilmadan gorunmez). actionAfterFirst adiminda adimin baseline'ina gore buyume beklenir
+   (imkan-koy: amenitiesLen>giris-tabani = en az bir imkan cizildi). Baseline'siz actionAfterFirst
+   -> kosulsuz true (savunmaci). */
+function onbActionReadyFor(s){
+  if(!s || !s.action || !s.action.label) return false;
+  if(s.actionIframeOnly && !onbInIframe()) return false;
+  if(!s.actionAfterFirst) return true;
+  if(!s.baseline || !onbTour) return true;
+  let cur, base=onbBases[onbIdx];
+  try{ cur=s.baseline(onbTour.ctx()); }catch(e){ return false; }
+  return (typeof cur==='number' && typeof base==='number') ? cur>base : true;
+}
 function onbRenderCard(){
   if(!onbUI || !onbUI.card || !onbTour) return;
   const s=onbTour.steps[onbIdx]; if(!s) return;
@@ -912,8 +932,9 @@ function onbRenderCard(){
      (kullanici elle gecer). Oncelik: paused > gate(İleri) > action. */
   const gated = !onbPaused && !!onbGate[onbIdx];
   /* actionIframeOnly: aksiyon dugmesi (or. export 'Bitir') YALNIZ gomulu iframe'de gorunur;
-     standalone KPTA'da adim mevcut davranisini korur (export: exportClicked ile oto-bitis). */
-  const actionOK = s.action && s.action.label && (!s.actionIframeOnly || onbInIframe());
+     standalone KPTA'da adim mevcut davranisini korur (export: exportClicked ile oto-bitis).
+     actionAfterFirst (imkan-koy): aksiyon ancak ilk imkan cizilince gorunur (IS 5). */
+  const actionOK = onbActionReadyFor(s);
   let btns='';
   if(s.skippable && !gated) btns += '<button type="button" class="onbSkip" data-onb="skip">Atla</button>';
   if(onbPaused) btns += '<button type="button" class="onbAct onbNext" data-onb="pro">Profesyonel moda geç</button>';
@@ -1118,6 +1139,7 @@ function onbGoto(idx){
   onbGate[onbIdx]=entryOk;
   onbSet('onb.'+onbTour.id+'.step', String(onbIdx));
   onbPaused = !!s.needsPro && !onbLiveCtx().modePro();
+  try{ onbActionReady=onbActionReadyFor(s); }catch(e){ onbActionReady=false; }   // IS 5: aksiyon kapisi giris durumu
   onbRenderCard();
   onbScrollTargetIntoView();   // IS 3: hedef viewport disindaysa ortala (adim basina bir kez)
   onbReposition();
@@ -1165,6 +1187,12 @@ function onbTick(){
   const nowPaused = !!s.needsPro && !onbLiveCtx().modePro();
   if(nowPaused!==onbPaused){ onbPaused=nowPaused; onbRenderCard(); }
   if(onbPaused) return;                       // Pro gerekli ama kapali -> ilerleme yok
+  /* IS 5: actionAfterFirst adiminda (imkan-koy) ilk imkan cizilince aksiyon dugmesi belirsin.
+     Durum degisince karti tazele (aksi halde autofill giriste gorunur ya da hic gelmez). */
+  if(s.action && s.actionAfterFirst){
+    let ar=false; try{ ar=onbActionReadyFor(s); }catch(e){}
+    if(ar!==onbActionReady){ onbActionReady=ar; onbRenderCard(); }
+  }
   /* GIRIS-SAGLANMIS adim -> İleri bekliyor: oto-ilerleme YOK (kullanici İleri'ye basacak). */
   if(onbGate[onbIdx]){ onbReposition(); return; }
   /* ARDISIK KAPI (adim adim): mevcut adim saglandiysa BIR sonraki adima gec. onbGoto o
@@ -1216,6 +1244,18 @@ function onbLaunchTour(tour, reset){
 }
 /* geriye-uyum sarmalayici: eski cagri yollari 'ana'yi baslatir */
 function onbLaunch(reset){ onbLaunchTour(onbTourById('ana'), reset); }
+/* IS 6 — TUR DUGMESI = KALDIGIN YERDEN: #onbStart (ve kabuk Tur devri) motor 'ana' turunu
+   RESUME-farkinda baslatir. Yarim (active) ya da kapatilmis (dismissed) + ilerleme var (step>0)
+   + ayni surum -> depolanmis adimdan surdur (onbLaunchTour false: idx=max(storedStep,firstUnsatisfied)).
+   Taze / done / surum-bump -> bastan (1/16). "kullanici Tur'a basti = devam istiyor" (dismissed dahil). */
+function onbRelaunch(){
+  const tour=onbTourById('ana'); if(!tour) return;
+  const st=onbStored(tour);
+  if((st.status==='active' || st.status==='dismissed') && st.v===tour.version && st.step>0)
+    onbLaunchTour(tour, false);   // resume: kaldigin yer
+  else
+    onbLaunchTour(tour, true);    // taze / done / surum-bump: bastan
+}
 
 function onbAutoStart(){
   const tour=onbTourById('ana');
@@ -1242,7 +1282,7 @@ function onbWatchTick(){
 
 function onbBoot(){
   onbMigrateLegacy();
-  const b=onbEl('onbStart'); if(b && b.addEventListener) b.addEventListener('click', function(){ onbLaunch(true); });
+  const b=onbEl('onbStart'); if(b && b.addEventListener) b.addEventListener('click', function(){ onbRelaunch(); });   // IS 6: kaldigin yerden (resume-farkinda)
   if(typeof document!=='undefined' && document.addEventListener){
     document.addEventListener('click', function(e){                 // delege tamamlanma tiklamalari
       const t=(e.target && e.target.closest) ? e.target.closest('#svgBtn,#impBtn,[data-v3d="extrender"]') : null;
@@ -1286,6 +1326,8 @@ var ONB = {
   kamCtx: onbKamCtx,
   launch: onbLaunch,
   launchTour: onbLaunchTour,
+  relaunch: onbRelaunch,            // IS 6: kaldigin yerden (resume-farkinda)
+  actionReadyFor: onbActionReadyFor,// IS 5: aksiyon dugmesi gorunurluk kapisi
   stop: onbStop
 };
 

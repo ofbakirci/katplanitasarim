@@ -3,8 +3,16 @@
    Ne yapar: Mesken kabuk karsilamasindan (Akis Turu) baslayip 2B editordeki 16 adimlik ANA
    TUR'u GERCEK tiklarla yurutur (parsel, Blok A/B cizimi, yerlesim, duvar, balkon, site imkanlari,
    kat gezme, export), sonra 3B kopru -> kamera3d mini-tur -> render galerisi -> Dose adimlarini
-   surer. Beklenen: 55 assert gecti, 0 pageerror, 0 console.error (temiz cikis kodu 0).
+   surer. Beklenen: TUM assert'ler gecti, 0 pageerror, 0 console.error (temiz cikis kodu 0).
    Gercek tiklar: DOM = el.click(); tuval = mousedown/mouseup dispatch (client koord ghost DOM'dan).
+
+   REV3 YENI ASSERT'LER (impl raporu 7 kalem):
+     (a) kabuk kamera evresi ATLANMADI — 'Kamera koy' karti gorundu + kullanici tiki olmadan render'a gecilmedi.
+     (b) angleNudge/extNudge dialoglari hands-on turda HIC gorunmedi (flowTourActive suppress; MutationObserver).
+     (c) 3B evresinde doseme tadi — dose3d ('Mobilyayi dene') + malzeme3d ('Ic malzeme') kabuk kartlari gorundu.
+     (d) imkan-koy: 'Kalan imkanlari otomatik yerlestir' aksiyonu havuz cizilmeden KARTTA YOK, cizildikten sonra VAR.
+     (e) Uret ciktilari paket-kokenli — karta dusen cam img naturalWidth==1600 + demo-assets/cam1.jpg 300KB+ (yeni set; eski 199KB DEGIL).
+     (f) Tur dugmesi: motor turunu 5. adimda kapat -> #mskTourBtn -> stored adimdan RESUME (5/16, 1/16 DEGIL).
 
    GEREKSINIMLER:
      - puppeteer-core:  `npm i puppeteer-core`  (repo kokune ya da tools/ altina)
@@ -176,6 +184,46 @@ async function shot(page, tag){
   return name;
 }
 
+// (b) NUDGE GOZETLEYICI — angleNudge/extNudge dialoglari PARENT document.body'ye eklenir; tur akisinda
+//   flowTourActive() bunlari bastirir. MutationObserver ekleme aninda id'yi yakalar; getNudgeSeen okur.
+async function installNudgeObserver(page){
+  try{
+    await page.evaluate(()=>{
+      if(window.__nudgeObs) return;
+      window.__nudgeSeen = [];
+      const hit=(el)=>{ try{ if(el && el.id && (el.id==='angleNudge'||el.id==='extNudge')) window.__nudgeSeen.push(el.id); }catch(e){} };
+      const scan=(n)=>{ if(!n || n.nodeType!==1) return; hit(n);
+        try{ if(n.querySelectorAll) n.querySelectorAll('#angleNudge,#extNudge').forEach(hit); }catch(e){} };
+      const mo=new MutationObserver(function(muts){ for(const m of muts){ for(const n of m.addedNodes){ scan(n); } } });
+      mo.observe(document.body, {childList:true, subtree:true});
+      window.__nudgeObs = mo;
+    });
+  }catch(e){}
+}
+async function getNudgeSeen(page){
+  try{ return await page.evaluate(()=>Array.isArray(window.__nudgeSeen)?window.__nudgeSeen.slice():[]); }catch(e){ return ['<oku-hata>']; }
+}
+
+// (f) TUR DUGMESI RESUME — motor turu 5. adimdayken: KAPAT (onbClose) -> #mskTourBtn -> onbRelaunch resume.
+//   Cizilen Blok A geometrisi korunur; resume ayni adimi (5/16) geri getirir -> ana akis kesintisiz surer.
+async function resumeScenario(page, f){
+  const c0 = await onbCard(f); const p0 = progN(c0.prog); const before=(p0&&p0.n)||0;
+  (before>=5) ? ok('(f) resume-giris: motor '+(c0.prog||'?')+' (5. adim)') : bad('(f) resume giris 5/16','prog='+c0.prog);
+  // motor turunu KAPAT — kartin X'i (data-onb="close" -> onbStop('dismissed'))
+  await onbClick(f, 'close'); await sleep(500);
+  const st = await f.evaluate(()=>{ try{ return localStorage.getItem('onb.ana.status'); }catch(e){ return null; } });
+  const gone = await f.evaluate(()=>!document.querySelector('.onbCard'));
+  (st==='dismissed' && gone) ? ok('(f) motor turu KAPATILDI (dismissed + kart gitti)') : bad('(f) motor turu kapatildi','status='+st+' cardGone='+gone);
+  // #mskTourBtn (kabuk baslik) -> demoHandsOnResumeTour -> #onbStart -> onbRelaunch (resume-farkinda)
+  const clicked = await clickParent(page, '#mskTourBtn');
+  clicked ? ok('(f) #mskTourBtn tiklandi (kaldigin yerden)') : bad('(f) #mskTourBtn','buton yok');
+  // motor karti geri gelsin
+  const back = await waitFor(async()=>{ const c=await onbCard(f); return (c.visible && progN(c.prog))?c:null; }, {timeout:12000, desc:'(f) motor karti resume'}).catch(()=>null);
+  const p1 = back ? progN(back.prog) : null;
+  (p1 && p1.n>=5) ? ok('(f) TUR DUGMESI RESUME: '+back.prog+' — stored adimdan surdu (1/16 DEGIL)', 'once='+before+' sonra='+p1.n) : bad('(f) resume stored adimdan (1/16 degil)','sonra='+(back?back.prog:'kart yok'));
+  await sleep(300);
+}
+
 // ============ MAIN ============
 (async()=>{
   const browser = await puppeteer.launch({
@@ -197,6 +245,7 @@ async function shot(page, tag){
 
   const f = await waitEngineFrame(page);
   ok('engineFrame yuklendi');
+  await installNudgeObserver(page);   // (b) angleNudge/extNudge hic cikmasin diye izle
   await sleep(1500);
 
   if(PKG){ await runPkg(page, f); }
@@ -222,13 +271,13 @@ async function runHandson(page, f){
   // ---- PHASE 1: shell welcome + proje ----
   let sc = await waitFor(async()=>{ const c=await shellCard(page); return c.visible?c:null; }, {timeout:15000, desc:'shell welcome'});
   const p1=progN(sc.prog);
-  (p1 && p1.n===1 && p1.total===10) ? ok('kabuk welcome 1/10', sc.title) : bad('kabuk welcome 1/10', 'gorulen='+sc.prog+' '+sc.title);
+  (p1 && p1.n===1 && p1.total===12) ? ok('kabuk welcome 1/12', sc.title) : bad('kabuk welcome 1/12', 'gorulen='+sc.prog+' '+sc.title);
   await shot(page,'01-welcome');
 
   await shellClickNext(page); await sleep(600);
   sc = await shellCard(page);
   const p2=progN(sc.prog);
-  (p2 && p2.n===2) ? ok('kabuk proje 2/10', sc.title) : bad('kabuk proje 2/10', 'gorulen='+sc.prog);
+  (p2 && p2.n===2 && p2.total===12) ? ok('kabuk proje 2/12', sc.title) : bad('kabuk proje 2/12', 'gorulen='+sc.prog);
   await shot(page,'02-proje');
 
   // click İleri on proje -> handsonHandoff -> shell hidden + motor tour appears
@@ -287,6 +336,11 @@ async function runHandson(page, f){
   (specsA.n===1 && specsA.has3 && !specsA.has2acik) ? ok('FIX1 Blok A unitSpecs TEK daire 3+1 ensuite', JSON.stringify(specsA)) : bad('FIX1 Blok A unitSpecs tek 3+1', JSON.stringify(specsA));
   // FIX3: Daireler sekmesi aktif (kullanici otomatik karmayi gorur)
   (await daireTabActive(f)) ? ok('FIX3 Daireler sekmesi aktif (Blok A yerlesim)') : bad('FIX3 Daireler sekmesi aktif (A)', 'aktif degil');
+
+  // (f) TUR DUGMESI RESUME — motor turunu 5. adimda KAPAT -> #mskTourBtn -> stored adimdan sürer (5/16, 1/16 DEGIL).
+  //   Kapatma sonrasi geometri korunur, resume ayni adimi geri getirir -> ana akis kesintisiz devam eder.
+  await resumeScenario(page, f);
+  await shot(page,'06b-resume');
 
   // yerlesim: click Yerleşimi Oluştur (#genBtn)
   await engClick(f, '#genBtn'); await sleep(1500);
@@ -360,6 +414,11 @@ async function runHandson(page, f){
   else { const c=await onbCard(f); bad('13/16 imkan-koy','kart='+c.prog); }
   await shot(page,'14-imkan');
 
+  // (d) SIRA: giriste (havuz cizilmeden) 'Kalan imkanlari otomatik yerlestir' aksiyonu KARTTA YOK.
+  const cardPre = await onbCard(f);
+  const hasActPre = cardPre.btns.some(b=>b.act==='act');
+  (!hasActPre) ? ok('(d) imkan-koy giris: autofill aksiyonu YOK (once cizdir)', 'btns='+cardPre.btns.map(b=>b.act).join(',')) : bad('(d) imkan-koy giris autofill gizli','btns='+JSON.stringify(cardPre.btns));
+
   // imkan-koy: open amenity tool, select pool, draw triangle over pool ghost, then auto-fill
   await engClick(f, '#tAmenity'); await sleep(400);
   await engClick(f, '#amenityBar [data-am="pool"]'); await sleep(300);
@@ -372,6 +431,9 @@ async function runHandson(page, f){
     const amN = await f.evaluate(()=>{ try{ return (typeof amenities!=="undefined"&&amenities?amenities.length:0)||0; }catch(e){ return -1; } });
     (amN>=1) ? ok('havuz poligonu cizildi', 'amenities='+amN) : bad('havuz cizildi','amenities='+amN);
   } else { bad('havuz ghost box okundu','yok'); }
+  // (d) SIRA: ilk imkan cizilince aksiyon dugmesi KARTTA BELIRIR (onbTick tazeler; poll).
+  const actNow = await waitFor(async()=>{ const c=await onbCard(f); return c.btns.some(b=>b.act==='act')?c:null; }, {timeout:6000, desc:'(d) autofill aksiyonu belirdi'}).catch(()=>null);
+  actNow ? ok('(d) imkan-koy: ilk havuzdan sonra autofill aksiyonu VAR', 'btns='+actNow.btns.map(b=>b.act).join(',')) : bad('(d) autofill aksiyonu belirmedi','(ilk imkandan sonra act yok)');
   // auto-fill remaining
   await onbClick(f,'act'); await sleep(600);
   const amFull = await f.evaluate(()=>{ try{ return (typeof amenities!=="undefined"&&amenities?amenities.length:0)||0; }catch(e){ return -1; } });
@@ -435,25 +497,32 @@ async function runPhase3(page, f){
   (units>0) ? ok('demo-plan yuklendi units>0','units='+units) : bad('demo-plan units>0','units='+units);
   await shot(page,'18-3d');
 
-  // shell tour resume: should show a card again (in3d/go3d). advance via İleri until kamera step CTA
-  await sleep(1200);
-  let guard=0;
-  while(guard++<8){
+  // shell tour resume: card returns (in3d) -> İleri ile in3d/dose3d/malzeme3d -> kamera (check adimi, İleri yok).
+  //   (c) DOSEME TADI: dose3d ('Mobilyayi dene') + malzeme3d ('Ic malzeme') kartlari akista gorunur.
+  await sleep(1400);
+  let guard=0; const seenTitles=[];
+  while(guard++<10){
     const s=await engStep(page);
     const sc=await shellCard(page);
-    // if at kamera step and step===2, CTA target is #ctaBtn -> click cta to go to camera
-    if(s && s.step===2){
-      // click İleri on shell card if present (go3d/in3d), else click cta
+    if(sc.visible && sc.title && seenTitles[seenTitles.length-1]!==sc.title) seenTitles.push(sc.title);
+    if(s && s.step===2 && sc.visible){
       const clickedNext = await shellClickNext(page);
-      if(!clickedNext) break;
+      if(!clickedNext) break;      // kamera karti = check adimi -> "Adimi yapin" (İleri yok) -> dur
       await sleep(700);
     } else break;
   }
   await shot(page,'19-shell-resume');
+  log('   [kabuk kart dizisi] '+JSON.stringify(seenTitles));
+  // (c) doseme tadi kartlari gorundu mu
+  const sawDose = seenTitles.some(t=>/Mobilyay/i.test(t)), sawMat = seenTitles.some(t=>/(İç|Ic)\s*malzeme/i.test(t));
+  (sawDose && sawMat) ? ok('(c) 3B doseme tadi: dose3d + malzeme3d kartlari gorundu', seenTitles.join(' > ')) : bad('(c) doseme tadi kartlari','sawDose='+sawDose+' sawMat='+sawMat+' dizi='+JSON.stringify(seenTitles));
+  // (a) part1: kabuk 'Kamera koy' karti gorundu (atlanmadi) ve render'a (step>=4) DUSMEDI.
+  const kcard = await shellCard(page); const sCam = await engStep(page);
+  (kcard.visible && /Kamera koy/.test(kcard.title||'') && sCam && sCam.step<4)
+    ? ok('(a) kabuk kamera karti gorundu, atlanMADI', (kcard.prog||'')+' step='+(sCam&&sCam.step)) : bad('(a) kamera karti gorundu/atlanmadi','card='+JSON.stringify(kcard)+' step='+JSON.stringify(sCam));
 
-  // Now advance to camera: CTA at step 2 -> angleNudge dialog -> "Otomatik Açı ile Devam"
+  // Kamera'ya gec: step 2 CTA (Kamera Yerlestir). IS 4: tur akisinda angleNudge CIKMAZ (assert b global dogrular).
   await clickParent(page, '#ctaBtn'); await sleep(500);
-  // angle nudge dialog
   const anGo = await page.evaluate(()=>{ const b=document.getElementById('anGo'); if(b){ b.click(); return true; } return false; });
   await sleep(1500);
   await waitFor(async()=>{ const s=await engStep(page); return (s&&s.step>=3)?s:null; }, {timeout:20000, desc:'camera step>=3'});
@@ -481,13 +550,15 @@ async function runPhase3(page, f){
   (cam.ex===3) ? ok('ext==3','ex='+cam.ex) : bad('ext==3','ex='+cam.ex);
   await shot(page,'21-cameras');
 
-  // advance through kamera3d tour to render handoff: click İleri/act/skip until render-isaret handoff
-  // simplest: click CTA (Render Kadrajları) at step 3 -> extNudge? no, cameras placed so step3Proceed goes.
+  // (a) part2: kameralar yerlesti ama render'a (step 4) HENUZ gecilmedi — kullanici CTA tiki bekleniyor.
+  const sPreRender = await engStep(page);
+  (sPreRender && sPreRender.step===3) ? ok('(a) kameralar konuldu, render OTO-gecilmedi (step=3)', 'step='+sPreRender.step) : bad('(a) render oto-gecilmedi','step='+JSON.stringify(sPreRender));
+  // advance through kamera3d tour to render handoff: click CTA (Render Kadrajları) at step 3.
   await clickParent(page, '#ctaBtn'); await sleep(600);
-  // possible extNudge dialog (no drone? we have 3) -> ex>0 so step3Go directly. else handle.
+  // IS 4: tur akisinda extNudge (drone hatirlatmasi) CIKMAZ; enGo yoksa no-op (assert b global dogrular).
   const enGo = await page.evaluate(()=>{ const b=document.getElementById('enGo'); if(b){ b.click(); return true; } return false; });
   await waitFor(async()=>{ const s=await engStep(page); return (s&&s.step>=4)?s:null; }, {timeout:20000, desc:'render step>=4'});
-  ok('render kadraj galerisi (step 4)');
+  ok('(a) render kadraj galerisi (step 4) — CTA tiki ile gecildi');
   await shot(page,'22-render-gallery');
 
   // gallery: Üret -> onay dialog -> DEMO interception
@@ -512,6 +583,26 @@ async function runPhase3(page, f){
   const okImgs = imgs.filter(c=>/cam[1-7]\.jpg|ext[1-3]\.jpg|plan-[ab]\.jpg|plan\.jpg/.test(c.res));
   const hasCam = imgs.some(c=>/cam[1-7]\.jpg/.test(c.res)), hasExt = imgs.some(c=>/ext[1-3]\.jpg/.test(c.res)), hasPlan = imgs.some(c=>/plan(-[ab])?\.jpg/.test(c.res));
   (okImgs.length>=3 && hasCam) ? ok('DEMO interception kartlari (cam/ext/plan)','n='+okImgs.length+'/'+imgs.length+' cam='+hasCam+' ext='+hasExt+' plan='+hasPlan) : bad('DEMO interception','imgs='+JSON.stringify(imgs.slice(0,6)));
+
+  // (e) PAKET-KOKENLI: karta dusen cam img'i gercekten yukle -> naturalWidth==1600 + demo-assets/cam1.jpg 300KB+ (yeni set).
+  const camCard = imgs.find(c=>/cam[1-7]\.jpg/.test(c.res));
+  const eInfo = await page.evaluate(async (cardUrl)=>{
+    async function probe(url){
+      let size=-1, nat=-1;
+      try{ const r=await fetch(url,{cache:'no-store'}); const b=await r.blob(); size=b.size; }catch(e){ size=-2; }
+      nat = await new Promise(res=>{ try{ const im=new Image(); im.onload=()=>res(im.naturalWidth||0); im.onerror=()=>res(-1); im.src=url; }catch(e){ res(-1); } });
+      return {url, size, nat};
+    }
+    const base='/mesken/demo-assets/cam1.jpg';
+    const out={ base:await probe(base) };
+    if(cardUrl) out.card=await probe(cardUrl);
+    return out;
+  }, camCard ? camCard.res : null);
+  const baseOK = eInfo.base && eInfo.base.nat===1600 && eInfo.base.size>=300000;   // yeni set 307KB+; eski 199KB DEGIL
+  baseOK ? ok('(e) demo-assets/cam1.jpg paket-kokenli (nat=1600, >=300KB)', 'nat='+eInfo.base.nat+' size='+eInfo.base.size) : bad('(e) cam1.jpg paket-kokenli','base='+JSON.stringify(eInfo.base));
+  const cardImgOK = eInfo.card && eInfo.card.nat===1600 && eInfo.card.size>=300000;
+  (camCard && cardImgOK) ? ok('(e) karta dusen cam img naturalWidth==1600 + 300KB+', (camCard.res)+' nat='+eInfo.card.nat+' size='+eInfo.card.size) : bad('(e) karta dusen cam img 1600px/300KB','card='+JSON.stringify(eInfo.card)+' url='+(camCard?camCard.res:'yok'));
+
   await clickParent(page, '#ctaBtn'); await sleep(1000);
   const step5 = await waitFor(async()=>{ const s=await engStep(page); return (s&&s.step>=5)?s:null; }, {timeout:15000, desc:'dose step5'}).catch(()=>null);
   step5 ? ok('Döşe adimi (step 5)') : bad('Döşe step5', 'kalindi');
@@ -519,6 +610,10 @@ async function runPhase3(page, f){
   // marketplace panel present
   const mkt = await page.evaluate(()=>!!document.getElementById('mktCtx') || !!document.querySelector('.mkt-row'));
   mkt ? ok('pazaryeri paneli') : bad('pazaryeri paneli','yok');
+
+  // (b) angleNudge/extNudge dialoglari tur boyunca HIC gorunmedi (flowTourActive suppress).
+  const nudges = await getNudgeSeen(page);
+  (nudges.length===0) ? ok('(b) angleNudge/extNudge tur boyunca HIC cikmadi') : bad('(b) nudge dialoglari cikti','gorulen='+JSON.stringify(nudges));
 }
 
 // ============ helpers needing engine internals ============

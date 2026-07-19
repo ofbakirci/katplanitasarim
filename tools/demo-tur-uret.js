@@ -155,23 +155,40 @@ function dataUriToBuffer(uri) {
 function emitAssets(pkg, pkgPath, outDir) {
   const r = pkg.renders || {};
   const written = [];
+  // IS 7 — TUM "Uret" gorselleri paketten 1600px q80 UNIFORM. Idempotent: her cagride kaynak
+  //   paketin FULL-RES buffer'indan sips -Z 1600 (en uzun kenar 1600'e sigdir; UPSCALE ETMEZ) +
+  //   formatOptions 80 -> deterministik cikti (onceki diski dikkate almaz). sips yoksa (darwin disi)
+  //   ham buffer + uyari (idempotentlik yalniz macOS'ta garanti; jeneratorun tasarim ortami macOS).
+  const IMG_MAX = 1600, IMG_Q = 80;
+  const cp = require('child_process');
+  const resizeJpeg = (fp) => {
+    try {
+      cp.execFileSync('sips', ['-Z', String(IMG_MAX), '-s', 'format', 'jpeg', '-s', 'formatOptions', String(IMG_Q), fp], { stdio: 'ignore' });
+      return true;
+    } catch (e) {
+      console.error('UYARI: sips calistirilamadi (ham buffer birakildi) ->', path.basename(fp), (e && e.message) || e);
+      return false;
+    }
+  };
   const writeImg = (render, name) => {
     if (!render || !render.image) { console.error('UYARI: render bulunamadi ->', name); return; }
     const buf = dataUriToBuffer(render.image);
     const fp = path.join(outDir, name);
     fs.writeFileSync(fp, buf);
-    written.push({ name, bytes: buf.length });
+    resizeJpeg(fp);                                   // 1600px q80 UNIFORM (sips)
+    written.push({ name, bytes: fs.statSync(fp).size });
   };
-  // cam7 = 7. ic render (id cam7 / index 6). cam1..6 demo-assets'te ZATEN mevcut.
-  const int = r.interior || [];
-  const cam7 = int.find((x) => x.id === 'cam7') || int[6];
-  writeImg(cam7, 'cam7.jpg');
-  // dis renderlar ext1..extN -> ext{N}.jpg (id'ye gore)
+  // IC kameralar: cam1..camN (id'ye gore; id yoksa index+1). Onceden yalniz cam7 yaziliyordu -> artik HEPSI.
+  (r.interior || []).forEach((c, i) => {
+    const name = (c.id && /^cam\d+$/.test(c.id)) ? c.id + '.jpg' : ('cam' + (i + 1) + '.jpg');
+    writeImg(c, name);
+  });
+  // DIS (drone) renderlari ext1..extN -> ext{N}.jpg (id'ye gore)
   (r.exterior || []).forEach((e, i) => {
     const name = (e.id && /^ext\d+$/.test(e.id)) ? e.id + '.jpg' : ('ext' + (i + 1) + '.jpg');
     writeImg(e, name);
   });
-  // plan renderlari: block 0 -> plan-a.jpg, block 1 -> plan-b.jpg (block/name'e gore)
+  // PLAN renderlari: block 0 -> plan-a.jpg, block 1 -> plan-b.jpg (block/name'e gore)
   (r.plans || []).forEach((p, i) => {
     let suffix = null;
     if (p.name) suffix = String(p.name).toLowerCase();
@@ -179,6 +196,10 @@ function emitAssets(pkg, pkgPath, outDir) {
     else suffix = String.fromCharCode(97 + i);
     writeImg(p, 'plan-' + suffix + '.jpg');
   });
+  // TEKIL plan fallback -> plan.jpg (kabuk demoPlanAsset fallback'i: DEMO_ASSETS+'plan.jpg').
+  //   renders.plan (tekil) = son bloğun plani; yoksa son plans[] kaydina dus.
+  const singlePlan = r.plan || (r.plans || [])[(r.plans || []).length - 1];
+  writeImg(singlePlan, 'plan.jpg');
 
   // demo-plan.json (minified)
   const plan = buildPlan(pkg);

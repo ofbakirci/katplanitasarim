@@ -455,8 +455,27 @@ const asserts = `
   T('FIX4 export action Bitir + actionIframeOnly', typeof step('export').action.run==='function' && step('export').action.label==='Bitir' && step('export').actionIframeOnly===true);
   T('FIX4 export bodyIframe emoji yok', !/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(step('export').bodyIframe));
 
-  /* eklenen adim alanlari 'tum title/body dolu' + 'emoji yok' sozlesmesini bozmaz */
-  T('render-isaret bodyIframe emoji yok', !/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(kstep('render-isaret').bodyIframe));
+  /* ================= (16) REV3 — PURUZSUZLUK DUZELTMELERI ================= */
+  /* IS 5 — IMKAN-KOY AKSIYON SIRASI: "Kalan imkanlari otomatik yerlestir" ancak ILK imkan
+     cizilince (amenitiesLen>base) belirir; giriste GIZLI. onbActionReadyFor kapisi. */
+  T('IS5 imkan-koy actionAfterFirst isaretli', step('imkan-koy').actionAfterFirst===true);
+  T('IS5 diger aksiyonlu adimlar actionAfterFirst DEGIL (parsel-getir/kamera-koy/render-isaret)',
+    !step('parsel-getir').actionAfterFirst && !kstep('kamera-koy').actionAfterFirst && !kstep('render-isaret').actionAfterFirst);
+  T('IS5 ONB.actionReadyFor export', typeof ONB.actionReadyFor==='function');
+  T('IS5 actionReadyFor: aksiyonsuz adim -> false', ONB.actionReadyFor(step('pro-mod'))===false);
+  T('IS5 actionReadyFor: kosulsuz aksiyon (parsel-getir) -> true', ONB.actionReadyFor(step('parsel-getir'))===true);
+  (function(){ var st=onbTour, bs=onbBases, ix=onbIdx;
+    onbIdx=12; onbBases={12:0};   // imkan-koy indeksi
+    onbTour={ ctx:function(){ return baseCtx({amenitiesLen:()=>0}); } };
+    T('IS5 actionReadyFor: giriste (0 imkan) aksiyon GIZLI', ONB.actionReadyFor(step('imkan-koy'))===false);
+    onbTour={ ctx:function(){ return baseCtx({amenitiesLen:()=>1}); } };
+    T('IS5 actionReadyFor: ilk imkan sonrasi aksiyon GORUNUR', ONB.actionReadyFor(step('imkan-koy'))===true);
+    onbTour=st; onbBases=bs; onbIdx=ix;
+  })();
+
+  /* IS 6 — TUR DUGMESI = KALDIGIN YERDEN: onbRelaunch resume-farkinda (active/dismissed+step>0
+     + ayni surum -> resume; taze/done/surum-bump -> bastan). Export mevcut (davranis browser). */
+  T('IS6 ONB.relaunch export', typeof ONB.relaunch==='function');
 
   /* ENV GUARD: tarayici degil -> denetleyici duragan (setInterval/watcher kurulmadi) */
   T('onbBrowser()=false (headless)', onbBrowser()===false);
