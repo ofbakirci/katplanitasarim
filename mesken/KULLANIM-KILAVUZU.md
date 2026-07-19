@@ -43,6 +43,8 @@ Akış beş adımdır ve hep aynı sırayı izler:
 | 5 | Döşe | Üretilen render'ları toplar, dışa aktarırsın | **"Planı Dışa Aktar"** |
 
 <!-- GORSEL 01: adim-1 genel ekran — sol panel Bina sekmesi acik + uretilmis kat plani tuvalde + panel altinda denetim ozeti; ust seritte 5 adimlik akis gorunur -->
+![Adım 1 genel ekran: Bina sekmesi, üretilmiş kat planı ve denetim özeti](kilavuz-gorsel/gorsel-01-genel-editor.jpg)
+*Adım 1 — üst şeritte beş adımlık akış, solda Bina sekmesi, tuvalde üretilmiş plan, sağda Daire Tablosu ve altta "1 sorun · 4 bilgi · 22 tamam" denetim özeti.*
 
 > **Kredisiz mi, ücretli mi?**
 > Mesken'in neredeyse tamamı **kredisiz** çalışır: plan çizimi, mevzuat denetimi, 3B görünüm, kamera yerleştirme, malzeme ve mobilya döşeme, 3B görünümü PNG olarak indirme, kadraj küçük görselleri ve "kendi-açı" önizlemeler — hepsi tarayıcının içinde, hiçbir ücret çıkarmadan üretilir.
@@ -105,6 +107,8 @@ Mesken'de ekranı karartıp hedef öğeye spotlight tutan, açıklama kartıyla 
 - **Kamera 3B mini-turu (6 adım)** — 3B görünümde kamera aracını açtığında kendiliğinden başlar. Kamera yerleştirmeden dış render'a kadar kamera panelini tanıtır; Mesken akışındayken son adımı seni sağ alttaki "Render Kadrajları" düğmesine yönlendirir ve zincir Akış Turu'yla devam eder (ayrıntı Bölüm 8).
 
 <!-- GORSEL 02: ana tur spotlight — ekran karartilmis, "Profesyonel moda gec" adimi vurgulu, aciklama karti "1 / 13" sayaci ve ilerleme cubugu ile -->
+![Ana tur: "Profesyonel moda geç" adımı, 1/16 sayacı](kilavuz-gorsel/gorsel-02-ana-tur-spotlight.jpg)
+*Ana turun ilk adımı: ekran kararır, "Profesyonel moda geç" adımı vurgulanır; kart "1 / 16" sayacı ve ilerleme çubuğu ile yönlendirir (Pro mod zaten açıkken "İleri" ile geçilir).*
 
 ### Proje paketi: "Paket Aç" / "Paket İndir"
 
@@ -126,6 +130,8 @@ Bu adım gerçek plan motorudur ve tüm akışın temelidir. Ana hedefin, paneli
 Profesyonel modda **"Parsel/İmar"** sekmesi, tasarımı gerçek bir arsaya oturtmanı sağlar.
 
 <!-- GORSEL 03: Parsel/Imar sekmesi — ust'te TKGM sorgu kutusu, altta Imar Durumu paneli (TAKS/KAKS/Hmax/cekmeler), en altta cekme grid'i -->
+![Parsel/İmar sekmesi: TKGM sorgusu, İmar Durumu paneli ve çekme ızgarası](kilavuz-gorsel/gorsel-03-parsel-imar.jpg)
+*Parsel/İmar sekmesi — üstte TKGM sorgu kutusu, altında İBB e-Plan imar durumu (TAKS/KAKS/Hmax, ada/parsel, yoğunluk) ve plan notundan taranan çekme değerleri.*
 
 **TKGM parsel sorgusu.** İki giriş yolu vardır:
 
@@ -196,6 +202,8 @@ Sınırın kapalı ve en az bir daire tipin tanımlıysa **"Yerleşimi Oluştur"
 Üretimden sonra panelin altında canlı bir mevzuat denetim özeti belirir (Bölüm 6). Buradan sonra planı elle inceleyip ince ayar yapabilirsin.
 
 <!-- GORSEL 04: "Yerleşimi Oluştur" sonrasi — uretilmis apartman kat plani; koridor, cekirdek (merdiven/asansor) ve numarali daireler; her odada TR etiket -->
+![Üretilmiş apartman kat planı: koridor, çekirdek ve numaralı daireler](kilavuz-gorsel/gorsel-04-yerlesim-plan.jpg)
+*"Yerleşimi Oluştur" sonrası üretilmiş plan: koridor, çekirdek ve daireler (D1, D2…); her odada Türkçe piyes etiketi, sağda Daire Tablosu dökümü.*
 
 ---
 
@@ -233,6 +241,8 @@ Tuvalde doğrudan sürükleyerek düzen değiştirebilirsin:
 - **Turuncu ayırıcı (cut) tutamaçları:** daire sınırlarını taşır. Plan yeniden dizilir ama etkilenmeyen dairelerdeki elle düzenlemeler korunur.
 
 <!-- GORSEL 05: duvar surukleme — iki oda arasindaki kare tutamac ve Shift ile ayni hizadaki parcalarin birlikte tasinmasi; bir daire sinirinda turuncu ayirici tutamac -->
+![Duvar tutamaçları: odalar arası kare tutamaçlar](kilavuz-gorsel/gorsel-05-duvar-tutamac.jpg)
+*Üretilen planda odalar arası kare duvar tutamaçları görünür; sürükleyerek (Shift ile aynı hizadakiler birlikte) düzeni ince ayar yaparsın.*
 
 ### Sağ tık menüsü (üretim sonrası)
 
@@ -258,6 +268,8 @@ Bir odaya sağ tıkladığında zengin bir bağlam menüsü açılır.
 **Çekirdek öğesine sağ tık:** sil + eleman ekle. **Ortak alan artığına sağ tık:** **"Apartman holüne kat (çekirdek erişimi aç)"** ve **"Komşulara dağıtıp sil"** ("Sığınak silinemez" koruması). **Balkona sağ tık:** **"Balkonu sil"**. **Avluya sağ tık:** **"Avluyu sil"**.
 
 <!-- GORSEL 06: oda sag tik menusu — "Bu odadan oyarak ekle" ve "Duzenle" alt menuleri acik, secenek listesi gorunur -->
+![Oda sağ tık menüsü: oyarak ekle + Düzenle](kilavuz-gorsel/gorsel-06-sag-tik-menu.jpg)
+*Bir odaya sağ tık: "Bu odadan oyarak ekle" (oda tipleri), "Düzenle" (tip değiştir / böl / takas), "Daire iç düzeni" ve daire/yapı elemanı seçenekleri.*
 
 ### Geri/İleri al ve Geçmiş paneli
 
@@ -310,6 +322,8 @@ Profesyonel modda **"Site (çoklu blok)"** anahtarıyla açılır. Her blok kend
 - Yalnız Site modunda görünen "Site özeti" paneli: blok sayısı, toplam taban (TAKS) ve toplam inşaat alanı (KAKS/emsal).
 
 <!-- GORSEL 07: Site modu — parsel uzerinde A/B/C bloklari; biri secili (net), digerleri hayalet; Site ozeti paneli kosede -->
+![Site modu: parsel üstünde Blok A ve Blok B](kilavuz-gorsel/gorsel-07-site-bloklar.jpg)
+*Site görünümü aracı — aynı parsel üstünde Blok A ve Blok B; bloğa tıkla düzenle, sürükle taşı. Site imkanları (havuz, yeşil alan, oyun) da yerinde.*
 
 ---
 
@@ -324,6 +338,8 @@ Panelin altında özet bir satır durur: **"N sorun · N bilgi · N tamam"** ve 
 Bir bölgeye bağlı satıra tıklamak popup'ı kapatır ve tuvalde o alana yakınlaştırır. Bazı sorun satırlarında bir **"Öneri"** düğmesi bulunur: seni ilgili odağa götürür ve durum çubuğunda bir ipucu gösterir — ama otomatik düzeltme YAPMAZ; kararı sen verirsin.
 
 <!-- GORSEL 08: "Mevzuat Kontrolü" popup — Sorunlar/Bilgi/Tamam katlanir bolumleri; bir sorun satirinda "Oneri" dugmesi -->
+![Mevzuat Kontrolü penceresi: Tamam / Sorunlar / Bilgi](kilavuz-gorsel/gorsel-08-mevzuat-popup.jpg)
+*"Mevzuat Kontrolü" penceresi: Tamam (22), Sorunlar (1 — otopark eksikliği) ve Bilgi (4) katlanır bölümleri; bölgeli satıra tıklamak tuvalde o alana yakınlaştırır.*
 
 ### Denetlenen kuralların özeti
 
@@ -368,6 +384,8 @@ Adım 2'de yerleştirilmiş kameralar salt-görünürdür (mesh + koni + etiket)
 **"Kamera Yerleştir"** ile Adım 3'e geçerken bir kezlik bir bilgi penceresi çıkar: **"Planı Boya açısı"**. Plan boyama karesi 3B görünümün bulunduğu açıdan üretilir — ideal açıyı şimdi seçip yön küresinin yanındaki **vizör-kilit** düğmesiyle kilitleyebilirsin; kilitlemezsen dik izometrik açı otomatik kullanılır. **"Açıyı Ayarla"** seni bu adımda bırakır ve vizör-kilit düğmesinin yanına **kalıcı bir işaret balonu** takar ("Açıyı ayarla, sonra burayı tıkla — kadraj kilitlenir"; düğme hafifçe nabız atar). Balon bir bildirim gibi kaybolmaz: kilide basana ya da adımı değiştirene kadar durur, 3B yeniden kurulsa da geri gelir. **"Otomatik Açı ile Devam"** normal akışla sürer. Çok bloklu projede her blok için ayrı açı kilitlenebilir (blok çipleriyle gez).
 
 <!-- GORSEL 09: 3B dollhouse — ust kat kaldirilmis daire; oda etiketleri, mobilya ve malzeme boyamasi acik; kosede orbit kuresi ve yon chip'leri -->
+![3B dollhouse görünümü: etiketler, mobilya, malzeme](kilavuz-gorsel/gorsel-09-3b-dollhouse.jpg)
+*Adım 2 — 3B dollhouse: oda etiketleri, mobilya ve malzeme boyaması açık; sağda Katmanlar çekmecesi, köşede orbit küresi (K/D/G/B · Üst/İzo) ve dikey zoom.*
 
 ### Gezinme
 
@@ -411,6 +429,8 @@ Bu adımda 3B tam ekran açık kalır ve kamera paneli görünür. Panel şerit-
 Kamera adımında ray **sadeleştirilmiştir**: araç grupları **"Kamera (İç)"**, **"Drone (Dış)"**, **"Mobilya"**, **"Gezinti (masaüstü)"** ve **"İndir"** — **"İç Malzeme"** ile **"Dış Cephe"** bu adımda görünmez (onlar 3B adımının işidir, bkz. Bölüm 9; yaptığın malzeme/cephe seçimleri sahnede boyalı kalır). Bir dış araca tıklayınca otomatik dış moda, bir iç araca tıklayınca iç moda geçilir (araçlar köprülüdür).
 
 <!-- GORSEL 10: kamera dock — ic kamera secili; Yon/Tasi/Odakla/Sil eylemleri, Yukseklik ve Bakis acisi slider'lari, Bakis Yonu kuresi, Objektif chip'leri (16/24/35/50 mm), Gun saati -->
+![Kamera dock'u: eylemler, sliderlar, yön küresi, lens, gün saati](kilavuz-gorsel/gorsel-10-kamera-dock.jpg)
+*İç kamera dock'u (detay açık): kamera şeridi + Yön/Taşı/Odakla/Sil, Yükseklik ve Bakış açısı sliderları, Bakış Yönü küresi, Objektif (16/24/35/50 mm) ve Gün saati; solda kameranın kendi görüşü.*
 
 ### İç kamera dock
 
@@ -462,6 +482,8 @@ Mesh'te bir odaya tıkla; dock'ta oda adı (ıslak hacimlerde ek "ıslak" etiket
 Aynı swatch'a tekrar tıklamak seçimi kaldırır. **"Türe göre ata"** tüm odalara tip bazlı tutarlı bir atama yapar; **"Tümünü sıfırla"** hepsini temizler; seçili odada **"Varsayılana dön"** vardır. Seçtiğin malzeme mesh'te prosedürel doku olarak görünür (tahta çizgisi/balıksırtı, fuga ızgarası, boya).
 
 <!-- GORSEL 11: Ic Malzeme dock — secili odaya Zemin ve Duvar swatch satirlari; mesh'te secilen malzeme gercek doku olarak gorunur -->
+![İç Malzeme dock'u: Zemin ve Duvar swatch'ları](kilavuz-gorsel/gorsel-11-ic-malzeme-dock.jpg)
+*İç Malzeme aracı — mesh'te seçili odaya (ANTRE) ait Zemin ve Duvar swatch satırları; "Türe göre ata" ve "Tümünü sıfırla" ile toplu atama. Seçim mesh'te gerçek doku olur.*
 
 ### Dış Cephe preset'leri
 
@@ -491,6 +513,8 @@ Balkonlara otomatik Bistro Masa/Sandalye konur.
 Her tip gerçek boyutlu kutu-geometrisiyle çizilir. **"Render'a mobilya ekle"** onay kutusu: işaretliyse döşeli, işaretsizse boş üretim — bu tercih PNG, snapshot ve floorplan-map çıktılarının hepsinde tutarlı uygulanır.
 
 <!-- GORSEL 12: Mobilya — sag'da kategori paleti, tuvalde otomatik doselenmis salon; bir esya suruklenirken hayalet onizleme -->
+![Mobilya dock'u: kategori paleti ve döşenmiş plan](kilavuz-gorsel/gorsel-12-mobilya.jpg)
+*Mobilya aracı — kategori + parça paleti (alt dock'ta), otomatik döşenmiş odalar (kuşbakışı kilit); "Yeniden döşe", "Temizle" ve "Render'a mobilya ekle".*
 
 Mobilya kısayolları için Bölüm 13'e bak.
 
@@ -529,6 +553,8 @@ Galeri üç grupta toplanır: **"Plan Boyama"**, **"İç Kameralar"** ve **"Dı�
 Galerinin solunda sabit (sticky) bir **"Önce / Sonra"** karşılaştırma paneli durur: seçili kartın (bir karta tıklamadıysan ilk üretilmiş kartın) **kadraj görseli (önce)** ile **AI render'ı (sonra)** üst üste bindirilir ve alttaki sürgüyle ikisi arasında gezersin — sol yarı kadraj, sağ yarı render. Herhangi bir karta tıklamak paneli o karta geçirir; seç/bırak yalnız **henüz üretilmemiş** kartta çalışır — üretilmiş ya da üretimdeki karta tıklamak seçime dokunmaz, sadece karşılaştırmayı açar. Henüz üretilmemiş kartta yalnız kadraj ve "Üretilince karşılaştırma burada" notu görünür. Planı Boya kartında önce = dollhouse izo kadrajı (sabit 4:3, plana tam sığdırılmış), sonra = boyalı plan; drone kartında önce = 3B snapshot, sonra = dış render. Kadraj görseli her zaman 3B önizlemeden kredisiz alınır — paket açılışında da taze yakalanır, sürgünün iki yüzü hiçbir durumda aynı görsele düşmez. Görseller panelde kırpılmadan (contain) gösterilir. Dar ekranlarda sol kolonla birlikte gizlenir.
 
 <!-- GORSEL 13: Adim-4 render galerisi — uc grup basligi (Plan Boyama blok karti x2, Ic Kameralar, Dis/Drone) + sagda Render Listesi checklist'i; alt cubukta "Üret (N)" -->
+![Adım 4 render galerisi: gruplanmış kadraj kartları ve Render Listesi](kilavuz-gorsel/gorsel-13-render-galerisi.jpg)
+*Render Kadrajları: Plan Boyama (blok başına kart), İç Kameralar — Blok A/B; solda Önce/Sonra karşılaştırma, sağda Render Listesi. (Vitrinde kareler üretilmiş, alt çubuk "Tümü üretildi".)*
 
 ### Sadık / Yaratıcı
 
@@ -590,6 +616,8 @@ Sol paneldeki **"Pazaryeri"** bölümü seçili karta göre değişir — pazary
 - Yalnız hiç seçim yokken (ya da oda türü tanınmadığında) genel liste görünür. Ürünler, markalar ve fiyatlar **tamamen örnektir** (placeholder) — gerçek bir katalog/ağ bağlantısı yoktur.
 
 <!-- GORSEL 14: Adim-5 Döşe ekrani — blok-bölümlü kart grid'i (Planı Boya + Kamera kartlari), sagda Döşeme Özeti; solda seçili yatak odasi render'ina göre sponsorlu ürün listesi -->
+![Adım 5 Döşe: blok-bölümlü kart grid'i ve bağlamsal pazaryeri](kilavuz-gorsel/gorsel-14-dose-pazaryeri.jpg)
+*Döşe — blok-bölümlü kart grid'i (Planı Boya + Kamera + Drone); seçili yatak odası render'ına göre solda "Bu render'daki ürünler — Yatak Odası" listesi, sağda Döşeme Özeti.*
 
 ### Ön-gösterim olanlar
 

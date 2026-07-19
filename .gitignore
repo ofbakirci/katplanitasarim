@@ -13,3 +13,4 @@ render-debug/
 
 # L1-A örnek DXF çıktıları (yerel CAD kontrolü, web/git dışı)
 kat-plani-ornek-*.dxf
+e2e-cikti/
