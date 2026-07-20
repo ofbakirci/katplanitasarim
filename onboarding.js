@@ -34,7 +34,7 @@
 
 /* ---- senaryo surumleri: adimlar degisince ARTIR -> done/dismissed kullanici yeniden gezer ---- */
 const ONB_VERSION = 5;        // 'ana' turu (v5 REV6: balkon-ekle BOS baslar -> demo set yakalanir + bir balkon ekletip 'Kalan balkonlari otomatik yerlestir' aksiyonu + #tBalk araci oto-sec; site-ac TAMAMLAMA semantigi (uzerine yazmaz))
-const ONB_KAM_VERSION = 5;    // 'kamera3d' turu (v5 REV7: aci-ayarla BOLUNDU -> yon-degistir + kamera-tasi (ayri check: SECILI kamera dir/pos sig; eski lastCamSig son-kamerayi izleyip GECILEMIYORDU) + kart dock butonuna capalanir (kamera/PiP/cubuk ORTULMEZ))
+const ONB_KAM_VERSION = 6;    // 'kamera3d' turu (v6 REV8: yon-degistir/kamera-tasi CANLI 3 kusur — (a) iki-asamali net dil (Yon dugmesi=aim modu, SONRA sahne tiki) + sceneHole (dock deligi+tuval aydinlik); (b) rebaseKey=camSelSig: kamera SECIMI degisince taban resetlenir, adim ILERLEMEZ (yalniz gercek yon/konum degisimi); (c) SECILI kamera vurgusu — View3D.setCamHighlightBoost nabiz halkasi + buyuk marker)
 
 /* ================= DEMO PAKET HEDEFLERI (ONB_TARGETS) =================
    v2 vizyonu: "paketi vereceğim, onboarding onu kullanıcıya elle çizdirtecek —
@@ -879,22 +879,30 @@ const ONB_KAM_STEPS = [
      SECILI kamerayi izler (camDirSig/camPosSig, getActiveCamIdx); (2) hedef = alt dock'taki "Yön"/"Taşı"
      dugmeleri (#v3dCamDock, ekran alt-ortasi) -> kart o dock'a capalanir, sahne ORTASINDAKI kamera/PiP/
      cubuk HICBIR ZAMAN ORTULMEZ; (3) net eylem dili: once dock dugmesi, sonra sahneye tikla. */
+  /* REV8 (IS 2 canli teshis) — 3 KUSUR: (a) "Yön" dock dugmesi HEDEF/nisan isareti: tiklayinca yon DEGISMEZ,
+     aim moduna GIRER (sonra sahneye tiklamak gerek) -> iki-asamali net dil + sahne tuvali karartisiz (sceneHole:
+     dock dugmesi delik KALIR ama tuval de aydinlik/tiklanabilir gorunur, "sahneye tikla" adimini glitch hissettirmez).
+     (b) Kameranin KENDISINE tiklayinca adim ilerliyordu (secim degisince camDirSig FARKLI kamerayi okuyup taban !=
+     deger) -> rebaseKey=camSelSig: secim degisince taban o kameraya resetlenir, adim ILERLEMEZ; yalniz GERCEK yon
+     degisiminde ilerler. */
   { id:'yon-degistir', skippable:true,
     title:'Bakış yönünü değiştir',
-    body:'Kamera seçili. Alttaki dock’ta işaretli "Yön" düğmesine bas, sonra sahnede kameranın bakacağı noktaya tıkla (kameranın koni ucunu sürükleyerek ya da tekerlekle de çevirebilirsin). Önizleme anında güncellenir.',
+    body:'Kamera seçili. İki adım: 1) Alttaki dock’ta işaretli <b>"Yön"</b> düğmesine bas (düğme yanar) — bu bakış-noktası kilidini açar, yönü tek başına değiştirmez. 2) Sahnede kameranın bakacağı noktaya tıkla — önizleme anında döner. (Koni ucunu sürükleyerek ya da tekerlekle de çevirebilirsin.)',
     target:{type:'dom', sel:'#v3dCamDock [data-camact="aim"]'},
-    compact:true, avoidSel:['#v3dPip','#v3dExtPip'],
+    compact:true, avoidSel:['#v3dPip','#v3dExtPip'], sceneHole:true,
     ensure:function(){ onbSelectFirstCam(); },
     baseline:function(ctx){ return ctx.camDirSig(); },
+    rebaseKey:function(ctx){ return ctx.camSelSig(); },   // (b) secim degisince taban resetlenir -> kamera tikina ilerlemez
     check:function(ctx, base){ return ctx.camCount() > 0 && ctx.camDirSig() !== base; } },
 
   { id:'kamera-tasi', skippable:true,
     title:'Kamerayı taşı',
-    body:'Alttaki dock’ta işaretli "Taşı" düğmesine bas, sonra kamerayı koymak istediğin yere tıkla — ya da sahnedeki kamera simgesini doğrudan sürükle. Konum değişince önizleme de değişir.',
+    body:'İki adım: 1) Alttaki dock’ta işaretli <b>"Taşı"</b> düğmesine bas (düğme yanar). 2) Kamerayı koymak istediğin yere sahnede tıkla — ya da sahnedeki kamera simgesini doğrudan sürükle. Konum değişince önizleme de değişir.',
     target:{type:'dom', sel:'#v3dCamDock [data-camact="move"]'},
-    compact:true, avoidSel:['#v3dPip','#v3dExtPip'],
+    compact:true, avoidSel:['#v3dPip','#v3dExtPip'], sceneHole:true,
     ensure:function(){ onbSelectFirstCam(); },
     baseline:function(ctx){ return ctx.camPosSig(); },
+    rebaseKey:function(ctx){ return ctx.camSelSig(); },   // (b) secim degisince taban resetlenir
     check:function(ctx, base){ return ctx.camCount() > 0 && ctx.camPosSig() !== base; } },
 
   { id:'lens-sec', skippable:true,
@@ -1086,6 +1094,13 @@ function onbKamActiveCam(){
   if(i<0 || i>=c.length) i=c.length-1;
   return c[i]||null;
 }
+/* REV8 (IS 2/b,c) — SECILI kamera INDEKS imzasi: yon-degistir/kamera-tasi check tabani SECIM degisince
+   resetlenmeli (kullanici baska kameraya tiklayinca camDirSig/camPosSig FARKLI kamerayi okur -> eski taban
+   != yeni deger -> adim YANLIS ilerliyordu). Harness rebaseKey bunu okur; degisince onbBases[idx] tazelenir
+   (SECILI kamera degisti -> taban o kameraya kayar, adim ILERLEMEZ; ancak gercek yon/konum degisince ilerler). */
+function onbKamSelSig(){ const v=onbV3d();
+  try{ if(v && typeof v.getActiveCamIdx==='function'){ const c=onbKamCams(); if(!c.length) return ''; let i=v.getActiveCamIdx(); if(i<0||i>=c.length) i=c.length-1; return String(i); } }catch(e){}
+  return ''; }
 function onbKamR2(n){ return Math.round((+n||0)*100)/100; }
 function onbKamCtx(){
   return {
@@ -1110,6 +1125,8 @@ function onbKamCtx(){
       try{ return [onbKamR2(c.target.x),onbKamR2(c.target.y),onbKamR2(c.target.z)].join(','); }catch(e){ return ''; } },
     camPosSig:function(){ const c=onbKamActiveCam(); if(!c||!c.pos) return '';
       try{ return [onbKamR2(c.pos.x),onbKamR2(c.pos.y),onbKamR2(c.pos.z)].join(','); }catch(e){ return ''; } },
+    /* REV8: SECILI kamera indeks imzasi (rebaseKey) — secim degisince yon/tasi taban resetlenir, adim ilerlemez */
+    camSelSig:function(){ return onbKamSelSig(); },
     lensSig:function(){ try{ return onbKamCams().map(function(c){ return c.lens||24; }).join(','); }catch(e){ return ''; } },
     extMode:function(){ const v=onbV3d();
       try{ return !!(v && typeof v.isExteriorMode==='function' && v.isExteriorMode()); }catch(e){ return false; } },
@@ -1159,6 +1176,7 @@ let onbIdx      = 0;
 let onbPaused   = false;         // needsPro adiminda Basit moda dusuldu -> duraklat karti
 let onbHidden   = false;         // tur.visible() false (3B kapandi) -> UI gizli, bekle
 let onbBases    = {};            // {idx: yakalanmis baseline}
+let onbRebase   = {};            // REV8 (IS 2/b): {idx: son rebaseKey} — deger degisince onbBases[idx] tazelenir (SECILI kamera degisti -> taban resetlenir, adim ilerlemez)
 let onbGate     = {};            // {idx: bool} — o adima GIRISTE check saglaniyordu -> İleri bekliyor (oto-atlama yok)
 let onbTimer    = null;          // ~250ms algilama dongusu (tur aktifken)
 let onbWatchTimer = null;        // ~750ms tetik watcher'i (kamera3d)
@@ -1227,14 +1245,18 @@ function onbBuildUI(){
   const mask=document.createElementNS(NS,'mask'); mask.setAttribute('id','onbHoleMask'); mask.setAttribute('maskUnits','userSpaceOnUse');
   const bg=document.createElementNS(NS,'rect'); bg.setAttribute('x',0); bg.setAttribute('y',0); bg.setAttribute('fill','#fff');
   const hole=document.createElementNS(NS,'rect'); hole.setAttribute('fill','#000'); hole.setAttribute('rx',8);
+  /* REV8 (IS 2/a) — IKINCI DELIK: yon-degistir/kamera-tasi gibi "once dock dugmesine bas, SONRA sahneye tikla"
+     adimlarinda hedef DOM deligi (dock dugmesi) KORUNUR ama sahne tuvali de ayri delikle aydinlik kalir ->
+     karartilmis sahne "tiklanamaz" hissi vermez (sceneHole). fullCanvasHole tek-delikle butonu isaretsiz birakirdi. */
+  const hole2=document.createElementNS(NS,'rect'); hole2.setAttribute('fill','#000'); hole2.setAttribute('rx',8);
   const holeC=document.createElementNS(NS,'circle'); holeC.setAttribute('fill','#000'); holeC.setAttribute('r',0); holeC.setAttribute('class','onbPulse');
-  mask.appendChild(bg); mask.appendChild(hole); mask.appendChild(holeC); defs.appendChild(mask);
+  mask.appendChild(bg); mask.appendChild(hole); mask.appendChild(hole2); mask.appendChild(holeC); defs.appendChild(mask);
   const dim=document.createElementNS(NS,'rect'); dim.setAttribute('id','onbDim'); dim.setAttribute('x',0); dim.setAttribute('y',0);
   dim.setAttribute('fill','var(--scrim)'); dim.setAttribute('mask','url(#onbHoleMask)');
   svg.appendChild(defs); svg.appendChild(dim);
   const card=document.createElement('div'); card.className='onbCard';
   document.body.appendChild(svg); document.body.appendChild(card);
-  onbUI={svg:svg, bg:bg, hole:hole, holeC:holeC, dim:dim, card:card};
+  onbUI={svg:svg, bg:bg, hole:hole, hole2:hole2, holeC:holeC, dim:dim, card:card};
   card.addEventListener('click', onbCardClick);
   if(!onbWired){ onbWired=true;
     window.addEventListener('resize', function(){ if(onbActive) onbReposition(); });
@@ -1510,6 +1532,14 @@ function onbReposition(){
   const t=onbTargetRect();
   const s0=onbTour && onbTour.steps[onbIdx];
   const cvRect=(s0 && s0.fullCanvasHole) ? onbCanvasRect() : null;
+  /* REV8 (IS 2/a): sceneHole -> hedef dock deligiNE EK sahne-tuvali deligi (aydinlik + tiklanabilir his). */
+  const scRect=(s0 && s0.sceneHole && !cvRect) ? onbCanvasRect() : null;
+  if(onbUI.hole2){
+    if(scRect){ const pad=2;
+      onbUI.hole2.setAttribute('x', scRect.left-pad); onbUI.hole2.setAttribute('y', scRect.top-pad);
+      onbUI.hole2.setAttribute('width', Math.max(0, scRect.width+pad*2)); onbUI.hole2.setAttribute('height', Math.max(0, scRect.height+pad*2));
+    } else { onbUI.hole2.setAttribute('width',0); onbUI.hole2.setAttribute('height',0); }
+  }
   /* spotlight delik: hedef DOM/canvas — ghost olsa da hedef (or. #tDraw dugmesi) isaretlenir.
      FIX 5: fullCanvasHole -> delik TUM tuval (cvRect); araclar da tuval icinde oldugundan
      ayrica isaretlemeye gerek yok (circle r=0). cvRect yoksa normal hedef mantigina duser. */
@@ -1624,6 +1654,8 @@ function onbGoto(idx){
   if(s.baseline && !(onbIdx in onbBases)){
     try{ onbBases[onbIdx]=s.baseline(onbTour.ctx()); }catch(e){ onbBases[onbIdx]=undefined; }
   }
+  /* REV8 (IS 2/b): rebaseKey giris degerini yakala -> tick'te bu deger degisince taban tazelenir (secim degisimi) */
+  if(typeof s.rebaseKey==='function'){ try{ onbRebase[onbIdx]=s.rebaseKey(onbTour.ctx()); }catch(e){ onbRebase[onbIdx]=undefined; } }
   /* GIRIS-SAGLANMISLIK: bu adima GIRERKEN check zaten saglaniyor mu? -> onbGate[idx].
      Evetse tur burada durur ve İleri düğmesi cikar (oto-atlama yok). baseline'li
      adimlarda base=giris-degeri oldugundan "buyume" check'leri girişte HEP false
@@ -1698,6 +1730,14 @@ function onbTick(){
     let ar=false; try{ ar=onbActionReadyFor(s); }catch(e){}
     if(ar!==onbActionReady){ onbActionReady=ar; onbRenderCard(); }
   }
+  /* REV8 (IS 2/b) — SECIM-FARKINDA TABAN: rebaseKey degeri degistiyse (kullanici baska kamerayi secti) taban
+     o kameraya resetle -> secim degisimi TEK BASINA adimi ilerletmez; yalniz secili kameranin gercek yon/konum
+     degisimi ilerletir. onbGate'ten ONCE ki secim degisince (base==deger) ok=false, kilit kalmaz. */
+  if(typeof s.rebaseKey==='function'){
+    let _rk; try{ _rk=s.rebaseKey(ctx); }catch(e){ _rk=undefined; }
+    if(_rk!==onbRebase[onbIdx]){ onbRebase[onbIdx]=_rk;
+      if(s.baseline){ try{ onbBases[onbIdx]=s.baseline(ctx); }catch(e){} } }
+  }
   /* GIRIS-SAGLANMIS adim -> İleri bekliyor: oto-ilerleme YOK (kullanici İleri'ye basacak). */
   if(onbGate[onbIdx]){ onbReposition(); return; }
   /* ARDISIK KAPI (adim adim): mevcut adim saglandiysa BIR sonraki adima gec. onbGoto o
@@ -1717,12 +1757,15 @@ function onbClearTimers(){
   if(onbTimer){ clearInterval(onbTimer); onbTimer=null; }
   if(onbRaf){ if(typeof cancelAnimationFrame==='function') cancelAnimationFrame(onbRaf); onbRaf=0; }
 }
+function onbCamBoostOff(){ try{ const v=onbV3d(); if(v && typeof v.setCamHighlightBoost==='function') v.setCamHighlightBoost(false); }catch(e){} }
 function onbFinish(){
   if(onbTour){ onbSet('onb.'+onbTour.id+'.status','done'); onbSet('onb.'+onbTour.id+'.v',String(onbTour.version)); }
+  onbCamBoostOff();   // REV8 (IS 2/c): tur bitince kamera vurgu-yukseltmesini kapat
   onbActive=false; onbTour=null; onbHidden=false; onbClearTimers(); onbTeardown();
 }
 function onbStop(status){
   if(onbTour){ onbSet('onb.'+onbTour.id+'.status', status||'dismissed'); onbSet('onb.'+onbTour.id+'.v',String(onbTour.version)); }
+  onbCamBoostOff();   // REV8 (IS 2/c): kapatinca da vurgu-yukseltmeyi kapat
   onbActive=false; onbTour=null; onbHidden=false; onbClearTimers(); onbTeardown();
 }
 
@@ -1734,7 +1777,9 @@ function onbStop(status){
 function onbLaunchTour(tour, reset){
   if(!tour || !onbBrowser() || !document.body) return;
   if(onbActive) onbStop('dismissed');          // ayni anda tek tur
-  onbTour=tour; onbActive=true; onbPaused=false; onbHidden=false; onbBases={}; onbGate={}; onbCollapsed=false;   // IS 2: tur baslarken kart ACIK gelir
+  onbTour=tour; onbActive=true; onbPaused=false; onbHidden=false; onbBases={}; onbRebase={}; onbGate={}; onbCollapsed=false;   // IS 2: tur baslarken kart ACIK gelir
+  /* REV8 (IS 2/c): kamera3d turunda SECILI kamera vurgusunu yukselt (View3D nabiz halkasi + buyuk/parlak marker) */
+  try{ const _v=onbV3d(); if(_v && typeof _v.setCamHighlightBoost==='function') _v.setCamHighlightBoost(tour.id==='kamera3d'); }catch(e){}
   if(tour.id==='ana'){ onbExportFlag=false; if(reset) onbDemoBalkSet=null; }   // IS 1: bastan baslarken demo balkon seti yakalamasi tazelensin
   if(tour.id==='kamera3d') onbExtRenderFlag=false;
   onbSet('onb.'+tour.id+'.status','active'); onbSet('onb.'+tour.id+'.v', String(tour.version));

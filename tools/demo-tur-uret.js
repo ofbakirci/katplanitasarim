@@ -171,6 +171,58 @@ function ensureBlockParking(pkg) {
   return { changed: true, block: 1, from: cur, to: OTO_TARGET_BODRUM };
 }
 
+// ---- KAMERA / DEPO KAT DAMGASI ONARIMI (idempotent, İNVARYANT-tabanlı) ----
+// SORUN (cam5/cam7 sadakat kusuru): ensureBlockParking bir bloğa bodrum EKLEDİĞİNDE (bs.floors.unshift)
+//   o bloğun TÜM kat indeksleri +1 kayar; app.js:97 __floor MUTLAK kat indeksidir (0=en alt bodrum,
+//   zemin=bodrumSayisi) ve switchFloor(camera.__floor) ile canlı mesh'i kurar. Ama iç kameraların ve
+//   mobilya/malzeme deposunun __floor damgaları KAYMADIĞI için kameralar YANLIŞ katı (zemin) gösterip
+//   stored snapshot'a sadakati kaybediyordu (Blok B: cam4-7). Blok A dokunulmadığından cam1-3 sağlamdı.
+// NEDEN DELTA DEĞİL İNVARYANT: diskteki paket "yarı-migre" — REV11 floors'u kaydırdı (bodrumSayisi=3) ama
+//   damgaları bırakmıştı; ensureBlockParking artık idempotent no-op döner → unshift-anına bağlı bir delta
+//   kaydırma HİÇ tetiklenmezdi. Bunun yerine HEDEF invaryanttan türetiriz: demo iç kameraların TÜMÜ kat1'de
+//   (zemin üstü ilk konut katı) yakalanır → doğru __floor = bodrumSayisi(blok)+1. Blok başına delta = hedef −
+//   kameranın mevcut __floor'u; kameralar hedefe çekilir, O BLOĞUN depo girdileri AYNI delta ile kaydırılır
+//   (kameralar+depolar aynı floors yapısında birlikte yakalandı). delta=0 → hiçbir şeye dokunma → BYTE-ÖZDEŞ.
+// İDEMPOTENS: onarım sonrası __floor==bodrumSayisi+1 → sonraki koşumda delta=0 → değişiklik yok.
+function repairCameraFloorStamps(pkg) {
+  const ks = pkg && pkg.kpState;
+  const cams = pkg && pkg.cameras;
+  if (!ks || !Array.isArray(ks.blocks) || !cams || !Array.isArray(cams.interior)) return { changed: false, deltas: {} };
+  const bodrumOfBlock = (b) => _bodrumOf(ks.blocks[b] || {});
+  // (1) blok başına delta: o bloğun iç kameralarından türet — hepsi kat1 (=bodrum+1) invaryantında olmalı.
+  //     Bir blokta kameralar farklı __floor'daysa (karışık kat) delta belirsiz → o bloğun DEPOSUNU KAYDIRMA
+  //     (null işaretle; kameralar yine tek tek hedefe çekilir, güvenli taraf).
+  const deltaByBlock = {};
+  cams.interior.forEach((c) => {
+    if (c.__floor == null) return;
+    const b = (c.__block != null) ? c.__block : 0;
+    const d = (bodrumOfBlock(b) + 1) - c.__floor;
+    if (deltaByBlock[b] === undefined) deltaByBlock[b] = d;
+    else if (deltaByBlock[b] !== d) deltaByBlock[b] = null;   // tutarsız → depo kaydırma güvensiz
+  });
+  let changed = false;
+  // (2) kameraları hedefe (bodrum+1 = kat1) çek.
+  cams.interior.forEach((c) => {
+    if (c.__floor == null) return;
+    const b = (c.__block != null) ? c.__block : 0;
+    const target = bodrumOfBlock(b) + 1;
+    if (c.__floor !== target) { c.__floor = target; changed = true; }
+  });
+  // (3) depoları blok deltasıyla kaydır (yalnız TUTARLI + SIFIR-OLMAYAN delta → idempotent + güvenli).
+  const shiftStore = (store) => {
+    if (!store) return;
+    Object.keys(store).forEach((k) => {
+      const v = store[k];
+      if (!v || v.__floor == null || v.__block == null) return;
+      const d = deltaByBlock[v.__block];
+      if (d) { v.__floor = v.__floor + d; changed = true; }
+    });
+  };
+  shiftStore(pkg.furnitureStore);
+  shiftStore(pkg.materialStore);
+  return { changed, deltas: deltaByBlock };
+}
+
 // ---- (b) demo-plan.json: render'siz TAM kpState (amenities pts'li) + slim kameralar + MOBİLYA ----
 // REV5 KUSUR 6 — MOBİLYA SADAKATİ: demo-plan.json artık furniture (düz liste) + furnitureStore (WRAPPED,
 //   kat-ayrı meta korunur) + materialStore de taşır. Böylece hands-on büyük normalizasyon (demoHandsonNormalize)
@@ -200,6 +252,10 @@ function emitAssets(pkg, pkgPath, outDir) {
   //   de mutasyonlu kpState'ten türer; renders'a DOKUNULMAZ → JPEG'ler bayt-özdeş). Idempotent.
   const parkFix = ensureBlockParking(pkg);
   if (parkFix.changed) console.error('  paket temizliği: Blok B bodrum ' + parkFix.from + '→' + parkFix.to + ' (otopark açığı kapatıldı)');
+  // KAMERA/DEPO KAT DAMGASI ONARIMI: bodrum eklenince (bu koşumda ya da geçmiş REV11'de) kayan floors
+  //   indekslerine __floor damgalarını hizala (kameralar kat1'e, depolar aynı blok deltasıyla). İdempotent.
+  const stampFix = repairCameraFloorStamps(pkg);
+  if (stampFix.changed) console.error('  kamera/depo damga onarımı: blok delta ' + JSON.stringify(stampFix.deltas) + ' (iç kameralar kat1=bodrum+1 katına hizalandı)');
   const r = pkg.renders || {};
   const written = [];
   // IS 7 — TUM "Uret" gorselleri paketten 1600px q80 UNIFORM. Idempotent: her cagride kaynak
@@ -287,4 +343,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { amenityPts, withPts, convertAmenitiesEverywhere, slimCameras, buildBlob, buildPlan, cropImar, ensureBlockParking };
+module.exports = { amenityPts, withPts, convertAmenitiesEverywhere, slimCameras, buildBlob, buildPlan, cropImar, ensureBlockParking, repairCameraFloorStamps };

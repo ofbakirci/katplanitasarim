@@ -58,7 +58,7 @@ const FULL_BASES = {5:0, 6:0, 7:0, 9:1, 12:0, 14:'0|konut'};
 /* KAMERA3D ctx stub'u */
 function kamCtx(over){
   const c={
-    camUI:()=>false, camCount:()=>0, lastCamSig:()=>'', camDirSig:()=>'', camPosSig:()=>'', lensSig:()=>'',
+    camUI:()=>false, camCount:()=>0, lastCamSig:()=>'', camDirSig:()=>'', camPosSig:()=>'', camSelSig:()=>'', lensSig:()=>'',
     extMode:()=>false, extCount:()=>0, extRenderClicked:()=>false
   };
   return Object.assign(c, over||{});
@@ -76,7 +76,7 @@ const asserts = `
       return k.iframeAuto===true && k.zBoost===true && k.watch===true && typeof k.visible==='function'; })());
   T('registry: ana iframeAuto/zBoost/watch kapali', (function(){ const a=onbTourById('ana');
       return a.iframeAuto===false && a.zBoost===false && a.watch===false && a.visible===null; })());
-  T('VERSION=5 (REV6) / KAM_VERSION=5 (REV7)', ONB.VERSION===5 && ONB.KAM_VERSION===5);
+  T('VERSION=5 (REV6) / KAM_VERSION=6 (REV8)', ONB.VERSION===5 && ONB.KAM_VERSION===6);
   T('ana 16 adim (blokB-yerlesim eklendi)', ONB_STEPS.length===16);
   T('kamera3d 7 adim (REV7: aci-ayarla -> yon-degistir + kamera-tasi)', ONB_KAM_STEPS.length===7);
   const allIds=ONB_STEPS.map(s=>s.id).concat(ONB_KAM_STEPS.map(s=>s.id));
@@ -105,6 +105,11 @@ const asserts = `
   T('kamera-tasi hedefi dock "Taşı" (#v3dCamDock [data-camact="move"])', kstep('kamera-tasi').target.type==='dom' && kstep('kamera-tasi').target.sel==='#v3dCamDock [data-camact="move"]');
   T('yon-degistir + kamera-tasi kompakt kart + PiP avoidSel', kstep('yon-degistir').compact===true && kstep('kamera-tasi').compact===true && Array.isArray(kstep('yon-degistir').avoidSel) && kstep('yon-degistir').avoidSel.indexOf('#v3dPip')>=0);
   T('yon-degistir/kamera-tasi ensure (hedef-kurtarma) fonksiyon', typeof kstep('yon-degistir').ensure==='function' && typeof kstep('kamera-tasi').ensure==='function');
+  /* REV8 (IS 2/a): sceneHole -> dock deligi + sahne tuvali aydinlik (karartilmis sahne tiklanamaz hissi vermez) */
+  T('REV8 yon-degistir/kamera-tasi sceneHole (tuval aydinlik)', kstep('yon-degistir').sceneHole===true && kstep('kamera-tasi').sceneHole===true);
+  /* REV8 (IS 2/b): rebaseKey=camSelSig -> secim degisince taban resetlenir (kamera tikina yanlis ilerleme yok) */
+  T('REV8 yon-degistir/kamera-tasi rebaseKey=camSelSig', typeof kstep('yon-degistir').rebaseKey==='function' && typeof kstep('kamera-tasi').rebaseKey==='function'
+     && kstep('yon-degistir').rebaseKey(kamCtx({camSelSig:()=>'2'}))==='2' && kstep('kamera-tasi').rebaseKey(kamCtx({camSelSig:()=>'0'}))==='0');
   T('lens-sec hedefi #v3dLRow (REV5: detay kutusu ac)', kstep('lens-sec').target.type==='dom' && kstep('lens-sec').target.sel==='#v3dLRow');
   /* pro-mod giris-saglanmis (Pro zaten acik) uyarlanabilir metin (bodyDone) */
   T('pro-mod bodyDone var + "zaten açık" + İleri', typeof step('pro-mod').bodyDone==='string' && step('pro-mod').bodyDone.indexOf('zaten açık')>=0 && step('pro-mod').bodyDone.indexOf('İleri')>=0);
@@ -294,6 +299,7 @@ const asserts = `
       {0:0, 1:'d0', 2:'p0', 3:'l0', 5:2})===7);   // 1:yon 2:tasi 3:lens giris-tabanlari (sig degisti) · 5:drone-ekle (extCount 3>2)
   (function(){ const c=onbKamCtx();
     T('canli kamCtx headless guvenli', c.camUI()===false && c.camCount()===0 && c.camDirSig()==='' && c.camPosSig()==='' && c.extMode()===false && c.extCount()===0);
+    T('REV8 canli ctx camSelSig headless guvenli (View3D yok -> "")', typeof c.camSelSig==='function' && c.camSelSig()==='');
   })();
 
   /* (11) watcher karari — iframe-bypass dahil (saf) */

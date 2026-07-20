@@ -115,6 +115,9 @@
   // camUIEnabled: kamera bölümü YALNIZ adım 4'te (openCompare) görünür — adım 2 (salt 3B izleme) ASLA göstermez.
   // placeAction: zemine tıklayınca ne olacak — 'add' (yeni kamera, 2 tık) · 'aim' (seçili kamerayı yeni noktaya çevir) · 'move' (seçili kamerayı taşı)
   let placeMode=false, camUIEnabled=false, placeAction='aim', camList=[], activeCamIdx=-1, pendingPos=null, camHeight='eye', camLens=24, camPlanSig=null, camPlanCtx=null;
+  // IS 2 (#6 "seçili kamera anlaşılmıyor"): SEÇİLİ kamera işaretçisine referans (loop() her karede nabız halkasını ölçekler)
+  //   + kamera turu vurgu-yükseltme bayrağı (onboarding kamera3d turu View3D.setCamHighlightBoost ile açar → daha büyük/parlak marker).
+  let camActiveMarker=null, camHighlightBoost=false;
   // ── İŞ 1: KAMERA BAĞLAM DAMGASI — camList/extCams öğeleri hangi kat/blok bağlamında OLUŞTURULDUĞUNU taşır
   //   ({__floor,__block}). Amaç: çoklu kat (katAyri) / çoklu blok (site) projelerinde bir bağlamda konan
   //   kamera/drone BAŞKA bağlam görüntülenirken gizmo/export/thumbnail'e SIZMASIN (geçersiz plan-px/oda
@@ -3281,6 +3284,51 @@
   }
   let extModeCallback=null;   // A1: function(isExterior){} — prototip #v3dViewSeg ↔ strand segmenti senkronu
   function toggleExterior(){ setExteriorMode(!exteriorMode); }
+  // IS 1 (kabuk 'gezinti'/FPV adımı) — SAHNEYİ İÇ GÖRÜNÜME + DAİRELİ BLOK/KATA HAZIRLA. Dış cephe adımından
+  //   sonra gelen gezinti adımında sahne DIŞ görünümde kalıyordu → pegman bina içine bırakılamıyor. Bu köprü:
+  //   (1) dış cephe modundan İÇ görünüme döner (pegman ancak iç modda drop olur),
+  //   (2) site açıksa dairelerin olduğu bloğa (kullanıcı: 'B blokta gezelim' → adı 'B' olan / son blok) geçer,
+  //   (3) kat-ayrı açıksa dairelerin olduğu normal konut katına geçer (bodrum/otopark değil),
+  //   (4) sahneyi 2B motorun güncel durumundan tazeler + kadrajlar. Hepsi typeof-guard'lı (site/kat-ayrı kapalı → sessiz).
+  function pickResidentialBlockIdx(){
+    try{
+      if(typeof siteOn!=='function' || !siteOn()) return -1;
+      if(typeof blocks==='undefined' || !Array.isArray(blocks) || blocks.length<2) return -1;
+      if(typeof blockName==='function'){
+        for(var k=0;k<blocks.length;k++){ var nm=blockName(k); if(nm && /^B$/i.test(String(nm).trim())) return k; }   // 'B blokta gezelim'
+      }
+      return blocks.length-1;   // ad eşleşmezse son blok (B tipik olarak en son eklenir)
+    }catch(e){ return -1; }
+  }
+  function pickResidentialFloorIdx(){
+    try{
+      if(typeof floorsOn!=='function' || !floorsOn()) return -1;
+      if(typeof totalFloors!=='function' || typeof usageOf!=='function') return -1;
+      var total=totalFloors(), z=(typeof zeminIdx==='function')?zeminIdx():0;
+      // 1) konut + gerçekten daire olan en alt ÜST kat (tipik apartman katı; zemin ticari olabilir)
+      for(var k=z+1;k<total;k++){ if(usageOf(k)!=='konut') continue;
+        var d=[]; try{ d=(typeof floorDwellingAreas==='function')?floorDwellingAreas(k):[]; }catch(e){}
+        if(d.length>0) return k; }
+      // 2) konut + daireli herhangi kat (zemin dahil)
+      for(var k2=0;k2<total;k2++){ if(usageOf(k2)!=='konut') continue;
+        var d2=[]; try{ d2=(typeof floorDwellingAreas==='function')?floorDwellingAreas(k2):[]; }catch(e){}
+        if(d2.length>0) return k2; }
+      // 3) daire tespiti olmadı → ilk konut kat (zemin üstü tercih)
+      for(var k3=z;k3<total;k3++){ if(usageOf(k3)==='konut') return k3; }
+      return -1;
+    }catch(e){ return -1; }
+  }
+  function enterWalkContext(){
+    var changed=false;
+    try{ if(exteriorMode) setExteriorMode(false); }catch(e){}   // dış cepheden İÇ görünüme dön
+    try{ var tb=pickResidentialBlockIdx(), cur=(typeof activeBlock!=='undefined')?activeBlock:0;
+      if(tb>=0 && tb!==cur && typeof switchBlock==='function'){ switchBlock(tb); changed=true; } }catch(e){}
+    try{ var tf=pickResidentialFloorIdx();
+      if(tf>=0 && (typeof activeFloor==='undefined' || tf!==activeFloor) && typeof switchFloor==='function'){ switchFloor(tf); changed=true; } }catch(e){}
+    try{ rebuildFromEngine(); }catch(e){}
+    try{ if(!exteriorMode) fitView(); }catch(e){}
+    return changed;
+  }
   // F4: dış modda GÖRÜNTÜ-only blok seçimi. 2B aktif blok state'ini DEĞİŞTİRMEZ — yalnız extBlockView'i
   //   set edip kabuğu YENİDEN kurar (seçilen/Tümü tam kabuk, diğerleri hayalet). sel: sayı index | 'all'.
   function setExtBlockView(sel){
@@ -4688,7 +4736,13 @@
     window.addEventListener('keyup', walkKeyUp, true);
     document.addEventListener('pointerlockchange', walkLockChange);
     document.addEventListener('mousemove', walkMouseMove);
-    if(el.requestPointerLock) try{ el.requestPointerLock(); }catch(e){}
+    // pointer-lock isteği modern Chromium'da PROMISE döndürür; kullanıcı-jesti olmayan/headless
+    // ortamda reddi NORMALDIR (FPV klavye-yürüyüş pointer-lock'suz da çalışır). try/catch yalnız
+    // senkron fırlatmayı yakalar → promise reddi 'unhandled rejection' olur (e2e pageerror). Sessizce yut.
+    if(el.requestPointerLock) try{
+      const plp=el.requestPointerLock();
+      if(plp && typeof plp.then==='function') plp.catch(function(){ /* pointer-lock reddi normal: klavye-yürüyüş devam eder */ });
+    }catch(e){}
   }
   function exitWalk(){
     if(!walkOn) return;
@@ -5010,23 +5064,31 @@
     }); }
   // SEÇİLİ kamerayı belirginleştir (#6 "seçileni göremiyorum"): zemine parlak turuncu halka + diske + kameraya ince dikey iğne.
   function makeActiveMarker(c){
-    const grp=new THREE.Group(), COL=0xffa53a;
-    const ring=new THREE.Mesh(new THREE.RingGeometry(0.44,0.62,44),
-      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.92,side:THREE.DoubleSide,depthWrite:false}));
+    const grp=new THREE.Group(), COL=0xffa53a, boost=camHighlightBoost;   // boost = kamera turu: daha büyük/parlak
+    const rIn=boost?0.50:0.44, rOut=boost?0.74:0.62;
+    const ring=new THREE.Mesh(new THREE.RingGeometry(rIn,rOut,48),
+      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.95,side:THREE.DoubleSide,depthWrite:false}));
     ring.rotation.x=-Math.PI/2; ring.position.set(c.pos.x,0.03,c.pos.z);
-    const disc=new THREE.Mesh(new THREE.CircleGeometry(0.44,44),
-      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.16,side:THREE.DoubleSide,depthWrite:false}));
+    const disc=new THREE.Mesh(new THREE.CircleGeometry(rIn,48),
+      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:boost?0.22:0.16,side:THREE.DoubleSide,depthWrite:false}));
     disc.rotation.x=-Math.PI/2; disc.position.set(c.pos.x,0.025,c.pos.z);
     const H=Math.max(0.4,c.pos.y||1.6);
-    const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,H,8),
-      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.5,depthWrite:false}));
+    const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,H,8),
+      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:boost?0.62:0.5,depthWrite:false}));
     pin.position.set(c.pos.x,H/2,c.pos.z);
     grp.add(ring,disc,pin);
+    // #6 NABIZ HALKASI: seçili kamerayı okunur kıl — loop() her karede pulseRing'i genişletip soldurur (camActiveMarker referansı).
+    const pulse=new THREE.Mesh(new THREE.RingGeometry(rOut,rOut+(boost?0.13:0.09),48),
+      new THREE.MeshBasicMaterial({color:COL,transparent:true,opacity:0.55,side:THREE.DoubleSide,depthWrite:false}));
+    pulse.rotation.x=-Math.PI/2; pulse.position.set(c.pos.x,0.02,c.pos.z);
+    grp.add(pulse);
+    grp.userData.activeMarker=true; grp.userData.pulseRing=pulse;   // loop() nabız için okur
     return grp;
   }
   function renderCamGizmos(){
     if(!scene) return;
     const g=ensureGizmoGroup();
+    camActiveMarker=null;   // #6: her yeniden çizimde seçili-işaretçi referansını sıfırla (loop() nabzı taze mesh'i izler)
     while(g.children.length){ const ch=g.children[0]; disposeGizmo(ch); g.remove(ch); }
     // K4: adım-2 önizleme modunda gizmolar SALT-GÖRÜNÜR (mesh+koni+etiket, düzenleme yok). Dış modda iç kameralar
     //   gizli (setExteriorMode camGizmos.visible=false) → önizleme yalnız Kat görünümünde iç kamerayı gösterir.
@@ -5045,7 +5107,7 @@
     camList.forEach(function(c,i){
       if(!camCtxMatch(c)) return;   // İŞ 1b: başka kat/blok bağlamının kamerası bu sahnede gizmo kurmaz
       const active=(i===activeCamIdx);
-      if(active) g.add(makeActiveMarker(c));                        // seçili işaretçi ÖNCE → kamera mesh'i üstte kalsın
+      if(active){ camActiveMarker=makeActiveMarker(c); g.add(camActiveMarker); }   // seçili işaretçi ÖNCE → kamera mesh'i üstte kalsın; ref loop() nabzı için
       g.add(makeViewCone(c,active));
       g.add(makeCameraMesh(c,active,i));
       if(active) g.add(makeAimHandle(c));                           // S3: koni-ucu NİŞAN tutamacı (sürükle = yeniden nişan)
@@ -7879,6 +7941,12 @@
   function loop(){ raf=requestAnimationFrame(loop);
     if(overlay.style.display!=='none'&&controls){
       if(walkOn){ walkStep(); renderer.render(scene,cam); renderMiniMap(); return; }   // W1: gezinti kendi kamera durumunu sürer (orbit/PiP/koni pass ATLA); R8: minimap scissor-pass (ana pass'ten SONRA)
+      // #6 SEÇİLİ KAMERA NABZI: seçili işaretçinin dış halkası genişleyip solar → hangi kamera seçili tek bakışta okunur.
+      if(!exteriorMode && camUIEnabled && camActiveMarker && camActiveMarker.userData && camActiveMarker.userData.pulseRing){
+        const _pt=(typeof performance!=='undefined'?performance.now():Date.now())*0.001;
+        const _ph=0.5+0.5*Math.sin(_pt*3.0), _ps=1+(camHighlightBoost?0.55:0.4)*_ph, _pr=camActiveMarker.userData.pulseRing;
+        _pr.scale.set(_ps,_ps,_ps); if(_pr.material) _pr.material.opacity=(camHighlightBoost?0.65:0.5)*(1-_ph);
+      }
       controls.update(); renderer.render(scene,cam);
       if(exteriorMode) renderExtPip(); else renderPip();     // S2: dış modda drone PiP; içte B1-R kamera PiP (scissor pass)
       checkAngleDrift();                                     // açı kilitten saptı mı → sol uyarı
@@ -8001,6 +8069,10 @@
     isWalking:function(){ return !!walkOn; },
     walkEnterCount:function(){ return walkEnterCount; },
     walkMoved:function(){ return !!walkMoved; },
+    // IS 1: kabuk 'gezinti' adımı giriş köprüsü — sahneyi İÇ görünüme + daireli blok/kata hazırla (pegman drop çalışsın).
+    enterWalkContext:function(){ try{ return enterWalkContext(); }catch(e){ return false; } },
+    // IS 2 (#6): SEÇİLİ kamera işaretçisini kamera turunda daha belirgin yap (onboarding kamera3d aç/kapa).
+    setCamHighlightBoost:function(on){ camHighlightBoost=!!on; try{ if(camUIEnabled && !exteriorMode) renderCamGizmos(); }catch(e){} },
     // rail arac gruplari acik mi (dose3d/malzeme3d hedef butonu overlay'de var mi kontrolu)
     isFurnUIEnabled:function(){ return !!furnUIEnabled; },
     isMatUIEnabled:function(){ return !!matUIEnabled; },

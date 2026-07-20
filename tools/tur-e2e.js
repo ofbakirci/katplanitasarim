@@ -989,6 +989,9 @@ async function runPhase3(page, f){
       const getters=await f.evaluate(()=>{ try{ const V=window.View3D; return { isWalking:typeof V.isWalking, walkEnterCount:typeof V.walkEnterCount, walkMoved:typeof V.walkMoved }; }catch(e){ return {err:String(e)}; } });
       const base=await f.evaluate(()=>{ try{ return window.View3D.walkEnterCount(); }catch(e){ return -1; } });
       geziSpot={ engHole:engHole.ok, engInfo:engHole, getters, base };
+      // IS3(REV-bugun): gezinti adimina GIRERKEN shell step.enter -> View3D.enterWalkContext() cagirir:
+      //   dis moddan cikar (exteriorMode=false) + site aciksa daireli bloga (B) + konut katina gecer. Bu anda oku.
+      geziSpot.ctx=await f.evaluate(()=>{ try{ const V=window.View3D; return { hasEWC:(typeof V.enterWalkContext==='function'), ext:(V.isExteriorMode?V.isExteriorMode():null), blk:(V.blockContext?V.blockContext():null) }; }catch(e){ return {err:String(e)}; } });
       // rail Gezinti butonuna tik -> toggleWalk -> enterWalk -> walkEnterCount++
       await f.evaluate(()=>{ try{ const b=document.querySelector('#v3dRail button[data-grp="walk"]'); if(b) b.click(); }catch(e){} }); await sleep(500);
       let after=await f.evaluate(()=>{ try{ return window.View3D.walkEnterCount(); }catch(e){ return -1; } });
@@ -1022,6 +1025,11 @@ async function runPhase3(page, f){
     : bad('IS3 FPV getter\'lari eksik', JSON.stringify(geziSpot&&geziSpot.getters));
   (geziSpot && geziSpot.entered) ? ok('IS3 gezinti: rail Gezinti butonuyla FPV\'ye girildi (walkEnterCount++)', 'base='+(geziSpot&&geziSpot.base)+'->'+(geziSpot&&geziSpot.after)) : bad('IS3 gezinti walkEnterCount artmadi', JSON.stringify(geziSpot));
   geziAdvanced ? ok('IS3 gezinti yaptirinca OTO-ilerledi (kamera evresine)') : bad('IS3 gezinti oto-ilerleme (İleri kacisi kullanildi)');
+  // IS3(REV-bugun) — GEZINTI GIRISINDE enterWalkContext: dis moddan cikip IC gorunume gecmeli (pegman bina
+  //   icine birakilabilsin); site aciksa daireli blok (B) baglami. exteriorMode===false birincil sinyal.
+  (geziSpot && geziSpot.ctx && geziSpot.ctx.hasEWC && geziSpot.ctx.ext===false)
+    ? ok('IS3 gezinti girisinde enterWalkContext: IC gorunume gecti (exteriorMode false) + Blok/site baglami', JSON.stringify(geziSpot.ctx))
+    : bad('IS3 gezinti girisinde ic goruntu/enterWalkContext saglanmadi', JSON.stringify(geziSpot&&geziSpot.ctx));
   // REV6 KUSUR 2: dose3d engineHole (iframe seffaf) + #mskTourRing hedef Mobilya butonunu sariyor + bos sahne +
   //   Otomatik Döşe sinyali degisti (furnitureEditCount++) + oto-ilerledi.
   (doseSpot&&doseSpot.engHole) ? ok('KUSUR2 dose3d engineHole: motor iframe SEFFAF (delik 3B sahneyi kapsar)', JSON.stringify(doseSpot&&doseSpot.engInfo)) : bad('KUSUR2 dose3d engineHole iframe seffaf', JSON.stringify(doseSpot&&doseSpot.engInfo));
@@ -1124,6 +1132,31 @@ async function runPhase3(page, f){
     (yonCompact.hasCard && yonCompact.compact) ? ok('KUSUR13a yon-degistir kart KOMPAKT (.onbCompact, '+yonCompact.w+'px)', JSON.stringify({w:yonCompact.w})) : bad('KUSUR13a yon-degistir kart kompakt degil', JSON.stringify(yonCompact));
     (!yonCompact.ovDock && !yonCompact.ovPip) ? ok('KUSUR13a yon-degistir kart kamera dock (#v3dCamDock) + PiP (#v3dPip) ile ÇAKIŞMIYOR', JSON.stringify({ovDock:yonCompact.ovDock, ovPip:yonCompact.ovPip, hasDock:yonCompact.hasDock, hasPip:yonCompact.hasPip})) : bad('KUSUR13a yon-degistir kart dock/PiP ortuyor', JSON.stringify(yonCompact));
     (yonCompact.hasEnsure) ? ok('KUSUR13a yon-degistir adiminda hedef-kurtarma ensure() fonksiyonu var') : bad('KUSUR13a yon-degistir ensure fonksiyonu yok', JSON.stringify(yonCompact));
+    // REV8(bugun) IS4/a — SAHNE-DELIGI (sceneHole): hedef dock deligine EK, sahne tuvali de aydinlik/tiklanabilir
+    //   kalir. onbHoleMask'te hole2 (3. rect) canvasWrap kadar acilir -> scrim sahne uzerinde SEFFAF.
+    const scHole = await f.evaluate(()=>{ try{
+      const m=document.getElementById('onbHoleMask'); if(!m) return {ok:false, reason:'onbHoleMask yok'};
+      const rects=m.querySelectorAll('rect'); const h2=rects[2];   // [bg, hole, hole2]
+      if(!h2) return {ok:false, reason:'hole2 yok', n:rects.length};
+      const hw=+h2.getAttribute('width')||0, hh=+h2.getAttribute('height')||0;
+      const cw=document.getElementById('canvasWrap'); const cr=cw?cw.getBoundingClientRect():null;
+      if(!cr) return {ok:false, reason:'canvasWrap yok', hw, hh};
+      const covers = hw>=cr.width*0.8 && hh>=cr.height*0.8;
+      return {ok:covers, hw:Math.round(hw), hh:Math.round(hh), cw:Math.round(cr.width), ch:Math.round(cr.height)};
+    }catch(e){ return {ok:false, reason:String(e)}; } });
+    (scHole.ok) ? ok('REV8 yon-degistir sceneHole: sahne bolgesi maske-SEFFAF (hole2 ~ canvasWrap)', JSON.stringify(scHole)) : bad('REV8 yon-degistir sceneHole hole2 canvas kadar acilmadi', JSON.stringify(scHole));
+    // REV8(bugun) IS4/c — SECILI KAMERA VURGUSU: View3D.setCamHighlightBoost (nabiz halkasi + buyuk marker).
+    //   Pratik sinyal: fonksiyon var + kamera secili (aktif marker cizilebilir).
+    const boostDiag = await f.evaluate(()=>({ hasBoost:(window.View3D&&typeof View3D.setCamHighlightBoost==='function'), sel:(window.View3D&&View3D.getActiveCamIdx)?View3D.getActiveCamIdx():-1 }));
+    (boostDiag.hasBoost && boostDiag.sel>=0) ? ok('REV8 secili kamera vurgusu: setCamHighlightBoost var + kamera secili (buyuk marker/nabiz halkasi)', JSON.stringify(boostDiag)) : bad('REV8 setCamHighlightBoost/secim vurgu sinyali eksik', JSON.stringify(boostDiag));
+    // REV8(bugun) IS4/b — KAMERA-SECIMI-ILERLETMEZ: rebaseKey=camSelSig. Baska kamera secilince taban O kameraya
+    //   resetlenir -> camDirSig!==base OLMAZ -> adim ILERLEMEZ (yalniz GERCEK yon degisimi ilerletir).
+    const selBefore = await f.evaluate(()=>(window.View3D&&View3D.getActiveCamIdx)?View3D.getActiveCamIdx():-1);
+    const selSwitched = await f.evaluate(()=>{ try{ const V=window.View3D; const n=(V.getCameras?V.getCameras().length:0); if(n<2) return {ok:false,n}; let cur=(V.getActiveCamIdx?V.getActiveCamIdx():0); if(cur<0) cur=0; const other=(cur+1)%n; V.selectCam(other); return {ok:true, cur, other, now:(V.getActiveCamIdx?V.getActiveCamIdx():-1), n}; }catch(e){ return {ok:false, err:String(e)}; } });
+    await sleep(1200);   // rebaseKey tick + kart kontrolu (adim ILERLEMEMELI)
+    const stillYon = await f.evaluate(()=>{ const c=document.querySelector('.onbCard'); return !!(c && /Bakış yönünü değiştir/.test(c.textContent||'')); });
+    await f.evaluate((i)=>{ try{ if(i>=0 && window.View3D&&View3D.selectCam) View3D.selectCam(i); }catch(e){} }, selBefore);   // secimi eski haline getir
+    (selSwitched.ok && stillYon) ? ok('REV8 kamera-secimi-ilerletmez: baska kamera secilince adim ILERLEMEDI (rebaseKey=camSelSig)', JSON.stringify({selSwitched, stillYon})) : bad('REV8 kamera secimi adimi ilerletti (rebaseKey camSelSig?)', JSON.stringify({selSwitched, stillYon}));
     // GERCEK EYLEM: dock aim butonu + sahne tiki -> secili kamera yon (camDirSig) degissin
     const yonRes = await changeCamSig(f, 'aim');
     (yonRes.changed) ? ok('KUSUR13a yon-degistir: dock aim + sahne tikiyla camDirSig DEGISTI (secili kamera)', JSON.stringify({before:yonRes.before, after:yonRes.after, via:yonRes.via})) : bad('KUSUR13a camDirSig degismedi', JSON.stringify(yonRes));
@@ -1547,6 +1580,47 @@ async function runPkg(page, f){
   // REV7: vitrin turu da 13 adim (gezinti eklendi)
   const scT=progN(sc?sc.prog:''); (scT && scT.total===13) ? ok('vitrin akis turu 13 adim (gezinti dahil)','total='+scT.total) : bad('vitrin akis turu total 13','prog='+(sc?sc.prog:'?'));
   await shot(page,'pkg-01');
+
+  // ── SADAKAT ONARIMI ASSERT'I (cam5/cam7 kusuru — REV11 bodrum ekleyince Blok B floors indeksleri +1 kaydi,
+  //   iç kamera __floor damgalari kaymadigi icin canli mesh YANLIS kati (zemin) kuruyordu). Jeneratör
+  //   repairCameraFloorStamps ile iç kameralari kat1'e (bodrum+1) hizalar. Burada CANLI vitrinde dogrula:
+  //   (1) iç kameralarin __floor'u KENDI blogunun bodrumSayisi+1'ine (kat1 indeksi) esit (DINAMIK, gomulu sayi yok).
+  //   (2) o floors[kat1] KONUT kati imzasi — zemin (bodrum) katindan FARKLI bolge sayisi (kamera zeminde DEGIL). */
+  const stampChk = await f.evaluate(()=>{
+    try{
+      const V=window.View3D; if(!V||!V.getCameras) return {ok:false, reason:'no View3D.getCameras'};
+      const cams=V.getCameras()||[];
+      const inter=cams.filter(c=>c && c.__floor!=null && c.__block!=null);   // iç kameralar (drone'da __floor yok)
+      if(!inter.length) return {ok:false, reason:'ic kamera yok', total:cams.length};
+      const blk=(typeof blocks!=='undefined'&&blocks)?blocks:null;
+      const bodrumOf=(b)=>{ const bl=blk&&blk[b]; const n=(bl&&bl.ui)?parseInt(bl.ui.bodrumSayisi,10):NaN; return isFinite(n)?n:0; };
+      const per={};
+      inter.forEach(c=>{ const b=c.__block; const bod=bodrumOf(b); const target=bod+1;
+        if(!per[b]) per[b]={bod, target, floors:[], allKat1:true, regsKat1:-1, regsZemin:-1};
+        per[b].floors.push(c.__floor); if(c.__floor!==target) per[b].allKat1=false; });
+      // bölge imzasi: her blogun floors[kat1] (konut) vs floors[bodrum-son=zemin index=bod-... ] — zemin idx=bod.
+      Object.keys(per).forEach(b=>{ const bl=blk&&blk[b]; const P=per[b];
+        const fk=bl&&bl.floors&&bl.floors[P.target]; P.regsKat1=(fk&&fk.plan&&fk.plan.regions)?fk.plan.regions.length:-1;
+        const fz=bl&&bl.floors&&bl.floors[P.bod];     P.regsZemin=(fz&&fz.plan&&fz.plan.regions)?fz.plan.regions.length:-1; });
+      return {ok:true, per, nInter:inter.length};
+    }catch(e){ return {ok:false, reason:String(e)}; }
+  });
+  if(!stampChk.ok){
+    bad('SADAKAT: iç kamera __floor damgasi okunamadi', JSON.stringify(stampChk));
+  } else {
+    const per=stampChk.per;
+    // (1) HER blogun iç kameralari kat1 (bodrum+1) katinda
+    const allOk=Object.keys(per).every(b=>per[b].allKat1);
+    allOk ? ok('SADAKAT: iç kamera __floor == blogun bodrumSayisi+1 (kat1) — TÜM bloklar', JSON.stringify(per))
+          : bad('SADAKAT: iç kamera __floor kat1 (bodrum+1) DEGIL — floors kaymis, damga kalmis', JSON.stringify(per));
+    // (2) Blok B (blok 1) kat1 imzasi ZEMIN'den farkli (kamera zemin katinda degil) — regs mevcutsa dogrula
+    const b1=per[1];
+    if(b1 && b1.regsKat1>0 && b1.regsZemin>0){
+      (b1.regsKat1!==b1.regsZemin)
+        ? ok('SADAKAT: Blok B kat1 KONUT imzasi zeminden farkli (kamera zeminde degil)', 'kat1regs='+b1.regsKat1+' zeminRegs='+b1.regsZemin+' kat1idx='+b1.target)
+        : bad('SADAKAT: Blok B kat1 == zemin imzasi (kamera hala zemin katinda?)', JSON.stringify(b1));
+    }
+  }
 
   // REV7 ADIM-5 (Döşe) VITRIN ASSERT'LERI — pakette render'lar dolu; adim-5'e atla + ilk karti sec, pazaryeri
   //   baglami kurulsun. (i) 'VİDEO TURLAR' seridi (.vtstrip) KALKTI, (ii) sag panelde #expTourDaire/#expTourSite
