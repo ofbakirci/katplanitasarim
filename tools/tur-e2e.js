@@ -40,8 +40,10 @@ function loadPuppeteer(){                                   // once yerel node_m
     'puppeteer-core',
     P.join(__dirname, 'node_modules', 'puppeteer-core'),
     P.join(__dirname, '..', 'node_modules', 'puppeteer-core'),
+    process.env.PUPPETEER_CORE || '',
     '/private/tmp/claude-501/-Users-ofbakirci-apps-ofb-katplanitasarim/f134d055-1952-494f-9e8f-060129f159ce/scratchpad/node_modules/puppeteer-core',
-  ];
+    '/private/tmp/claude-501/-Users-ofbakirci-apps-ofb-katplanitasarim/a78ddd65-c5da-4cbf-bdaf-8ae09a09428c/scratchpad/node_modules/puppeteer-core',
+  ].filter(Boolean);
   for(const t of tries){ try{ return require(t); }catch(e){} }
   throw new Error('puppeteer-core bulunamadi — `npm i puppeteer-core` calistirin.');
 }
@@ -61,6 +63,7 @@ const BASE = MESKEN_ROOT
 
 const results = [];
 let shotN = 0;
+let tPageStart = 0;   // (e) LOADER: sayfa goto ani -> tur karsilama karti suresi tavani
 const errors = [];   // pageerror
 const consoleErrs = [];
 
@@ -157,15 +160,28 @@ async function iframeDoseTargetRect(page){
 //   download gozetleyici kur (URL.createObjectURL + a[download].click yakalar).
 async function installDownloadObserver(page){
   try{ await page.evaluate(()=>{
-    if(window.__dlObs) return; window.__dlSeen=[];
+    if(window.__dlObs) return; window.__dlSeen=[]; window.__dlBlobs=[]; window.__dlBlobP=[];
     const origCreate=URL.createObjectURL;
     URL.createObjectURL=function(b){ try{ window.__dlSeen.push('blob'); }catch(e){} return origCreate.apply(this, arguments); };
     const origClick=HTMLAnchorElement.prototype.click;
-    HTMLAnchorElement.prototype.click=function(){ try{ if(this.download) window.__dlSeen.push('a:'+this.download); }catch(e){} return origClick.apply(this, arguments); };
+    HTMLAnchorElement.prototype.click=function(){
+      try{ if(this.download){ window.__dlSeen.push('a:'+this.download);
+        const href=this.href, name=this.download;
+        if(/^blob:/.test(href)){                // blob URL revoke edilmeden ONCE baytlari oku (bayt/PK/girdi sayisi teyidi)
+          const pr=fetch(href).then(r=>r.arrayBuffer()).then(buf=>{ const u=new Uint8Array(buf);
+            // yerel-dosya-basligi (0x50 0x4B 0x03 0x04) tara -> ZIP girdi sayisi
+            let entries=0; for(let i=0;i+3<u.length;i++){ if(u[i]===0x50&&u[i+1]===0x4B&&u[i+2]===0x03&&u[i+3]===0x04) entries++; }
+            window.__dlBlobs.push({ name, size:u.length, b0:u[0]||0, b1:u[1]||0, pk:(u[0]===0x50&&u[1]===0x4B), entries }); }).catch(()=>{});
+          window.__dlBlobP.push(pr);
+        }
+      } }catch(e){}
+      return origClick.apply(this, arguments);
+    };
     window.__dlObs=true;
   }); }catch(e){}
 }
 async function getDownloads(page){ try{ return await page.evaluate(()=>Array.isArray(window.__dlSeen)?window.__dlSeen.slice():[]); }catch(e){ return []; } }
+async function getDownloadBlobs(page){ try{ await page.evaluate(()=>Promise.all((window.__dlBlobP||[]).map(p=>p.catch(()=>{})))); return await page.evaluate(()=>Array.isArray(window.__dlBlobs)?window.__dlBlobs.slice():[]); }catch(e){ return []; } }
 
 // --- motor (iframe) onboarding card helpers ---
 async function onbCard(f){
@@ -326,6 +342,7 @@ async function resumeScenario(page, f){
 
   const url = `${BASE}?demo=1${PKG?'&paket=1':''}&_cb=${Date.now()}`;
   log('\n=== E2E '+(MESKEN_ROOT?'[MESKEN-KOK regresyon]':(PKG?'[VITRIN paket=1]':'[HANDS-ON]'))+' === '+url);
+  tPageStart = Date.now();   // (e) LOADER tavani icin baslangic
   await page.goto(url, {waitUntil:'domcontentloaded', timeout:60000});
 
   const f = await waitEngineFrame(page);
@@ -360,6 +377,13 @@ async function resumeScenario(page, f){
 async function runHandson(page, f){
   // ---- PHASE 1: shell welcome + proje ----
   let sc = await waitFor(async()=>{ const c=await shellCard(page); return c.visible?c:null; }, {timeout:15000, desc:'shell welcome'});
+  // (e) LOADER REGRESYON TAVANI: sayfa goto'dan loader KALKIP tur karsilama karti GORUNUR olana kadar toplam
+  //   sure < 13sn (LOADER_DUR=8.5 + boot; eski 16.4sn REGRESYON). Loader 'is-done' -> gorunum gizli.
+  await waitFor(async()=>{ const done=await page.evaluate(()=>{ const l=document.getElementById('meskenLoader');
+    return !l || l.classList.contains('is-done') || getComputedStyle(l).visibility==='hidden'; }); return done?true:null; },
+    {timeout:16000, interval:200, desc:'loader is-done'}).catch(()=>{});
+  const loaderMs = Date.now()-tPageStart;
+  (loaderMs < 13000) ? ok('(e) loader: goto->loader kalkti+karsilama karti < 13sn', loaderMs+'ms') : bad('(e) loader < 13sn tavani (regresyon)', loaderMs+'ms');
   const p1=progN(sc.prog);
   (p1 && p1.n===1 && p1.total===12) ? ok('kabuk welcome 1/12', sc.title) : bad('kabuk welcome 1/12', 'gorulen='+sc.prog+' '+sc.title);
   await shot(page,'01-welcome');
@@ -459,6 +483,16 @@ async function runHandson(page, f){
   // REV4 KUSUR 3: uygulanan plan DEMO blok A imzasiyla eslesir (regions == demo, motor taze-uretimi DEGIL)
   const planA = await f.evaluate(()=>{ try{ return { regs:(typeof plan!=='undefined'&&plan&&plan.regions)?plan.regions.length:-1, units:(typeof plan!=='undefined'&&plan&&plan.unitObjs)?plan.unitObjs.length:-1 }; }catch(e){ return {regs:-2}; } });
   (bridgeA.ok && planA.regs===bridgeA.aRegs) ? ok('KUSUR3 Blok A demo yerlesim uygulandi (regions=demo, motor DEGIL)', 'regs='+planA.regs+'==demo '+bridgeA.aRegs) : bad('KUSUR3 Blok A demo yerlesim','plan='+JSON.stringify(planA)+' demoA='+(bridgeA.aRegs));
+  // REV(a) BALKON-ADIMINDAN ONCE BALKONSUZ: onbApplyDemoLayout demo balkonlarini onbDemoBalkSet'e stashlar,
+  //   plani balkonsuz basar -> yerlesim sonrasi (balkon-ekle adimina KADAR) balconies.length===0; set dolu (>=10).
+  const balkAfterLayout = await f.evaluate(()=>{
+    try{ const n=(typeof balconies!=='undefined'&&balconies)?balconies.length:-1;
+      const set=(typeof ONB!=='undefined'&&ONB.demoBalkCount)?ONB.demoBalkCount():-1;
+      // demo blok A'nin GERCEK balkon adedi (stash bunun aynisi olmali; fallback ONB_TARGETS.balkon DEGIL)
+      let raw=-1; try{ const rs=(typeof onbDemoBlockState==='function')?onbDemoBlockState('blokA'):null; raw=(rs&&Array.isArray(rs.balconies))?rs.balconies.length:-1; }catch(e){}
+      return {n, set, raw}; }catch(e){ return {n:-2, set:-2, raw:-2, err:String(e)}; } });
+  (balkAfterLayout.n===0) ? ok('REV(a) yerlesim sonrasi balconies=0 (balkon-adimina kadar gorunmez)','n='+balkAfterLayout.n) : bad('REV(a) yerlesim sonrasi balconies=0','n='+balkAfterLayout.n);
+  (balkAfterLayout.set>=1 && balkAfterLayout.set===balkAfterLayout.raw) ? ok('REV(a) layout demo balkon seti stashlandi (onbDemoBalkSet=blok A gercek balkon adedi)','set='+balkAfterLayout.set+'==rawA '+balkAfterLayout.raw) : bad('REV(a) onbDemoBalkSet demo A ile eslesmedi','set='+balkAfterLayout.set+' rawA='+balkAfterLayout.raw);
   mc = await waitOnbProg(f, 6, {timeout:15000, desc:'6 duvar-cek'}); ok('motor 6/16 '+mc.title);
   await shot(page,'07-duvar-cek');
 
@@ -824,6 +858,23 @@ async function runPhase3(page, f){
   await waitFor(async()=>{ const c=await onbCard(f); const p=progN(c.prog); return (c.visible && p && p.total===7)?c:null; }, {timeout:25000, desc:'kamera3d tour (7 adim)'});
   let kc = await onbCard(f); ok('kamera3d turu basladi', kc.prog+' '+kc.title);
 
+  // REV(c) 3B FAZINDA TUR DUGMESI = KAMERA MINI-TURU: kamera3d turunu KAPAT (dismiss) -> kabuk #mskTourBtn ->
+  //   onbRelaunch FAZ-FARKINDA (3B acik) -> kamera3d BASTAN (1/7, step 0) + kart gorunur + onb.ana durumu DEGISMEDI.
+  const anaBefore = await f.evaluate(()=>{ try{ return localStorage.getItem('onb.ana.status'); }catch(e){ return null; } });
+  await onbClick(f,'close'); await sleep(500);
+  const kamGone = await f.evaluate(()=>!document.querySelector('.onbCard'));
+  const kamStatus = await f.evaluate(()=>{ try{ return localStorage.getItem('onb.kamera3d.status'); }catch(e){ return null; } });
+  (kamGone && kamStatus==='dismissed') ? ok('REV(c) kamera3d turu KAPATILDI (dismissed + kart gitti)','status='+kamStatus) : bad('REV(c) kamera3d kapatildi','status='+kamStatus+' gone='+kamGone);
+  const relaunchClicked = await clickParent(page, '#mskTourBtn');
+  relaunchClicked ? ok('REV(c) 3B\'de #mskTourBtn tiklandi (mini-tur geri)') : bad('REV(c) #mskTourBtn tiklanmadi');
+  const kamBack = await waitFor(async()=>{ const c=await onbCard(f); const p=progN(c.prog); return (c.visible && p && p.total===7)?{c,p}:null; }, {timeout:12000, interval:250, desc:'REV(c) kamera3d resume'}).catch(()=>null);
+  (kamBack && kamBack.p.n===1) ? ok('REV(c) Tur dugmesi kamera3d\'yi BASTAN acti (1/7, step 0)','prog='+kamBack.c.prog) : bad('REV(c) kamera3d bastan 1/7','geldi='+(kamBack?kamBack.c.prog:'kart yok'));
+  const kamStatus2 = await f.evaluate(()=>{ try{ return localStorage.getItem('onb.kamera3d.status'); }catch(e){ return null; } });
+  (kamStatus2==='active') ? ok('REV(c) kamera3d durumu tekrar active') : bad('REV(c) kamera3d active','status='+kamStatus2);
+  const anaAfter = await f.evaluate(()=>{ try{ return localStorage.getItem('onb.ana.status'); }catch(e){ return null; } });
+  (anaAfter===anaBefore) ? ok('REV(c) onb.ana durumu DEGISMEDI (kamera turu ana\'ya dokunmaz)','ana='+anaAfter) : bad('REV(c) onb.ana durumu degisti','before='+anaBefore+' after='+anaAfter);
+  kc = await onbCard(f);
+
   // place one interior camera via mesh: real two-click (pos+aim). Verify count INCREMENTS.
   const camBefore = await getCamCounts(f);
   // ensure camera tool open (tour onStepEnter opens it; guard for timing): if #v3dPlaceBtn missing, click rail Kamera
@@ -911,6 +962,19 @@ async function runPhase3(page, f){
   const extView = await f.evaluate(()=>({ mode:(window.View3D&&View3D.isExteriorMode)?View3D.isExteriorMode():false, view:(window.View3D&&View3D.getExtBlockView)?View3D.getExtBlockView():null }));
   (extView.mode && extView.view==='all') ? ok('KUSUR2 drone evresinde blok gorunumu Tumu', JSON.stringify(extView)) : bad('KUSUR2 drone gorunumu Tumu degil', JSON.stringify(extView));
 
+  // REV(d) ZEMIN KAT BALKONSUZ: dis cephe kuruluyken kat-ayrili blokta zemin kat (floorBalc[0]) balkonsuz,
+  //   ust katlar balkonlu. View3D.buildExteriorForTest -> floorBalc dizisi = stackShell'in kat-basina balkon
+  //   karari (zemin false -> groundFallbackProto/balkonsuz proto klonlanir; ust true -> balkon plaka+korkuluk).
+  const fbInfo = await waitFor(async()=>{
+    const r = await f.evaluate(()=>{ try{ const V=window.View3D; if(!V||!V.buildExteriorForTest) return null;
+      try{ V.setExteriorMode&&V.setExteriorMode(true); }catch(e){}
+      const e=V.buildExteriorForTest(); return e?{floorBalc:e.floorBalc, floors:e.floors}:null; }catch(e){ return {err:String(e&&e.message||e)}; } });
+    return (r && Array.isArray(r.floorBalc) && r.floorBalc.length>=2) ? r : null;
+  }, {timeout:12000, interval:600, desc:'REV(d) floorBalc'}).catch(()=>null);
+  const fbArr = fbInfo && Array.isArray(fbInfo.floorBalc) ? fbInfo.floorBalc : null;
+  (fbArr && fbArr[0]===false) ? ok('REV(d) zemin kat BALKONSUZ (floorBalc[0]===false)', JSON.stringify(fbArr)) : bad('REV(d) zemin kat balkonsuz (floorBalc[0]=false)', JSON.stringify(fbInfo));
+  (fbArr && fbArr.slice(1).some(v=>v===true)) ? ok('REV(d) UST katlarda balkon VAR (floorBalc[1..]===true)', JSON.stringify(fbArr)) : bad('REV(d) ust katlarda balkon var', JSON.stringify(fbInfo));
+
   // REV5 KUSUR 15 — drone-ekle "zaten tamamlanmis" DEMEZ (eyleme bekler) + kullanici 1 drone ekler -> ex=3
   const droneAddCard = await waitKamCard(f, /Drone kamerası ekle/, 9000).catch(()=>null);
   if(droneAddCard){
@@ -981,12 +1045,15 @@ async function runPhase3(page, f){
       return {url, size, nat};
     }
     const base='/mesken/demo-assets/cam1.jpg';
-    const out={ base:await probe(base) };
+    const out={ base:await probe(base), cam6:await probe('/mesken/demo-assets/cam6.jpg') };
     if(cardUrl) out.card=await probe(cardUrl);
     return out;
   }, camCard ? camCard.res : null);
   const baseOK = eInfo.base && eInfo.base.nat===1600 && eInfo.base.size>=300000;   // yeni set 307KB+; eski 199KB DEGIL
   baseOK ? ok('(e) demo-assets/cam1.jpg paket-kokenli (nat=1600, >=300KB)', 'nat='+eInfo.base.nat+' size='+eInfo.base.size) : bad('(e) cam1.jpg paket-kokenli','base='+JSON.stringify(eInfo.base));
+  // REV(e-cam6) cam6.jpg YENILENDI (bugun): sabit boyut 337271 bayt + 1600px (hash-degisim regresyon citasi).
+  const cam6OK = eInfo.cam6 && eInfo.cam6.nat===1600 && eInfo.cam6.size===337271;
+  cam6OK ? ok('REV(e) demo-assets/cam6.jpg yeni set (nat=1600, size=337271 sabit)', 'nat='+eInfo.cam6.nat+' size='+eInfo.cam6.size) : bad('REV(e) cam6.jpg sabit boyut/nat','cam6='+JSON.stringify(eInfo.cam6));
   const cardImgOK = eInfo.card && eInfo.card.nat===1600 && eInfo.card.size>=300000;
   (camCard && cardImgOK) ? ok('(e) karta dusen cam img naturalWidth==1600 + 300KB+', (camCard.res)+' nat='+eInfo.card.nat+' size='+eInfo.card.size) : bad('(e) karta dusen cam img 1600px/300KB','card='+JSON.stringify(eInfo.card)+' url='+(camCard?camCard.res:'yok'));
 
@@ -1028,10 +1095,29 @@ async function runPhase3(page, f){
   //   tıklayınca exportProject() -> exportPackage() -> .mskpkg blob a[download].click (download gozetleyici yakalar).
   const ctaLabel = await page.evaluate(()=>{ const b=document.getElementById('ctaBtn'); return b?b.textContent.trim():''; });
   (/Projeyi İndir/.test(ctaLabel)) ? ok('REV6 son adim #ctaBtn etiketi "Projeyi İndir"', ctaLabel) : bad('REV6 ctaBtn "Projeyi İndir"','label='+ctaLabel);
-  const dlBefore = (await getDownloads(page)).length;
   await clickParent(page, '#ctaBtn');
-  const dlSeen = await waitFor(async()=>{ const d=await getDownloads(page); return d.length>dlBefore ? d : null; }, {timeout:12000, interval:400, desc:'proje indirme tetiklendi'}).catch(()=>null);
-  (dlSeen && dlSeen.length>dlBefore) ? ok('REV6 "Projeyi İndir" GERÇEK indirme tetikledi (.mskpkg blob)', 'dl='+JSON.stringify(dlSeen.slice(-3))) : bad('REV6 proje indirme tetiklenmedi','dl='+JSON.stringify(await getDownloads(page)));
+  // REV(ZIP) INDIRME GOZCUSU: Proje Indir = TAM 1 .mskpkg + TAM 1 proje-<tarih>-render.zip (ayri JPEG YOK).
+  //   render.zip async uretilir (Promise.all(pkgToDataURL)) -> ikisini de bekle.
+  const dlBoth = await waitFor(async()=>{ const d=await getDownloads(page);
+    const pkg=d.filter(x=>/^a:proje-.*\.mskpkg$/.test(x)), zip=d.filter(x=>/^a:proje-.*-render\.zip$/.test(x));
+    return (pkg.length>=1 && zip.length>=1) ? {pkg, zip} : null;
+  }, {timeout:20000, interval:400, desc:'mskpkg + render.zip indirme'}).catch(()=>null);
+  const dlAll = await getDownloads(page);
+  const mskpkgN = dlAll.filter(x=>/^a:proje-.*\.mskpkg$/.test(x)).length;
+  const zipN = dlAll.filter(x=>/^a:proje-.*-render\.zip$/.test(x)).length;
+  const jpgN = dlAll.filter(x=>/^a:.*\.jpg$/.test(x)).length;
+  (mskpkgN===1) ? ok('REV(ZIP) TAM 1 .mskpkg indi', 'n='+mskpkgN) : bad('REV(ZIP) tam 1 .mskpkg','n='+mskpkgN+' dl='+JSON.stringify(dlAll));
+  (zipN===1) ? ok('REV(ZIP) TAM 1 proje-<tarih>-render.zip indi', 'n='+zipN) : bad('REV(ZIP) tam 1 render.zip','n='+zipN+' dl='+JSON.stringify(dlAll));
+  (jpgN===0) ? ok('REV(ZIP) ayri JPEG indirmesi YOK (hepsi ZIP\'te)', 'jpg='+jpgN) : bad('REV(ZIP) ayri JPEG indirmesi kalkti','jpg='+jpgN+' dl='+JSON.stringify(dlAll));
+  // ZIP baytlari: >0 + PK imzali + girdi sayisi (STORE local-file-header taramasi). mskpkg baytlari >0.
+  const blobs = await getDownloadBlobs(page);
+  const zipBlob = blobs.find(b=>/-render\.zip$/.test(b.name));
+  const mskBlob = blobs.find(b=>/\.mskpkg$/.test(b.name));
+  (zipBlob && zipBlob.size>0) ? ok('REV(ZIP) render.zip > 0 bayt', 'size='+zipBlob.size) : bad('REV(ZIP) render.zip >0 bayt','blob='+JSON.stringify(zipBlob||null));
+  (zipBlob && zipBlob.pk) ? ok('REV(ZIP) render.zip PK imzali (0x50 0x4B)', 'b0='+(zipBlob&&zipBlob.b0)+' b1='+(zipBlob&&zipBlob.b1)) : bad('REV(ZIP) render.zip PK imzali','blob='+JSON.stringify(zipBlob||null));
+  (zipBlob && zipBlob.entries>=1) ? ok('REV(ZIP) render.zip girdi sayisi', zipBlob.entries+' girdi'+(zipBlob.entries===12?' (12 render)':'')) : bad('REV(ZIP) render.zip girdi>=1','entries='+(zipBlob?zipBlob.entries:'?'));
+  (mskBlob && mskBlob.size>0) ? ok('REV(ZIP) .mskpkg > 0 bayt', 'size='+mskBlob.size) : bad('REV(ZIP) .mskpkg >0 bayt','blob='+JSON.stringify(mskBlob||null));
+  log('   [indirmeler] '+JSON.stringify(dlAll)+'  bloblar='+JSON.stringify(blobs.map(b=>({n:b.name,size:b.size,pk:b.pk,e:b.entries}))));
   await shot(page,'25-export');
 
   // (b) angleNudge/extNudge dialoglari tur boyunca HIC gorunmedi (flowTourActive suppress).

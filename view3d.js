@@ -2956,6 +2956,11 @@
       // İş B3: f→proto eşlemesi (kat-başına dış cephe, tip-kat paylaşımlı). VERİLMEDİYSE (ya da floorsOn()
       //   kapalıyken hiç kurulmadıysa) null → aşağıdaki dal hiç tetiklenmez, mevcut tekil-proto yolu BYTE-AYNI.
       const fProtos = shellOpt.floorProtos||null;
+      // İŞ 2 — ZEMİN/ALT KAT BALKON BASTIRMA: tekil-proto fallback (perFloorOn kapalı / ziyaret edilmemiş kat)
+      //   AKTİF katın (balkonlu) proto'sunu TÜM katlara klonluyordu → zeminde/alt katta olmayan balkon çıkıyordu.
+      //   floorBalc[f]===false olan kat, balkonsuz fallback proto'yu (groundFallbackProto) klonlar. floorBalc
+      //   VERİLMEDİYSE (kat-ayrı yok / hesaplanamadı) dal hiç tetiklenmez → mevcut davranış BYTE-AYNI.
+      const fBalc = shellOpt.floorBalc||null, noBalcProto = shellOpt.groundFallbackProto||null;
       const stack=new THREE.Group(); exteriorGroup.add(stack);
       // proto TEK örnek — her benzersiz proto nesnesini İLK isteyen KAT ham alır, sonrakiler klonlar.
       //   BUG (UÇAN-BİNA/U1): çıkma KAPALIYKEN upProto===faceProto (aynı referans). Eski kod faceUsed/upUsed
@@ -2968,6 +2973,7 @@
         let g;
         if(f===0 && groundProto){ g=claim(groundProto); }                   // C2: zemin ayrı vitrin cephesi (öncelik korunur)
         else if(fProtos && fProtos[f]){ g=claim(fProtos[f]); }               // İş B3: bu katın KENDİ cephesi (tip-kat paylaşımlı)
+        else if(fBalc && fBalc[f]===false && noBalcProto && !(cikmaOnB && f>0)){ g=claim(noBalcProto); }   // İŞ 2: bu katta balkon YOK → balkonsuz proto (çıkmalı üst kat hariç: kontur farklı)
         else if(f===0){ g=claim(faceProto); }                               // zemin = taban kontur (fallback)
         else { g=claim(upProto); }                                          // üst katlar = (çıkmalı) kontur (fallback)
         g.position.y=f*flH; stack.add(g);
@@ -3065,6 +3071,27 @@
           floorProtos[f]=fp;
         }
       }
+      // İŞ 2 — KAT-BAŞINA BALKON BAYRAĞI + BALKONSUZ FALLBACK PROTO: kat-ayrıda her katın KENDİ snapshot'ı
+      //   balkon taşır (demo: otopark/alt konut = 0, üst konut = 10). floorSnapshotAt her katın (ziyaret
+      //   edilmemiş dahil) balconies'ini verir. Aktif kat balkonlu AMA bazı katlar balkonsuzsa: o katlar
+      //   için balkonsuz proto kur; stackShell fallback'i floorBalc[f]===false katta bunu klonlar.
+      //   Kat-ayrı yoksa (floorSnapshotAt null) fb hep true → mevcut davranış (her kat balkonlu) korunur.
+      let floorBalc=null, groundFallbackProto=null;
+      try{
+        if(typeof zeminIdx==='function' && typeof floorSnapshotAt==='function'){
+          const activeHasBalc=!!(upperMap && upperMap.balconies && upperMap.balconies.length>0);
+          const fb=[]; let anyNoBalc=false, anyKnown=false;
+          for(let f=0; f<fc.above; f++){
+            const snap=floorSnapshotAt(zeminIdx()+f);
+            if(snap && Array.isArray(snap.balconies)){ anyKnown=true; const has=snap.balconies.length>0; fb[f]=has; if(!has) anyNoBalc=true; }
+            else fb[f]=true;   // bilinmiyor → balkonlu (mevcut davranış)
+          }
+          if(anyKnown && anyNoBalc && activeHasBalc){
+            floorBalc=fb;
+            groundFallbackProto=buildExtFloorGroup(Object.assign({}, upperMap, {balconies:[]}), contour, holes, floorH, mats);
+          }
+        }
+      }catch(e){ floorBalc=null; groundFallbackProto=null; }
       // C2: katAyri + zemin ticari → zemin kat KENDİ planından ayrı cephe (vitrin); zemin harici katlar proto klonu.
       let groundProto=null, groundWin=0;
       try{
@@ -3090,7 +3117,9 @@
         shellOpt.upperProto=buildExtFloorGroup(upperMap, upCont, upHoles, floorH, mats, false, {d:ck.d, base:contour});
       }
       if(floorProtos) shellOpt.floorProtos=floorProtos;   // İş B3: f→proto (tip-kat paylaşımlı); yoksa mevcut tekil-yol
+      if(floorBalc){ shellOpt.floorBalc=floorBalc; shellOpt.groundFallbackProto=groundFallbackProto; }   // İŞ 2: balkonsuz kat fallback'i
       stackShell(contour, holes, fc.above, floorH, proto, groundProto, shellOpt);
+      if(exteriorGroup) exteriorGroup.userData.floorBalc=floorBalc?floorBalc.slice():null;   // İŞ 2 test/teşhis: kat-başına balkon bayrağı ([0]=zemin); null → gating tetiklenmedi (kat-ayrı yok / hepsi balkonlu)
       // Ç4: kapı verisi ZEMİN katın planından — aktif kat zemin değilse (katAyri) zemin snapshot'ından
       //   türet; türetilemezse (ziyaret edilmemiş zemin / katAyri kapalı) aktif map (zaten aynı plan).
       //   Niş de AYNI map'i okur → markiz ile kapı paneli aynı kapıya çapalanır (map'ler aynı bloğun
@@ -7974,7 +8003,8 @@
                floors:extBox&&extBox.floors, below:extBox&&extBox.below, floorH:extBox&&extBox.floorH,
                topY:extBox&&+extBox.topY.toFixed(2), childCount:exteriorGroup.children.length,
                hasCourtyardHole:extCourtyards().length>0, ghostBlocks:extGhostBlocks().length,
-               amenityCount:extAmenities().length, amenityMeshes:ud.amenityMeshes||0 }; },
+               amenityCount:extAmenities().length, amenityMeshes:ud.amenityMeshes||0,
+               floorBalc:ud.floorBalc?ud.floorBalc.slice():null }; },   // İŞ 2: kat-başına balkon bayrağı ([0]=zemin false → balkonsuz)
     // S3: HEADLESS — mevcut imkanlardan türetilen drone prompt peyzaj sinyali + tip listesi (THREE'siz).
     amenityPromptSignal:function(opt){ return amenityPromptSignal(opt); },
     amenityTypesPresent:function(opt){ return amenityTypesPresent(opt); },

@@ -478,6 +478,17 @@ function onbApplyDemoLayout(which){
     const st={}; for(const k in raw){ if(Object.prototype.hasOwnProperty.call(raw,k)) st[k]=raw[k]; }
     st.katAyri=false; st.floors=null; st.activeFloor=0;
     st.ui=Object.assign({}, raw.ui||{}, {bodrumSayisi:'0'});   // bodrum turun ilerki adimina birakilir
+    /* IS 1 (REV) — BALKONLAR BALKON-ADIMINDAN ONCE GORUNMESIN: eski akista yerlesim basimi (restoreState)
+       demo blok balkonlarini (block0'da 10) DA basiyordu -> plan balkonlu gorunuyor, sonra balkon-ekle
+       girisinde yakala+temizle onlari SILIYOR -> "geri gitme" hissi. FIX: demo balkonlari BURADA ayir,
+       onbDemoBalkSet'e stashla (yalniz set BOSken; blokA ilk cagirir), state'ten cikar -> layout GERCEKTEN
+       balkonsuz basar; balkon-ekle adimi ilk balkonu ekletir, kalanini onbPlaceRemainingBalconies tamamlar.
+       (Tur disi restoreState/import DEGISMEZ — bu ayirma yalniz onbApplyDemoLayout demo-basiminda.) */
+    try{
+      if(Array.isArray(raw.balconies) && raw.balconies.length && !(Array.isArray(onbDemoBalkSet)&&onbDemoBalkSet.length))
+        onbDemoBalkSet = raw.balconies.map(function(b){ return {ei:b.ei, t0:b.t0, t1:b.t1, depth:b.depth}; });
+    }catch(e){}
+    st.balconies=[];   // demo layout balkonsuz basar (set yukarida yakalandi)
     // keepBlocks:true -> canli blocks dizisi + parsel + amenity KORUNUR; keepFloors YOK -> villaFloors
     //   null'a + katAyri checkbox false'a resetlenir (tek-kat baglami; kat-ayri turun ilerki adiminda).
     restoreState(st, {keepBlocks:true, fit:false});
@@ -505,6 +516,10 @@ function onbGenBtnCapture(ev){
    ile gelen demo seti; demo-plan'da 10) onbDemoBalkSet'e kopyalanir. Bos/1'den az ise fallback
    ONB_TARGETS.balkonlar kopyasi. Sonra onbClearBalconies BOSALTIR (kullanici bir tane elle eklesin). */
 function onbCaptureBalkSet(){
+  /* IS 1 (REV) — SET ZATEN DOLU ISE YENIDEN YAKALAMA: onbApplyDemoLayout demo-basiminda balkonlari
+     zaten ayirip stashlar (balconies bu adima BOS gelir). Yeniden yakalarsak bos balconies'i alip
+     fallback'e duseriz -> gercek demo seti kaybolur. Doluysa oldugu gibi birak. */
+  if(Array.isArray(onbDemoBalkSet) && onbDemoBalkSet.length) return onbDemoBalkSet;
   let src=null;
   try{ if(typeof balconies!=='undefined' && Array.isArray(balconies)) src=balconies; }catch(e){}
   onbDemoBalkSet = (src && src.length>0)
@@ -1664,7 +1679,7 @@ function onbLaunchTour(tour, reset){
   if(!tour || !onbBrowser() || !document.body) return;
   if(onbActive) onbStop('dismissed');          // ayni anda tek tur
   onbTour=tour; onbActive=true; onbPaused=false; onbHidden=false; onbBases={}; onbGate={};
-  if(tour.id==='ana') onbExportFlag=false;
+  if(tour.id==='ana'){ onbExportFlag=false; if(reset) onbDemoBalkSet=null; }   // IS 1: bastan baslarken demo balkon seti yakalamasi tazelensin
   if(tour.id==='kamera3d') onbExtRenderFlag=false;
   onbSet('onb.'+tour.id+'.status','active'); onbSet('onb.'+tour.id+'.v', String(tour.version));
   const auto = onbComputeTarget(tour.steps, tour.ctx(), {}, {});   // DEVAM icin ilk saglanmayan adim
@@ -1683,6 +1698,17 @@ function onbLaunch(reset){ onbLaunchTour(onbTourById('ana'), reset); }
    + ayni surum -> depolanmis adimdan surdur (onbLaunchTour false: idx=max(storedStep,firstUnsatisfied)).
    Taze / done / surum-bump -> bastan (1/16). "kullanici Tur'a basti = devam istiyor" (dismissed dahil). */
 function onbRelaunch(){
+  /* IS 3 (REV) — FAZ-FARKINDA TUR: 3B gorunum acikken (kamera fazi) Tur tiki KAMERA mini-turunu
+     (kamera3d) hedefler; 2B'de mevcut davranis aynen 'ana'. Kullanici mini-turu KAPATINCA (dismissed)
+     watcher onu yeniden baslatmaz (onbDecideStart 'idle') -> Tur tek yeniden-baslatma yolu.
+       kamera3d: active + ilerleme -> kaldigin yer; dismissed/done/taze -> BASTAN (6 adimlik kisa mini-tur).
+       ana:      active/dismissed + ilerleme -> kaldigin yer (IS 6 davranisi korunur). */
+  const kam=onbTourById('kamera3d');
+  if(kam && onbV3dVisible()){
+    const ks=onbStored(kam);
+    onbLaunchTour(kam, !(ks.status==='active' && ks.v===kam.version && ks.step>0));
+    return;
+  }
   const tour=onbTourById('ana'); if(!tour) return;
   const st=onbStored(tour);
   if((st.status==='active' || st.status==='dismissed') && st.v===tour.version && st.step>0)
@@ -1758,6 +1784,7 @@ var ONB = {
   remainingBalconies: onbRemainingBalconies,
   demoBalkCount: onbDemoBalkCount,
   captureBalkSet: onbCaptureBalkSet,
+  resetBalkSet: function(){ onbDemoBalkSet=null; },   // IS 1: yakalanan demo balkon setini sifirla (tur bastan / test izolasyonu)
   placeRemainingBalconies: onbPlaceRemainingBalconies,
   /* GOREV C — kart-kacinma saf yardimcilari + avoid cozucu (headless test) */
   rectOverlapArea: onbRectOverlapArea,

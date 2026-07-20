@@ -516,13 +516,26 @@ const asserts = `
     T('A placeRemainingBalconies idempotent (mukerrer basmaz)', global.balconies.length===5);
     global.balconies=saved;
   })();
-  /* GOREV A — stepEnter(balkon-ekle): set YAKALANIR (bosalmadan once) + balconies BOSALIR */
+  /* IS 1 (REV) — stepEnter(balkon-ekle): set BOSKEN canliyi YAKALAR (bosalmadan once) + balconies BOSALIR.
+     Yeni akista set genelde onbApplyDemoLayout'ta ONCEDEN stashlanir (o zaman capture DOKUNMAZ); burada
+     resetBalkSet ile "hic stashlanmadi" fallback yolu test edilir -> canlidaki 10 yakalanir. */
   (function(){ var saved=global.balconies;
+    ONB.resetBalkSet();   // IS 1: onceki alt-bloktan kalan seti sifirla -> capture canliyi (10) yakalasin
     global.balconies=[]; for(var i=0;i<10;i++) global.balconies.push({ei:i%2, t0:i, t1:i+0.4, depth:2});   // demo-plan gibi 10 balkon
     ONB.stepEnter('balkon-ekle');
     T('A stepEnter(balkon-ekle): set 10 YAKALANDI (bosalmadan once)', ONB.demoBalkCount()===10);
     T('A stepEnter(balkon-ekle): balconies BOSALDI (0)', Array.isArray(global.balconies) && global.balconies.length===0);
     global.balconies=saved;
+  })();
+  /* IS 1 (REV) — set ZATEN DOLU ise stepEnter(balkon-ekle) capture DOKUNMAZ (onbApplyDemoLayout stash'i korunur) */
+  (function(){ var saved=global.balconies;
+    ONB.resetBalkSet();
+    global.balconies=[]; for(var i=0;i<10;i++) global.balconies.push({ei:i%2, t0:i, t1:i+0.4, depth:2});
+    ONB.captureBalkSet();   // set := 10 (stash simulasyonu)
+    global.balconies=[{ei:0,t0:0,t1:0.4,depth:2}];   // layout sonrasi balconies BASKA/az olsa bile
+    ONB.stepEnter('balkon-ekle');
+    T('A stepEnter(balkon-ekle): set DOLU ise yeniden yakalamaz (10 korunur)', ONB.demoBalkCount()===10);
+    global.balconies=saved; ONB.resetBalkSet();
   })();
   /* GOREV A — site-ac: TAMAMLAMA (kullanici balkonu KORUNUR, uzerine yazmaz) */
   (function(){ var saved=global.balconies;
