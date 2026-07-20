@@ -22,6 +22,7 @@ const TEMPLATE = [path.join(HERE, '02_PROTOTIP', 'prototip.template.html'),
                   path.join(HERE, 'prototip.template.html')]
                  .find(p => fs.existsSync(p)) || path.join(HERE, 'prototip.template.html');
 const OUT = path.join(HERE, 'MESKEN-prototip.html');
+const LOADER_DIR = path.join(HERE, 'loaderanimation');
 
 // Gerçek motor: tek-dosya bundle (worktree'de değil, ana repoda).
 // Önce ana repo kökü, sonra mesken yerel kopyası denenir.
@@ -67,6 +68,27 @@ const DEMO = {
   layout:   svgString('master1.svg'),      // adım 2 demo: tam yerleşim (kpState taşır)
 };
 
+function dataURI(file, mime) {
+  return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
+}
+
+function buildRandomLoaderHTML() {
+  const shellPath = path.join(LOADER_DIR, 'random-loader.html');
+  const scriptPath = path.join(LOADER_DIR, 'unified-loader.js');
+  const wordmark = dataURI(path.join(LOADER_DIR, 'assets', 'wordmark.png'), 'image/png');
+  let shell = fs.readFileSync(shellPath, 'utf8');
+  const loaderScript = fs.readFileSync(scriptPath, 'utf8').replace(/<\/script/gi, '<\\/script');
+  shell = shell.replace('assets/wordmark.png', wordmark);
+  shell = shell.replace('unfolding-space-concept.png', wordmark);
+  shell = shell.replace(
+    '<script src="unified-loader.js?v=unified-1"></script>',
+    '<script>\n' + loaderScript + '\n</script>'
+  );
+  return shell;
+}
+
+const randomLoaderHTML = buildRandomLoaderHTML();
+
 // ---- gömülecek <script> ----
 // JSON.stringify, gömülü motorun KENDİ </script> ve <!-- dizilerini kaçırmaz; bu diziler
 // dıştaki <script> bloğunu erken kapatır. JS string literali içinde "<\/" === "</" olduğundan
@@ -82,6 +104,8 @@ const assetsBlock =
   '<script>\n' +
   'window.MSK_ENGINE_HTML = ' + jsStr(engineHTML) + ';\n' +
   'window.MSK_DEMO = ' + jsStr(DEMO) + ';\n' +
+  'window.MSK_RANDOM_LOADER_HTML = ' + jsStr(randomLoaderHTML) + ';\n' +
+  '(function(){var f=document.getElementById("meskenLoaderVisual");if(f)f.srcdoc=window.MSK_RANDOM_LOADER_HTML;})();\n' +
   '</script>';
 
 // ---- birleştir ----
