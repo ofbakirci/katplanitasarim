@@ -498,6 +498,35 @@ function onbApplyDemoLayout(which){
     return true;
   }catch(e){ try{ console.info('[onb] demo yerlesim uygulanamadi:', e&&e.message||e); }catch(_){} return false; }
 }
+/* aktif bloğu 'blokA'|'blokB' anahtarına çevir (activeBlock=1 -> B; yoksa A). */
+function onbActiveBlockWhich(){
+  try{ return (typeof activeBlock!=='undefined' && activeBlock===1) ? 'blokB' : 'blokA'; }catch(e){ return 'blokA'; }
+}
+/* TUR SONU MEVZUAT NORMALİZASYONU — kat-ayrı geçişinde demo bloğun TAM KAT YAPISINI yükle.
+   onbApplyDemoLayout TEK-KAT bağlamı için floors/bodrum'u SIYIRIR (yerleşim adımı henüz kat-ayrı
+   değil); kat-ayrı açıldıktan SONRA (kat-gez girişi) burada demo bloğun GERÇEK kat yapısını —
+   kat-ayrı + bodrum OTOPARK katları + kat kullanımları + her katın temiz yerleşimi — restoreState
+   ile globallere basıyoruz. Böylece tur sonu (2B) mevzuat durumu demo paketiyle BİREBİR olur:
+   otopark gereksinimi karşılanır, apartman holü çekirdeğe bağlı, daireler tam yerleşir. floors
+   SIYRILMAZ (onbApplyDemoLayout'tan farkı bu). keepBlocks -> canlı blocks/parsel/amenity korunur.
+   which yoksa AKTİF blok (kat-ayrı adımında Blok B). Kopru/restore patlarsa false (dokunmaz). */
+function onbApplyDemoFloors(which){
+  which = which || onbActiveBlockWhich();
+  const raw=onbDemoBlockState(which); if(!raw) return false;
+  if(typeof restoreState!=='function') return false;
+  try{
+    // Demo blok TAM proje snapshot'ı (katAyri=true + bodrumSayisi + floors[] + her katın planı).
+    //   AYNEN uygula — floors/bodrum SIYRILMAZ. restoreState: bodrumSayisi<-st.ui, villaFloors<-st.floors,
+    //   activeFloor<-st.activeFloor, katAyri checkbox ON (io.js 219/255).
+    const st={}; for(const k in raw){ if(Object.prototype.hasOwnProperty.call(raw,k)) st[k]=raw[k]; }
+    restoreState(st, {keepBlocks:true, fit:false});
+    try{ if(typeof saveActiveBlock==='function') saveActiveBlock(); }catch(e){}   // blocks[activeBlock]'e sabitle
+    try{ if(typeof runChecks==='function' && typeof plan!=='undefined' && plan) runChecks(); }catch(e){}
+    try{ if(typeof fitView==='function') fitView(); }catch(e){}
+    try{ if(typeof render==='function') render(); }catch(e){}
+    return true;
+  }catch(e){ try{ console.info('[onb] demo kat yapisi uygulanamadi:', e&&e.message||e); }catch(_){} return false; }
+}
 /* genBtn capture-tik: yerlesim adimlarinda demo yerlesimini uygula + motor taze-uretimini bastir.
    Basarisizsa dokunma -> planner.js generateWithHistory (fallback) normal calisir. */
 function onbGenBtnCapture(ev){
@@ -797,6 +826,7 @@ function onbStepEnter(id){
     case 'blokB-yerlesim': onbSnapBlock('blokB'); onbSetDemoUnits('blokB'); onbOpenDaireTab(); break;  // blok B -> demo ayak izi + B karmasi + Daireler sekmesi
     case 'imkan-koy': onbFit(); onbOpenAmenityTool(); break;                                  // blok B planli -> kadraj + imkan hayaletleri + KUSUR 9: imkan araci ac + Havuz sec
     case 'kat-ayri':  onbExitAmenityMode(); onbFocusBuiltBlock(); onbOpenBinaTab(); break;    // amenity modundan cik + planli bloga gec (guard; iki blok da planli) + Bina sekmesi
+    case 'kat-gez':   onbApplyDemoFloors(); break;                                            // TUR SONU MEVZUAT: kat-ayri ACILDIKTAN sonra demo blok TAM kat yapisi (bodrum otopark + kat kullanimlari + temiz yerlesim) -> mevzuat demo paketiyle BIREBIR
     case 'kamera-koy': onbOpenCameraTool(); break;                                            // kamera3d: raydan Kamera aracini ac (dock + Yerlestir gorunur)
     case 'yon-degistir': onbOpenCameraTool(); onbSelectFirstCam(); break;                     // REV7: kamera araci acik + sec -> dock "Yön"/"Taşı" dugmeleri (has=true) tiklanabilir; sahnede yon degistir
     case 'kamera-tasi':  onbOpenCameraTool(); onbSelectFirstCam(); break;                     // REV7: ayni baglam -> dock "Taşı" + sahnede kamerayi tasi

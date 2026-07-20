@@ -126,6 +126,42 @@ async function engineFrame(page){
 async function waitEngineFrame(page){
   return waitFor(async()=>await engineFrame(page), {timeout:30000, desc:'engineFrame'});
 }
+// motor frame'inden CANLI mevzuat 'bad' (sorun) sayısı + bağlam (aktif blok/bodrum/kat).
+async function readEngineBadCount(f){
+  return f.evaluate(()=>{
+    const R=(typeof runChecks==='function')?runChecks():[];
+    const b=R.filter(o=>o.s==='bad');
+    let bod=null,fl=null,blk=null;
+    try{ bod=document.getElementById('bodrumSayisi')?document.getElementById('bodrumSayisi').value:null; }catch(e){}
+    try{ fl=(typeof villaFloors!=='undefined'&&villaFloors)?villaFloors.length:null; }catch(e){}
+    try{ blk=(typeof activeBlock!=='undefined')?activeBlock:null; }catch(e){}
+    return { n:b.length, ids:b.map(x=>x.id), bod, floors:fl, blk };
+  });
+}
+// VİTRİN REFERANSI: aynı browser'da YENİ sayfada ?demo=1&paket=1 aç, paket yüklenince (units>0) mevzuat
+//   'bad' sayısını oku, sayfayı kapat. Paket dolu vitrinin gerçek mevzuat durumu = tur sonu hedefi.
+async function measureVitrinReference(page){
+  const browser = page.browser();
+  const p2 = await browser.newPage();
+  try{
+    await p2.setViewport({width:1400,height:900});
+    const vurl = `${BASE}?demo=1&paket=1&_cb=${Date.now()}`;
+    await p2.goto(vurl, {waitUntil:'domcontentloaded', timeout:60000});
+    const f2 = await waitFor(async()=>{
+      const fr=await engineFrame(p2);
+      if(!fr) return null;
+      const rdy=await fr.evaluate(()=>{ try{ return typeof runChecks==='function' && typeof plan!=='undefined' && !!plan; }catch(e){ return false; } }).catch(()=>false);
+      return rdy?fr:null;
+    }, {timeout:40000, interval:400, desc:'vitrin engineFrame+plan'});
+    // paket TAM yüklensin (units>0) — normalizasyon/rehydration bitmeden okuma erken olur
+    await waitFor(async()=>{ const u=await f2.evaluate(()=>{ try{ const m=window.buildFloorplanMap&&window.buildFloorplanMap(); return m&&m.units?m.units.length:0; }catch(e){ return 0; } }); return u>0?u:null; },
+      {timeout:40000, interval:400, desc:'vitrin units>0'}).catch(()=>null);
+    await sleep(1500);
+    return await readEngineBadCount(f2);
+  } finally {
+    try{ await p2.close(); }catch(e){}
+  }
+}
 
 // --- shell (parent) helpers ---
 async function shellCard(page){
@@ -824,6 +860,19 @@ async function runHandson(page, f){
   if(mc){ ok('motor 16/16 '+mc.title); }
   else { const c=await onbCard(f); bad('16/16 export','kart='+c.prog); }
   await shot(page,'17-export');
+
+  // ===== TUR SONU MEVZUAT == VİTRİN REFERANSI (dinamik) =====
+  //   İLKE: tur adım geçişlerinde HER ŞEY paket orijinaline normalize edilir → tur sonu (2B) mevzuat
+  //   durumu demo paketiyle BİREBİR olmalı. Referans = vitrin (?demo=1&paket=1) aynı koşumda AYRI sayfada
+  //   ÖLÇÜLÜR (sabit sayı gömülmez). Paket temiz (Blok B otopark açığı jeneratörle kapatıldı) → referans=0.
+  const tourEndBad = await readEngineBadCount(f);
+  const refBad = await measureVitrinReference(page);   // yeni sayfada vitrin ölç (aynı browser/sunucu)
+  (refBad.n===0)
+    ? ok('vitrin referansı MEVZUAT TEMİZ (paket temiz: 0 sorun)', 'ref='+refBad.n+' aktifBlok='+refBad.blk+' bodrum='+refBad.bod)
+    : bad('vitrin referansı 0 sorun (paket temiz olmalı)', 'ref='+refBad.n+' ids='+JSON.stringify(refBad.ids));
+  (tourEndBad.n===refBad.n)
+    ? ok('tur sonu (2B) mevzuat sorun sayısı == vitrin referansı (DİNAMİK)', 'turSonu='+tourEndBad.n+' == ref='+refBad.n+' (bodrum='+tourEndBad.bod+' kat='+tourEndBad.floors+' blok='+tourEndBad.blk+')')
+    : bad('tur sonu mevzuat == vitrin referansı', 'turSonu='+tourEndBad.n+' != ref='+refBad.n+' turSonuIds='+JSON.stringify(tourEndBad.ids));
 
   // REV6 EXPORT: son kart iframe'de "3B'ye geç" (titleIframe) + "3B Görüntüle"/"Proje İndir" dili (eski "Paket İndir"
   //   YOK); action Bitir (actionIframeOnly); STANDALONE hedef #projSaveBtn -> iframe'de HEDEFSIZ (svgBtn hic yok).

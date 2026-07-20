@@ -137,6 +137,40 @@ function buildBlob(pkg) {
   };
 }
 
+// ---- PAKET TEMİZLİĞİ: Blok B otopark açığını kapat (idempotent) ----
+// Demo paketinde Blok B (blocks[1]) 12 daire (3 daire × 4 konut katı) ~17 araçlık otopark ister;
+// 2 bodrum otopark katı yalnız ≈14 araç sığdırıyor → vitrin "Sorunlar: 1" (otopark EKSİK) gösteriyordu.
+// MİNİMAL çözüm (Otopark Yön. Ek-1 sanksiyonlu (ii) yolu): Blok B'ye bir bodrum OTOPARK katı daha ekle
+// (bodrumSayisi 2→3; en alt otopark bodrumunu klonla → ≈+7 araç, 21≥17). Kat seviyesi indeksten türer
+// (floorLevel(k)=k-bodrumSayisi), stored bay sayısı providedParking'te YENİDEN hesaplanır → klon güvenli.
+// Görünmez (bodrum dış/plan render'ında yok) → paket render JPEG'leri BAYT-ÖZDEŞ kalır (renders'a dokunulmaz).
+// Idempotent: bodrumSayisi zaten hedefteyse dokunmaz → demo-plan.json/mskpkg regen deterministik.
+const OTO_TARGET_BODRUM = 3;       // Blok B için hedef bodrum (otopark) katı sayısı
+function _bodrumOf(bs){ return parseInt((bs && bs.ui && bs.ui.bodrumSayisi) || '0', 10) || 0; }
+function addBodrumFloors(bs, n) {
+  for (let i = 0; i < n; i++) {
+    const clone = JSON.parse(JSON.stringify(bs.floors[0]));  // en alt bodrum (otopark) snapshot klonu
+    bs.floors.unshift(clone);
+    bs.activeFloor = (bs.activeFloor || 0) + 1;              // aktif kat aynı fiziksel kata işaret etmeyi sürdürür
+  }
+  const nb = String(_bodrumOf(bs) + n);
+  if (bs.ui) bs.ui.bodrumSayisi = nb;
+  (bs.floors || []).forEach((fl) => { if (fl && fl.ui) fl.ui.bodrumSayisi = nb; });  // bina-geneli sabit eşitle
+}
+// Blok B'nin (ve o blok aktifken top-level aynasının) otopark bodrum sayısını hedefe çıkar.
+function ensureBlockParking(pkg) {
+  const ks = pkg && pkg.kpState;
+  if (!ks || !Array.isArray(ks.blocks) || ks.blocks.length < 2) return { changed: false };
+  const bs = ks.blocks[1];                                  // Blok B = demo otopark açığının olduğu blok
+  if (!bs || !Array.isArray(bs.floors) || !bs.floors.length) return { changed: false };
+  const cur = _bodrumOf(bs);
+  if (cur >= OTO_TARGET_BODRUM) return { changed: false };  // idempotent: zaten yeterli
+  const need = OTO_TARGET_BODRUM - cur;
+  addBodrumFloors(bs, need);
+  if ((ks.activeBlock || 0) === 1) addBodrumFloors(ks, need);  // top-level Blok B'yi aynalıyorsa onu da güncelle
+  return { changed: true, block: 1, from: cur, to: OTO_TARGET_BODRUM };
+}
+
 // ---- (b) demo-plan.json: render'siz TAM kpState (amenities pts'li) + slim kameralar + MOBİLYA ----
 // REV5 KUSUR 6 — MOBİLYA SADAKATİ: demo-plan.json artık furniture (düz liste) + furnitureStore (WRAPPED,
 //   kat-ayrı meta korunur) + materialStore de taşır. Böylece hands-on büyük normalizasyon (demoHandsonNormalize)
@@ -162,6 +196,10 @@ function dataUriToBuffer(uri) {
 
 // ---- --assets: gorseller + demo-plan.json + REGEN paket ----
 function emitAssets(pkg, pkgPath, outDir) {
+  // PAKET TEMİZLİĞİ: görsel/regen ÖNCESİ Blok B otopark açığını kapat (demo-plan.json + REGEN mskpkg ikisi
+  //   de mutasyonlu kpState'ten türer; renders'a DOKUNULMAZ → JPEG'ler bayt-özdeş). Idempotent.
+  const parkFix = ensureBlockParking(pkg);
+  if (parkFix.changed) console.error('  paket temizliği: Blok B bodrum ' + parkFix.from + '→' + parkFix.to + ' (otopark açığı kapatıldı)');
   const r = pkg.renders || {};
   const written = [];
   // IS 7 — TUM "Uret" gorselleri paketten 1600px q80 UNIFORM. Idempotent: her cagride kaynak
@@ -249,4 +287,4 @@ function main() {
 }
 
 if (require.main === module) main();
-module.exports = { amenityPts, withPts, convertAmenitiesEverywhere, slimCameras, buildBlob, buildPlan, cropImar };
+module.exports = { amenityPts, withPts, convertAmenitiesEverywhere, slimCameras, buildBlob, buildPlan, cropImar, ensureBlockParking };
