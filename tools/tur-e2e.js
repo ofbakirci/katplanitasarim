@@ -26,8 +26,10 @@
      - HTTP sunucu:     repo kokunde  `python3 -m http.server 8750`  (E2E_PORT ile ezilebilir)
 
    KOSUM:
-     node tools/tur-e2e.js          # hands-on: ana tur 16 adim + phase3 (55 assert)
-     node tools/tur-e2e.js --pkg    # vitrin regresyonu (?demo=1&paket=1: paket dolu gelir)
+     node tools/tur-e2e.js          # hands-on: ana tur 16 adim + phase3 (harici python http.server GEREKIR)
+     node tools/tur-e2e.js --pkg    # vitrin regresyonu (?demo=1&paket=1: paket dolu gelir; harici sunucu GEREKIR)
+     node tools/tur-e2e.js --mesken-root   # mesken KLASORU kok serviste (harici: http.server --directory mesken)
+     node tools/tur-e2e.js --kok-rewrite   # CANLI Caddy sekli (pathname '/' + /mesken/* dosyalar) — KENDI ic sunucusunu baslatir, harici sunucu GEREKMEZ
      CHROME="..." E2E_PORT=8750 node tools/tur-e2e.js
 
    Ekran goruntuleri:  ./e2e-cikti/  (cwd'ye gore; her adimda e2e-NN-<etiket>.png). */
@@ -57,9 +59,41 @@ const PKG = process.argv.includes('--pkg');
 //   Dunku 3 canli kusurun (taze yerlesim, catisiz, kullanici kameralari) tek kok nedeni: mesken-kok
 //   serviste demo-plan.json 404 -> kopru + normalizasyon SESSIZCE atlaniyordu. Bu senaryo o yolu dogrular.
 const MESKEN_ROOT = process.argv.includes('--mesken-root');
-const BASE = MESKEN_ROOT
-  ? `http://localhost:${PORT}/MESKEN-prototip.html`
-  : `http://localhost:${PORT}/mesken/MESKEN-prototip.html`;
+// KOK-REWRITE REGRESYONU: --kok-rewrite ile CANLI Caddy sekli simule edilir — pathname '/' KALIR
+//   (rewrite @root /mesken/MESKEN-prototip.html) ama dosyalar repo yapisindan (/mesken/*) sunulur.
+//   Bu senaryo KENDI node http sunucusunu baslatir (rewrite taklidi) — harici python http.server GEREKMEZ.
+//   Kok neden: pathname'de '/mesken/' YOKken eski sabit tureme '/demo-assets/'e dusup 404 aliyordu; aday-listeli
+//   probe '/mesken/demo-assets/' adayini bulup demo koprusunu diriltmeli.
+const KOK_REWRITE = process.argv.includes('--kok-rewrite');
+const BASE = KOK_REWRITE
+  ? `http://localhost:${PORT}/`
+  : MESKEN_ROOT
+    ? `http://localhost:${PORT}/MESKEN-prototip.html`
+    : `http://localhost:${PORT}/mesken/MESKEN-prototip.html`;
+// KOK-REWRITE ic sunucusu: '/' ve '/demo' -> mesken/MESKEN-prototip.html; '/mesken/*' -> repo dosyalari.
+//   HEAD desteklenir (aday-probe HEAD kullanir). Path-traversal korumasi + no-store.
+let _kokServer=null;
+function startKokServer(){
+  const http=require('http');
+  const REPO=path.resolve(__dirname,'..');
+  const MIME={'.html':'text/html; charset=utf-8','.json':'application/json','.js':'text/javascript','.css':'text/css','.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.mskpkg':'application/json','.svg':'image/svg+xml'};
+  const srv=http.createServer((req,res)=>{
+    let p=(req.url||'/').split('?')[0];
+    let file;
+    if(p==='/'||p==='/demo'||p==='/demo/'||p==='/index.html') file=path.join(REPO,'mesken','MESKEN-prototip.html'); // Caddy @root/@demoroot taklidi
+    else file=path.join(REPO, p.replace(/^\/+/,''));   // /mesken/* (ve digerleri) -> repo-koku
+    const norm=path.normalize(file);
+    if(norm!==REPO && !norm.startsWith(REPO+path.sep)){ res.writeHead(403); res.end('403'); return; }
+    fs.stat(norm,(err,st)=>{
+      if(err||!st.isFile()){ res.writeHead(404,{'Content-Type':'text/plain'}); res.end('404'); return; }
+      const ext=path.extname(norm).toLowerCase();
+      const head={'Content-Type':MIME[ext]||'application/octet-stream','Content-Length':st.size,'Cache-Control':'no-store'};
+      if(req.method==='HEAD'){ res.writeHead(200,head); res.end(); return; }
+      res.writeHead(200,head); fs.createReadStream(norm).pipe(res);
+    });
+  });
+  return new Promise((resolve,reject)=>{ srv.on('error',reject); srv.listen(PORT,()=>{ _kokServer=srv; resolve(srv); }); });
+}
 
 const results = [];
 let shotN = 0;
@@ -340,8 +374,9 @@ async function resumeScenario(page, f){
   page.on('console', m=>{ if(m.type()==='error'){ const t=m.text(); let u=''; try{ u=(m.location&&m.location().url)||''; }catch(e){} if(/favicon\.ico/.test(t+u)) return; consoleErrs.push(t+(u?(' @'+u):'')); } });
   // frames also emit via page in puppeteer
 
+  if(KOK_REWRITE){ try{ await startKokServer(); log('  (kok-rewrite ic sunucu :'+PORT+' basladi)'); }catch(e){ console.error('kok-rewrite ic sunucu baslamadi:', e&&e.message||e); process.exit(2); } }
   const url = `${BASE}?demo=1${PKG?'&paket=1':''}&_cb=${Date.now()}`;
-  log('\n=== E2E '+(MESKEN_ROOT?'[MESKEN-KOK regresyon]':(PKG?'[VITRIN paket=1]':'[HANDS-ON]'))+' === '+url);
+  log('\n=== E2E '+(KOK_REWRITE?'[KOK-REWRITE regresyon]':(MESKEN_ROOT?'[MESKEN-KOK regresyon]':(PKG?'[VITRIN paket=1]':'[HANDS-ON]')))+' === '+url);
   tPageStart = Date.now();   // (e) LOADER tavani icin baslangic
   await page.goto(url, {waitUntil:'domcontentloaded', timeout:60000});
 
@@ -351,7 +386,8 @@ async function resumeScenario(page, f){
   await installDownloadObserver(page);// REV6: son adim 'Projeyi Indir' gercek indirme tetikler mi
   await sleep(1500);
 
-  if(MESKEN_ROOT){ await runMeskenRoot(page, f); }
+  if(KOK_REWRITE){ await runKokRewrite(page, f); }
+  else if(MESKEN_ROOT){ await runMeskenRoot(page, f); }
   else if(PKG){ await runPkg(page, f); }
   else { await runHandson(page, f); }
 
@@ -368,6 +404,7 @@ async function resumeScenario(page, f){
   //   browser.close() ASILI KALABILIR. Kapanisi timeout ile yarista; takilirsa Chrome surecini oldur.
   await Promise.race([ browser.close().catch(()=>{}), sleep(5000) ]);
   try{ const proc=browser.process&&browser.process(); if(proc&&proc.kill) proc.kill('SIGKILL'); }catch(e){}
+  try{ if(_kokServer) _kokServer.close(); }catch(e){}
   const clean = (nFail===0 && errors.length===0);
   log(clean ? '\nGREEN' : '\nRED');
   process.exit(clean?0:1);
@@ -772,7 +809,7 @@ async function runPhase3(page, f){
   //   (furnitureEditCount/materialEditCount) degisince tur oto-ilerler.
   await sleep(1400);
   let guard=0; const seenTitles=[];
-  let doseSpot=null, matSpot=null, doseAdvanced=false, matAdvanced=false;
+  let doseSpot=null, matSpot=null, matAutoSpot=null, doseAdvanced=false, matAdvanced=false;
   while(guard++<16){
     const s=await engStep(page);
     if(!(s && s.step===2)) break;
@@ -801,12 +838,21 @@ async function runPhase3(page, f){
     if(/(İç|Ic)\s*malzeme/i.test(title)){
       await sleep(700);
       const engHole=await engineHoleTransparent(page);
-      const btn=await iframeElemRectParent(page,'[data-grp="material"]');
-      const ring=await shellRingRect(page);
-      matSpot={ engHole:engHole.ok, engInfo:engHole, ring:ringWraps(ring, btn) };
+      // GÖREV 2 — 1. ASAMA: malzeme dock KAPALI -> hedef = rail Ic Malzeme butonu (iki-asamali yonlendirme).
+      const btnRail=await iframeElemRectParent(page,'[data-grp="material"]');
+      const ring0=await shellRingRect(page);
+      matSpot={ engHole:engHole.ok, engInfo:engHole, ring:ringWraps(ring0, btnRail) };
       const before=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } });
-      await f.evaluate(()=>{ try{ const V=window.View3D; const m=V.getMap&&V.getMap(); let rid=null; const u=m&&m.units&&m.units[0]; if(u&&u.rooms&&u.rooms[0]) rid=u.rooms[0].id; else if(m&&m.common_areas&&m.common_areas[0]) rid=m.common_areas[0].id; if(rid&&V.selectMatRoom) V.selectMatRoom(rid); if(V.applyMaterial) V.applyMaterial('floor','parke_mese'); }catch(e){} });
-      const after=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } });
+      // GÖREV 2 — 2. ASAMA: Ic Malzeme aracini AC -> dock acilir, "Türe göre ata" (matauto) gorunur. pollTimer
+      //   (300ms) render()'i tazeler -> #mskTourRing matauto'ya kayar. Sonra matauto'ya tikla -> applyMaterialsByType
+      //   -> materialEditCount++. Delta olmazsa oda-secip-applyMaterial fallback (yine de counter artar).
+      await f.evaluate(()=>{ try{ const b=document.querySelector('[data-grp="material"]'); if(b) b.click(); }catch(e){} }); await sleep(900);
+      const btnAuto=await iframeElemRectParent(page,'#v3dMatDock [data-v3d="matauto"]');
+      const ringA=await shellRingRect(page);
+      matAutoSpot={ hasBtn:!!btnAuto, ring:ringWraps(ringA, btnAuto) };
+      await f.evaluate(()=>{ try{ const au=document.querySelector('#v3dMatDock [data-v3d="matauto"]'); if(au) au.click(); }catch(e){} }); await sleep(400);
+      let after=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } });
+      if(!(after>before)){ await f.evaluate(()=>{ try{ const V=window.View3D; const m=V.getMap&&V.getMap(); let rid=null; const u=m&&m.units&&m.units[0]; if(u&&u.rooms&&u.rooms[0]) rid=u.rooms[0].id; else if(m&&m.common_areas&&m.common_areas[0]) rid=m.common_areas[0].id; if(rid&&V.selectMatRoom) V.selectMatRoom(rid); if(V.applyMaterial) V.applyMaterial('floor','parke_mese'); }catch(e){} }); after=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } }); }
       matSpot.editDelta=(after>before); matSpot.before=before; matSpot.after=after;
       matAdvanced=await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && !/(İç|Ic)\s*malzeme/i.test(c.title||''))?true:null; },{timeout:6000,desc:'malzeme3d oto-ilerledi'}).catch(()=>false);
       continue;
@@ -830,6 +876,10 @@ async function runPhase3(page, f){
   doseAdvanced ? ok('KUSUR2 dose3d yaptirinca oto-ilerledi (yaptirma)') : bad('KUSUR2 dose3d oto-ilerleme','ilerlemedi');
   (matSpot&&matSpot.engHole) ? ok('KUSUR2 malzeme3d engineHole: motor iframe SEFFAF', JSON.stringify(matSpot&&matSpot.engInfo)) : bad('KUSUR2 malzeme3d engineHole iframe seffaf', JSON.stringify(matSpot&&matSpot.engInfo));
   (matSpot&&matSpot.ring&&matSpot.ring.wraps) ? ok('KUSUR2 malzeme3d #mskTourRing hedef Ic Malzeme butonunu SARIYOR', JSON.stringify(matSpot.ring)) : bad('KUSUR2 malzeme3d ring hedef sarmiyor', JSON.stringify(matSpot&&matSpot.ring));
+  // GÖREV 2: malzeme dock ACILINCA #mskTourRing "Türe göre ata" (matauto) butonunu SARIYOR (dinamik iframeTarget).
+  (matAutoSpot&&matAutoSpot.hasBtn&&matAutoSpot.ring&&matAutoSpot.ring.wraps)
+    ? ok('GOREV2 malzeme3d dock acik: #mskTourRing "Türe göre ata" (matauto) butonunu SARIYOR', JSON.stringify(matAutoSpot.ring))
+    : bad('GOREV2 malzeme3d matauto ring hedef sarmiyor', JSON.stringify(matAutoSpot));
   (matSpot&&matSpot.editDelta) ? ok('KUSUR2 malzeme3d malzeme sinyali degisti (materialEditCount++)', 'n='+(matSpot&&matSpot.before)+'->'+(matSpot&&matSpot.after)) : bad('KUSUR2 malzeme3d malzeme sinyali','delta yok '+JSON.stringify(matSpot));
   matAdvanced ? ok('KUSUR2 malzeme3d yaptirinca oto-ilerledi (yaptirma)') : bad('KUSUR2 malzeme3d oto-ilerleme','ilerlemedi');
   // (a) part1: kabuk 'Kamera koy' karti gorundu (atlanmadi) ve render'a (step>=4) DUSMEDI.
@@ -1378,4 +1428,48 @@ async function runMeskenRoot(page, f){
     ? ok('mesken-kok: Yerlesimi Olustur demo yerlesimi uyguladi (plan.regions=demo A imzasi)', 'regs='+applied.regs+'==demo '+(bridge&&bridge.aRegs))
     : bad('mesken-kok demo yerlesim uygulanmadi','applied='+JSON.stringify(applied)+' demoA='+(bridge&&bridge.aRegs));
   await shot(page,'mkroot-01');
+}
+
+// ============ KOK-REWRITE REGRESYONU (CANLI Caddy sekli: pathname '/' + dosyalar /mesken/*) ============
+//   Canli kok neden (demo koprusu YINE oldu, 2. kez): Caddy `rewrite @root /mesken/MESKEN-prototip.html`
+//   pathname'i '/' TUTAR ama dosyalari /mesken/ altindan sunar; pathname'de '/mesken/' YOKken eski sabit
+//   tureme '/demo-assets/'e dusup 404 aliyordu -> demoBridgePlanToEngine + demoHandsonNormalize SESSIZCE
+//   oluyordu (A blok demodan gelmiyor, cati yok, kamera evresinde 9 kare = kopru-suz deriveShowcaseCameras).
+//   ic node sunucu bu sekli TAKLIT eder ('/' -> prototip, '/mesken/*' -> dosyalar). Aday-listeli probe
+//   '/mesken/demo-assets/' adayini bulup koprusu diriltmeli. Assert: probe 200 (hangi aday) + '/demo-assets/'
+//   404 (kok neden) + __mskDemoPlan kuruldu + kamera 7 ic+3 dis + yerlesim regs==demo A.
+async function runKokRewrite(page, f){
+  await sleep(1500);
+  // pathname '/' KALDI mi (Caddy @root taklidi calisiyor) + sayfa MESKEN prototipi mi (rewrite iceriden dosya verdi)
+  const loc = await page.evaluate(()=>({path:location.pathname, hasEngine:!!document.getElementById('engineFrame')}));
+  (loc.path==='/' && loc.hasEngine) ? ok('kok-rewrite: pathname "/" KALDI + prototip yuklendi (Caddy @root taklidi)', JSON.stringify(loc)) : bad('kok-rewrite pathname/prototip', JSON.stringify(loc));
+  // (1) ADAY PROBE: '/mesken/demo-assets/' 200 (kok-rewrite kazanan aday), '/demo-assets/' 200 DEGIL (eski sabit tureme = kok neden)
+  const probe = await page.evaluate(async()=>{
+    async function head(u){ try{ const r=await fetch(u,{method:'HEAD',cache:'no-store'}); return r.status; }catch(e){ return -1; } }
+    return { mesken: await head('/mesken/demo-assets/demo-plan.json'), eski: await head('/demo-assets/demo-plan.json') };
+  });
+  (probe.mesken===200) ? ok('kok-rewrite: probe adayi "/mesken/demo-assets/" 200 (kazanan taban)', JSON.stringify(probe)) : bad('kok-rewrite /mesken/demo-assets/ 200', JSON.stringify(probe));
+  (probe.eski!==200) ? ok('kok-rewrite: eski sabit tureme "/demo-assets/" 200 DEGIL (kok neden dogrulandi)', 'durum='+probe.eski) : bad('kok-rewrite eski /demo-assets/ 200 OLMAMALI', 'durum='+probe.eski);
+  // (2) kabuk boot koprusu iframe window'una __mskDemoPlan kurdu (probe dogru tabani buldu -> bridge 200)
+  const bridge = await waitFor(async()=>{
+    const b=await f.evaluate(()=>{ try{ const p=window.__mskDemoPlan; const kp=(p&&p.kpState)||p; if(!kp||!kp.blocks) return null;
+      const c=p.cameras||{}; const ic=Array.isArray(c.interior)?c.interior.length:0, ex=Array.isArray(c.exterior)?c.exterior.length:0;
+      return {aRegs:kp.blocks[0].plan.regions.length, bRegs:(kp.blocks[1]?kp.blocks[1].plan.regions.length:-1), ic, ex, cams:ic+ex}; }catch(e){ return null; } });
+    return b?b:null;
+  }, {timeout:15000, interval:400, desc:'kok-rewrite __mskDemoPlan kopru'}).catch(()=>null);
+  bridge ? ok('kok-rewrite: __mskDemoPlan kopru kuruldu (probe -> /mesken/demo-assets/ -> iframe)', JSON.stringify(bridge)) : bad('kok-rewrite __mskDemoPlan kopru','kurulmadi (probe basarisiz -> sessiz olum?)');
+  // KAMERA 7+3: kopru calisinca kamera evresi demo setini TAM tasir (kopru-suz 9 kare DEGIL -> 10 = 7 ic + 3 dis)
+  (bridge && bridge.ic===7 && bridge.ex===3) ? ok('kok-rewrite: kamera evresi demo seti 7 ic + 3 dis (kopru calisti, 9 kare DEGIL)', 'ic='+(bridge&&bridge.ic)+' ex='+(bridge&&bridge.ex)) : bad('kok-rewrite kamera 7 ic + 3 dis','ic='+(bridge&&bridge.ic)+' ex='+(bridge&&bridge.ex));
+  // (3) 'Yerlesimi Olustur' = onbApplyDemoLayout('blokA') -> plan.regions demo A imzasiyla eslesir (taze uretim DEGIL)
+  const applied = await f.evaluate(()=>{
+    try{ if(typeof onbApplyDemoLayout!=='function') return {ok:false, reason:'onbApplyDemoLayout yok'};
+      const done=onbApplyDemoLayout('blokA');
+      const regs=(typeof plan!=='undefined'&&plan&&plan.regions)?plan.regions.length:-1;
+      return {ok:done, regs};
+    }catch(e){ return {ok:false, reason:String(e&&e.message||e)}; }
+  });
+  (applied.ok && bridge && applied.regs===bridge.aRegs)
+    ? ok('kok-rewrite: Yerlesimi Olustur demo yerlesimi uyguladi (plan.regions==demo A imzasi)', 'regs='+applied.regs+'==demo '+(bridge&&bridge.aRegs))
+    : bad('kok-rewrite demo yerlesim uygulanmadi','applied='+JSON.stringify(applied)+' demoA='+(bridge&&bridge.aRegs));
+  await shot(page,'kokrw-01');
 }

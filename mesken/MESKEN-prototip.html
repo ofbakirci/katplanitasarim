@@ -753,21 +753,54 @@ window.MSK_RANDOM_LOADER_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n  
      demoLoadPackage/demoFallbackToMaster/demoLoadMasterPlan kodu SİLİNMEZ; yalnız DEMO_PKG'ye koşullanır. */
   var DEMO_PKG    = DEMO_MODE && (function(){ try{ return /[?&]paket=1\b/.test(location.search||''); }catch(e){ return false; } })();
   var DEMO_HANDSON= DEMO_MODE && !DEMO_PKG;
-  // Demo varlık kökü — SUNUCU KÖKÜNDEN BAĞIMSIZ (KUSUR 1/2/3 kök nedeni): eski sabit
-  //   '/mesken/demo-assets/' YALNIZ repo-kökünden servis edildiğinde (E2E :8750, nus) çalışıyordu;
-  //   yerel dev sunucusu 'mesken/' KÖK olarak servis edince (python -m http.server --directory mesken,
-  //   :8123) sayfa /MESKEN-prototip.html olur ve /mesken/demo-assets/ = 404 → demo-plan.json hiç
-  //   yüklenmez → oto-yerleşim/kamera/çatı normalizasyonu SESSİZCE atlanır. Artık konumdan türetilir:
-  //   path '/mesken/' içeriyorsa o köke göre, yoksa sayfanın YANINDAKİ kardeş demo-assets/ klasörüne göre.
-  var DEMO_ASSETS=(function(){
+  // Demo varlık kökü — SUNUCU KÖKÜNDEN BAĞIMSIZ, ADAY-LİSTELİ PROBE (KUSUR 1/2/3 kök nedeni, iki kez öldü):
+  //   TEK yol türetmesi kırılgan — canlı Caddy `rewrite @root /mesken/MESKEN-prototip.html` ile pathname'i
+  //   '/' ya da '/demo' TUTAR ama dosyaları /mesken/ altından sunar; pathname'de '/mesken/' YOKken eski
+  //   türetme `/demo-assets/`'e düşüyor → 404 → köprü+normalizasyon SESSİZCE ölüyor (A blok demodan gelmez,
+  //   çatı yok, kamera evresinde 9 kare = köprüsüz deriveShowcaseCameras). ÇÖZÜM: aday listesi + async probe.
+  //   Adaylar sırayla HEAD ile denenir (demo-plan.json), İLK 200 veren taban seçilir + cache'lenir. Köprü/
+  //   normalize/paket akışları demoAssetsBase() promise'ini BEKLER. Hiçbiri 200 değilse graceful (en-iyi
+  //   tahmin taban + fetch yine patlarsa motor fallback) + console.warn. Probe sonucu tek satır loglanır.
+  var DEMO_ASSETS_CANDIDATES=(function(){
+    var out=[], seen={};
+    var add=function(b){ if(b && !seen[b]){ seen[b]=1; out.push(b); } };
     try{
-      if(location.protocol==='file:') return 'demo-assets/';
       var p=location.pathname||'/';
       var i=p.indexOf('/mesken/');
-      if(i>=0) return p.slice(0,i)+'/mesken/demo-assets/';   // …/mesken/… kökünden (repo-kökü dev, E2E, nus)
-      return p.replace(/[^\/]*$/,'')+'demo-assets/';          // 'mesken/' KÖK olarak servis (yerel dev :8123) → kardeş klasör
-    }catch(e){ return 'demo-assets/'; }
+      if(i>=0) add(p.slice(0,i)+'/mesken/demo-assets/');   // 1) pathname '/mesken/' içeriyorsa o köke göre
+      add('/mesken/demo-assets/');                          // 2) kök-rewrite canlı (pathname='/', dosyalar /mesken/ altında)
+      add(p.replace(/[^\/]*$/,'')+'demo-assets/');          // 3) sayfa dizini kardeş (mesken-kök yerel servis :8123)
+    }catch(e){}
+    add('demo-assets/');                                    // 4) file: ve göreli fallback
+    return out;
   })();
+  // Sync en-iyi tahmin taban (probe çözülene dek image asset'leri vb. bunu kullanır; probe DEMO_ASSETS'i günceller).
+  var DEMO_ASSETS=(function(){
+    try{ if(location.protocol==='file:') return 'demo-assets/'; }catch(e){}
+    return DEMO_ASSETS_CANDIDATES[0]||'demo-assets/';
+  })();
+  var _demoAssetsBaseP=null;
+  function demoAssetsBase(){
+    if(_demoAssetsBaseP) return _demoAssetsBaseP;
+    // file:// açılışta fetch/HEAD güvenilmez (CORS/scheme) → probe atla, göreli taban kullan.
+    try{ if(location.protocol==='file:'){ DEMO_ASSETS='demo-assets/'; try{ console.info('[demo] varlık tabanı (file:): demo-assets/'); }catch(_){}; _demoAssetsBaseP=Promise.resolve('demo-assets/'); return _demoAssetsBaseP; } }catch(e){}
+    var cands=DEMO_ASSETS_CANDIDATES.slice(), i=0;
+    function tryNext(){
+      if(i>=cands.length){
+        try{ console.warn('[demo] varlık tabanı bulunamadı; adaylar denendi: '+cands.join(', ')+' — motor fallback'); }catch(_){}
+        return DEMO_ASSETS;   // graceful: en-iyi tahmin; fetch yine patlarsa köprü/normalize kendi graceful yoluna düşer
+      }
+      var base=cands[i++];
+      return fetch(base+'demo-plan.json', {method:'HEAD', cache:'no-store'})
+        .then(function(r){
+          if(r && r.ok){ DEMO_ASSETS=base; try{ console.info('[demo] varlık tabanı: '+base); }catch(_){}; return base; }
+          return tryNext();
+        })
+        .catch(function(){ return tryNext(); });
+    }
+    _demoAssetsBaseP=Promise.resolve().then(tryNext);
+    return _demoAssetsBaseP;
+  }
 
   /* SAYFA-YENİLEME UYARISI (GENEL): tüm prototip state'i bellekte yaşar (plan, kameralar, render'lar,
      döşenen stiller) — yenileme/kapatma HEPSİNİ kaybettirir. İlerleme varsa (adım 1'i geçtiyse ya da
@@ -1371,10 +1404,10 @@ window.MSK_RANDOM_LOADER_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n  
   function demoLoadPackage(){
     if(_demoFellBack) return;   // (savunmacı) zaten master'a düşülmüşse tekrar deneme
     demoLoadingShow();
-    var url=DEMO_ASSETS+'demo-proje.mskpkg';
     var p;
     // file:// açılışta fetch başarısız olur (CORS/scheme) → catch → master plan fallback (sorun değil).
-    try{ p=fetch(url); }catch(e){ demoFallbackToMaster(e); return; }
+    //   Aday-listeli probe ile TABAN çöz (demo-plan.json HEAD ile), sonra .mskpkg'yi o tabandan çek.
+    try{ p=demoAssetsBase().then(function(base){ return fetch(base+'demo-proje.mskpkg'); }); }catch(e){ demoFallbackToMaster(e); return; }
     p.then(function(r){ if(!r || !r.ok) throw new Error('HTTP '+(r&&r.status)); return r.text(); })
      .then(function(txt){
        importPackageText(txt, {
@@ -2663,7 +2696,8 @@ window.MSK_RANDOM_LOADER_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n  
     if(_demoPlanFetching){ return; }
     _demoPlanFetching=true;
     try{
-      fetch(DEMO_ASSETS+'demo-plan.json', {cache:'no-store'})
+      demoAssetsBase()
+        .then(function(base){ return fetch(base+'demo-plan.json', {cache:'no-store'}); })
         .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
         .then(function(pj){ _demoPlanCache=pj; _demoPlanFetching=false; push(pj); })
         .catch(function(e){ _demoPlanFetching=false; try{ console.info('[demo] plan köprüsü atlandı:', e&&e.message||e); }catch(_){} try{ done&&done(null); }catch(__){} });
@@ -2674,9 +2708,9 @@ window.MSK_RANDOM_LOADER_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n  
   //   Fetch/parse patlarsa NORMALİZASYONSUZ devam (graceful; konsola kısa not).
   function demoHandsonNormalize(done){
     var finished=false, fin=function(){ if(finished) return; finished=true; try{ done&&done(); }catch(e){} };
-    var url=DEMO_ASSETS+'demo-plan.json';
     try{
-      fetch(url, {cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+      demoAssetsBase().then(function(base){ return fetch(base+'demo-plan.json', {cache:'no-store'}); })
+      .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
       .then(function(pj){
         try{
           var kp=pj&&pj.kpState, w=eWin();
@@ -3684,10 +3718,22 @@ window.MSK_RANDOM_LOADER_HTML = "<!doctype html>\n<html lang=\"tr\">\n<head>\n  
           return (n>0)
             ? 'Sahnede '+n+' parça var. Sağ üstteki vurgulanan <em>Mobilya</em> aracını aç; alttaki <em>Otomatik Döşe</em> ile yeniden düzenle ya da paletten bir parça sürükle. Yapınca ilerlerim; <em>İleri</em> ile de geçebilirsin.'
             : '3B sahne şimdilik boş. Sağ üstteki vurgulanan <em>Mobilya</em> aracını aç, alttaki <em>Otomatik Döşe</em> düğmesine bas — bütün odalar tek tıkla döşenir. Yapınca ilerlerim; <em>İleri</em> ile de geçebilirsin.'; } },
-      { id:'malzeme3d', title:'İç malzeme', iframeTarget:'[data-grp="material"]', engineHole:true, escapable:true,
+      // GÖREV 2 — "TÜRE GÖRE ATA"YI HEDEFLE: kullanıcı isteği — iç malzeme adımında motor malzeme dock'undaki
+      //   <em>Türe göre ata</em> düğmesi (data-v3d="matauto" → applyMaterialsByType → matEditCount++) spotlight
+      //   edilsin. dose3d'deki dinamik iframeTarget deseni: malzeme dock'u AÇIKSA (#v3dMatDock görünür) doğrudan
+      //   matauto düğmesine; kapalıysa rail'deki İç Malzeme aracına (iki-aşamalı yönlendirme). check DELTA aynı.
+      { id:'malzeme3d', title:'İç malzeme', engineHole:true, escapable:true,
+        iframeTarget:function(){
+          try{ var d=eDoc(); if(d){ var au=d.querySelector('#v3dMatDock [data-v3d="matauto"]');
+            if(au&&au.getBoundingClientRect){ var r=au.getBoundingClientRect(); if(r&&(r.width>0||r.height>0)) return '#v3dMatDock [data-v3d="matauto"]'; } } }catch(e){}
+          return '[data-grp="material"]'; },
         baseline:function(){ var V=eView3D(); try{ return (V&&V.materialEditCount)?V.materialEditCount():0; }catch(e){ return 0; } },
         check:function(s, base){ var V=eView3D(); try{ return !!(V&&V.materialEditCount) && V.materialEditCount() > (base||0); }catch(e){ return false; } },
-        text:'Vurgulanan <em>İç Malzeme</em> aracını aç, bir odaya tıkla, zemin ya da duvar malzemesini seç; sahne anında güncellenir. Yapınca ilerlerim; <em>İleri</em> ile de geçebilirsin.' },
+        text:function(){ var open=false; try{ var d=eDoc(); if(d){ var au=d.querySelector('#v3dMatDock [data-v3d="matauto"]');
+            if(au&&au.getBoundingClientRect){ var r=au.getBoundingClientRect(); open=!!(r&&(r.width>0||r.height>0)); } } }catch(e){}
+          return open
+            ? 'Malzeme aracı açık. Alttaki vurgulanan <em>Türe göre ata</em> düğmesine bas — bütün odalar oda türüne göre tutarlı malzemeyle döşenir. İstersen bir odaya tıklayıp zemin/duvar malzemesini tek tek de seçebilirsin. Yapınca ilerlerim; <em>İleri</em> ile de geçebilirsin.'
+            : 'Sağ raydaki vurgulanan <em>İç Malzeme</em> aracını aç; açılan çubukta <em>Türe göre ata</em> ile tüm odalara tek tıkla tutarlı malzeme verebilir ya da bir odaya tıklayıp zemin/duvar malzemesini seçebilirsin. Yapınca ilerlerim; <em>İleri</em> ile de geçebilirsin.'; } },
       // REV5 KUSUR 11 — DIŞ CEPHE SEÇİCİYİ TANIT: 3B evresinde dış cephe presetini gösteren kart (dış render'lar
       //   bu cepheyi kullanır). Rail'deki Dış Cephe aracına spotlight; escapable İleri (zorlama yok).
       { id:'cephe', title:'Dış cephe', iframeTarget:'[data-grp="facade"]', engineHole:true, escapable:true,
