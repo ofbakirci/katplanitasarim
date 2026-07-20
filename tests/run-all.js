@@ -81,7 +81,8 @@ const strictTests = [
   'tests/ext-blok-gorunum.js',
   'tests/kat-cephe-blok.js',
   'tests/drone-baglam.js',
-  'tests/dis-giris-kapi.js'
+  'tests/dis-giris-kapi.js',
+  'tests/mesken-report.js'
 ];
 
 const smokeTests = [

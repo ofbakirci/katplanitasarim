@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Mesken ürün tanımı, teknik yapı ve doğrulama raporu.">
+<title>MESKEN — Ürün Tanımı, Teknik Yapı ve Doğrulama Raporu</title>
+<style>
+:root{
+  --acc:#B35A2E;--acc-dark:#8E4524;--acc-soft:#F0E2D8;
+  --ink:#26231F;--muted:#716A61;--bg:#F4F1EC;--panel:#FFFFFF;--soft:#FBFAF7;--line:#D8D2C8;
+  --ok:#4C8C5A;--warn:#9A6728;--info:#2E6E8E;--bad:#B34B35;
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --shadow:0 12px 36px rgba(62,49,38,.08);--radius:16px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+.topbar{border-bottom:1px solid var(--line);background:rgba(251,250,247,.94);backdrop-filter:blur(12px)}
+.topbar-in{max-width:1120px;margin:auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;min-width:0}
+.mark{width:34px;height:34px;border-radius:9px;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:800;box-shadow:0 2px 8px rgba(179,90,46,.24);flex:0 0 auto}
+.brand b{display:block;font-size:15px;letter-spacing:.04em}.brand small{display:block;color:var(--muted);font-size:10.5px;margin-top:2px}
+.home{font-size:12.5px;font-weight:650;color:var(--muted);text-decoration:none;white-space:nowrap}.home:hover{color:var(--acc)}
+.hero{max-width:1120px;margin:auto;padding:76px 24px 48px}
+.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--acc);font-weight:800;margin-bottom:16px}
+h1{font-size:clamp(36px,6vw,68px);line-height:1.02;letter-spacing:-.052em;max-width:920px;margin:0 0 24px}
+.lead{max-width:760px;font-size:clamp(17px,2vw,21px);line-height:1.6;color:#514B44;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:9px;margin-top:30px}.chip{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 11px;font-size:11.5px;color:var(--muted)}
+.hero-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;margin-top:42px}
+.hero-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:24px;box-shadow:0 2px 8px rgba(62,49,38,.035)}
+.hero-card.accent{background:var(--ink);border-color:var(--ink);color:#fff}.hero-card .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);font-weight:800}.hero-card.accent .k{color:#C9BDB2}
+.hero-card strong{display:block;font-size:22px;line-height:1.24;margin:10px 0 8px;letter-spacing:-.02em}.hero-card p{margin:0;color:var(--muted);font-size:13.5px;line-height:1.62}.hero-card.accent p{color:#D8D0C9}
+.toc-wrap{max-width:1120px;margin:auto;padding:0 24px 56px}.toc{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:14px;background:var(--soft);overflow:hidden}
+.toc a{padding:15px 17px;text-decoration:none;font-size:12px;font-weight:700;color:var(--muted);border-right:1px solid var(--line)}.toc a:last-child{border-right:none}.toc a:hover{background:var(--panel);color:var(--acc)}
+main{max-width:1120px;margin:auto;padding:0 24px 90px}.section{display:grid;grid-template-columns:230px minmax(0,1fr);gap:56px;padding:64px 0;border-top:1px solid var(--line)}
+.section-label{position:sticky;top:22px;align-self:start}.section-no{font-size:11px;color:var(--acc);letter-spacing:.14em;font-weight:800}.section-label h2{font-size:24px;line-height:1.15;letter-spacing:-.025em;margin:9px 0 10px}.section-label p{font-size:12.5px;line-height:1.55;color:var(--muted);margin:0}
+.content{min-width:0}.content h3{font-size:24px;line-height:1.25;letter-spacing:-.025em;margin:0 0 14px}.content h3:not(:first-child){margin-top:44px}.content h4{font-size:15px;margin:28px 0 9px}.content>p,.content li{font-size:15px;line-height:1.75;color:#4F4942}.content>p{margin:0 0 16px}.content ul{padding-left:20px;margin:10px 0 18px}.content li+li{margin-top:7px}
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:24px 0 10px}.flow-step{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 14px;min-height:124px}.flow-step b{display:block;font-size:12px;margin:10px 0 6px}.flow-step p{font-size:11.5px;line-height:1.5;color:var(--muted);margin:0}.num{width:24px;height:24px;border-radius:50%;background:var(--acc-soft);color:var(--acc);display:grid;place-items:center;font-size:11px;font-weight:800}
+.io{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}.io-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:19px}.io-card .icon{width:32px;height:32px;border-radius:9px;background:var(--acc-soft);color:var(--acc);display:grid;place-items:center;font-weight:800}.io-card h4{margin:13px 0 8px}.io-card p{font-size:12.5px;line-height:1.62;color:var(--muted);margin:0}
+.callout{border-left:3px solid var(--acc);background:var(--soft);padding:17px 19px;border-radius:0 12px 12px 0;margin:22px 0}.callout strong{font-size:13px}.callout p{font-size:13px!important;line-height:1.65!important;margin:5px 0 0!important;color:var(--muted)!important}
+.arch{margin:22px 0;background:var(--ink);border-radius:16px;padding:22px;color:#fff;display:grid;grid-template-columns:repeat(4,1fr);gap:1px}.arch-cell{padding:15px;border-left:1px solid #49433D}.arch-cell:first-child{border-left:none}.arch-cell small{display:block;color:#BFB5AC;font-size:10px;text-transform:uppercase;letter-spacing:.1em}.arch-cell b{display:block;font-size:14px;margin:8px 0 6px}.arch-cell p{font-size:11.5px;line-height:1.52;color:#D8D0C9;margin:0}
+.table-wrap{overflow-x:auto;margin:20px 0;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+table{width:100%;border-collapse:collapse;min-width:660px}th,td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:14px 15px;font-size:12.5px;line-height:1.55}th{background:var(--soft);font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}tr:last-child td{border-bottom:none}td:first-child{font-weight:700;color:var(--ink)}
+.status{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;white-space:nowrap}.status::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}.ok{color:var(--ok)}.limited{color:var(--warn)}.planned{color:var(--muted)}.notrun{color:var(--info)}
+.verify-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:20px 0}.verify{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:18px}.verify .vtop{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.verify h4{font-size:14px;margin:0}.verify p{font-size:12px;line-height:1.58;color:var(--muted);margin:9px 0 0}.verify code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10.5px;color:var(--acc);background:var(--acc-soft);padding:3px 6px;border-radius:5px;white-space:nowrap}
+.scope{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}.scope-card{border-radius:14px;padding:20px}.scope-card.yes{background:#EDF5EF;border:1px solid #CADFCE}.scope-card.no{background:#F8F0E8;border:1px solid #E8D3BF}.scope-card h4{margin:0 0 10px;font-size:14px}.scope-card ul{margin:0;padding-left:18px}.scope-card li{font-size:12.5px;line-height:1.58}.scope-card li+li{margin-top:6px}
+.conclusion{background:var(--ink);color:#fff;border-radius:20px;padding:clamp(26px,5vw,52px);margin-top:12px;box-shadow:var(--shadow)}.conclusion .eyebrow{color:#D89672}.conclusion h2{font-size:clamp(28px,4vw,45px);line-height:1.08;letter-spacing:-.04em;max-width:820px;margin:0 0 22px}.conclusion p{font-size:15px;line-height:1.72;color:#D7CEC7;max-width:800px;margin:0}.conclusion p+p{margin-top:14px}
+.foot{max-width:1120px;margin:auto;padding:22px 24px 36px;color:var(--muted);font-size:11.5px;display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--line)}.foot a{font-weight:700;text-decoration:none}.foot a:hover{color:var(--acc)}
+@media(max-width:900px){.hero-grid{grid-template-columns:1fr}.toc{grid-template-columns:1fr 1fr}.toc a:nth-child(2){border-right:none}.toc a:nth-child(-n+2){border-bottom:1px solid var(--line)}.section{grid-template-columns:1fr;gap:28px}.section-label{position:static;max-width:560px}.flow{grid-template-columns:1fr 1fr}.flow-step:last-child{grid-column:1/-1}.arch{grid-template-columns:1fr 1fr}.arch-cell:nth-child(3){border-left:none;border-top:1px solid #49433D}.arch-cell:nth-child(4){border-top:1px solid #49433D}}
+@media(max-width:620px){.topbar-in,.hero,.toc-wrap,main,.foot{padding-left:17px;padding-right:17px}.topbar-in{padding-top:11px;padding-bottom:11px}.brand small{display:none}.home{font-size:11.5px}.hero{padding-top:50px}.hero-grid{margin-top:30px}.hero-card{padding:19px}.toc{grid-template-columns:1fr}.toc a{border-right:none!important;border-bottom:1px solid var(--line)!important}.toc a:last-child{border-bottom:none!important}.section{padding:48px 0}.flow,.io,.verify-grid,.scope,.arch{grid-template-columns:1fr}.flow-step:last-child{grid-column:auto}.arch-cell{border-left:none;border-top:1px solid #49433D}.arch-cell:first-child{border-top:none}.io-card{padding:17px}.table-wrap{margin-left:-17px;margin-right:-17px;border-radius:0;border-left:none;border-right:none}.foot{flex-direction:column}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="/" aria-label="Mesken ana uygulamasına dön">
+      <span class="mark">M</span><span><b>MESKEN</b><small>Kat Planı → 3B Akışı</small></span>
+    </a>
+    <a class="home" href="/">Ana uygulamaya dön&nbsp; →</a>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="eyebrow">Ürün raporu · 20 Temmuz 2026</div>
+  <h1>Ürün Tanımı, Teknik Yapı ve Doğrulama Raporu</h1>
+  <p class="lead">Mesken’in bugün gerçekten ne yaptığını, nasıl çalıştığını ve hangi sınırlar içinde doğrulandığını; güncel kaynak kodu, çalışan arayüzü ve yeniden çalıştırılan kontroller üzerinden anlatır.</p>
+  <div class="meta">
+    <span class="chip">Kaynak: güncel uygulama kodu</span>
+    <span class="chip">Dil: Türkçe</span>
+    <span class="chip">Kapsam: ürün · mimari · doğrulama</span>
+    <span class="chip">Hassas kullanıcı verisi içermez</span>
+  </div>
+  <div class="hero-grid">
+    <article class="hero-card accent">
+      <div class="k">Kısa tanım</div>
+      <strong>Parsel fikrini, düzenlenebilir kat planından 3B sunuma ve fotogerçekçi görsellere taşıyan tarayıcı tabanlı tasarım akışı.</strong>
+      <p>Planlama, denetim, 3B model, kamera ve çıktı hazırlama tek arayüzde birbirine bağlanır.</p>
+    </article>
+    <article class="hero-card">
+      <div class="k">Doğruluk notu</div>
+      <strong>Ön tasarım ve sunum aracıdır; resmî proje onayı değildir.</strong>
+      <p>Mevzuat ve imar kontrolleri tasarımı erken aşamada yönlendirir. Uygulama çıktıları, üretim öncesinde yetkili uzman ve güncel resmî belgelerle kontrol edilmelidir.</p>
+    </article>
+  </div>
+</div>
+
+<nav class="toc-wrap" aria-label="Rapor bölümleri">
+  <div class="toc">
+    <a href="#urun">01 · Ürün Tanımı</a>
+    <a href="#teknik">02 · Teknik Yapı</a>
+    <a href="#dogrulama">03 · Doğrulama</a>
+    <a href="#sonuc">04 · Sonuç</a>
+  </div>
+</nav>
+
+<main>
+  <section class="section" id="urun">
+    <div class="section-label">
+      <div class="section-no">01</div>
+      <h2>Ürün Tanımı</h2>
+      <p>Mesken’in çözdüğü problem, kullanıcı akışı, girdileri ve ürettiği sonuçlar.</p>
+    </div>
+    <div class="content">
+      <h3>Fikir ile sunulabilir mekân arasındaki kopukluğu azaltır</h3>
+      <p>Mimari ön tasarımda parsel verisi, bina sınırı, daire programı, mevzuat kontrolü, 3B inceleme ve görselleştirme çoğu zaman ayrı araçlarda yürütülür. Bu ayrılık, her aşamada verinin yeniden kurulmasına ve plan ile son görselin birbirinden uzaklaşmasına yol açabilir.</p>
+      <p>Mesken bu zinciri tek bir yönlendirilmiş akışta birleştirir. Kullanıcı önce arazi ve yapı kararlarını tanımlar; sistem şematik yerleşimi kurar ve denetler; aynı veri 3B modele dönüşür; iç ve dış kamera kadrajları hazırlanır; seçilen kareler yapay zekâ ile fotogerçekçi sunuma çevrilebilir. Geometriyi önce uygulama üretir; yapay zekâ esas olarak malzeme, ışık ve görsel gerçekçilik katmanında kullanılır.</p>
+
+      <div class="io">
+        <article class="io-card"><div class="icon">G</div><h4>Girdiler</h4><p>Parsel/konum, imar değerleri, bina sınırı, kat ve daire programı, malzeme, mobilya, kamera, gün saati ve render yöntemi.</p></article>
+        <article class="io-card"><div class="icon">İ</div><h4>İşleme</h4><p>Izgara tabanlı yerleşim, çekirdek ve oda dağıtımı, kural denetimleri, 3B geometri, kamera görüntüsü ve isteğe bağlı yapay zekâ boyaması.</p></article>
+        <article class="io-card"><div class="icon">Ç</div><h4>Çıktılar</h4><p>Düzenlenebilir 2B plan, denetim özeti, 3B görünüm, iç/dış render’lar, proje paketi, render arşivi, SVG ve DXF.</p></article>
+      </div>
+
+      <h3>Kimler için değer üretir?</h3>
+      <p>Arayüz ve işlevler, konut veya karma yapı için erken tasarım alternatifi hazırlayan; planı düzenleyip kontrol etmek ve aynı çalışmadan sunum görselleri üretmek isteyen mimari tasarım, gayrimenkul geliştirme ve proje sunum ekiplerine yöneliktir. Ürün, uzman kararının yerine geçmekten çok seçenek üretme ve erken hata görme süresini kısaltan bir çalışma yüzeyi sağlar.</p>
+
+      <h3>Beş adımda güncel kullanıcı akışı</h3>
+      <div class="flow" aria-label="Mesken beş adımlı kullanıcı akışı">
+        <article class="flow-step"><span class="num">1</span><b>Sınır + Yerleşim</b><p>Parsel, imar, bina ve daire programı tanımlanır; plan üretilir ve düzenlenir.</p></article>
+        <article class="flow-step"><span class="num">2</span><b>3B</b><p>Plan, üstü açık dollhouse modele dönüşür; kat, blok, mobilya ve malzemeler incelenir.</p></article>
+        <article class="flow-step"><span class="num">3</span><b>Kamera</b><p>İç mekân ve drone kameraları sahneye yerleştirilir; yön, lens ve gün saati ayarlanır.</p></article>
+        <article class="flow-step"><span class="num">4</span><b>Render</b><p>Kadrajlar seçilir; sadık veya yaratıcı yöntemle üretim kuyruğuna alınır.</p></article>
+        <article class="flow-step"><span class="num">5</span><b>Döşe</b><p>Sonuçlar galeride toplanır; proje ve üretilmiş görseller dışa aktarılır.</p></article>
+      </div>
+
+      <h3>Başlıca özellikler</h3>
+      <ul>
+        <li><strong>Parsel ve imar bağlamı:</strong> koordinat, tam harita bağlantısı veya ada/parsel girdisi; parsel sınırı, çekme mesafesi, TAKS/KAKS ve yapı yaklaşma alanı desteği.</li>
+        <li><strong>Şematik yerleşim üretimi:</strong> apartman veya villa, tek ya da çok blok, kat bazlı konut/ticari/otopark/sığınak kullanımları, daire programı, çekirdek ve ortak alan dağıtımı.</li>
+        <li><strong>Plan düzenleme:</strong> duvar taşıma, oda ekleme/silme/bölme/tip değiştirme, daire ayırıcıları, balkon, avlu, blok, site imkânları, geri alma ve yeniden yapma.</li>
+        <li><strong>Canlı denetim:</strong> oda ölçüleri, erişim, doğal ışık, çekirdek/kaçış, parsel, avlu, blok mesafesi ve balkon kontrollerinin sorun–bilgi–tamam ayrımıyla gösterilmesi.</li>
+        <li><strong>3B hazırlık:</strong> plan verisinden katlı bina ve iç mekân modeli; kat/blok görünümü, mobilya, iç malzeme, dış cephe, kamera ve drone araçları.</li>
+        <li><strong>Sunum ve taşınabilirlik:</strong> 3B PNG, fotogerçekçi render, proje paketi, render ZIP arşivi, SVG ve şematik DXF çıktıları; proje paketini geri açma.</li>
+      </ul>
+
+      <h3>Sonuç üzerinde kullanıcının kontrolü</h3>
+      <p>Sistem tek bir “nihai plan” dayatmaz. Kullanıcı üretilen yerleşimi duvar ve oda araçlarıyla değiştirebilir, sorun satırından ilgili bölgeye odaklanabilir, kat ve bloklar arasında çalışabilir, 3B sahneyi mobilya ve malzemelerle düzenleyebilir, kamera kadrajlarını değiştirebilir ve hangi karelerin üretileceğini seçebilir. “Sadık” yöntem 3B anlık görüntüyü referans alarak geometriyi korumaya çalışır; “Yaratıcı” yöntem ise daha serbest yorum üretir.</p>
+
+      <div class="callout">
+        <strong>Hesap, geçmiş ve ekip kullanımı</strong>
+        <p>Uygulama içinde kullanıcı hesabı, bulut proje arşivi veya eş zamanlı ekip çalışma alanı bulunmuyor. Düzenleme geçmişi açık oturumda geri alma/yeniden yapma için tutuluyor; bazı arayüz tercihleri tarayıcıda hatırlanıyor. Kalıcı saklama, kullanıcının indirdiği proje paketiyle sağlanıyor.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="teknik">
+    <div class="section-label">
+      <div class="section-no">02</div>
+      <h2>Teknik Yapı</h2>
+      <p>Arayüz, plan motoru, 3B katman, render servisi ve veri akışının birlikte çalışması.</p>
+    </div>
+    <div class="content">
+      <h3>Dört katmanlı fakat tek akışlı mimari</h3>
+      <p>Mesken, kullanıcıya tek sayfa gibi görünür. İçeride ise Mesken’e özgü akış kabuğu, gömülü plan motoru, tarayıcı içi 3B sahne ve ayrı render servisi birlikte çalışır. Bu ayrım, plan üretimi ve düzenleme gibi kredisiz işlemlerin tarayıcıda kalmasını; yalnız fotogerçekçi üretimin dış modele gönderilmesini sağlar.</p>
+      <div class="arch" aria-label="Teknik mimari katmanları">
+        <article class="arch-cell"><small>01 · Kabuk</small><b>Akış ve durum</b><p>Beş adım, proje paketi, render galerisi, demo ve yönlendirilmiş turlar.</p></article>
+        <article class="arch-cell"><small>02 · Motor</small><b>2B plan</b><p>Geometri, yerleşim, düzenleme, denetim, içe/dışa aktarma.</p></article>
+        <article class="arch-cell"><small>03 · Tarayıcı</small><b>3B sahne</b><p>Model, mobilya, malzeme, kamera, drone ve kredisiz önizlemeler.</p></article>
+        <article class="arch-cell"><small>04 · Servis</small><b>AI render</b><p>Görsel ve prompt doğrulaması, sağlayıcı çağrısı, sonuç ve hata yanıtı.</p></article>
+      </div>
+
+      <h3>Kaynak ve üretim yapısı</h3>
+      <p>Plan motorunun HTML, stil ve modüler JavaScript kaynakları üretim derlemesinde tek dosyalı bir motora dönüştürülür. Mesken derleme adımı bu motoru kendi şablonuna gömer ve yayınlanan bağımsız prototipi üretir. Motor, aynı kökenden gelen bir iframe içinde çalışır; Mesken kabuğu motorun resmî dışa açılmış fonksiyonları üzerinden plan, 3B, kamera ve paket verisine erişir.</p>
+      <p>Bu yapı iki sınırı korur: plan algoritmaları Mesken sunum kabuğunda kopyalanmaz; üretilen prototip de elle düzenlenen ayrı bir kaynak hâline gelmez. Güncel çıktı, kaynak motor ve Mesken şablonundan her derlemede yeniden oluşturulur.</p>
+
+      <h3>Girdiden sonuca veri akışı</h3>
+      <ol>
+        <li>Parsel veya bina poligonu, yapı türü, kat kullanımları ve daire programı kullanıcıdan alınır.</li>
+        <li>Plan motoru 0,5 metrelik hücre temsili üzerinde kullanılabilir alanı çıkarır; koridor, çekirdek, daire ve odaları dağıtır; onarım adımlarından geçirir.</li>
+        <li>Aynı durum modeli kurallara gönderilir. Sorunlar, bilgilendirmeler ve başarılı kontroller kararlı kimliklerle kullanıcıya döner; ilgili bölgeye odaklanma veya düzeltme önerisi sağlanır.</li>
+        <li>Plan; duvar, kapı, pencere, balkon, kat/blok ve oda türü verileriyle 3B sahne haritasına çevrilir. Mobilya, malzeme ve kameralar bu haritaya eklenir.</li>
+        <li>Render seçilirse tarayıcı, seçilen kamera veya izometrik 3B görünümü PNG referansı olarak hazırlar. İç/dış profil, stil, gün saati ve sadakat yöntemiyle render servisine gönderir.</li>
+        <li>Servis sonucu görsel olarak galeriye ekler. Plan, kameralar, malzemeler, mobilyalar ve mevcut render’lar proje paketine yazılabilir.</li>
+      </ol>
+
+      <h3>Ana veri modeli</h3>
+      <p>Uygulamanın temel durumu; parsel ve bina noktaları, ızgara hücreleri, bölgeler, daire/oda tanımları, kapı ve pencere geçersiz kılmaları, balkonlar, avlular, site blokları ve imkânları, kat anlık görüntüleri, çekirdek bilgisi ve düzenleme geçmişinden oluşur. Mesken katmanı buna 3B görünüm, iç/dış kameralar, mobilya ve malzeme depoları, render kartları ve sonuç görsellerini ekler.</p>
+      <p>Taşınabilir proje paketi bu iki katmanı bir araya getirir. Paket içe alınırken biçim ve temel plan durumu kontrol edilir; mevcut çalışma varsa üzerine yazmadan önce kullanıcıdan onay istenir. Büyük render görselleri pakette veri URL’si olarak tutulur; dışa aktarım ayrıca render’ları ZIP içinde toplar.</p>
+
+      <h3>Karar ve doğrulama mekanizmaları</h3>
+      <p>Yerleşim üretimi bir yapay zekâ kararı değildir. Hücre tabanlı algoritmalar; bina geometrisi, daire istekleri, koridor/çekirdek gereksinimi, kat türü ve tanımlı eşikler üzerinden çalışır. Üretim sonrasında kopuk bölgeler, erişimsiz odalar ve çok ince parçalar için onarım adımları uygulanır. Her değişiklikten sonra denetim hattı yeniden çalışabilir.</p>
+      <p>Mevzuat yüzeyi dokuz ana kural grubuna ve toplam 23 kararlı kural kimliğine ayrılmıştır. Oda asgarileri, doğal ışık ve erişim; kapılar; kat kullanımı; çekirdek ve kaçış; parsel/imar; avlu; site ve balkon aynı çıktıda fakat ayrı kaynaklarla değerlendirilir. Sonuçlar tasarım yardımıdır: belediye verisinin güncelliği, proje özelindeki istisnalar ve yetkili onayı uygulama dışında ayrıca kontrol edilmelidir.</p>
+
+      <h3>Yapay zekâ ve dış servisler</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Bileşen</th><th>Görevi</th><th>Güncel davranış</th><th>Sınır</th></tr></thead>
+          <tbody>
+            <tr><td>Parsel / imar verisi</td><td>Konumdan parsel ve desteklenen şehirlerde imar bağlamı almak.</td><td>Tapu-kadastro sorgusu ile İstanbul, Ankara ve İzmir’e özgü belediye veri yolları bulunuyor.</td><td>Dış kaynak erişimi ve veri kapsamı değişebilir; resmî belge yerine geçmez.</td></tr>
+            <tr><td>3B motor</td><td>Plan verisini tarayıcı içinde katlı ve düzenlenebilir sahneye çevirmek.</td><td>Geometri, mobilya, malzeme, kamera, drone ve PNG önizlemeleri istemcide çalışıyor.</td><td>Diyagonal iç duvar ve tam CAD geometrisi desteklenmiyor.</td></tr>
+            <tr><td>Render sağlayıcısı</td><td>3B referansı malzeme ve ışıkla fotogerçekçi görsele çevirmek.</td><td>Replicate üzerinden Google nano-banana-pro kullanılıyor; iç, dış ve plan profilleri ayrılıyor.</td><td>Sağlayıcıya özgü entegrasyon; genel bir sağlayıcı bağımsızlığı katmanı yok. Token, kredi ve ağ gerekli.</td></tr>
+            <tr><td>Demo</td><td>Ücretli çağrı yapmadan akışı göstermek.</td><td>Önceden üretilmiş gerçek örnek görseller ve örnek proje paketi kullanılıyor; ücretli uçlara istek atılmıyor.</td><td>Demo sonucu, o anda dış modelin çalıştığını veya yeni bir üretimin kalitesini kanıtlamaz.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Hata yönetimi ve güvenli geri dönüşler</h3>
+      <ul>
+        <li>Eksik bina sınırı veya daire programında yerleşim başlatılmaz; dosya içe aktarımında biçim ve içerik kontrol edilir.</li>
+        <li>Riskli düzenlemeler bağlantı ve minimum alan korumalarından geçmezse geri alınır; geçmiş yığını adım adım geri dönüş sağlar.</li>
+        <li>Render servisi geçersiz JSON, eksik görsel/prompt, eksik erişim anahtarı ve sağlayıcı hatalarını açık hata yanıtlarına çevirir.</li>
+        <li>Render sunucusu yoksa arayüz kullanıcıya yeniden deneme yolu gösterir. Demo modu bu servise hiç çağrı yapmadan örnek sonuçlarla devam eder.</li>
+        <li>Sayfa yenilenirken açık çalışma varsa tarayıcının veri kaybı uyarısı tetiklenir; kalıcı kayıt için proje paketinin indirilmesi gerekir.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section" id="dogrulama">
+    <div class="section-label">
+      <div class="section-no">03</div>
+      <h2>Doğrulama</h2>
+      <p>Sistem içi korumalar, bu oturumda çalıştırılan kontroller ve açık kalan riskler.</p>
+    </div>
+    <div class="content">
+      <h3>Sistem içinde yapılan doğrulamalar</h3>
+      <div class="verify-grid">
+        <article class="verify"><div class="vtop"><h4>Girdi ve geometri</h4><span class="status ok">Uygulanmış</span></div><p>Kapalı sınır, geçerli proje dosyası, yerleşim ön koşulları, hücre bütünlüğü, oda bağlantısı ve güvenli duvar/oda düzenleme korumaları.</p></article>
+        <article class="verify"><div class="vtop"><h4>İş kuralları</h4><span class="status ok">Uygulanmış</span></div><p>Oda, kapı, kat, çekirdek, parsel, avlu, site ve balkon gruplarında sorun/bilgi/tamam sonuçları; bölgeye odaklanma ve öneri bağlantısı.</p></article>
+        <article class="verify"><div class="vtop"><h4>Dosya ve proje</h4><span class="status ok">Uygulanmış</span></div><p>SVG/JSON/DXF veya proje paketi ayrımı, paket biçim kontrolü, üzerine yazma onayı, tam durum geri yükleme ve render arşivi hazırlama.</p></article>
+        <article class="verify"><div class="vtop"><h4>Render istekleri</h4><span class="status limited">Sınırlı doğrulama</span></div><p>İç/dış profil ve gerekli görsel/prompt kontrolü, onay adımı, hata yanıtı ve demo güvenliği var; görsel doğruluk yine model çıktısına bağlı.</p></article>
+        <article class="verify"><div class="vtop"><h4>Erişim</h4><span class="status ok">Uygulanmış</span></div><p>Ana ürün ortak erişim kodu katmanının arkasında kalır. Bu bilgilendirme sayfası ayrı ve girişsizdir; özel proje veya kullanıcı verisi içermez.</p></article>
+        <article class="verify"><div class="vtop"><h4>Kalıcılık</h4><span class="status limited">Kullanıcı kontrollü</span></div><p>Oturum içi geçmiş ve proje paketi var; otomatik bulut yedeği veya kullanıcı hesabına bağlı arşiv bulunmuyor.</p></article>
+      </div>
+
+      <h3>Bu oturumda çalıştırılan güncel geliştirme kontrolleri</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Kontrol</th><th>Sonuç</th><th>Ne doğruladı?</th><th>Ne doğrulamadı?</th></tr></thead>
+          <tbody>
+            <tr><td><code>npm test</code></td><td><span class="status ok">80 / 80 test dosyası</span></td><td>Plan üretimi, düzenleme, denetim, içe/dışa aktarma, 3B veri, kamera, paket, onboarding ve rapor sözleşmeleri.</td><td>Her olası parsel biçimini ve her görsel kalite durumunu kapsamaz.</td></tr>
+            <tr><td><code>npm run test:smoke</code></td><td><span class="status ok">92 / 92 test dosyası</span></td><td>Sıkı pakete ek olarak farklı plan senaryoları ve daha geniş üretim duman kontrolleri.</td><td>Gerçek belediye servislerinin sürekli kullanılabilirliğini garanti etmez.</td></tr>
+            <tr><td><code>npm run test:syntax</code></td><td><span class="status ok">Başarılı</span></td><td>Birleştirilen uygulama betiklerinin sözdizimini ve yüklenebilirliğini.</td><td>Tarayıcıda tüm etkileşimlerin görsel doğruluğunu tek başına kanıtlamaz.</td></tr>
+            <tr><td><code>npm run build</code></td><td><span class="status ok">Başarılı</span></td><td>Tek dosyalı motorun ve güncel Mesken prototipinin kaynaklardan yeniden üretilebildiğini.</td><td>Canlı sunucu yönlendirmesi veya erişim kapısını tek başına doğrulamaz.</td></tr>
+            <tr><td>Yerel rapor kontrolleri</td><td><span class="status ok">Başarılı</span></td><td>Ayrı sayfa, zorunlu bölüm başlıkları, Mesken’e özgü içerik, dış kaynaksız stil ve mobil viewport sözleşmesini.</td><td>Gerçek cihazlardaki tüm yazı ölçeklerini kapsamaz.</td></tr>
+            <tr><td>Temiz oturum canlı akışı</td><td><span class="status ok">Başarılı</span></td><td>Ana uygulamanın kapılı kaldığını; giriş bağlantısını; raporun doğrudan 200 açıldığını; demo içinde ikinci bağlantı olmadığını; masaüstü ve mobil yerleşimi.</td><td>Yetkili kullanıcıyla bütün üretim akışının her adımını yeniden çalıştırmadı.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Bugün gerçekten çalışanlar ve açık kalanlar</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Alan</th><th>Durum</th><th>Kanıta dayalı yorum</th></tr></thead>
+          <tbody>
+            <tr><td>2B plan, düzenleme ve denetim</td><td><span class="status ok">Çalışıyor</span></td><td>Kaynak motor, kural kayıtları, geniş otomatik test paketi ve derleme ile doğrulandı.</td></tr>
+            <tr><td>3B, mobilya, malzeme ve kamera</td><td><span class="status ok">Çalışıyor</span></td><td>Tarayıcı içi veri/export testleri ve rehberli demo akışı mevcut.</td></tr>
+            <tr><td>AI render entegrasyonu</td><td><span class="status limited">Uygulanmış, oturumda kredi harcanmadı</span></td><td>Servis kodu, istek doğrulaması, prompt testleri ve canlı sağlık ucu doğrulandı; yeni ücretli görsel üretimi bu rapor için tetiklenmedi.</td></tr>
+            <tr><td>Proje paketi ve render ZIP’i</td><td><span class="status ok">Çalışıyor</span></td><td>Paket, kamera/malzeme/mobilya durumu, ZIP üretimi ve geri yükleme testlerle kapsanıyor.</td></tr>
+            <tr><td>Pazaryeri, fiyat ve ürün aktarımı</td><td><span class="status planned">Ön-gösterim</span></td><td>Ürünler ve toplam örnek veridir; “Pazaryerine Aktar” gerçek sipariş/entegrasyon oluşturmaz.</td></tr>
+            <tr><td>PDF sunumu ve video turu</td><td><span class="status planned">Henüz tamamlanmadı</span></td><td>PDF düğmesi yalnız bildirim üretir; daire/site video düğmeleri “Yakında” durumundadır.</td></tr>
+            <tr><td>Kredi, üyelik, bulut arşiv ve ekip</td><td><span class="status planned">Yok</span></td><td>Render kredi uyarısı var fakat gerçek bakiye/ödeme sistemi, kullanıcı hesabı, bulut geçmişi ve ortak çalışma alanı bağlı değildir.</td></tr>
+            <tr><td>Tam CAD ve serbest açılı iç duvar</td><td><span class="status planned">Sınırlı</span></td><td>Motor 0,5 m ızgaralı ve iç duvarlar dik açılıdır; DXF çıktısı şematiktir, tam CAD round-trip değildir.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="scope">
+        <article class="scope-card yes">
+          <h4>Bu raporla doğrulanan</h4>
+          <ul>
+            <li>Güncel kodun derlenmesi ve otomatik test paketi</li>
+            <li>Raporun ayrı, girişsiz ve mobil uyumlu sayfa olması</li>
+            <li>Ana ürünün erişim korumasının değişmemesi</li>
+            <li>Uygulanmış ve ön-gösterim işlevlerinin ayrıştırılması</li>
+          </ul>
+        </article>
+        <article class="scope-card no">
+          <h4>Üretim kullanımı öncesinde ayrıca gerekli</h4>
+          <ul>
+            <li>Parsel ve imar verisinin güncel resmî belgelerle teyidi</li>
+            <li>Mimar/mühendis incelemesi, belediye ve yangın onayı</li>
+            <li>Gerçek proje setinde ölçü, erişim ve çıktı kalite kontrolü</li>
+            <li>Render maliyeti, sağlayıcı kotası ve görsel sadakat kabul testi</li>
+            <li>Yedekleme, hesap/rol, KVKK ve operasyon süreçleri</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="conclusion" id="sonuc">
+    <div class="eyebrow">Sonuç</div>
+    <h2>Mesken’in temel değeri, aynı tasarım verisini plan kararından sunum karesine kadar taşımaktır.</h2>
+    <p>Ürün bugün; parsel ve bina girdilerinden düzenlenebilir bir şematik plan üretme, planı kural tabanlı denetleme, aynı veriden 3B sahne ve kamera kadrajları hazırlama, seçili kareleri fotogerçekçi üretime gönderme ve çalışmayı taşınabilir paket olarak saklama zincirini çalışır biçimde bir araya getiriyor.</p>
+    <p>Bununla birlikte Mesken resmî proje onayı, tam CAD sistemi veya bulut tabanlı çok kullanıcılı üretim platformu olarak sunulmamalıdır. Pazaryeri, PDF, video, üyelik ve kredi katmanları tamamlanmış ürün işlevleri değildir. Gerçek projede sağlıklı kullanım; uygulamanın erken tasarım hızını, yetkili uzman kontrolü ve güncel resmî veri doğrulamasıyla birlikte ele almayı gerektirir.</p>
+  </section>
+</main>
+
+<footer class="foot"><span>MESKEN · Ürün Tanımı, Teknik Yapı ve Doğrulama Raporu</span><a href="/">Ana uygulamaya dön →</a></footer>
+</body>
+</html>
