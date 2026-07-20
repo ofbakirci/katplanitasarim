@@ -506,6 +506,14 @@
   .onbCard{position:fixed; pointer-events:auto; max-width:320px; width:min(320px,calc(100vw - 24px)); background:var(--panel); color:var(--ink); border-radius:var(--r-lg); box-shadow:var(--sh-pop); border:1px solid var(--line); z-index:61; padding:14px 16px; font-size:13px; line-height:1.5;}
   .onbCard .onbClose{position:absolute; top:8px; right:8px; width:24px; height:24px; padding:0; border:0; background:transparent; color:var(--muted); font-size:15px; line-height:1; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); cursor:pointer;}
   .onbCard .onbClose:hover{color:var(--acc); background:var(--acc-soft);}
+  /* IS 2 — daralt/aç düğmesi (kapat düğmesinin solunda; glif '–'/'+', emoji YOK) */
+  .onbCard .onbCollapseBtn{position:absolute; top:8px; right:34px; width:24px; height:24px; padding:0; border:0; background:transparent; color:var(--muted); font-size:17px; font-weight:700; line-height:1; display:inline-flex; align-items:center; justify-content:center; border-radius:var(--r-sm); cursor:pointer;}
+  .onbCard .onbCollapseBtn:hover{color:var(--acc); background:var(--acc-soft);}
+  /* IS 2 — DARALTILMIŞ pill: adım başlığı + ilerleme + aç düğmesi tek satır; spotlight/ghost aynen sürer */
+  .onbCard.onbCollapsed{display:inline-flex; align-items:center; gap:10px; width:auto; max-width:min(320px,calc(100vw - 24px)); padding:8px 10px 8px 14px;}
+  .onbCard.onbCollapsed .onbPillTitle{font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px;}
+  .onbCard.onbCollapsed .onbPillProg{font-size:11px; font-weight:600; color:var(--muted); letter-spacing:.02em; white-space:nowrap;}
+  .onbCard.onbCollapsed .onbCollapseBtn{position:static; width:22px; height:22px; flex:0 0 auto;}
   .onbCard h3{margin:0 22px 6px 0; font-size:14px; font-weight:700; color:var(--ink);}
   .onbCard p{margin:0 0 10px; color:var(--ink);}
   .onbCard .prog{font-size:11px; font-weight:600; color:var(--muted); margin-bottom:6px; letter-spacing:.02em;}

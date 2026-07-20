@@ -541,6 +541,14 @@ function onbOpenBalconyTool(){
   try{ if(typeof setMode==='function' && (typeof mode==='undefined' || mode!=='balkon')) setMode('balkon'); }catch(e){}
   try{ const b=onbSel('#tBalk'); if(b && b.classList && !b.classList.contains('on') && b.click && (typeof mode==='undefined'||mode!=='balkon')) b.click(); }catch(e){}
 }
+/* IS 1 (kapi karartma fix) — KAPI ARACINI AC (onbOpenBalconyTool ikizi): kapi-pencere adimi girisinde
+   Kapi aracini oto-sec (setMode('door') + #tDoor dock dugmesi) -> kullanici araci aramaz, tuvale
+   dogrudan cift-tiklar. Zaten Kapi ya da Pencere modundaysa no-op (window da bu adimda gecerli). */
+function onbOpenDoorTool(){
+  try{ if(typeof mode!=='undefined' && (mode==='door'||mode==='window')) return; }catch(e){}
+  try{ if(typeof setMode==='function') setMode('door'); }catch(e){}
+  try{ const b=onbSel('#tDoor'); if(b && b.classList && !b.classList.contains('on') && b.click && (typeof mode==='undefined'||mode!=='door')) b.click(); }catch(e){}
+}
 /* GOREV A — kalan demo balkonlari yerlestir (balconies.push; UZERINE YAZMAZ). Yakalanan set icinde
    canli balconies ile eslesmeyenleri ekler. Hic eksik yoksa dokunmaz + toast atmaz. */
 function onbPlaceRemainingBalconies(){
@@ -654,7 +662,11 @@ const ONB_STEPS = [
 
   { id:'kapi-pencere', needsPro:false, skippable:true,
     title:'Kapı ve pencere',
-    /* HAFIF + skippable: bir cift-tik. Balkon ayri adimda (balkon-ekle) -> "10 balkon" notu KALKTI. */
+    /* HAFIF + skippable: bir cift-tik. Balkon ayri adimda (balkon-ekle) -> "10 balkon" notu KALKTI.
+       IS 1 (kapi karartma fix) — CIZIM/YERLESTIRME ADIMI: kullanici duvara cift-tiklayarak kapi/pencere
+       koyar (tuval-ustu is). fullCanvasHole -> tuval HIC kararmaz (blokA-ciz/duvar-cek/balkon-ekle ikizi);
+       onbStepEnter Kapi aracini oto-secer (balkon-ekle desenindeki onbOpenBalconyTool ikizi). */
+    fullCanvasHole:true,
     body:'Kapı ya da Pencere aracını seç, duvara çift tıklayarak ekle ya da taşı. Hafif bir adım — istersen atla.',
     target:{type:'dom', sel:'#tDoor'},
     baseline:function(ctx){ return ctx.doorWinCount(); },
@@ -778,6 +790,7 @@ function onbStepEnter(id){
   switch(id){
     case 'blokA-ciz': onbFit(); break;                                                       // parsel + blok A hayaleti tam gorunur
     case 'yerlesim':  onbSnapBlock('blokA'); onbSetDemoUnits('blokA'); onbOpenDaireTab(); break;  // blok A -> demo ayak izi + A karmasi (TEK daire) + Daireler sekmesi
+    case 'kapi-pencere': onbFit(); onbOpenDoorTool(); break;                                     // IS 1: tuval tam gorunur (fullCanvasHole) + Kapi araci oto-sec
     case 'balkon-ekle': onbCaptureBalkSet(); onbClearBalconies(); onbFit(); onbOpenBalconyTool(); break;  // GOREV A: demo set yakala + BOSALT + kadraj + balkon araci oto-sec
     case 'site-ac':   onbOpenBinaTab(); onbPlaceRemainingBalconies(); break;                  // Bina sekmesi + TAMAMLA (uzerine yazmaz; eksik yoksa no-op)
     case 'blokB-ciz': onbFit(); break;                                                        // blok B hayaleti tam gorunur
@@ -1126,6 +1139,7 @@ let onbUI       = null;          // {svg,bg,hole,holeC,dim,card}
 let onbWired    = false;         // resize/scroll dinleyicisi bir kez
 let onbToastTimer = null;        // gecici tost zamanlayicisi
 let onbActionReady = false;      // IS 5: actionAfterFirst adiminda aksiyon dugmesi gorunur mu (ilk imkan konuldu mu)
+let onbCollapsed = false;        // IS 2: kart daraltildi mi (pill'e indi) — kullanici bilincli daraltir, adim ilerleyince DARALTIK KALIR (tur bastan baslarken sifirlanir)
 let onbDemoBalkSet = null;       // GOREV A: balkon-ekle girisinde yakalanan demo balkon seti (balconies snapshot | fallback ONB_TARGETS.balkonlar)
 let onbEnsureAt = 0;             // GOREV C: hedef-kaybi kurtarma throttle damgasi (son ensure() Date.now)
 
@@ -1218,6 +1232,7 @@ function onbCardClick(e){
   const b=(e.target && e.target.closest) ? e.target.closest('[data-onb]') : null; if(!b) return;
   const a=b.getAttribute('data-onb');
   if(a==='close') onbStop('dismissed');
+  else if(a==='collapse'){ onbCollapsed=!onbCollapsed; onbRenderCard(); onbReposition(); }   // IS 2: daralt/ac -> pill<->kart; spotlight/ghost aynen surer
   else if(a==='skip') onbSkip();
   else if(a==='next') onbNext();
   else if(a==='pro'){ const m=onbEl('modePro'); if(m && m.click) m.click(); }
@@ -1257,6 +1272,16 @@ function onbRenderCard(){
   /* GOREV C / IS1 — kompakt kart (kamera turu yon-degistir/kamera-tasi/lens-sec + balkon-ekle): hedefi/PiP'i/plani ortmesin diye kucuk */
   try{ if(onbUI.card.classList){ if(s.compact) onbUI.card.classList.add('onbCompact'); else onbUI.card.classList.remove('onbCompact'); } }catch(e){}
   const total=onbTour.steps.length, n=onbIdx+1, pct=Math.round(n/total*100);
+  /* IS 2 — DARALTILMIS: kart minik bir pill'e iner (adim basligi + ilerleme + ac dugmesi). spotlight/delik
+     ve ghost'lar onbReposition/onbDrawGhosts ile AYNEN surer; check'ler onbTick'te isler. Ac tek tik. */
+  try{ if(onbUI.card.classList) onbUI.card.classList.toggle('onbCollapsed', !!onbCollapsed); }catch(e){}
+  if(onbCollapsed){
+    onbUI.card.innerHTML =
+        '<span class="onbPillTitle">'+onbEsc(onbStepTitle(s, onbInIframe()))+'</span>'
+      + '<span class="onbPillProg">'+n+' / '+total+'</span>'
+      + '<button type="button" class="onbCollapseBtn" data-onb="collapse" aria-label="Kartı aç" title="Kartı aç">+</button>';
+    return;
+  }
   const ic=(typeof icon==='function') ? icon('bulb','inl') : '';
   /* GIRIS-SAGLANMIS adim (onbGate[onbIdx]) -> oto-atlama YOK; kartta İleri düğmesi
      (kullanici elle gecer). Oncelik: paused > gate(İleri) > action. */
@@ -1279,6 +1304,7 @@ function onbRenderCard(){
      ilerleme cubugu=.progBar>i, kapat=24x24 ikon-buton (.onbClose, absolute kose). */
   onbUI.card.innerHTML =
       '<button type="button" class="onbClose" data-onb="close" aria-label="Turu kapat" title="Turu kapat">×</button>'
+    + '<button type="button" class="onbCollapseBtn" data-onb="collapse" aria-label="Kartı daralt" title="Kartı daralt">–</button>'
     + '<h3 class="onbTitle">'+ic+'<span>'+onbEsc(onbStepTitle(s, onbInIframe()))+'</span></h3>'
     + '<p class="onbText">'+text+'</p>'
     + '<div class="prog">'+n+' / '+total+'</div>'
@@ -1678,7 +1704,7 @@ function onbStop(status){
 function onbLaunchTour(tour, reset){
   if(!tour || !onbBrowser() || !document.body) return;
   if(onbActive) onbStop('dismissed');          // ayni anda tek tur
-  onbTour=tour; onbActive=true; onbPaused=false; onbHidden=false; onbBases={}; onbGate={};
+  onbTour=tour; onbActive=true; onbPaused=false; onbHidden=false; onbBases={}; onbGate={}; onbCollapsed=false;   // IS 2: tur baslarken kart ACIK gelir
   if(tour.id==='ana'){ onbExportFlag=false; if(reset) onbDemoBalkSet=null; }   // IS 1: bastan baslarken demo balkon seti yakalamasi tazelensin
   if(tour.id==='kamera3d') onbExtRenderFlag=false;
   onbSet('onb.'+tour.id+'.status','active'); onbSet('onb.'+tour.id+'.v', String(tour.version));

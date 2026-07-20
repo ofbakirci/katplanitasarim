@@ -145,6 +145,52 @@ async function shellClickNext(page){
 async function shellState(page){ return page.evaluate(()=>{ try{ return window.__msk && window.__msk.tour ? window.__msk.tour.getState() : null; }catch(e){ return null; } }); }
 async function engStep(page){ return page.evaluate(()=>{ try{ return (window.__msk&&window.__msk.state) ? {step:(window.__msk&&window.__msk.state).step, maxStep:(window.__msk&&window.__msk.state).maxStep} : null; }catch(e){ return null; } }); }
 async function clickParent(page, sel){ return page.evaluate(s=>{ const el=document.querySelector(s); if(el){ el.click(); return true; } return false; }, sel); }
+// REV7 IS2 — kabuk turu karti daraltilmis mi (pill: .tcCollapsed + .tc-ph pill basligi)
+async function shellCardCollapsed(page){ return page.evaluate(()=>{ const c=document.getElementById('mskTourCard'); if(!c) return {has:false};
+  return { has:true, collapsed:!!(c.classList&&c.classList.contains('tcCollapsed')), hasPill:!!c.querySelector('.tc-ph'), hasFull:!!c.querySelector('.tc-h'), hasCollapseBtn:!!c.querySelector('[data-act="collapse"]'), hasExpandBtn:!!c.querySelector('[data-act="expand"]') }; }); }
+// REV7 IS2 — kabuk turu spotlight cerceve/delik rect'i (daraltma spotlight'i bozmamali): ring varsa ring, yoksa
+//   #mtHoles ilk deligi (dim maskesi seffaf bolgesi). Karsilastirma icin sabit bir imza dondurur.
+async function shellSpotSig(page){ return page.evaluate(()=>{
+  const r=document.getElementById('mskTourRing');
+  if(r && r.classList && r.classList.contains('on')){ const rc=r.getBoundingClientRect(); if(rc.width>0||rc.height>0) return {kind:'ring', l:Math.round(rc.left), t:Math.round(rc.top), w:Math.round(rc.width), h:Math.round(rc.height)}; }
+  const g=document.getElementById('mtHoles'); if(g){ const h=g.querySelector('rect'); if(h) return {kind:'hole', l:Math.round(+h.getAttribute('x')||0), t:Math.round(+h.getAttribute('y')||0), w:Math.round(+h.getAttribute('width')||0), h:Math.round(+h.getAttribute('height')||0)}; }
+  return null;
+}); }
+// REV7 IS2 — kabuk turu karti daralt->aç tur (tek adimda): daralt pill'e iner + spotlight AYNEN + aç tam kart geri.
+async function shellCollapseRoundtrip(page){
+  const c0=await shellCardCollapsed(page);
+  const sig0=await shellSpotSig(page);
+  (c0.has && !c0.collapsed && c0.hasFull && c0.hasCollapseBtn) ? ok('IS2 kabuk kart tam (daralt dugmesi var)', JSON.stringify({full:c0.hasFull, cbtn:c0.hasCollapseBtn})) : bad('IS2 kabuk kart tam giris', JSON.stringify(c0));
+  // daralt
+  await page.evaluate(()=>{ const b=document.querySelector('#mskTourCard [data-act="collapse"]'); if(b) b.click(); }); await sleep(300);
+  const c1=await shellCardCollapsed(page); const sig1=await shellSpotSig(page);
+  (c1.collapsed && c1.hasPill && c1.hasExpandBtn) ? ok('IS2 kabuk kart DARALTILDI (pill: .tcCollapsed + .tc-ph + aç dugmesi)', JSON.stringify({pill:c1.hasPill, expand:c1.hasExpandBtn})) : bad('IS2 kabuk kart daraltilmadi', JSON.stringify(c1));
+  const sigSame=(!sig0&&!sig1) || (sig0&&sig1 && sig0.kind===sig1.kind && Math.abs(sig0.l-sig1.l)<=4 && Math.abs(sig0.t-sig1.t)<=4 && Math.abs(sig0.w-sig1.w)<=4 && Math.abs(sig0.h-sig1.h)<=4);
+  sigSame ? ok('IS2 kabuk daraltmada spotlight DEĞİŞMEDİ (delik/halka aynen)', JSON.stringify({once:sig0, sonra:sig1})) : bad('IS2 kabuk daraltmada spotlight degisti', JSON.stringify({once:sig0, sonra:sig1}));
+  // aç
+  await page.evaluate(()=>{ const b=document.querySelector('#mskTourCard [data-act="expand"]'); if(b) b.click(); }); await sleep(300);
+  const c2=await shellCardCollapsed(page);
+  (c2.has && !c2.collapsed && c2.hasFull) ? ok('IS2 kabuk kart AÇILDI (tam kart geri geldi)', JSON.stringify({full:c2.hasFull})) : bad('IS2 kabuk kart acilmadi', JSON.stringify(c2));
+}
+// REV7 IS2 — motor (iframe) turu karti daralt->aç tur (tek adimda): '–' pill'e iner (.onbCollapsed + .onbPillTitle)
+//   + fullCanvasHole deligi AYNEN (rect degismez) + '+' ile tam kart geri.
+async function motorCollapseRoundtrip(f){
+  const holeSig=async()=>f.evaluate(()=>{ const mask=document.getElementById('onbHoleMask'); if(!mask) return null;
+    const h=[...mask.querySelectorAll('rect')].find(r=>r.getAttribute('fill')==='#000'); if(!h) return null;
+    return {x:Math.round(+h.getAttribute('x')||0), y:Math.round(+h.getAttribute('y')||0), w:Math.round(+h.getAttribute('width')||0), h:Math.round(+h.getAttribute('height')||0)}; });
+  const s0=await holeSig();
+  const c0=await f.evaluate(()=>{ const c=document.querySelector('.onbCard'); return c?{full:!!c.querySelector('.onbTitle'), cbtn:!!c.querySelector('[data-onb="collapse"]')}:{full:false}; });
+  (c0.full && c0.cbtn) ? ok('IS2 motor kart tam (daralt dugmesi var)', JSON.stringify(c0)) : bad('IS2 motor kart tam giris', JSON.stringify(c0));
+  await onbClick(f, 'collapse'); await sleep(300);
+  const c1=await f.evaluate(()=>{ const c=document.querySelector('.onbCard'); return c?{collapsed:!!(c.classList&&c.classList.contains('onbCollapsed')), pill:!!c.querySelector('.onbPillTitle'), expand:!!c.querySelector('[data-onb="collapse"]')}:{collapsed:false}; });
+  const s1=await holeSig();
+  (c1.collapsed && c1.pill) ? ok('IS2 motor kart DARALTILDI (pill: .onbCollapsed + .onbPillTitle)', JSON.stringify(c1)) : bad('IS2 motor kart daraltilmadi', JSON.stringify(c1));
+  const same=(!s0&&!s1)||(s0&&s1 && Math.abs(s0.x-s1.x)<=4 && Math.abs(s0.y-s1.y)<=4 && Math.abs(s0.w-s1.w)<=4 && Math.abs(s0.h-s1.h)<=4);
+  same ? ok('IS2 motor daraltmada spotlight deligi DEĞİŞMEDİ (fullCanvasHole aynen)', JSON.stringify({once:s0, sonra:s1})) : bad('IS2 motor daraltmada delik degisti', JSON.stringify({once:s0, sonra:s1}));
+  await onbClick(f, 'collapse'); await sleep(300);   // pill'deki '+' de data-onb="collapse" -> toggle geri
+  const c2=await f.evaluate(()=>{ const c=document.querySelector('.onbCard'); return c?{full:!!c.querySelector('.onbTitle'), collapsed:!!(c.classList&&c.classList.contains('onbCollapsed'))}:{full:false}; });
+  (c2.full && !c2.collapsed) ? ok('IS2 motor kart AÇILDI (tam kart geri geldi)', JSON.stringify(c2)) : bad('IS2 motor kart acilmadi', JSON.stringify(c2));
+}
 // REV4: kabuk tur spotlight deligi (#mskTourHole) parent rect'i (overlay 'on' iken)
 async function shellHoleRect(page){ return page.evaluate(()=>{ const h=document.getElementById('mskTourHole'), ov=document.getElementById('mskTourOv'); if(!h||!ov||!ov.classList.contains('on')) return null; const r=h.getBoundingClientRect(); return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}; }); }
 // REV4: kabuk tur karti (#mskTourCard) parent rect'i (overlay 'on' iken)
@@ -371,6 +417,17 @@ async function resumeScenario(page, f){
   await page.setViewport({width:1600, height:900});
 
   page.on('pageerror', e=>{ errors.push(String(e.message||e)+(e && e.stack? ('\n     '+String(e.stack).split('\n').slice(0,4).join('\n     ')):'')); });
+  // TEMİZ-KONSOL POLİTİKASI + BİLİNEN-İYİ 404'LER (adim-5 ajaninin gordugu '404' arastirildi 2026-07-20):
+  //   BULGU: Adim-5 (Döşe) dahil TÜM demo gorselleri (cam1..7/ext1..3/plan-a,b/plan.jpg) demo-assets'te MEVCUT —
+  //   GERCEK eksik varlik YOK. Gorulen '404' = demoAssetsBase() ADAY-LISTELI HEAD probe'unun (DEMO_ASSETS_CANDIDATES)
+  //   KAYBEDEN adayina attigi demo-plan.json 404'u — TASARIM GEREGI (ilk 200 veren taban secilir). Bu YALNIZ
+  //   mesken-kok/kok-rewrite regresyon servislerinde olur (mesken-kok: '/mesken/demo-assets/…' loses -> '/demo-assets/'
+  //   wins; kok-rewrite: '/demo-assets/…' loses -> '/mesken/demo-assets/' wins). STANDART '/mesken/…' serviste
+  //   (hands-on + pkg = gercek kullanicinin gordugu yol) aday 1 ANINDA kazanir -> 404 HIC olmaz -> console.error==0.
+  //   Chrome bu HEAD 404'unu bir "Failed to load resource" konsol mesaji olarak yazsa da, KABUL cikis kodu
+  //   YALNIZ pageerror + assert'e bakar (asagi 'clean' kontrolu consoleErrs'i saymaz) -> regresyonlar yine GREEN.
+  //   favicon.ico 404'u (tarayici oto-istegi) asagida filtrelenir. demo-plan.json ERR_ABORTED (bridge fetch iptali)
+  //   catch'li/graceful -> zararsiz. Standart '/mesken/…' serviste console.error>0 = GERCEK yeni-eksik varlik regresyonu.
   page.on('console', m=>{ if(m.type()==='error'){ const t=m.text(); let u=''; try{ u=(m.location&&m.location().url)||''; }catch(e){} if(/favicon\.ico/.test(t+u)) return; consoleErrs.push(t+(u?(' @'+u):'')); } });
   // frames also emit via page in puppeteer
 
@@ -422,13 +479,17 @@ async function runHandson(page, f){
   const loaderMs = Date.now()-tPageStart;
   (loaderMs < 13000) ? ok('(e) loader: goto->loader kalkti+karsilama karti < 13sn', loaderMs+'ms') : bad('(e) loader < 13sn tavani (regresyon)', loaderMs+'ms');
   const p1=progN(sc.prog);
-  (p1 && p1.n===1 && p1.total===12) ? ok('kabuk welcome 1/12', sc.title) : bad('kabuk welcome 1/12', 'gorulen='+sc.prog+' '+sc.title);
+  (p1 && p1.n===1 && p1.total===13) ? ok('kabuk welcome 1/13', sc.title) : bad('kabuk welcome 1/13 (REV7: gezinti adimi eklendi 12->13)', 'gorulen='+sc.prog+' '+sc.title);
   await shot(page,'01-welcome');
+
+  // REV7 IS2 — KABUK KARTI DARALT/AÇ (welcome adiminda, tek adimda): daralt -> pill (.tcCollapsed) +
+  //   spotlight halkasi/delik AYNEN kalir (rect degismez) -> aç -> tam kart geri gelir.
+  await shellCollapseRoundtrip(page);
 
   await shellClickNext(page); await sleep(600);
   sc = await shellCard(page);
   const p2=progN(sc.prog);
-  (p2 && p2.n===2 && p2.total===12) ? ok('kabuk proje 2/12', sc.title) : bad('kabuk proje 2/12', 'gorulen='+sc.prog);
+  (p2 && p2.n===2 && p2.total===13) ? ok('kabuk proje 2/13', sc.title) : bad('kabuk proje 2/13', 'gorulen='+sc.prog);
   await shot(page,'02-proje');
 
   // click İleri on proje -> handsonHandoff -> shell hidden + motor tour appears
@@ -486,6 +547,9 @@ async function runHandson(page, f){
   // FIX5: cizim adiminda tuval karartisiz (fullCanvasHole -> delik canvasWrap'i kapsar)
   const holeA = await fullHoleCoversCanvas(f);
   holeA.ok ? ok('FIX5 blokA-ciz karartma yok (delik tuvali kapsar)', JSON.stringify(holeA.hole||{})) : bad('FIX5 blokA-ciz karartma yok', JSON.stringify(holeA));
+  // REV7 IS2 — MOTOR KARTI DARALT/AÇ (blokA-ciz adiminda, tek adimda): daralt -> pill (.onbCollapsed) +
+  //   fullCanvasHole deligi AYNEN kalir -> aç -> tam kart geri. Adim ilerlemedi (cizim asagida).
+  await motorCollapseRoundtrip(f);
   await shot(page,'05-blokA-ghost');
 
   // draw block A over ghost corners
@@ -560,6 +624,14 @@ async function runHandson(page, f){
   mc = await waitOnbProg(f, 7, {timeout:12000, desc:'7 kapi-pencere'}).catch(()=>null);
   if(mc){ ok('motor 7/16 '+mc.title); }
   else { const c=await onbCard(f); bad('7/16 kapi-pencere','kart='+c.prog+' (duvar check gecmedi mi)'); }
+  // REV7 IS1 — KAPI-PENCERE KARARTMASIZ + KAPI ARACI OTO-SEÇ: fullCanvasHole -> delik tuvali kapsar (canvas
+  //   hic kararmaz), onbStepEnter Kapi aracini oto-secer (#tDoor on / mode==='door').
+  await sleep(300);
+  const holeKapi = await fullHoleCoversCanvas(f);
+  holeKapi.ok ? ok('IS1 kapi-pencere karartma yok (delik tuvali kapsar)', JSON.stringify(holeKapi.hole||{})) : bad('IS1 kapi-pencere karartma yok', JSON.stringify(holeKapi));
+  const doorTool = await f.evaluate(()=>{ try{ const t=document.getElementById('tDoor'); const toolOn=!!(t&&t.classList&&t.classList.contains('on'));
+    const modeDoor=(typeof mode!=='undefined' && (mode==='door'||mode==='window')); return {toolOn, modeDoor, mode:(typeof mode!=='undefined'?mode:'?')}; }catch(e){ return {err:String(e&&e.message||e)}; } });
+  (doorTool.toolOn || doorTool.modeDoor) ? ok('IS1 kapi araci OTO-secili (#tDoor on / mode door)', JSON.stringify(doorTool)) : bad('IS1 kapi araci oto-secilmedi', JSON.stringify(doorTool));
   await shot(page,'08-kapi-pencere');
 
   // kapi-pencere: try a window double-click; else Atla
@@ -810,6 +882,7 @@ async function runPhase3(page, f){
   await sleep(1400);
   let guard=0; const seenTitles=[];
   let doseSpot=null, matSpot=null, matAutoSpot=null, doseAdvanced=false, matAdvanced=false;
+  let geziSpot=null, geziAdvanced=false;   // REV7 IS3: gezinti (İçeride yürü) adimi
   while(guard++<16){
     const s=await engStep(page);
     if(!(s && s.step===2)) break;
@@ -857,6 +930,27 @@ async function runPhase3(page, f){
       matAdvanced=await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && !/(İç|Ic)\s*malzeme/i.test(c.title||''))?true:null; },{timeout:6000,desc:'malzeme3d oto-ilerledi'}).catch(()=>false);
       continue;
     }
+    // REV7 IS3 — GEZİNTİ (İçeride yürü): cephe SONRASI kamera ÖNCESİ FPV tanitim adimi. engineHole SEFFAF +
+    //   View3D resmi FPV getter'lari (isWalking/walkEnterCount/walkMoved) var; raydaki Gezinti butonuna GERCEK
+    //   tik -> walkEnterCount artar -> check saglanir -> tur OTO-ilerler. (Pegman surukleme pratik degil; rail
+    //   butonu toggleWalk ile FPV'ye girer, ayni resmi sinyali uretir.)
+    if(/İçeride yürü|Gezinti|yürü/i.test(title)){
+      await sleep(500);   // cok-delikli maske + ring yerlessin
+      const engHole=await engineHoleTransparent(page);
+      const getters=await f.evaluate(()=>{ try{ const V=window.View3D; return { isWalking:typeof V.isWalking, walkEnterCount:typeof V.walkEnterCount, walkMoved:typeof V.walkMoved }; }catch(e){ return {err:String(e)}; } });
+      const base=await f.evaluate(()=>{ try{ return window.View3D.walkEnterCount(); }catch(e){ return -1; } });
+      geziSpot={ engHole:engHole.ok, engInfo:engHole, getters, base };
+      // rail Gezinti butonuna tik -> toggleWalk -> enterWalk -> walkEnterCount++
+      await f.evaluate(()=>{ try{ const b=document.querySelector('#v3dRail button[data-grp="walk"]'); if(b) b.click(); }catch(e){} }); await sleep(500);
+      let after=await f.evaluate(()=>{ try{ return window.View3D.walkEnterCount(); }catch(e){ return -1; } });
+      const walkingNow=await f.evaluate(()=>{ try{ return !!window.View3D.isWalking(); }catch(e){ return false; } });
+      geziSpot.after=after; geziSpot.entered=(after>base); geziSpot.walkingNow=walkingNow;
+      // FPV'den cik (walkOn kalirsa sonraki kamera evresine sizmasin) — ayni buton toggle-off
+      if(walkingNow){ await f.evaluate(()=>{ try{ const b=document.querySelector('#v3dRail button[data-grp="walk"]'); if(b) b.click(); }catch(e){} }); await sleep(300); }
+      geziAdvanced=await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && !/İçeride yürü|yürü/i.test(c.title||''))?true:null; },{timeout:6000,desc:'gezinti oto-ilerledi'}).catch(()=>false);
+      if(!geziAdvanced){ await shellClickNext(page); await sleep(500); }   // yaptirma olmazsa İleri kacisi
+      continue;
+    }
     // diger step-2 karti (in3d): İleri
     const clickedNext=await shellClickNext(page);
     if(!clickedNext) break;      // kamera karti = check adimi -> "Adimi yapin" (İleri yok) -> dur
@@ -867,6 +961,18 @@ async function runPhase3(page, f){
   // (c) doseme tadi kartlari gorundu mu (REV3 assert korunur)
   const sawDose = seenTitles.some(t=>/Mobilyay/i.test(t)), sawMat = seenTitles.some(t=>/(İç|Ic)\s*malzeme/i.test(t));
   (sawDose && sawMat) ? ok('(c) 3B doseme tadi: dose3d + malzeme3d kartlari gorundu', seenTitles.join(' > ')) : bad('(c) doseme tadi kartlari','sawDose='+sawDose+' sawMat='+sawMat+' dizi='+JSON.stringify(seenTitles));
+  // REV7 IS3 — GEZİNTİ adimi: (i) cephe SONRASI kamera ÖNCESİ gorundu, (ii) engineHole seffaf, (iii) resmi FPV
+  //   getter'lari var + walkEnterCount tikla ARTTI, (iv) yaptirinca oto-ilerledi (olmazsa İleri kacisi kullanildi).
+  const iCephe=seenTitles.findIndex(t=>/Dış cephe|cephe/i.test(t)), iGezi=seenTitles.findIndex(t=>/İçeride yürü|yürü/i.test(t)), iKam=seenTitles.findIndex(t=>/Kamera koy/i.test(t));
+  (iGezi>=0 && iCephe>=0 && iGezi>iCephe && (iKam<0 || iGezi<iKam))
+    ? ok('IS3 gezinti karti cephe SONRASI kamera ÖNCESİ gorundu', 'dizi='+seenTitles.join(' > '))
+    : bad('IS3 gezinti karti cephe<gezinti<kamera sirasi', 'iCephe='+iCephe+' iGezi='+iGezi+' iKam='+iKam+' dizi='+JSON.stringify(seenTitles));
+  (geziSpot && geziSpot.engHole) ? ok('IS3 gezinti engineHole: motor iframe SEFFAF (3B sahne parlak)', JSON.stringify(geziSpot.engInfo)) : bad('IS3 gezinti engineHole iframe seffaf', JSON.stringify(geziSpot&&geziSpot.engInfo));
+  (geziSpot && geziSpot.getters && geziSpot.getters.isWalking==='function' && geziSpot.getters.walkEnterCount==='function' && geziSpot.getters.walkMoved==='function')
+    ? ok('IS3 View3D resmi FPV getter\'lari var (isWalking/walkEnterCount/walkMoved)', JSON.stringify(geziSpot.getters))
+    : bad('IS3 FPV getter\'lari eksik', JSON.stringify(geziSpot&&geziSpot.getters));
+  (geziSpot && geziSpot.entered) ? ok('IS3 gezinti: rail Gezinti butonuyla FPV\'ye girildi (walkEnterCount++)', 'base='+(geziSpot&&geziSpot.base)+'->'+(geziSpot&&geziSpot.after)) : bad('IS3 gezinti walkEnterCount artmadi', JSON.stringify(geziSpot));
+  geziAdvanced ? ok('IS3 gezinti yaptirinca OTO-ilerledi (kamera evresine)') : bad('IS3 gezinti oto-ilerleme (İleri kacisi kullanildi)');
   // REV6 KUSUR 2: dose3d engineHole (iframe seffaf) + #mskTourRing hedef Mobilya butonunu sariyor + bos sahne +
   //   Otomatik Döşe sinyali degisti (furnitureEditCount++) + oto-ilerledi.
   (doseSpot&&doseSpot.engHole) ? ok('KUSUR2 dose3d engineHole: motor iframe SEFFAF (delik 3B sahneyi kapsar)', JSON.stringify(doseSpot&&doseSpot.engInfo)) : bad('KUSUR2 dose3d engineHole iframe seffaf', JSON.stringify(doseSpot&&doseSpot.engInfo));
@@ -1389,7 +1495,62 @@ async function runPkg(page, f){
   // shell tour boots (DEMO_PKG autostart)
   const sc = await waitFor(async()=>{ const c=await shellCard(page); return c.visible?c:null; }, {timeout:12000, desc:'pkg shell tour'}).catch(()=>null);
   sc ? ok('vitrin akis turu boot','prog='+sc.prog) : bad('vitrin akis turu boot','gorunmedi');
+  // REV7: vitrin turu da 13 adim (gezinti eklendi)
+  const scT=progN(sc?sc.prog:''); (scT && scT.total===13) ? ok('vitrin akis turu 13 adim (gezinti dahil)','total='+scT.total) : bad('vitrin akis turu total 13','prog='+(sc?sc.prog:'?'));
   await shot(page,'pkg-01');
+
+  // REV7 ADIM-5 (Döşe) VITRIN ASSERT'LERI — pakette render'lar dolu; adim-5'e atla + ilk karti sec, pazaryeri
+  //   baglami kurulsun. (i) 'VİDEO TURLAR' seridi (.vtstrip) KALKTI, (ii) sag panelde #expTourDaire/#expTourSite
+  //   pasif-gorunumlu butonlar VAR, (iii) pazaryeri .mkt-chg AKTIF (disabled DEGIL), (iv) ilk urunde 'Değiştir'
+  //   alternatif listesini ACAR, (v) alternatif tiki SECIMI DEGISTIRMEZ (salt toast).
+  await page.evaluate(()=>{ try{ window.__msk && window.__msk.goStep && window.__msk.goStep(5); }catch(e){} });
+  // ilk render kartini sec (pazaryeri baglami interior/plan olsun) — mktCtx satirlari .mkt-chg tasisin
+  const dose5 = await waitFor(async()=>{
+    const r=await page.evaluate(()=>{ try{ const c=document.querySelector('.fncard[data-fnid]'); if(c) c.click();
+      return { step:(window.__msk&&window.__msk.state)?window.__msk.state.step:-1, fncards:document.querySelectorAll('.fncard').length, hasMkt:!!document.getElementById('mktCtx') }; }catch(e){ return {err:String(e)}; } });
+    return (r.step===5 && r.hasMkt) ? r : null;
+  }, {timeout:12000, interval:400, desc:'adim-5 mktCtx'}).catch(()=>null);
+  dose5 ? ok('vitrin adim-5 (Döşe) acildi + render karti secildi','fncards='+dose5.fncards) : bad('vitrin adim-5 acilmadi','durum='+JSON.stringify(dose5));
+  await sleep(700);
+  const s5 = await page.evaluate(()=>{
+    try{
+      const vtstrip=document.querySelectorAll('.vtstrip,[class*="vtstrip"]').length;
+      const expD=document.getElementById('expTourDaire'), expS=document.getElementById('expTourSite');
+      const soonD=!!(expD && expD.classList && expD.classList.contains('soon')), soonS=!!(expS && expS.classList && expS.classList.contains('soon'));
+      const chgs=[...document.querySelectorAll('.mkt-chg')];
+      const chgDisabled=chgs.some(b=>b.disabled);
+      return { vtstrip, hasExpD:!!expD, hasExpS:!!expS, soonD, soonS, chgN:chgs.length, chgDisabled };
+    }catch(e){ return {err:String(e)}; }
+  });
+  (s5.vtstrip===0) ? ok('REV7 adim-5: "VİDEO TURLAR" seridi (.vtstrip) KALKTI','n='+s5.vtstrip) : bad('REV7 adim-5 vtstrip kalkmadi','n='+s5.vtstrip);
+  (s5.hasExpD && s5.hasExpS && s5.soonD && s5.soonS) ? ok('REV7 adim-5: #expTourDaire/#expTourSite pasif-gorunumlu (.soon) butonlar VAR', JSON.stringify(s5)) : bad('REV7 adim-5 expTour butonlari','durum='+JSON.stringify(s5));
+  (s5.chgN>=1 && !s5.chgDisabled) ? ok('REV7 adim-5: pazaryeri .mkt-chg AKTIF (disabled DEGIL)','n='+s5.chgN) : bad('REV7 adim-5 mkt-chg aktif','durum='+JSON.stringify(s5));
+  // (iv) ilk urunde Değiştir -> alternatif listesi (data-mkalts="0") gorunur (hidden kalkti) + buton .open
+  const altOpen = await page.evaluate(()=>{
+    try{ const host=document.getElementById('mktCtx'); if(!host) return {ok:false, reason:'no mktCtx'};
+      const chg=host.querySelector('.mkt-chg[data-mkchg]'); if(!chg) return {ok:false, reason:'no mkt-chg'};
+      const idx=chg.getAttribute('data-mkchg');
+      const panelBefore=host.querySelector('[data-mkalts="'+idx+'"]'); const hiddenBefore=!!(panelBefore&&panelBefore.hasAttribute('hidden'));
+      chg.click();
+      const panelAfter=host.querySelector('[data-mkalts="'+idx+'"]');
+      const hiddenAfter=!!(panelAfter&&panelAfter.hasAttribute('hidden'));
+      const alts=panelAfter?panelAfter.querySelectorAll('.mkt-alt').length:0;
+      const btnOpen=!!(chg.classList&&chg.classList.contains('open'));
+      return {ok:(hiddenBefore && !hiddenAfter && alts>0), hiddenBefore, hiddenAfter, alts, btnOpen};
+    }catch(e){ return {ok:false, reason:String(e)}; }
+  });
+  (altOpen.ok && altOpen.btnOpen) ? ok('REV7 adim-5: ilk urunde "Değiştir" alternatif listesini ACTI (hidden kalkti, .open)', JSON.stringify(altOpen)) : bad('REV7 adim-5 Değiştir alternatif acmadi', JSON.stringify(altOpen));
+  // (v) alternatif tiki SECIMI DEGISTIRMEZ: fnSelId (secili render karti) tik oncesi==sonrasi (salt toast).
+  const altPick = await page.evaluate(()=>{
+    try{ const st=(window.__msk&&window.__msk.state)||{}; const before=st.fnSelId||null;
+      const alt=document.querySelector('#mktCtx .mkt-alt'); if(!alt) return {ok:false, reason:'no .mkt-alt'};
+      alt.click();
+      const after=((window.__msk&&window.__msk.state)||{}).fnSelId||null;
+      return {ok:(before===after), before, after};
+    }catch(e){ return {ok:false, reason:String(e)}; }
+  });
+  (altPick.ok) ? ok('REV7 adim-5: alternatif tiki SECIMI DEGISTIRMEDI (salt toast; demo)', JSON.stringify(altPick)) : bad('REV7 adim-5 alternatif tiki secimi degistirdi', JSON.stringify(altPick));
+  await shot(page,'pkg-02-dose5');
 }
 
 // ============ SUNUCU-KOKU REGRESYONU (mesken KLASORU kok) ============

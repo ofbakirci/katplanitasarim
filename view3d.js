@@ -215,6 +215,12 @@
   //   walkKeys: basılı tuşlar. walkYaw/walkPitch: fare-bakış açıları (rad). walkRoofSav/walkGizSav/walkLblSav/walkCeilSav:
   //   giriş anındaki chrome durumları (çıkışta geri). walkClock: dt için son kare zamanı.
   let walkOn=false, walkSavedView=null, walkYaw=0, walkPitch=0, walkClock=0, walkCamMsgT=null;   // R9: walkCamMsgT = onay ipucu zamanlayıcı
+  // IS 3 (kabuk gezinti adimi) — RESMI FPV GOZLEMLENEBILIRLERI (isCamUIEnabled deseni; monkey-patch yok):
+  //   walkEnterCount = FPV moduna kac kez girildi (enterWalk'ta ++); walkMoved = bu gezintide en az bir adim
+  //   yuruundu mu (walkStep hareket dalinda true; enterWalk'ta false). Kabuk turu 'gezinti' check'i bunlari okur
+  //   (View3D.walkEnterCount/walkMoved/isWalking getter'lari). Cikista SIFIRLANMAZ -> Esc'le cikan kullanicinin
+  //   girisi/hareketi tur tarafindan gorulur.
+  let walkEnterCount=0, walkMoved=false;
   const walkKeys={ w:false, a:false, s:false, d:false, shift:false };
   let walkRoofSav=false, walkGizSav=true, walkLblSav=true, walkCeilSav=false, walkFogSav=null;
   let walkRay=null;                                          // gezinti çarpışması için ayrılmış Raycaster (picker'dan bağımsız)
@@ -4665,6 +4671,7 @@
       walkLamp.position.set(cam.position.x, cam.position.y+0.2, cam.position.z);
     }
     walkOn=true;
+    walkEnterCount++; walkMoved=false;                        // IS 3: FPV girisi say + bu gezinti icin hareket bayragini sifirla (kabuk 'gezinti' check'i okur)
     walkY=WALK_EYE; walkVelY=0; walkGrounded=true;           // J1: dikey durumu sıfırla (girişte yerde)
     Object.keys(walkKeys).forEach(function(k){ walkKeys[k]=false; });
     walkClock=(typeof performance!=='undefined'?performance.now():Date.now());
@@ -4882,6 +4889,7 @@
     if(walkKeys.d) ms+=1; if(walkKeys.a) ms-=1;
     walkFootstepStep(dt, (mf!==0||ms!==0), !!walkKeys.shift);
     if(mf!==0||ms!==0){
+      walkMoved=true;                                          // IS 3: bu gezintide gercekten hareket edildi (kabuk 'gezinti' check'i)
       // yatay düzlemde ileri/yan yön (pitch'ten bağımsız → merdiven yok, düz yürü)
       const fx=Math.sin(walkYaw), fz=-Math.cos(walkYaw);       // ileri (yatay)
       const rx=Math.cos(walkYaw), rz=Math.sin(walkYaw);        // sağ (yatay)
@@ -7987,6 +7995,12 @@
     materialEditCount:function(){ return matEditCount; },
     // toplam mobilya adedi (opsiyonel ikinci sinyal — demo doseli gelir, ekleme adedi artirir)
     furnitureCount:function(){ return (furnList&&furnList.length)||0; },
+    // IS 3: FPV/gezinti resmi gozlemlenebilirleri — kabuk akis turu 'gezinti' adiminin "yaptirma" check'i icin.
+    //   isWalking: su an FPV modunda mi; walkEnterCount: FPV'ye kac kez girildi (baseline delta -> girildi mi);
+    //   walkMoved: son gezintide en az bir adim yuruundu mu (Esc'le cikilsa da true kalir).
+    isWalking:function(){ return !!walkOn; },
+    walkEnterCount:function(){ return walkEnterCount; },
+    walkMoved:function(){ return !!walkMoved; },
     // rail arac gruplari acik mi (dose3d/malzeme3d hedef butonu overlay'de var mi kontrolu)
     isFurnUIEnabled:function(){ return !!furnUIEnabled; },
     isMatUIEnabled:function(){ return !!matUIEnabled; },
