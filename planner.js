@@ -473,9 +473,7 @@ function generate(keepCuts){
     plan.wallRuns=computeWallRuns();
     runChecks(); buildUnitTable(); renderFloorTabs(); updateStructResetBtn();
     if(typeof updateAmenityBtn==='function') updateAmenityBtn();
-    document.getElementById('svgBtn').disabled=false;
-    document.getElementById('pngBtn').disabled=false;
-    document.getElementById('dxfBtn').disabled=false;
+    if(typeof updateProjBtns==='function') updateProjBtns();
     render();
     return;
   }
@@ -2409,9 +2407,7 @@ function generate(keepCuts){
   renderFloorTabs();
   updateStructResetBtn();
   if(typeof updateAmenityBtn==='function') updateAmenityBtn();   // S3: bina üretilince site imkanları butonu görünür
-  document.getElementById('svgBtn').disabled=false;
-  document.getElementById('pngBtn').disabled=false;
-  document.getElementById('dxfBtn').disabled=false;
+  if(typeof updateProjBtns==='function') updateProjBtns();
   PROF.wrap('render', render);
   PROF.report(`${cols*M}x${rows*M}m kat=${kat}`);
 }

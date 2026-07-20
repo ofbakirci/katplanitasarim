@@ -426,6 +426,17 @@
   #roomMenu .mi.dis:hover{background:none; color:var(--muted);}
   #roomMenu .note{padding:6px 12px; color:var(--bad); max-width:230px; white-space:normal;}
   #roomMenu hr{border:none; border-top:1px solid var(--line); margin:4px 0;}
+  /* Proje İndir bölünmüş buton — açılır menü + pasif durum */
+  #projSaveBtn:disabled, #projSaveMore:disabled{opacity:.45; cursor:not-allowed; color:var(--muted); border-color:var(--line);}
+  #projSaveBtn:disabled:hover, #projSaveMore:disabled:hover{color:var(--muted); border-color:var(--line);}
+  #projSaveMore{line-height:1;}
+  #projSaveMenu{position:absolute; display:none; top:calc(100% + 4px); right:0; z-index:12; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--r-md); box-shadow:var(--sh-pop); font-size:12.5px; min-width:150px; padding:4px 0; user-select:none;}
+  #projSaveMenu.open{display:block;}
+  #projSaveMenu .mi{padding:6px 12px; cursor:pointer; white-space:nowrap; color:var(--ink);}
+  #projSaveMenu .mi:hover{background:var(--acc-soft); color:var(--acc);}
+  #projSaveMenu .mi.dis{color:var(--muted); cursor:not-allowed;}
+  #projSaveMenu .mi.dis:hover{background:none; color:var(--muted);}
   /* pencere ayar paneli (seçili pencere: genişlik/yükseklik/parapet/tam boy) */
   #winPanel{position:absolute; right:14px; bottom:48px; z-index:9; background:var(--panel); border:1px solid var(--line);
     border-radius:var(--r-md); box-shadow:var(--sh-pop); font-size:12px; width:210px; padding:10px 12px; user-select:none;}
@@ -508,6 +519,11 @@
   .onbCard .onbNext:hover{background:var(--acc-hover); border-color:var(--acc-hover); color:#fff;}
   @keyframes onbPulse{0%{transform:scale(1); opacity:.85;} 70%{transform:scale(2.2); opacity:0;} 100%{transform:scale(2.2); opacity:0;}}
   .onbPulse{transform-origin:center; transform-box:fill-box; animation:onbPulse 1.6s ease-out infinite; fill:var(--acc); opacity:.85;}
+  /* GOREV C — kamera turu KOMPAKT kart (aci-ayarla/lens-sec): hedefi/PiP'i ortmesin diye kucuk */
+  .onbCard.onbCompact{max-width:240px; width:min(240px,calc(100vw - 24px)); padding:10px 12px; font-size:12px; line-height:1.45;}
+  .onbCard.onbCompact h3{font-size:12.5px; margin-bottom:5px;}
+  .onbCard.onbCompact p{margin-bottom:8px;}
+  .onbCard.onbCompact .progBar{margin-bottom:9px;}
   /* kamera3d mini-turu: #view3dOverlay inline z-index:9999 (view3d.js) — spotlight+kart onun USTUNDE kalmali */
   #onbOverlay.onb3d{z-index:10001;}
   .onbCard.onb3d{z-index:10002;}

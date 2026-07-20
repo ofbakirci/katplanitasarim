@@ -33,8 +33,8 @@
    - EMOJI YASAK: ikon gerekirse icons.js icon() (typeof-guard'li) ya da duz metin. */
 
 /* ---- senaryo surumleri: adimlar degisince ARTIR -> done/dismissed kullanici yeniden gezer ---- */
-const ONB_VERSION = 4;        // 'ana' turu (v4 REV5: duvar-cek nabiz gercek duvarda + balkon-ekle demo-konum nabzi + imkan araci/havuz oto-sec + export son kart '3B'ye geç')
-const ONB_KAM_VERSION = 3;    // 'kamera3d' turu (v3 REV5: aci-ayarla kamera-sec+#v3dCamBar hedefi + lens-sec detay-kutu ac + drone 'Tumu' gorunum + drone-ekle delta-check + iframe'de dis-render adimi bitis-kartina donusur)
+const ONB_VERSION = 5;        // 'ana' turu (v5 REV6: balkon-ekle BOS baslar -> demo set yakalanir + bir balkon ekletip 'Kalan balkonlari otomatik yerlestir' aksiyonu + #tBalk araci oto-sec; site-ac TAMAMLAMA semantigi (uzerine yazmaz))
+const ONB_KAM_VERSION = 4;    // 'kamera3d' turu (v4 REV6: aci-ayarla/lens-sec kompakt kart + hedef/PiP kacinma (kart ortmez) + hedef-kaybi kurtarma (ensure throttle))
 
 /* ================= DEMO PAKET HEDEFLERI (ONB_TARGETS) =================
    v2 vizyonu: "paketi vereceğim, onboarding onu kullanıcıya elle çizdirtecek —
@@ -196,9 +196,14 @@ function onbMarkerWorld(kind){
 function onbBalconyMarkerWorld(){
   try{
     const g=(typeof ONB_TARGETS!=='undefined'&&ONB_TARGETS)?ONB_TARGETS.blokA:null;
-    const bs=(typeof ONB_TARGETS!=='undefined'&&ONB_TARGETS)?ONB_TARGETS.balkonlar:null;
-    if(!g||!Array.isArray(g.pts)||g.pts.length<3||!Array.isArray(bs)||!bs.length) return null;
-    const P=g.pts, b=bs[0];
+    if(!g||!Array.isArray(g.pts)||g.pts.length<3) return null;
+    /* GOREV A — hedef balkon: YAKALANAN demo set (onbDemoBalkSet) VARSA onun icinden HENUZ
+       yerlestirilmemis ILK kayit (kullanici birini ekleyince isaret bir sonrakine kayar),
+       yoksa fallback ONB_TARGETS.balkonlar[0]. Poligon referansi blok A pts (SAF). */
+    const set=(Array.isArray(onbDemoBalkSet)&&onbDemoBalkSet.length) ? onbDemoBalkSet
+      : ((typeof ONB_TARGETS!=='undefined'&&ONB_TARGETS&&Array.isArray(ONB_TARGETS.balkonlar)) ? ONB_TARGETS.balkonlar : null);
+    if(!Array.isArray(set)||!set.length) return null;
+    const P=g.pts, b=onbFirstUnplacedBalcony(set)||set[0];
     const A=P[b.ei], B=P[(b.ei+1)%P.length]; if(!A||!B) return null;
     const L=Math.hypot(B.x-A.x,B.y-A.y)||1, ux=(B.x-A.x)/L, uy=(B.y-A.y)/L;
     let nx=-uy, ny=ux;
@@ -279,6 +284,41 @@ function onbImkanPlaced(target, placed){
     if(Math.abs(c.x-tc.x)<=tol && Math.abs(c.y-tc.y)<=tol) return true;
   }
   return false;
+}
+/* GOREV A — canli yerlestirilmis balkonlar (global balconies); headless/motor yok -> [] */
+function onbLiveBalconies(){ try{ return (typeof balconies!=='undefined' && Array.isArray(balconies)) ? balconies : []; }catch(e){ return []; } }
+/* balkon eslesme (onbImkanPlaced'in balkon ikizi): AYNI kenar (ei) + t-araligi ANLAMLI
+   ortusuyor mu. Ghost isareti (bir sonraki eksik kayit) + kalan-balkon push'u bunu kullanir;
+   ayni kenardaki AYRI balkonlari (2m arali) karistirmaz -> ortusme esigi >0.5. */
+function onbBalconyPlaced(target, placed){
+  if(!target || !Array.isArray(placed)) return false;
+  const t0=Math.min(target.t0,target.t1), t1=Math.max(target.t0,target.t1);
+  for(let i=0;i<placed.length;i++){
+    const b=placed[i]; if(!b || b.ei!==target.ei) continue;
+    const b0=Math.min(b.t0,b.t1), b1=Math.max(b.t0,b.t1);
+    if(Math.min(t1,b1)-Math.max(t0,b0) > 0.5) return true;     // ayni kenarda anlamli ortusme
+  }
+  return false;
+}
+/* set icinde canli balconies'e gore HENUZ yerlestirilmemis ILK kayit (ghost isareti icin); yoksa null */
+function onbFirstUnplacedBalcony(set){
+  if(!Array.isArray(set)) return null;
+  const placed=onbLiveBalconies();
+  for(let i=0;i<set.length;i++){ if(!onbBalconyPlaced(set[i], placed)) return set[i]; }
+  return null;
+}
+/* set icinden canli balconies'te ESLESMEYEN (kalan) balkonlarin kopyalari — aksiyon/site-ac push eder.
+   set = yakalanan onbDemoBalkSet (yoksa fallback ONB_TARGETS.balkonlar). UZERINE YAZMA YOK. */
+function onbRemainingBalconies(){
+  const set=(Array.isArray(onbDemoBalkSet)&&onbDemoBalkSet.length) ? onbDemoBalkSet : onbDemoBalconies();
+  const placed=onbLiveBalconies(), out=[];
+  for(let i=0;i<set.length;i++){ if(!onbBalconyPlaced(set[i], placed)) out.push({ei:set[i].ei,t0:set[i].t0,t1:set[i].t1,depth:set[i].depth}); }
+  return out;
+}
+/* balkon-ekle kart metni icin dinamik sayi: yakalanan set uzunlugu (demo-plan'da 10), yoksa ONB_TARGETS.balkon */
+function onbDemoBalkCount(){
+  if(Array.isArray(onbDemoBalkSet) && onbDemoBalkSet.length) return onbDemoBalkSet.length;
+  return (typeof ONB_TARGETS!=='undefined' && ONB_TARGETS && ONB_TARGETS.balkon) ? ONB_TARGETS.balkon : 0;
 }
 /* ONB_TARGETS imkan hedefini motor amenity kaydina cevir. M1 semasi {type,pts:[...]} +
    geriye-uyum icin bbox alanlari (x/y/w/h/ang) de eklenir (M1 io eski kayitlari pts'siz
@@ -361,7 +401,7 @@ function onbOpenCamDetail(){
   try{ if(typeof setTimeout==='function'){ setTimeout(tryOpen, 120); setTimeout(tryOpen, 350); } }catch(e){}
 }
 /* KAT/EXPORT BAGLAMI: kat-ayri'ya girerken aktif blok BLOK B (yalnizca sinir cizili,
-   plansiz) olabilir -> kat seridi bos, #svgBtn pasif, export takilir. Yerlesimi OLAN
+   plansiz) olabilir -> kat seridi bos, export takilir. Yerlesimi OLAN
    bloga (ornekte Blok A) gec ki kat-ayri/kat-gez/export gercek bir plan uzerinde issin.
    Tek blok / plan zaten aktif blokta ise no-op. Hepsi typeof-guard'li (headless'te sessiz). */
 function onbFocusBuiltBlock(){
@@ -461,15 +501,41 @@ function onbGenBtnCapture(ev){
     }
   }catch(e){}
 }
-/* aktif blogun balkonlarini demo setle tamamla (global balconies) */
-function onbSetDemoBalconies(){
-  const b=onbDemoBalconies(); if(!b.length) return;
+/* GOREV A — balkon-ekle GIRISINDE demo balkon setini YAKALA: mevcut balconies (yerlesim/normalizasyon
+   ile gelen demo seti; demo-plan'da 10) onbDemoBalkSet'e kopyalanir. Bos/1'den az ise fallback
+   ONB_TARGETS.balkonlar kopyasi. Sonra onbClearBalconies BOSALTIR (kullanici bir tane elle eklesin). */
+function onbCaptureBalkSet(){
+  let src=null;
+  try{ if(typeof balconies!=='undefined' && Array.isArray(balconies)) src=balconies; }catch(e){}
+  onbDemoBalkSet = (src && src.length>0)
+    ? src.map(function(b){ return {ei:b.ei, t0:b.t0, t1:b.t1, depth:b.depth}; })
+    : onbDemoBalconies();   // fallback: ONB_TARGETS.balkonlar kopyasi
+  return onbDemoBalkSet;
+}
+/* balconies'i BOSALT + tazele (balkon-ekle girisi). Motor globali yoksa no-op (headless guard). */
+function onbClearBalconies(){
   let ok=false;
-  try{ if(typeof balconies!=='undefined'){ balconies=b; ok=true; } }catch(e){}
+  try{ if(typeof balconies!=='undefined'){ balconies=[]; ok=true; } }catch(e){}
   if(!ok) return;
   try{ if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks(); }catch(e){}
   try{ if(typeof render==='function') render(); }catch(e){}
-  onbToast('Balkonları örnekten tamamladım');
+}
+/* BALKON ARACINI AC (onbOpenAmenityTool deseninin balkon ikizi): setMode('balkon') + #tBalk dock
+   dugmesini aktive et -> kullanici araci aramaz, hayaletin kenarina dogrudan ekler. Zaten aciksa no-op. */
+function onbOpenBalconyTool(){
+  try{ if(typeof setMode==='function' && (typeof mode==='undefined' || mode!=='balkon')) setMode('balkon'); }catch(e){}
+  try{ const b=onbSel('#tBalk'); if(b && b.classList && !b.classList.contains('on') && b.click && (typeof mode==='undefined'||mode!=='balkon')) b.click(); }catch(e){}
+}
+/* GOREV A — kalan demo balkonlari yerlestir (balconies.push; UZERINE YAZMAZ). Yakalanan set icinde
+   canli balconies ile eslesmeyenleri ekler. Hic eksik yoksa dokunmaz + toast atmaz. */
+function onbPlaceRemainingBalconies(){
+  if(typeof balconies==='undefined' || !Array.isArray(balconies)) return;
+  const rem=onbRemainingBalconies();
+  if(!rem.length) return;
+  for(let i=0;i<rem.length;i++) balconies.push(rem[i]);
+  try{ if(typeof plan!=='undefined' && plan && typeof runChecks==='function') runChecks(); }catch(e){}
+  try{ if(typeof render==='function') render(); }catch(e){}
+  onbToast('Kalan balkonları yerleştirdim');
 }
 /* kalan demo imkanlari yerlestir (amenities.push) — imkan-koy kart aksiyonu */
 function onbPlaceRemainingImkanlar(){
@@ -588,8 +654,13 @@ const ONB_STEPS = [
        kenarini (ei orta noktasi + depth) dunya koordinatinda isaret eder -> kullanici oraya ekler, set
        sasirtmaz. Baska kenara eklerse de adim gecer (zorlama yok); nudge yalnizca yonlendirir. */
     ghost:{ marker:'balcony' }, fullCanvasHole:true,
-    body:'Balkon aracını seç, işaretli kenara balkon ekle (örnekteki yerlerden biri) — bir tane yeter, kalanını ben tamamlarım. Örnek projede '+ONB_TARGETS.balkon+' balkon var.',
+    /* body FONKSIYON: sayi DINAMIK (yakalanan set uzunlugu; demo-plan'da 10). onbStepEnter girisinde
+       balconies BOSALTILIR + set yakalanir -> adim GERCEKTEN balkonsuz baslar; bir tane ekleyince
+       'Kalan balkonlari otomatik yerlestir' aksiyonu belirir (actionAfterFirst). */
+    body:function(){ return 'Balkon aracını seç, işaretli kenara balkon ekle (örnekteki yerlerden biri) — bir tane yeter, kalanını ben tamamlarım. Örnek projede '+onbDemoBalkCount()+' balkon var.'; },
     target:{type:'dom', sel:'#tBalk'},
+    action:{ label:'Kalan balkonları otomatik yerleştir', run:function(){ onbPlaceRemainingBalconies(); } },
+    actionAfterFirst:true,
     baseline:function(ctx){ return ctx.balconyCount(); },
     check:function(ctx, base){ return ctx.balconyCount() > (base||0); } },
 
@@ -670,12 +741,12 @@ const ONB_STEPS = [
     /* REV5 KUSUR 10 — MESKEN AKISINDA SON KART "3B'YE GEC": iframe'de basliktan itibaren yon 3B'dir
        (kullanici: "16/16 hala 'Planı dışa aktar' diyor"). titleIframe + bodyIframe -> sag alttaki "3B
        Görüntüle" CTA'sina yonlendirir (kabuk-butonu iframe'den spotlight'lanamaz; kabuk turu devralinca
-       go3d adimi #ctaBtn'i highlight'lar); "Paket İndir" ikincil cumle. STANDALONE KPTA'da #svgBtn + SVG
-       dili AYNEN. action iframe'de Bitir (actionIframeOnly). */
+       go3d adimi #ctaBtn'i highlight'lar); "Proje İndir" ikincil cumle. STANDALONE KPTA'da #projSaveBtn
+       hedefi. action iframe'de Bitir (actionIframeOnly). */
     titleIframe:'3B’ye geç',
-    body:'Hazır! Planı SVG olarak indir ya da daha sonra "İçe aktar" ile geri yükle.',
-    bodyIframe:'Yerleşim hazır. Sağ alttaki "3B Görüntüle" düğmesiyle projeyi 3B dollhouse olarak aç — akış turu kabukta devam eder. (İstersen üstteki "Paket İndir" ile projeyi tek dosya olarak da saklarsın.)',
-    target:function(){ return onbInIframe() ? {type:'none'} : {type:'dom', sel:'#svgBtn'}; },
+    body:'Hazır! "Proje İndir" ile projeni tek dosya olarak indir; "Proje Aç" ile istediğin an geri yüklersin.',
+    bodyIframe:'Yerleşim hazır. Sağ alttaki "3B Görüntüle" düğmesiyle projeyi 3B dollhouse olarak aç — akış turu kabukta devam eder. (İstersen üstteki "Proje İndir" ile projeyi tek dosya olarak da saklarsın.)',
+    target:function(){ return onbInIframe() ? {type:'none'} : {type:'dom', sel:'#projSaveBtn'}; },
     action:{ label:'Bitir', run:function(){ onbFinish(); } }, actionIframeOnly:true,
     check:function(ctx){ return ctx.exportClicked(); } }
 ];
@@ -687,8 +758,8 @@ function onbStepEnter(id){
   switch(id){
     case 'blokA-ciz': onbFit(); break;                                                       // parsel + blok A hayaleti tam gorunur
     case 'yerlesim':  onbSnapBlock('blokA'); onbSetDemoUnits('blokA'); onbOpenDaireTab(); break;  // blok A -> demo ayak izi + A karmasi (TEK daire) + Daireler sekmesi
-    case 'balkon-ekle': onbFit(); break;
-    case 'site-ac':   onbOpenBinaTab(); onbSetDemoBalconies(); break;                         // Bina sekmesi + balkonlar demo set
+    case 'balkon-ekle': onbCaptureBalkSet(); onbClearBalconies(); onbFit(); onbOpenBalconyTool(); break;  // GOREV A: demo set yakala + BOSALT + kadraj + balkon araci oto-sec
+    case 'site-ac':   onbOpenBinaTab(); onbPlaceRemainingBalconies(); break;                  // Bina sekmesi + TAMAMLA (uzerine yazmaz; eksik yoksa no-op)
     case 'blokB-ciz': onbFit(); break;                                                        // blok B hayaleti tam gorunur
     case 'blokB-yerlesim': onbSnapBlock('blokB'); onbSetDemoUnits('blokB'); onbOpenDaireTab(); break;  // blok B -> demo ayak izi + B karmasi + Daireler sekmesi
     case 'imkan-koy': onbFit(); onbOpenAmenityTool(); break;                                  // blok B planli -> kadraj + imkan hayaletleri + KUSUR 9: imkan araci ac + Havuz sec
@@ -746,6 +817,10 @@ const ONB_KAM_STEPS = [
        DEGIL). skippable + delta-check -> kitlenme yok. */
     body:'İşaretli çubuk seçili kameranın üstünde. Yön ile bakış noktasını değiştir ya da sahnedeki kamera simgesini sürükleyerek taşı — önizleme anında güncellenir.',
     target:{type:'dom', sel:'#v3dCamBar'},
+    /* GOREV C — kompakt kart + hedef/PiP kacinma (kamera simgesi cubugun ALTINDA -> expandDown:90
+       'alt' konumu eledir, kart yana/uste kacar) + hedef-kaybi kurtarma (kamera secimi kapanirsa yeniden sec). */
+    compact:true, avoidSel:['#v3dPip','#v3dExtPip'], expandDown:90,
+    ensure:function(){ onbSelectFirstCam(); },
     baseline:function(ctx){ return ctx.lastCamSig(); },
     check:function(ctx, base){ return ctx.camCount() > 0 && ctx.lastCamSig() !== base; } },
 
@@ -756,6 +831,9 @@ const ONB_KAM_STEPS = [
        katmanini ACAR (#v3dCamDock .sum) -> #v3dLRow gorunur, hedef dolu. skippable + lensSig delta -> kitlenme yok. */
     body:'Kamera detay kutusu açık. 16-24-35-50 mm lensler görüş açısını değiştirir: küçük sayı geniş açı, büyük sayı yakın plan. İşaretli satırdan bir lens seç.',
     target:{type:'dom', sel:'#v3dLRow'},
+    /* GOREV C — kompakt kart + PiP kacinma + hedef-kaybi kurtarma (detay kutusu kapanirsa yeniden ac). */
+    compact:true, avoidSel:['#v3dPip','#v3dExtPip'],
+    ensure:function(){ onbSelectFirstCam(); onbOpenCamDetail(); },
     baseline:function(ctx){ return ctx.lensSig(); },
     check:function(ctx, base){ return ctx.lensSig() !== base; } },
 
@@ -993,12 +1071,14 @@ let onbGate     = {};            // {idx: bool} — o adima GIRISTE check saglan
 let onbTimer    = null;          // ~250ms algilama dongusu (tur aktifken)
 let onbWatchTimer = null;        // ~750ms tetik watcher'i (kamera3d)
 let onbRaf      = 0;             // spotlight takip rAF
-let onbExportFlag = false;       // #svgBtn/#impBtn tiklandi (ana adim 13)
+let onbExportFlag = false;       // #projSaveBtn/#projOpenBtn tiklandi (ana adim 13)
 let onbExtRenderFlag = false;    // [data-v3d="extrender"] tiklandi (kamera3d adim 6)
 let onbUI       = null;          // {svg,bg,hole,holeC,dim,card}
 let onbWired    = false;         // resize/scroll dinleyicisi bir kez
 let onbToastTimer = null;        // gecici tost zamanlayicisi
 let onbActionReady = false;      // IS 5: actionAfterFirst adiminda aksiyon dugmesi gorunur mu (ilk imkan konuldu mu)
+let onbDemoBalkSet = null;       // GOREV A: balkon-ekle girisinde yakalanan demo balkon seti (balconies snapshot | fallback ONB_TARGETS.balkonlar)
+let onbEnsureAt = 0;             // GOREV C: hedef-kaybi kurtarma throttle damgasi (son ensure() Date.now)
 
 function onbBrowser(){ return typeof window!=='undefined' && typeof window.innerWidth==='number' && typeof document!=='undefined'; }
 
@@ -1098,8 +1178,9 @@ function onbCardClick(e){
    (step.bodyIframe) varsa onu, yoksa standart step.body'yi doner. SAF (arg olarak
    inIframe alir) -> headless test edilebilir. */
 function onbStepBody(step, inIframe){
-  if(step && inIframe && step.bodyIframe) return step.bodyIframe;
-  return (step && step.body) || '';
+  if(step && inIframe && step.bodyIframe) return (typeof step.bodyIframe==='function') ? step.bodyIframe() : step.bodyIframe;
+  const b=step && step.body;
+  return (typeof b==='function') ? (b()||'') : (b || '');
 }
 /* REV5 KUSUR 10: gomulu iframe baglaminda alternatif BASLIK (step.titleIframe) varsa onu (export ->
    "3B'ye geç"), yoksa standart step.title. SAF (arg olarak inIframe alir). */
@@ -1124,6 +1205,8 @@ function onbActionReadyFor(s){
 function onbRenderCard(){
   if(!onbUI || !onbUI.card || !onbTour) return;
   const s=onbTour.steps[onbIdx]; if(!s) return;
+  /* GOREV C — kompakt kart (kamera turu aci-ayarla/lens-sec): hedefi/PiP'i ortmesin diye kucuk */
+  try{ if(onbUI.card.classList){ if(s.compact) onbUI.card.classList.add('onbCompact'); else onbUI.card.classList.remove('onbCompact'); } }catch(e){}
   const total=onbTour.steps.length, n=onbIdx+1, pct=Math.round(n/total*100);
   const ic=(typeof icon==='function') ? icon('bulb','inl') : '';
   /* GIRIS-SAGLANMIS adim (onbGate[onbIdx]) -> oto-atlama YOK; kartta İleri düğmesi
@@ -1180,12 +1263,53 @@ function onbCanvasRect(){
   if(w && w.getBoundingClientRect && onbVisible(w)) return w.getBoundingClientRect();
   return null;
 }
-function onbPositionCard(rect){
+/* GOREV C — rect normalizasyonu + ortusme alani (kart-kacinma icin). r = DOMRect
+   (left/top/right/bottom) YA DA {x,y,w/width,h/height}. onbRectOverlapArea SAF (headless test). */
+function onbRectNorm(r){
+  if(!r) return null;
+  if('right' in r && 'bottom' in r && 'left' in r && 'top' in r) return {left:r.left,top:r.top,right:r.right,bottom:r.bottom};
+  const x=(r.x!=null?r.x:r.left)||0, y=(r.y!=null?r.y:r.top)||0;
+  const w=(r.width!=null?r.width:r.w)||0, h=(r.height!=null?r.height:r.h)||0;
+  return {left:x,top:y,right:x+w,bottom:y+h};
+}
+function onbRectOverlapArea(a,b){
+  a=onbRectNorm(a); b=onbRectNorm(b); if(!a||!b) return 0;
+  const ox=Math.max(0, Math.min(a.right,b.right)-Math.max(a.left,b.left));
+  const oy=Math.max(0, Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top));
+  return ox*oy;
+}
+/* aday kart konumlari: alt, ust, sag-yan, sol-yan — her biri viewport'a clamp'li kart rect'i.
+   {left,top,right,bottom,x,y} (x/y = stil icin sol-ust). */
+function onbCardCandidates(rect, w, h, GAP, M, vw, vh){
+  const cx=rect.left+rect.width/2 - w/2;   // yatay ortalanmis (alt/ust)
+  const cy=rect.top+rect.height/2 - h/2;   // dikey ortalanmis (yan)
+  const cX=function(x){ return Math.max(M, Math.min(x, vw-w-M)); };
+  const cY=function(y){ return Math.max(M, Math.min(y, vh-h-M)); };
+  const mk=function(x,y){ x=cX(x); y=cY(y); return {left:x,top:y,right:x+w,bottom:y+h,x:x,y:y}; };
+  return [ mk(cx, rect.bottom+GAP),           // alt
+           mk(cx, rect.top-GAP-h),            // ust
+           mk(rect.right+GAP, cy),            // sag-yan
+           mk(rect.left-GAP-w, cy) ];         // sol-yan
+}
+function onbPositionCard(rect, avoid){
   if(!onbUI || !onbUI.card) return;
   const M=12, GAP=14, vw=window.innerWidth, vh=window.innerHeight;
   const w=onbUI.card.offsetWidth||300, h=onbUI.card.offsetHeight||160;
   let x, y;
   if(!rect){ x=(vw-w)/2; y=(vh-h)/2; }
+  else if(Array.isArray(avoid) && avoid.length){
+    /* GOREV C — KACINMA: hedefi + avoid rect'lerini (PiP, hedefin asagi genisletilmis hali)
+       ORTMEYEN ilk aday konum; hicbiri temiz degilse EN AZ ortusen (sonra viewport clamp). */
+    const cand=onbCardCandidates(rect, w, h, GAP, M, vw, vh);
+    const blockers=[rect].concat(avoid).filter(Boolean);
+    let best=cand[0], bestOv=Infinity;
+    for(let i=0;i<cand.length;i++){
+      let ov=0; for(let j=0;j<blockers.length;j++) ov+=onbRectOverlapArea(cand[i], blockers[j]);
+      if(ov<=0){ best=cand[i]; bestOv=0; break; }
+      if(ov<bestOv){ bestOv=ov; best=cand[i]; }
+    }
+    x=best.x; y=best.y;
+  }
   else{
     x=rect.left+rect.width/2-w/2;
     y=rect.bottom+GAP;
@@ -1195,6 +1319,20 @@ function onbPositionCard(rect){
   x=Math.max(M, Math.min(x, vw-w-M));
   y=Math.max(M, Math.min(y, vh-h-M));
   onbUI.card.style.left=x+'px'; onbUI.card.style.top=y+'px';
+}
+/* GOREV C — kamera turu adiminda kart hedefi/PiP'i ORTMESIN: adimin avoidSel elemanlari (or.
+   #v3dPip/#v3dExtPip rect'leri) + (opsiyonel) hedefin asagi genisletilmis hali (expandDown:
+   kamera simgesi cubugun ALTINDA) blocker listesi olarak doner. avoid konfigurasyonu YOKSA null
+   -> onbPositionCard eski (tek-hedef) davranisa duser (cizim adimlari BOZULMAZ). */
+function onbCardAvoid(step, rect){
+  if(!step || (!step.avoidSel && !step.expandDown)) return null;
+  const out=[];
+  if(step.expandDown && rect) out.push({left:rect.left, top:rect.top, right:rect.right, bottom:rect.bottom+step.expandDown});
+  const sels=Array.isArray(step.avoidSel) ? step.avoidSel : (step.avoidSel ? [step.avoidSel] : []);
+  for(let i=0;i<sels.length;i++){
+    try{ const el=onbSel(sels[i]); if(el && el.getBoundingClientRect && onbVisible(el)){ const r=el.getBoundingClientRect(); if(r.width>0||r.height>0) out.push(r); } }catch(e){}
+  }
+  return out.length ? out : null;
 }
 /* IS 3 (harita-editor madde 7) — KART-GHOST KACINMA: cizim adiminda kart, ghost ayak izinin
    EKRAN bbox'una gore konumlanir (sentetik merkez-daire yerine) -> cizim alanini ORTMEZ.
@@ -1257,7 +1395,7 @@ function onbReposition(){
   /* kart konumu: ghost varsa ghost bbox'unu KACIN (cizim alanini ortme); yoksa hedefe gore */
   const gb=onbGhostScreenBBox();
   if(gb){ onbPositionCard(gb); }
-  else if(t.kind==='dom'){ onbPositionCard(t.rect); }
+  else if(t.kind==='dom'){ onbPositionCard(t.rect, onbCardAvoid(s0, t.rect)); }   // GOREV C: kamera adimlarinda hedef/PiP kacinma
   else if(t.kind==='canvas'){ const r=t.rect, cx=r.left+r.width/2, cy=r.top+r.height/2, rad=Math.max(40, Math.min(r.width, r.height)*0.18);
     onbPositionCard({left:cx-rad, top:cy-rad, right:cx+rad, bottom:cy+rad, width:rad*2, height:rad*2}); }
   else { onbPositionCard(null); }
@@ -1402,6 +1540,17 @@ function onbTick(){
   const nowPaused = !!s.needsPro && !onbLiveCtx().modePro();
   if(nowPaused!==onbPaused){ onbPaused=nowPaused; onbRenderCard(); }
   if(onbPaused) return;                       // Pro gerekli ama kapali -> ilerleme yok
+  /* GOREV C — HEDEF-KAYBI KURTARMA: kamera turunda aktif adimin hedefi kayboldu (target 'none';
+     kullanici kamera secimini/detay kutusunu kapatti) ama 3B overlay HALA acik (!onbHidden) ise,
+     throttle'li (~900ms) step.ensure ile hedefi geri getir (aci-ayarla: onbSelectFirstCam ->
+     #v3dCamBar; lens-sec: + onbOpenCamDetail -> #v3dLRow). overlay KAPALIYKEN devreye GIRMEZ
+     (onbTour.visible bloklari onbHidden'i zaten yonetir -> mevcut duraklatma korunur). */
+  if(s.ensure && !onbHidden){
+    try{ if(onbTargetRect().kind==='none'){
+      const now=(typeof Date!=='undefined' && Date.now) ? Date.now() : 0;
+      if(now-onbEnsureAt > 900){ onbEnsureAt=now; s.ensure(); }
+    } }catch(e){}
+  }
   /* IS 5: actionAfterFirst adiminda (imkan-koy) ilk imkan cizilince aksiyon dugmesi belirsin.
      Durum degisince karti tazele (aksi halde autofill giriste gorunur ya da hic gelmez). */
   if(s.action && s.actionAfterFirst){
@@ -1500,7 +1649,7 @@ function onbBoot(){
   const b=onbEl('onbStart'); if(b && b.addEventListener) b.addEventListener('click', function(){ onbRelaunch(); });   // IS 6: kaldigin yerden (resume-farkinda)
   if(typeof document!=='undefined' && document.addEventListener){
     document.addEventListener('click', function(e){                 // delege tamamlanma tiklamalari
-      const t=(e.target && e.target.closest) ? e.target.closest('#svgBtn,#impBtn,[data-v3d="extrender"]') : null;
+      const t=(e.target && e.target.closest) ? e.target.closest('#projSaveBtn,#projOpenBtn,#projDxfItem,[data-v3d="extrender"]') : null;
       if(!t) return;
       if(t.getAttribute && t.getAttribute('data-v3d')==='extrender') onbExtRenderFlag=true;   // kamera3d adim 6
       else onbExportFlag=true;                                                                // ana adim 13
@@ -1533,6 +1682,17 @@ var ONB = {
   amenityRecord: onbAmenityRecord,
   remainingImkanlar: onbRemainingImkanlar,
   slimCams: onbSlimCams,
+  /* GOREV A — balkon TAMAMLAMA saf cozuculeri (headless test) */
+  balconyPlaced: onbBalconyPlaced,
+  firstUnplacedBalcony: onbFirstUnplacedBalcony,
+  remainingBalconies: onbRemainingBalconies,
+  demoBalkCount: onbDemoBalkCount,
+  captureBalkSet: onbCaptureBalkSet,
+  placeRemainingBalconies: onbPlaceRemainingBalconies,
+  /* GOREV C — kart-kacinma saf yardimcilari + avoid cozucu (headless test) */
+  rectOverlapArea: onbRectOverlapArea,
+  cardCandidates: onbCardCandidates,
+  cardAvoid: onbCardAvoid,
   computeTarget: onbComputeTarget,
   decideStart: onbDecideStart,
   watchDecision: onbWatchDecision,

@@ -299,9 +299,7 @@ function restoreState(st, opt){
   hoverWall=null; hoverRoomId=null; hoverDoor=null; hoverBalk=null; hoverP=null;
   plan.wallRuns=computeWallRuns();
   document.getElementById('genBtn').disabled=false;
-  document.getElementById('svgBtn').disabled=false;
-  document.getElementById('pngBtn').disabled=false;
-  document.getElementById('dxfBtn').disabled=false;
+  updateProjBtns();
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: içe aktarılan sınırın alan/çevresi (eski değer asılı kalmasın) */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
@@ -321,7 +319,9 @@ function exportSVG(){
     if(clone.insertBefore) clone.insertBefore(md, clone.firstChild||null); else clone.appendChild(md);
   }
   const blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='kat-plani.svg'; a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=(function(){ const d=new Date(),p=n=>(n<10?'0':'')+n; return 'proje-'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'.svg'; })();   // yeniden açılabilir proje dosyası
+  a.click();
   if(typeof trainLog!=='undefined'){ trainLog.record('svg'); if(typeof updateTrainLogUI==='function') updateTrainLogUI(); }   // kabul = zayıf-pozitif tercih sinyali (self-training)
 }
 function exportPNG(){
@@ -1139,9 +1139,49 @@ function exportAIOutput(){
   setTimeout(exportWallBoundaryPNG, 1000);     // 5) kat-plani-duvarsinirlari.png (ŞEFFAF duvar/oda/daire sınırı + KAPI BOŞLUKLARI)
   setTimeout(exportFloorplanMapFiles, 1500);   // 3) floorplan-map.json + 4) floorplan-overlay.svg
 }
-document.getElementById('svgBtn').onclick=exportSVG;
-document.getElementById('pngBtn').onclick=exportPNG;
-document.getElementById('dxfBtn').onclick=exportDXF;
+/* ── Proje Aç / Proje İndir (SVG/PNG/DXF/İçe aktar dörtlüsünün yerini alan ikili) ──
+   Proje İndir ana tık = exportSVG (plan durumu gömülü, yeniden açılabilir). Bitişik ▾ menüsü:
+   "2B DXF indir" = exportDXF (plan yoksa pasif). Proje Aç = tüm biçimleri tanıyan importPlanText.
+   Kapı (gating): parsel/sınır çizilir çizilmez Proje İndir aktifleşir (plan beklemez). */
+function projHasPlan(){ return !!(typeof plan!=='undefined' && plan && plan.regions); }
+function projExportable(){
+  if(projHasPlan()) return true;
+  if(typeof closed!=='undefined' && closed && typeof pts!=='undefined' && pts && pts.length>=3) return true;
+  if(typeof parcelClosed!=='undefined' && parcelClosed && typeof parcelPts!=='undefined' && parcelPts && parcelPts.length>=3) return true;
+  return false;
+}
+function updateProjBtns(){
+  const save=document.getElementById('projSaveBtn'), more=document.getElementById('projSaveMore');
+  const on=projExportable();
+  if(save) save.disabled=!on;
+  if(more) more.disabled=!on;
+  const dxf=document.getElementById('projDxfItem');
+  if(dxf){ const pl=projHasPlan(); dxf.classList.toggle('dis', !pl); dxf.setAttribute('aria-disabled', pl?'false':'true'); }
+  if(!on) projSaveMenuClose();
+}
+function projSaveMenuOpen(){ const m=document.getElementById('projSaveMenu'), mo=document.getElementById('projSaveMore');
+  if(!m) return; m.classList.add('open'); if(mo) mo.setAttribute('aria-expanded','true'); }
+function projSaveMenuClose(){ const m=document.getElementById('projSaveMenu'), mo=document.getElementById('projSaveMore');
+  if(!m) return; m.classList.remove('open'); if(mo) mo.setAttribute('aria-expanded','false'); }
+{
+  const saveBtn=document.getElementById('projSaveBtn'), moreBtn=document.getElementById('projSaveMore');
+  const menu=document.getElementById('projSaveMenu'), dxfItem=document.getElementById('projDxfItem');
+  const openInput=document.getElementById('projOpenFile'), openBtn=document.getElementById('projOpenBtn');
+  if(saveBtn) saveBtn.onclick=()=>{ if(!saveBtn.disabled) exportSVG(); };
+  if(moreBtn) moreBtn.onclick=e=>{ e.stopPropagation(); if(moreBtn.disabled) return;
+    const m=document.getElementById('projSaveMenu'); if(m&&m.classList.contains('open')) projSaveMenuClose(); else projSaveMenuOpen(); };
+  if(dxfItem) dxfItem.onclick=e=>{ e.stopPropagation();
+    if(!projHasPlan()){ alert('2B DXF için önce bir yerleşim oluşturun.'); return; }
+    projSaveMenuClose(); exportDXF(); };
+  if(menu) menu.onclick=e=>e.stopPropagation();
+  if(typeof document!=='undefined' && document.addEventListener) document.addEventListener('click',()=>projSaveMenuClose());
+  if(typeof window!=='undefined' && window.addEventListener) window.addEventListener('blur',()=>projSaveMenuClose());
+  if(openBtn && openInput){ openBtn.onclick=()=>openInput.click();
+    openInput.addEventListener('change',()=>{ const f=openInput.files&&openInput.files[0]; if(!f) return;
+      const rd=new FileReader(); rd.onload=()=>importPlanText(String(rd.result), f.name); rd.readAsText(f); openInput.value=''; }); }
+  updateProjBtns();
+}
+if(typeof window!=='undefined'){ window.__kptaProjExportable=projExportable; window.__kptaProjHasPlan=projHasPlan; window.updateProjBtns=updateProjBtns; }
 /* AI Output düğmesi UI'dan kaldırıldı (ControlNet/paint hattı deprecated); export fonksiyonları
    (exportAIOutput/exportAIPaintPNG/exportEdgeMaskPNG/exportWallBoundaryPNG/buildFloorplanMap)
    motor sözleşmesi + view3d kapı-span parity + testler için AYNEN korunur. */
@@ -1383,9 +1423,7 @@ function kpBuildPlanFromCells(geom){
   hoverWall=null; hoverRoomId=null; hoverDoor=null; hoverBalk=null; hoverP=null;
   plan.wallRuns=computeWallRuns();
   document.getElementById('genBtn').disabled=false;
-  document.getElementById('svgBtn').disabled=false;
-  document.getElementById('pngBtn').disabled=false;
-  document.getElementById('dxfBtn').disabled=false;
+  updateProjBtns();
   document.getElementById('unitTable').style.display='';
   /* durum çubuğu: çözümlenen sınırın alan/çevresi */
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
@@ -1419,7 +1457,12 @@ function importPlanText(txt, fname){
   if(typeof closeFloorPaste==='function') closeFloorPaste();   // içe aktarma bağlamı sıfırlar → kat kopyala tamponunu bırak
   txt=txt.replace(/^﻿/,'');
   try{
-    if(/^\s*\{/.test(txt)){ restoreState(normalizeFloorParcels(JSON.parse(txt))); repairImportedPlan(); return; }
+    if(/^\s*\{/.test(txt)){
+      let obj=JSON.parse(txt);
+      /* .mskpkg (MESKEN proje paketi) → gömülü kpState'i çöz (düz kpState JSON'u ile aynı yola akar) */
+      if(obj && obj.format==='mesken-proje-paketi' && obj.kpState) obj=obj.kpState;
+      restoreState(normalizeFloorParcels(obj)); repairImportedPlan(); return;
+    }
     const m=txt.match(/<metadata[^>]*id="kpState"[^>]*>([\s\S]*?)<\/metadata>/);
     if(m){
       const json=m[1].replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');
@@ -1435,19 +1478,12 @@ function importPlanText(txt, fname){
   }
 }
 {
-  const impInput=document.getElementById('impFile');
-  document.getElementById('impBtn').onclick=()=>impInput.click();
-  impInput.addEventListener('change',()=>{
-    const f=impInput.files&&impInput.files[0]; if(!f) return;
-    const rd=new FileReader();
-    rd.onload=()=>importPlanText(String(rd.result), f.name);
-    rd.readAsText(f); impInput.value='';
-  });
+  /* Sürükle-bırak içe aktarma (Proje Aç dosya seçici io.js üstünde projOpenFile ile bağlandı) */
   window.addEventListener('dragover',e=>{ e.preventDefault(); });
   window.addEventListener('drop',e=>{
     e.preventDefault();
     const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
-    if(!/\.(svg|json|dxf)$/i.test(f.name)) return;
+    if(!/\.(svg|json|dxf|mskpkg)$/i.test(f.name)) return;
     const rd=new FileReader();
     rd.onload=()=>importPlanText(String(rd.result), f.name);
     rd.readAsText(f);

@@ -143,15 +143,17 @@
         </div>
       </div>
       <div style="display:flex; gap:6px; margin-top:8px;">
-        <button class="small" id="svgBtn" style="flex:1" disabled data-tip="Planı vektör SVG olarak indir (plan durumu gömülü)">SVG indir</button>
-        <button class="small" id="pngBtn" style="flex:1" disabled data-tip="Planı yüksek çözünürlüklü PNG görsel olarak indir">PNG indir</button>
-        <button class="small" id="dxfBtn" style="flex:1" disabled data-tip="Planı CAD için DXF çizim olarak indir">DXF indir</button>
+        <button class="small" id="projOpenBtn" style="flex:1" data-tip="Proje dosyası aç — SVG / JSON / DXF / MSKPKG (plan durumu gömülü)">Proje Aç</button>
+        <input type="file" id="projOpenFile" accept=".json,.svg,image/svg+xml,.dxf,.mskpkg" style="display:none">
+        <div id="projSaveWrap" style="position:relative; flex:1; display:flex;">
+          <button class="small" id="projSaveBtn" style="flex:1; border-top-right-radius:0; border-bottom-right-radius:0" disabled data-tip="Projeyi yeniden açılabilir SVG olarak indir (plan durumu gömülü)">Proje İndir</button>
+          <button class="small" id="projSaveMore" style="flex:0 0 auto; width:24px; padding:3px 0; border-left:none; border-top-left-radius:0; border-bottom-left-radius:0" disabled aria-haspopup="true" aria-expanded="false" data-tip="Diğer dışa aktarma biçimleri">▾</button>
+          <div id="projSaveMenu">
+            <div class="mi" id="projDxfItem" data-tip="Planı CAD için 2B DXF çizim olarak indir">2B DXF indir</div>
+          </div>
+        </div>
       </div>
-      <div style="display:flex; gap:6px; margin-top:6px;">
-        <button class="small" id="impBtn" style="flex:1" data-tip="SVG / JSON / DXF plan dosyasını içe aktar">İçe aktar</button>
-        <input type="file" id="impFile" accept=".svg,image/svg+xml,.json,.dxf" style="display:none">
-      </div>
-      <div style="margin-top:4px; font-size:11px; color:#9c8e76; line-height:1.35">SVG (plan durumu gömülü ya da eski) · JSON · DXF</div>
+      <div style="margin-top:4px; font-size:11px; color:#9c8e76; line-height:1.35">Proje İndir = plan durumu gömülü SVG · Aç: SVG / JSON / DXF / MSKPKG</div>
       <details id="trainSec" class="wt-sec pro-only">
         <summary>Eğitim günlüğü <small id="trainCount">(0 kayıt)</small></summary>
         <div class="wt-hint">İndirilen/render'a gönderilen planlar yerelde tercih verisi olarak birikir (ağ yok). İleride yerleşim sıralayıcının eğitimi için.</div>

@@ -1287,7 +1287,7 @@ function clearCanvasForNewBlock(){
   villaFloors=null; activeFloor=0; lockedCore=null;
   const ka=document.getElementById('katAyri'); if(ka) ka.checked=false;
   document.getElementById('genBtn').disabled=true;
-  document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true; document.getElementById('dxfBtn').disabled=true;
+  if(typeof updateProjBtns==='function') updateProjBtns();
   document.getElementById('unitTable').style.display='none';
   document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–';
   updateKatAyriUI(); updateStructResetBtn(); render();

@@ -117,6 +117,48 @@ function spotlightCovers(hole, btn){
   const covers = hole.width>10 && hole.height>10 && bcx>=hole.left-6 && bcx<=hole.right+6 && bcy>=hole.top-6 && bcy<=hole.bottom+6;
   return {covers, holeW:Math.round(hole.width), btnC:{x:Math.round(bcx),y:Math.round(bcy)}};
 }
+// REV6: kabuk turu ARTIK cok-delikli SVG maske (#mskTourMask/#mtHoles) + hedef vurgu halkasi (#mskTourRing).
+//   #mskTourRing rect'i (overlay 'on' + halka 'on' iken); yoksa null.
+async function shellRingRect(page){ return page.evaluate(()=>{ const ov=document.getElementById('mskTourOv'), r=document.getElementById('mskTourRing'); if(!ov||!ov.classList.contains('on')||!r||!r.classList.contains('on')) return null; const rc=r.getBoundingClientRect(); if(rc.width<=0&&rc.height<=0) return null; return {left:rc.left,top:rc.top,right:rc.right,bottom:rc.bottom,width:rc.width,height:rc.height}; }); }
+// REV6 engineHole: dim maskesinde motor iframe bolgesi SEFFAF mi — #mtHoles rect'lerinden biri engineFrame'i kapsar mi.
+async function engineHoleTransparent(page){ return page.evaluate(()=>{
+  const ov=document.getElementById('mskTourOv'); if(!ov||!ov.classList.contains('on')) return {ok:false, reason:'overlay kapali'};
+  const fr=document.getElementById('engineFrame'); if(!fr) return {ok:false, reason:'iframe yok'};
+  const er=fr.getBoundingClientRect(); if(er.width<=0||er.height<=0) return {ok:false, reason:'iframe rect bos'};
+  const g=document.getElementById('mtHoles'); if(!g) return {ok:false, reason:'mtHoles yok'};
+  const cx=er.left+er.width/2, cy=er.top+er.height/2;
+  const rects=[...g.querySelectorAll('rect')].map(r=>({x:+r.getAttribute('x'),y:+r.getAttribute('y'),w:+r.getAttribute('width'),h:+r.getAttribute('height')}));
+  const covers=rects.some(h=> cx>=h.x-6 && cx<=h.x+h.w+6 && cy>=h.y-6 && cy<=h.y+h.h+6 && h.w>=er.width*0.8 && h.h>=er.height*0.8);
+  return {ok:covers, holes:rects.length, engW:Math.round(er.width), engH:Math.round(er.height)};
+}); }
+// REV6: vurgu halkasi hedef butonu SARIYOR mu (halka >= buton, toleransli)
+function ringWraps(ring, btn){
+  if(!ring||!btn) return {wraps:false, hasRing:!!ring, hasBtn:!!btn};
+  const tol=16;
+  const wraps = ring.left<=btn.left+tol && ring.top<=btn.top+tol && ring.right>=btn.right-tol && ring.bottom>=btn.bottom-tol
+    && (ring.right-ring.left)>=(btn.right-btn.left)-tol;
+  return {wraps, ring:{l:Math.round(ring.left),t:Math.round(ring.top),w:Math.round(ring.width)}, btn:{l:Math.round(btn.left),t:Math.round(btn.top),w:Math.round(btn.right-btn.left)}};
+}
+// REV6 dose3d dinamik hedef: mobilya dock aciksa furnauto dugmesi, kapaliysa rail Mobilya butonu.
+async function iframeDoseTargetRect(page){
+  const au=await iframeElemRectParent(page,'#v3dFurnDock [data-v3d="furnauto"]');
+  if(au) return {rect:au, which:'furnauto'};
+  const rail=await iframeElemRectParent(page,'[data-grp="furniture"]');
+  return {rect:rail, which:'rail'};
+}
+// REV6 EXPORT: son adim #ctaBtn 'Projeyi Indir' -> gercek indirme (blob a[download].click). Parent'a
+//   download gozetleyici kur (URL.createObjectURL + a[download].click yakalar).
+async function installDownloadObserver(page){
+  try{ await page.evaluate(()=>{
+    if(window.__dlObs) return; window.__dlSeen=[];
+    const origCreate=URL.createObjectURL;
+    URL.createObjectURL=function(b){ try{ window.__dlSeen.push('blob'); }catch(e){} return origCreate.apply(this, arguments); };
+    const origClick=HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click=function(){ try{ if(this.download) window.__dlSeen.push('a:'+this.download); }catch(e){} return origClick.apply(this, arguments); };
+    window.__dlObs=true;
+  }); }catch(e){}
+}
+async function getDownloads(page){ try{ return await page.evaluate(()=>Array.isArray(window.__dlSeen)?window.__dlSeen.slice():[]); }catch(e){ return []; } }
 
 // --- motor (iframe) onboarding card helpers ---
 async function onbCard(f){
@@ -268,6 +310,7 @@ async function resumeScenario(page, f){
   const f = await waitEngineFrame(page);
   ok('engineFrame yuklendi');
   await installNudgeObserver(page);   // (b) angleNudge/extNudge hic cikmasin diye izle
+  await installDownloadObserver(page);// REV6: son adim 'Projeyi Indir' gercek indirme tetikler mi
   await sleep(1500);
 
   if(PKG){ await runPkg(page, f); }
@@ -331,6 +374,25 @@ async function runHandson(page, f){
   // imar paneli ada assert
   const imar = await f.evaluate(()=>{ const b=document.body.innerText||''; return /2010/.test(b); });
   imar ? ok('imar paneli ada 2010') : bad('imar paneli ada 2010','yok');
+  // REV6 EXPORT — PARSEL-YALNIZ AKTIFLIK: parsel cizilir cizilmez (plan URETILMEDEN) kabuk 'Proje Indir'
+  //   (#pkgExportBtn) aktif olur (updatePkgExportBtn 900ms interval; pkgEngineExportable=parsel yeter).
+  const pkgExpParcel = await waitFor(async()=>{
+    const st=await page.evaluate(()=>{ const b=document.getElementById('pkgExportBtn'), m=document.getElementById('pkgExportMore');
+      return { exp:!!b, expOn:!!(b&&!b.disabled), moreOn:!!(m&&!m.disabled), label:(b?b.textContent.trim():'') }; });
+    return st.expOn ? st : null;
+  }, {timeout:4000, interval:300, desc:'pkgExportBtn parsel aktif'}).catch(()=>null);
+  const pkgExpNow = pkgExpParcel || await page.evaluate(()=>{ const b=document.getElementById('pkgExportBtn'); return {exp:!!b, expOn:!!(b&&!b.disabled), label:(b?b.textContent.trim():'')}; });
+  (pkgExpNow.expOn) ? ok('REV6 parsel-yalniz: kabuk "Proje Indir" aktif (plan yok, parsel yeter)', JSON.stringify(pkgExpNow)) : bad('REV6 parsel-yalniz Proje Indir aktif','durum='+JSON.stringify(pkgExpNow));
+  // kabuk titlebar buton etiketleri 'Proje Aç' / 'Proje İndir'
+  const pkgLabels = await page.evaluate(()=>{ const o=document.getElementById('pkgImportBtn'), e=document.getElementById('pkgExportBtn');
+    return { open:(o?o.textContent.trim():''), exp:(e?e.textContent.trim():'') }; });
+  (/Proje Aç/.test(pkgLabels.open) && /Proje İndir/.test(pkgLabels.exp)) ? ok('REV6 kabuk titlebar "Proje Aç"/"Proje İndir"', JSON.stringify(pkgLabels)) : bad('REV6 kabuk export etiketleri', JSON.stringify(pkgLabels));
+  // ▾ menusu acilir ('2B DXF indir' ogesi). #pkgExportMore onclick e.stopPropagation -> document-close tetiklenmez.
+  await clickParent(page, '#pkgExportMore'); await sleep(300);
+  const dxfMenu = await page.evaluate(()=>{ const m=document.getElementById('pkgExportMenu'), d=document.getElementById('pkgDxfItem');
+    const open=!!(m && m.style.display!=='none'); return { open, dxf:(d?d.textContent.trim():''), hasDxf:!!d }; });
+  (dxfMenu.open && /2B DXF indir/.test(dxfMenu.dxf)) ? ok('REV6 ▾ menu acildi + "2B DXF indir" ogesi var', JSON.stringify(dxfMenu)) : bad('REV6 ▾ menu / DXF ogesi', JSON.stringify(dxfMenu));
+  await page.evaluate(()=>{ try{ document.body.click(); }catch(e){} }); await sleep(150);   // menuyu kapat (turu engellemesin)
   await sleep(600);
   // card must NOT occlude any ghost corner (faithful to bug #1)
   const overlap = await cardGhostOverlap(page, f);
@@ -406,8 +468,24 @@ async function runHandson(page, f){
   mc = await waitOnbProg(f, 8, {timeout:10000, desc:'8 balkon-ekle'}); ok('motor 8/16 '+mc.title);
   await shot(page,'09-balkon');
 
+  // REV6 BALKON — BOS BASLAR: balkon-ekle GIRISINDE balconies BOSALTILIR (onbCaptureBalkSet + onbClearBalconies);
+  //   demo seti ARTIK on-dolu GELMEZ. Balkon araci OTO-SECILI (onbOpenBalconyTool -> setMode('balkon') + #tBalk).
+  //   Aksiyon ('Kalan balkonlari otomatik yerlestir') actionAfterFirst -> giriste GORUNMEZ (bir balkon cizilene dek).
+  const balkEntry = await f.evaluate(()=>{
+    try{ const n=(typeof balconies!=="undefined"&&balconies?balconies.length:0)||0;
+      const t=document.getElementById('tBalk'); const toolOn=!!(t&&t.classList&&t.classList.contains('on'));
+      const modeBalk=(typeof mode!=='undefined'&&mode==='balkon');
+      let readyEntry=null; try{ const st=(typeof onbTour!=='undefined'&&onbTour&&onbTour.steps)?onbTour.steps[(typeof onbIdx!=='undefined'?onbIdx:-1)]:null;
+        if(st && typeof onbActionReadyFor==='function') readyEntry=!!onbActionReadyFor(st); }catch(e){}
+      return {n, toolOn, modeBalk, readyEntry};
+    }catch(e){ return {err:String(e&&e.message||e)}; }
+  });
+  (balkEntry.n===0) ? ok('REV6 balkon-ekle girisinde balconies BOS (0; on-dolu gelmiyor)','n='+balkEntry.n) : bad('REV6 balkon giris bos (0)','n='+balkEntry.n);
+  (balkEntry.toolOn||balkEntry.modeBalk) ? ok('REV6 balkon araci OTO-secili (#tBalk on / mode balkon)',JSON.stringify(balkEntry)) : bad('REV6 balkon araci oto-secili',JSON.stringify(balkEntry));
+  (balkEntry.readyEntry===false) ? ok('REV6 balkon-ekle giris: autofill aksiyonu GIZLI (once cizdir)') : bad('REV6 balkon autofill giriste gizli','readyEntry='+balkEntry.readyEntry);
+
   // REV5 KUSUR 8 — DEMO-KONUM NABZI: onbGhost'ta .onbMark nabzi VAR ve marker dunya-noktasi demo blok A'nin
-  //   ILK balkon kenarinin (ONB_TARGETS.balkonlar[0]) konumu (rastgele degil; kullaniciyi ornek yere yonlendirir).
+  //   ILK balkon kenarinin konumu (rastgele degil; kullaniciyi ornek yere yonlendirir).
   const balkMark = await f.evaluate(()=>{
     try{
       const m=(typeof onbBalconyMarkerWorld==='function')?onbBalconyMarkerWorld():null;
@@ -422,15 +500,44 @@ async function runHandson(page, f){
   balkMark.ok ? ok('KUSUR8 balkon-ekle demo-konum nabzi gorunuyor (kenar isaretli)', JSON.stringify(balkMark))
              : bad('KUSUR8 balkon-ekle demo-konum nabzi yok', JSON.stringify(balkMark));
 
-  // balkon-ekle: add one balcony (click near a facade)
-  const balk = await addBalcony(f);
-  balk ? ok('bir balkon eklendi') : bad('balkon eklendi','olmadi');
+  // REV6: BIR balkon ciz + AYNI SENKRON evaluate icinde actionReadyFor'u oku (tur timer'i araya giremez).
+  //   -> readyBefore=false (giris), readyAfter=true (ilk balkon sonrasi aksiyon belirir); kullanicinin balkonu (sig) yakalanir.
+  const balkRes = await f.evaluate(()=>{
+    function ready(){ try{ const st=(typeof onbTour!=='undefined'&&onbTour&&onbTour.steps)?onbTour.steps[(typeof onbIdx!=='undefined'?onbIdx:-1)]:null;
+      if(st && typeof onbActionReadyFor==='function') return !!onbActionReadyFor(st); }catch(e){} return null; }
+    const svg=document.getElementById('svg'); if(!svg) return {added:false, reason:'no svg'};
+    const r=svg.getBoundingClientRect();
+    function ev(type,x,y){ svg.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,clientX:x,clientY:y,button:0,view:window})); }
+    const tb=document.getElementById('tBalk'); if(tb && !(typeof mode!=='undefined'&&mode==='balkon')) tb.click();
+    const readyBefore=ready();
+    const before=(typeof balconies!=="undefined"&&balconies?balconies.length:0)||0;
+    const pts=[];
+    for(let t=0.15;t<=0.85;t+=0.05){ pts.push([r.left+r.width*t, r.top+r.height*0.14]); pts.push([r.left+r.width*t, r.top+r.height*0.86]); pts.push([r.left+r.width*0.14, r.top+r.height*t]); pts.push([r.left+r.width*0.86, r.top+r.height*t]); }
+    for(const p of pts){ ev('mousemove',p[0],p[1]); ev('mousedown',p[0],p[1]); ev('mouseup',p[0],p[1]);
+      const now=(typeof balconies!=="undefined"&&balconies?balconies.length:0)||0;
+      if(now>before){ const readyAfter=ready(); const b=balconies[now-1];
+        const sig=b?{ei:b.ei, t0:+(+b.t0).toFixed(3), depth:+(+b.depth).toFixed(3)}:null;
+        const setLen=(typeof onbDemoBalkSet!=="undefined"&&Array.isArray(onbDemoBalkSet))?onbDemoBalkSet.length:-1;
+        return {added:true, before, after:now, readyBefore, readyAfter, sig, setLen}; }
+    }
+    return {added:false, before, readyBefore};
+  });
+  (balkRes.added && balkRes.after===1) ? ok('REV6 kullanici GERCEK tikla 1 balkon ekledi','n='+balkRes.before+'->'+balkRes.after) : bad('REV6 tam 1 balkon eklendi', JSON.stringify(balkRes));
+  (balkRes.readyBefore===false && balkRes.readyAfter===true) ? ok('REV6 aksiyon ILK balkondan SONRA belirir (readyBefore=false -> readyAfter=true)') : bad('REV6 balkon autofill aksiyonu ilk-sonra',JSON.stringify({rb:balkRes.readyBefore, ra:balkRes.readyAfter}));
+  const userBalk = balkRes.sig, demoSetLen = balkRes.setLen;
+  // tur oto-ilerler (check balconyCount>0 saglandi) -> site-ac. onStepEnter onbPlaceRemainingBalconies TAMAMLAR (push).
   mc = await waitOnbProg(f, 9, {timeout:10000, desc:'9 site-ac'}).catch(()=>null);
   if(mc){ ok('motor 9/16 '+mc.title); }
   else { const c=await onbCard(f); bad('9/16 site-ac','kart='+c.prog); }
-  // balconies == demo set assert (onbSetDemoBalconies on enter of site-ac)
-  const balc = await f.evaluate(()=>{ try{ return (typeof balconies!=="undefined"&&balconies?balconies.length:0)||0; }catch(e){ return -1; } });
-  (balc>=5) ? ok('balconies demo seti', 'n='+balc) : bad('balconies demo seti (>=5)','n='+balc);
+  // REV6: site-ac gecisinde balconies TAMAMLANIR (>=demo set) + kullanicinin balkonu KORUNUR (UZERINE YAZILMAZ).
+  const balkSite = await f.evaluate((ub)=>{
+    try{ const arr=(typeof balconies!=="undefined"&&balconies)?balconies:[]; const n=arr.length;
+      let preserved=false; if(ub){ preserved=arr.some(b=> b && b.ei===ub.ei && Math.abs((+b.t0)-ub.t0)<0.01 && Math.abs((+b.depth)-ub.depth)<0.01); }
+      return {n, preserved};
+    }catch(e){ return {n:-1, preserved:false, err:String(e)}; }
+  }, userBalk);
+  (demoSetLen>0 && balkSite.n>=demoSetLen) ? ok('REV6 site-ac: balconies demo set uzunluguna TAMAMLANDI (push)','n='+balkSite.n+' set>='+demoSetLen) : bad('REV6 balconies tamamlanmadi','n='+balkSite.n+' set='+demoSetLen);
+  (balkSite.n>=1 && balkSite.preserved) ? ok('REV6 kullanicinin ekledigi balkon KORUNDU (uzerine yazilmadi)','n='+balkSite.n+' sig='+JSON.stringify(userBalk)) : bad('REV6 kullanici balkonu korunmadi (overwrite?)','site='+JSON.stringify(balkSite)+' sig='+JSON.stringify(userBalk));
   await shot(page,'10-site-ac');
 
   // site-ac: target smart -> if bina tab not active, target=bina tab. Click bina tab then #siteMod.
@@ -536,21 +643,23 @@ async function runHandson(page, f){
   else { const c=await onbCard(f); bad('16/16 export','kart='+c.prog); }
   await shot(page,'17-export');
 
-  // FIX4: export IFRAME'de HEDEFSIZ + "Paket İndir" metni + Bitir; #svgBtn hedeflenMEZ.
+  // REV6 EXPORT: son kart iframe'de "3B'ye geç" (titleIframe) + "3B Görüntüle"/"Proje İndir" dili (eski "Paket İndir"
+  //   YOK); action Bitir (actionIframeOnly); STANDALONE hedef #projSaveBtn -> iframe'de HEDEFSIZ (svgBtn hic yok).
   const exCard = await onbCard(f);
-  (/Paket İndir/.test(exCard.text)) ? ok('FIX4 export bodyIframe "Paket İndir"', exCard.text.slice(0,60)) : bad('FIX4 export "Paket İndir"','text='+exCard.text.slice(0,80));
-  (exCard.btns.some(b=>b.act==='act' && /Bitir/.test(b.label))) ? ok('FIX4 export Bitir dugmesi') : bad('FIX4 export Bitir','btns='+JSON.stringify(exCard.btns));
-  // spotlight deligi svgBtn'i HEDEFLEMEMELI (iframe -> type none, delik r=0/genislik=0)
+  (/3B Görüntüle|Proje İndir/.test(exCard.text)) ? ok('REV6 export bodyIframe "3B Görüntüle"/"Proje İndir" dili', exCard.text.slice(0,70)) : bad('REV6 export yeni export dili','text='+exCard.text.slice(0,90));
+  (/3B/.test(exCard.title)) ? ok('REV6 export son kart basligi "3B\'ye geç"', exCard.title) : bad('REV6 export basligi 3B','title='+exCard.title);
+  (exCard.btns.some(b=>b.act==='act' && /Bitir/.test(b.label))) ? ok('REV6 export Bitir dugmesi') : bad('REV6 export Bitir','btns='+JSON.stringify(exCard.btns));
+  // spotlight deligi #projSaveBtn'i HEDEFLEMEMELI (iframe -> type none); eski #svgBtn butonu KALKTI (yok).
   const exTarget = await f.evaluate(()=>{
-    const svg=document.getElementById('svgBtn'); const mask=document.getElementById('onbHoleMask');
-    let holeW=null, holeC=null; if(mask){ const rs=[...mask.querySelectorAll('rect')]; const h=rs.find(r=>r.getAttribute('fill')==='#000'); holeW=h?+h.getAttribute('width'):null; const c=mask.querySelector('circle'); holeC=c?+c.getAttribute('r'):null; }
-    // svgBtn spotlight'lanmis mi: hole rect svgBtn bbox'una denk mi?
-    let svgHighlighted=false;
-    if(svg && mask){ const br=svg.getBoundingClientRect(); const rs=[...mask.querySelectorAll('rect')]; const h=rs.find(r=>r.getAttribute('fill')==='#000');
-      if(h){ const hx=+h.getAttribute('x'), hw=+h.getAttribute('width'); svgHighlighted = (br.width>0 && Math.abs(hx-(br.left-6))<3 && Math.abs(hw-(br.width+12))<3); } }
-    return { holeW, holeC, svgHighlighted };
+    const proj=document.getElementById('projSaveBtn'); const oldSvg=document.getElementById('svgBtn');
+    const mask=document.getElementById('onbHoleMask');
+    let projHighlighted=false;
+    if(proj && mask){ const br=proj.getBoundingClientRect(); const rs=[...mask.querySelectorAll('rect')]; const h=rs.find(r=>r.getAttribute('fill')==='#000');
+      if(h){ const hx=+h.getAttribute('x'), hw=+h.getAttribute('width'); projHighlighted = (br.width>0 && Math.abs(hx-(br.left-6))<3 && Math.abs(hw-(br.width+12))<3); } }
+    return { hasProjSave:!!proj, oldSvgGone:!oldSvg, projHighlighted };
   });
-  (!exTarget.svgHighlighted) ? ok('FIX4 export #svgBtn HEDEFLENMEDI (iframe hedefsiz)', JSON.stringify(exTarget)) : bad('FIX4 export svgBtn hedeflendi', JSON.stringify(exTarget));
+  (exTarget.oldSvgGone) ? ok('REV6 eski #svgBtn butonu KALKTI (Proje Aç/İndir ikilisi geldi)', JSON.stringify(exTarget)) : bad('REV6 eski #svgBtn hala var', JSON.stringify(exTarget));
+  (!exTarget.projHighlighted) ? ok('REV6 export #projSaveBtn HEDEFLENMEDI (iframe hedefsiz)', JSON.stringify(exTarget)) : bad('REV6 export projSaveBtn hedeflendi', JSON.stringify(exTarget));
   // Bitir -> motor turu biter
   await onbClick(f,'act'); await sleep(800);
   const done = await f.evaluate(()=>{ try{ return localStorage.getItem('onb.ana.status'); }catch(e){ return null; } });
@@ -574,14 +683,15 @@ async function runPhase3(page, f){
   const units = await f.evaluate(()=>{ try{ const m=window.buildFloorplanMap&&window.buildFloorplanMap(); return m&&m.units?m.units.length:0; }catch(e){ return -1; } });
   (units>0) ? ok('demo-plan yuklendi units>0','units='+units) : bad('demo-plan units>0','units='+units);
 
-  // REV5 KUSUR 6 — MOBİLYA SADAKATİ: büyük normalizasyon paket mobilyasını da yükler (demo-plan.json furniture/store).
-  //   mesh hazır olunca View3D.furnitureCount() paket setine yakın olmalı (auto-furnish'e düşmez). 0 ise LIE.
-  const furn = await waitFor(async()=>{
-    const n = await f.evaluate(()=>{ try{ const V=window.View3D; return (V&&V.furnitureCount)?V.furnitureCount():0; }catch(e){ return 0; } });
-    return n>0 ? n : null;
-  }, {timeout:12000, interval:500, desc:'furniture yukleme'}).catch(()=>0);
-  (furn>=60) ? ok('KUSUR6 normalizasyon paket mobilyasini yukledi (furnitureCount)','n='+furn)
-             : bad('KUSUR6 mobilya yuklenmedi / az (paket ~126)','n='+furn);
+  // REV6 GÖREV B2 — 3B SAHNE BOŞ BAŞLAR: normalize mobilyayı ÖNDEN basmaz (store'lar STASH'te bekler:
+  //   state._demoStashFurniture/_demoStashMaterials). 3B köprüsünden hemen sonra furnitureCount()===0;
+  //   kullanıcı dose3d adımında Otomatik Döşe'ye basar, paket sadakati step3Go'da (kamera evresi) uygulanır.
+  const furnEmpty = await f.evaluate(()=>{ try{ const V=window.View3D; return (V&&V.furnitureCount)?V.furnitureCount():-1; }catch(e){ return -2; } });
+  (furnEmpty===0) ? ok('REV6 3B sahne BOŞ başlar (furnitureCount==0; store STASH\'te)','n='+furnEmpty) : bad('REV6 3B sahne bos baslamadi (0 beklenir)','n='+furnEmpty);
+  // stash gerçekten var mı (kamera evresinde uygulanacak) — sadakat garantisinin kanıtı
+  const stashReady = await page.evaluate(()=>{ try{ const st=(window.__msk&&window.__msk.state)||{}; const f=st._demoStashFurniture;
+    return { has:!!f, n:(f&&f.length!=null)?f.length:(f?Object.keys(f).length:0) }; }catch(e){ return {has:false}; } });
+  (stashReady.has) ? ok('REV6 paket mobilya STASH\'i hazır (kamera evresinde uygulanacak)','stash='+JSON.stringify(stashReady)) : bad('REV6 mobilya stash yok','stash='+JSON.stringify(stashReady));
   await shot(page,'18-3d');
 
   // shell tour resume: card returns (in3d) -> İleri ile in3d, sonra REV4 KUSUR 2: dose3d/malzeme3d
@@ -598,22 +708,29 @@ async function runPhase3(page, f){
     if(sc.title && seenTitles[seenTitles.length-1]!==sc.title) seenTitles.push(sc.title);
     const title=sc.title||'';
     if(/Mobilyay/i.test(title)){
-      // KUSUR 2: spotlight deligi iframe Mobilya rail butonunu kapsiyor mu
-      await sleep(550);
-      const hole=await shellHoleRect(page), btn=await iframeElemRectParent(page,'[data-grp="furniture"]');
-      doseSpot=spotlightCovers(hole, btn);
-      // yaptirma: mobilya duzenlemesi -> furnitureEditCount artar -> sync oto-ilerler (autoFurnishAll furnSnapshot cagirir)
+      // REV6 KUSUR 2: engineHole -> motor iframe (3B sahne) SEFFAF + #mskTourRing hedef Mobilya butonunu SARIYOR.
+      await sleep(700);   // cok-delikli maske + ring yerlessin
+      const engHole=await engineHoleTransparent(page);
+      const doseTgt=await iframeDoseTargetRect(page);
+      const ring=await shellRingRect(page);
+      doseSpot={ engHole:engHole.ok, engInfo:engHole, ring:ringWraps(ring, doseTgt.rect), which:doseTgt.which };
+      // GÖREV B2: sahne BOŞ (furnitureCount==0) -> Otomatik Döşe ile yaptir (gercek tik; olmazsa API fallback).
+      doseSpot.emptyBefore=await f.evaluate(()=>{ try{ return window.View3D.furnitureCount(); }catch(e){ return -1; } });
       const before=await f.evaluate(()=>{ try{ return window.View3D.furnitureEditCount(); }catch(e){ return -1; } });
-      await f.evaluate(()=>{ try{ window.View3D.setFurnUI&&window.View3D.setFurnUI(true); window.View3D.autoFurnishAll&&window.View3D.autoFurnishAll(); }catch(e){} });
-      const after=await f.evaluate(()=>{ try{ return window.View3D.furnitureEditCount(); }catch(e){ return -1; } });
+      await f.evaluate(()=>{ try{ const b=document.querySelector('[data-grp="furniture"]'); if(b) b.click(); }catch(e){} }); await sleep(300);
+      await f.evaluate(()=>{ try{ const au=document.querySelector('#v3dFurnDock [data-v3d="furnauto"]'); if(au) au.click(); }catch(e){} }); await sleep(400);
+      let after=await f.evaluate(()=>{ try{ return window.View3D.furnitureEditCount(); }catch(e){ return -1; } });
+      if(!(after>before)){ await f.evaluate(()=>{ try{ window.View3D.setFurnUI&&window.View3D.setFurnUI(true); window.View3D.autoFurnishAll&&window.View3D.autoFurnishAll(); }catch(e){} }); after=await f.evaluate(()=>{ try{ return window.View3D.furnitureEditCount(); }catch(e){ return -1; } }); }
       doseSpot.editDelta=(after>before); doseSpot.before=before; doseSpot.after=after;
       doseAdvanced=await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && !/Mobilyay/i.test(c.title||''))?true:null; },{timeout:6000,desc:'dose3d oto-ilerledi'}).catch(()=>false);
       continue;
     }
     if(/(İç|Ic)\s*malzeme/i.test(title)){
-      await sleep(550);
-      const hole=await shellHoleRect(page), btn=await iframeElemRectParent(page,'[data-grp="material"]');
-      matSpot=spotlightCovers(hole, btn);
+      await sleep(700);
+      const engHole=await engineHoleTransparent(page);
+      const btn=await iframeElemRectParent(page,'[data-grp="material"]');
+      const ring=await shellRingRect(page);
+      matSpot={ engHole:engHole.ok, engInfo:engHole, ring:ringWraps(ring, btn) };
       const before=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } });
       await f.evaluate(()=>{ try{ const V=window.View3D; const m=V.getMap&&V.getMap(); let rid=null; const u=m&&m.units&&m.units[0]; if(u&&u.rooms&&u.rooms[0]) rid=u.rooms[0].id; else if(m&&m.common_areas&&m.common_areas[0]) rid=m.common_areas[0].id; if(rid&&V.selectMatRoom) V.selectMatRoom(rid); if(V.applyMaterial) V.applyMaterial('floor','parke_mese'); }catch(e){} });
       const after=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } });
@@ -631,11 +748,15 @@ async function runPhase3(page, f){
   // (c) doseme tadi kartlari gorundu mu (REV3 assert korunur)
   const sawDose = seenTitles.some(t=>/Mobilyay/i.test(t)), sawMat = seenTitles.some(t=>/(İç|Ic)\s*malzeme/i.test(t));
   (sawDose && sawMat) ? ok('(c) 3B doseme tadi: dose3d + malzeme3d kartlari gorundu', seenTitles.join(' > ')) : bad('(c) doseme tadi kartlari','sawDose='+sawDose+' sawMat='+sawMat+' dizi='+JSON.stringify(seenTitles));
-  // REV4 KUSUR 2: dose3d spotlight iframe Mobilya butonunda + edit sinyali degisti + oto-ilerledi
-  (doseSpot&&doseSpot.covers) ? ok('KUSUR2 dose3d spotlight iframe Mobilya butonunda', JSON.stringify(doseSpot)) : bad('KUSUR2 dose3d spotlight buton', JSON.stringify(doseSpot));
-  (doseSpot&&doseSpot.editDelta) ? ok('KUSUR2 dose3d mobilya sinyali degisti (furnitureEditCount++)', 'n='+(doseSpot&&doseSpot.before)+'->'+(doseSpot&&doseSpot.after)) : bad('KUSUR2 dose3d mobilya sinyali','delta yok '+JSON.stringify(doseSpot));
+  // REV6 KUSUR 2: dose3d engineHole (iframe seffaf) + #mskTourRing hedef Mobilya butonunu sariyor + bos sahne +
+  //   Otomatik Döşe sinyali degisti (furnitureEditCount++) + oto-ilerledi.
+  (doseSpot&&doseSpot.engHole) ? ok('KUSUR2 dose3d engineHole: motor iframe SEFFAF (delik 3B sahneyi kapsar)', JSON.stringify(doseSpot&&doseSpot.engInfo)) : bad('KUSUR2 dose3d engineHole iframe seffaf', JSON.stringify(doseSpot&&doseSpot.engInfo));
+  (doseSpot&&doseSpot.ring&&doseSpot.ring.wraps) ? ok('KUSUR2 dose3d #mskTourRing hedef Mobilya butonunu SARIYOR ('+(doseSpot.which)+')', JSON.stringify(doseSpot.ring)) : bad('KUSUR2 dose3d ring hedef sarmiyor', JSON.stringify(doseSpot&&doseSpot.ring));
+  (doseSpot&&doseSpot.emptyBefore===0) ? ok('KUSUR2 dose3d sahne BOŞ (furnitureCount==0) -> Otomatik Döşe', 'n='+(doseSpot&&doseSpot.emptyBefore)) : bad('KUSUR2 dose3d bos sahne (0)','n='+(doseSpot&&doseSpot.emptyBefore));
+  (doseSpot&&doseSpot.editDelta) ? ok('KUSUR2 dose3d Otomatik Döşe sinyali degisti (furnitureEditCount++)', 'n='+(doseSpot&&doseSpot.before)+'->'+(doseSpot&&doseSpot.after)) : bad('KUSUR2 dose3d mobilya sinyali','delta yok '+JSON.stringify(doseSpot));
   doseAdvanced ? ok('KUSUR2 dose3d yaptirinca oto-ilerledi (yaptirma)') : bad('KUSUR2 dose3d oto-ilerleme','ilerlemedi');
-  (matSpot&&matSpot.covers) ? ok('KUSUR2 malzeme3d spotlight iframe Ic Malzeme butonunda', JSON.stringify(matSpot)) : bad('KUSUR2 malzeme3d spotlight buton', JSON.stringify(matSpot));
+  (matSpot&&matSpot.engHole) ? ok('KUSUR2 malzeme3d engineHole: motor iframe SEFFAF', JSON.stringify(matSpot&&matSpot.engInfo)) : bad('KUSUR2 malzeme3d engineHole iframe seffaf', JSON.stringify(matSpot&&matSpot.engInfo));
+  (matSpot&&matSpot.ring&&matSpot.ring.wraps) ? ok('KUSUR2 malzeme3d #mskTourRing hedef Ic Malzeme butonunu SARIYOR', JSON.stringify(matSpot.ring)) : bad('KUSUR2 malzeme3d ring hedef sarmiyor', JSON.stringify(matSpot&&matSpot.ring));
   (matSpot&&matSpot.editDelta) ? ok('KUSUR2 malzeme3d malzeme sinyali degisti (materialEditCount++)', 'n='+(matSpot&&matSpot.before)+'->'+(matSpot&&matSpot.after)) : bad('KUSUR2 malzeme3d malzeme sinyali','delta yok '+JSON.stringify(matSpot));
   matAdvanced ? ok('KUSUR2 malzeme3d yaptirinca oto-ilerledi (yaptirma)') : bad('KUSUR2 malzeme3d oto-ilerleme','ilerlemedi');
   // (a) part1: kabuk 'Kamera koy' karti gorundu (atlanmadi) ve render'a (step>=4) DUSMEDI.
@@ -649,6 +770,14 @@ async function runPhase3(page, f){
   await sleep(1500);
   await waitFor(async()=>{ const s=await engStep(page); return (s&&s.step>=3)?s:null; }, {timeout:20000, desc:'camera step>=3'});
   ok('kamera adimi (step 3)');
+  // REV6 KUSUR 6 — MOBİLYA SADAKATİ (STASH UYGULANDI): kamera evresine girerken (step3Go, 'Önce' kadrajı
+  //   yakalanmadan ÖNCE) STASH'lenmiş paket mobilya store'u __kptaFurniture'a kurulur -> furnitureCount paket
+  //   setine eşit (>=60). "Önce" kadrajı = paket render mobilyası. (3B köprüsünde 0'dı; şimdi dolu.)
+  const furnApplied = await waitFor(async()=>{
+    const n = await f.evaluate(()=>{ try{ const V=window.View3D; return (V&&V.furnitureCount)?V.furnitureCount():0; }catch(e){ return 0; } });
+    return n>=60 ? n : null;
+  }, {timeout:15000, interval:600, desc:'stash furniture uygulandi'}).catch(()=>0);
+  (furnApplied>=60) ? ok('KUSUR6 kamera evresinde STASH paket mobilyasi uygulandi (furnitureCount>=60)','n='+furnApplied) : bad('KUSUR6 stash mobilya uygulanmadi (paket ~126)','n='+furnApplied);
   await shot(page,'20-camera-step');
 
   // kamera3d mini-tour auto-starts in iframe (iframeAuto). wait for ITS card (total===6, not the ana tour's 15).
@@ -691,6 +820,23 @@ async function runPhase3(page, f){
   if(aciCard){
     const aciDiag = await f.evaluate(()=>({ sel:(window.View3D&&View3D.getActiveCamIdx)?View3D.getActiveCamIdx():-1, bar:!!document.getElementById('v3dCamBar') }));
     (aciDiag.sel>=0) ? ok('KUSUR13 aci-ayarla: kamera SECILI (#v3dCamBar hedefi, bos ping degil)', JSON.stringify(aciDiag)) : bad('KUSUR13 aci-ayarla kamera secili degil', JSON.stringify(aciDiag));
+    // REV6 GÖREV C — KOMPAKT KART + HEDEF/PiP KAÇINMA: kart .onbCompact (240px) ve kamera hedefini (#v3dCamBar)
+    //   ve PiP önizlemesini (#v3dPip) ÖRTMEZ (kart-çakışmazlık); adımın 'ensure' hedef-kurtarma fonksiyonu var.
+    await sleep(400);   // kart yerlessin (onbReposition + expandDown kacinma)
+    const compactDiag = await f.evaluate(()=>{
+      const card=document.querySelector('.onbCard'); if(!card) return {hasCard:false};
+      const compact=!!(card.classList&&card.classList.contains('onbCompact'));
+      const cr=card.getBoundingClientRect();
+      function rc(id){ const el=document.getElementById(id); if(!el) return null; if(el.style&&el.style.display==='none') return null; const r=el.getBoundingClientRect(); return (r.width>0&&r.height>0)?{left:r.left,top:r.top,right:r.right,bottom:r.bottom}:null; }
+      function ov(a,b){ if(!a||!b) return false; return !(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom); }
+      const bar=rc('v3dCamBar'), pip=rc('v3dPip');
+      const c4={left:cr.left,top:cr.top,right:cr.right,bottom:cr.bottom};
+      let hasEnsure=false; try{ const st=(onbTour&&onbTour.steps)?onbTour.steps[onbIdx]:null; hasEnsure=!!(st&&typeof st.ensure==='function'); }catch(e){}
+      return {hasCard:true, compact, w:Math.round(cr.width), ovBar:ov(c4,bar), ovPip:ov(c4,pip), hasBar:!!bar, hasPip:!!pip, hasEnsure};
+    });
+    (compactDiag.hasCard && compactDiag.compact) ? ok('KUSUR13 aci-ayarla kart KOMPAKT (.onbCompact, '+compactDiag.w+'px)', JSON.stringify({w:compactDiag.w})) : bad('KUSUR13 aci-ayarla kart kompakt degil', JSON.stringify(compactDiag));
+    (!compactDiag.ovBar && !compactDiag.ovPip) ? ok('KUSUR13 aci-ayarla kart hedef (#v3dCamBar) + PiP (#v3dPip) ile ÇAKIŞMIYOR', JSON.stringify({ovBar:compactDiag.ovBar, ovPip:compactDiag.ovPip, hasBar:compactDiag.hasBar, hasPip:compactDiag.hasPip})) : bad('KUSUR13 aci-ayarla kart hedef/PiP ortuyor', JSON.stringify(compactDiag));
+    (compactDiag.hasEnsure) ? ok('KUSUR13 aci-ayarla adiminda hedef-kurtarma ensure() fonksiyonu var') : bad('KUSUR13 aci-ayarla ensure fonksiyonu yok', JSON.stringify(compactDiag));
     await onbClick(f,'skip'); await sleep(500);
   } else bad('KUSUR13 aci-ayarla karti gelmedi');
 
@@ -824,6 +970,16 @@ async function runPhase3(page, f){
   // marketplace panel present
   const mkt = await page.evaluate(()=>!!document.getElementById('mktCtx') || !!document.querySelector('.mkt-row'));
   mkt ? ok('pazaryeri paneli') : bad('pazaryeri paneli','yok');
+
+  // REV6 EXPORT — SON ADIM CTA "Projeyi İndir" GERÇEK İNDİRME: step 5'te #ctaBtn etiketi 'Projeyi İndir';
+  //   tıklayınca exportProject() -> exportPackage() -> .mskpkg blob a[download].click (download gozetleyici yakalar).
+  const ctaLabel = await page.evaluate(()=>{ const b=document.getElementById('ctaBtn'); return b?b.textContent.trim():''; });
+  (/Projeyi İndir/.test(ctaLabel)) ? ok('REV6 son adim #ctaBtn etiketi "Projeyi İndir"', ctaLabel) : bad('REV6 ctaBtn "Projeyi İndir"','label='+ctaLabel);
+  const dlBefore = (await getDownloads(page)).length;
+  await clickParent(page, '#ctaBtn');
+  const dlSeen = await waitFor(async()=>{ const d=await getDownloads(page); return d.length>dlBefore ? d : null; }, {timeout:12000, interval:400, desc:'proje indirme tetiklendi'}).catch(()=>null);
+  (dlSeen && dlSeen.length>dlBefore) ? ok('REV6 "Projeyi İndir" GERÇEK indirme tetikledi (.mskpkg blob)', 'dl='+JSON.stringify(dlSeen.slice(-3))) : bad('REV6 proje indirme tetiklenmedi','dl='+JSON.stringify(await getDownloads(page)));
+  await shot(page,'25-export');
 
   // (b) angleNudge/extNudge dialoglari tur boyunca HIC gorunmedi (flowTourActive suppress).
   const nudges = await getNudgeSeen(page);

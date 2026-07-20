@@ -21,6 +21,7 @@ const strictTests = [
   'tests/paket-geo.js',
   'tests/paket-parsel-geo.js',
   'tests/import.js',
+  'tests/pkg-slug.js',
   'tests/dxf-import.js',
   'tests/dxf-roundtrip.js',
   'tests/avlu-blok.js',

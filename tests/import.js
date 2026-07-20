@@ -72,6 +72,18 @@ rejects(badCell, 'geçersiz hücre reddedildi');
 const badUi=JSON.parse(js0); delete badUi.ui;
 rejects(badUi, 'eksik ui reddedildi');
 
+/* --- 1b) .mskpkg (MESKEN proje paketi) sniffing: importPlanText gömülü kpState'i çözer --- */
+plan=null; pts=[]; closed=false; unitSpecs=[];
+const pkgTxt=JSON.stringify({format:'mesken-proje-paketi', version:1, kpState:JSON.parse(js0), cameras:{}, renders:{}});
+importPlanText(pkgTxt, 'proje-20260720.mskpkg');
+ok(!!plan, 'mskpkg: importPlanText plan kurdu');
+ok(plan.unitObjs.length===units0, 'mskpkg: daire sayısı korunur ('+plan.unitObjs.length+'/'+units0+')');
+ok(sig(plan)===sig0, 'mskpkg: bölge imzası birebir aynı');
+/* format alanı olmayan düz kpState JSON eskisi gibi çalışmalı (regresyon) */
+plan=null; pts=[]; closed=false; unitSpecs=[];
+importPlanText(js0, 'proje.json');
+ok(!!plan && plan.unitObjs.length===units0, 'düz kpState JSON hâlâ çalışıyor');
+
 /* --- 2) eski SVG geometri çözümleyici --- */
 if(typeof DOMParser==='undefined'){
   console.log('  (linkedom yok: geometri çözümleyici testi atlandı — npm i linkedom)');

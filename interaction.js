@@ -464,6 +464,7 @@ svg.addEventListener('mousedown',e=>{
     }
     const p=snapPoint(sx,sy);
     if(p.closing){ parcelClosed=true; hoverP=null; balkChecksRefresh();
+      if(typeof updateProjBtns==='function') updateProjBtns();   // parsel kapandı → Proje İndir aktif (plan/sınır beklemez)
       setStatusHint('Parsel kapalı — yol cephesi seçmek için bir kenara tıklayın','#4a7c4a'); render(); return; }  // B6: kapanış geri bildirimi
     if(parcelPts.length && p.x===parcelPts[parcelPts.length-1].x && p.y===parcelPts[parcelPts.length-1].y) return;
     parcelPts.push({x:p.x,y:p.y}); render(); return;
@@ -1013,6 +1014,7 @@ function finishPoly(){
   }
   closed=true; hoverP=null; blockDrawBad=null;
   document.getElementById('genBtn').disabled=false;
+  if(typeof updateProjBtns==='function') updateProjBtns();   // sınır kapandı → Proje İndir aktif (plan beklemez)
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m';
   if(typeof updateAmenityBtn==='function') updateAmenityBtn();   // F1: bina sınırı kapanınca imkan düğmesi görünür (yerleşim beklemeden keşfedilebilir)
@@ -1479,13 +1481,14 @@ document.getElementById('tClear').onclick=()=>{ pts=[];roomPts=[];closed=false;p
   if(villaFloors){ villaFloors[activeFloor]=null; renderFloorTabs(); } // yalnız aktif kat temizlenir
   else { lockedCore=null; } // tek bina: iskelet de sıfırlanır
   updateStructResetBtn();
-  document.getElementById('genBtn').disabled=true; document.getElementById('svgBtn').disabled=true; document.getElementById('pngBtn').disabled=true;
+  document.getElementById('genBtn').disabled=true; if(typeof updateProjBtns==='function') updateProjBtns();
   document.getElementById('unitTable').style.display='none';
   document.getElementById('stArea').textContent='–'; document.getElementById('stPerim').textContent='–'; render(); };
 document.getElementById('tFit').onclick=fitView;
 document.getElementById('tSample').onclick=()=>{ pts=[{x:0,y:0},{x:32,y:0},{x:32,y:16},{x:0,y:16}]; closed=true;
   document.getElementById('genBtn').disabled=false; resetCuts(); fitView();
   if(typeof updateAmenityBtn==='function') updateAmenityBtn();   // F1: örnek sınırda da imkan düğmesi görünür
+  if(typeof updateProjBtns==='function') updateProjBtns();
   document.getElementById('stArea').textContent=fmt(shoelace(pts))+' m²';
   document.getElementById('stPerim').textContent=fmt(perim(pts))+' m'; };
 function fitView(){
