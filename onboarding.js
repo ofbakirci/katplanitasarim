@@ -34,7 +34,7 @@
 
 /* ---- senaryo surumleri: adimlar degisince ARTIR -> done/dismissed kullanici yeniden gezer ---- */
 const ONB_VERSION = 5;        // 'ana' turu (v5 REV6: balkon-ekle BOS baslar -> demo set yakalanir + bir balkon ekletip 'Kalan balkonlari otomatik yerlestir' aksiyonu + #tBalk araci oto-sec; site-ac TAMAMLAMA semantigi (uzerine yazmaz))
-const ONB_KAM_VERSION = 4;    // 'kamera3d' turu (v4 REV6: aci-ayarla/lens-sec kompakt kart + hedef/PiP kacinma (kart ortmez) + hedef-kaybi kurtarma (ensure throttle))
+const ONB_KAM_VERSION = 5;    // 'kamera3d' turu (v5 REV7: aci-ayarla BOLUNDU -> yon-degistir + kamera-tasi (ayri check: SECILI kamera dir/pos sig; eski lastCamSig son-kamerayi izleyip GECILEMIYORDU) + kart dock butonuna capalanir (kamera/PiP/cubuk ORTULMEZ))
 
 /* ================= DEMO PAKET HEDEFLERI (ONB_TARGETS) =================
    v2 vizyonu: "paketi vereceğim, onboarding onu kullanıcıya elle çizdirtecek —
@@ -654,6 +654,11 @@ const ONB_STEPS = [
        kenarini (ei orta noktasi + depth) dunya koordinatinda isaret eder -> kullanici oraya ekler, set
        sasirtmaz. Baska kenara eklerse de adim gecer (zorlama yok); nudge yalnizca yonlendirir. */
     ghost:{ marker:'balcony' }, fullCanvasHole:true,
+    /* IS 1 (REV7) — KART KUCUK + PLANI ORTMEZ: kart .onbCompact (240px) + marker-hayaletli fullCanvasHole
+       adimlarinda kart, blok ayak izinin (global pts) EKRAN bbox'unu KACINAN bos ekran kosesine oturur
+       (onbPlaceCardInFreeCorner). Eski davranis: kucuk balkon isaretinin ALTINA kart -> plan ortasini
+       ortuyordu (kullanici: "balkon karti yerlesimi kapatiyor"). */
+    compact:true,
     /* body FONKSIYON: sayi DINAMIK (yakalanan set uzunlugu; demo-plan'da 10). onbStepEnter girisinde
        balconies BOSALTILIR + set yakalanir -> adim GERCEKTEN balkonsuz baslar; bir tane ekleyince
        'Kalan balkonlari otomatik yerlestir' aksiyonu belirir (actionAfterFirst). */
@@ -765,7 +770,8 @@ function onbStepEnter(id){
     case 'imkan-koy': onbFit(); onbOpenAmenityTool(); break;                                  // blok B planli -> kadraj + imkan hayaletleri + KUSUR 9: imkan araci ac + Havuz sec
     case 'kat-ayri':  onbExitAmenityMode(); onbFocusBuiltBlock(); onbOpenBinaTab(); break;    // amenity modundan cik + planli bloga gec (guard; iki blok da planli) + Bina sekmesi
     case 'kamera-koy': onbOpenCameraTool(); break;                                            // kamera3d: raydan Kamera aracini ac (dock + Yerlestir gorunur)
-    case 'aci-ayarla': onbOpenCameraTool(); onbSelectFirstCam(); break;                       // KUSUR 13: kamera araci acik + sec -> #v3dCamBar simgede belirir, surukleme kamerayi tasir
+    case 'yon-degistir': onbOpenCameraTool(); onbSelectFirstCam(); break;                     // REV7: kamera araci acik + sec -> dock "Yön"/"Taşı" dugmeleri (has=true) tiklanabilir; sahnede yon degistir
+    case 'kamera-tasi':  onbOpenCameraTool(); onbSelectFirstCam(); break;                     // REV7: ayni baglam -> dock "Taşı" + sahnede kamerayi tasi
     case 'lens-sec':   onbOpenCameraTool(); onbSelectFirstCam(); onbOpenCamDetail(); break;   // KUSUR 14: kamera araci + sec + detay kutusu ac -> #v3dLRow gorunur
     case 'drone-gec':  onbSetDroneAllView(); break;                                           // KUSUR 2: dis moda gecince 'Tumu' blok gorunumu
     case 'drone-ekle': onbSetDroneAllView(); break;                                           // KUSUR 2: dis mod acik -> 'Tumu' garanti
@@ -808,21 +814,30 @@ const ONB_KAM_STEPS = [
       return ctx.camCount() > (base||0);
     } },
 
-  { id:'aci-ayarla', skippable:true,
-    title:'Açıyı ayarla',
-    /* REV5 KUSUR 1+13 — BOS PING/KITLENME GIDERILDI: eski adim tuval-MERKEZINE ping atiyordu (secili
-       kamera yoktu -> surukleme sahneyi donduruyor, "anlamsiz"). Artik onbStepEnter BIR kamerayi SECER
-       (View3D.selectCam) + odaklar -> secili kameranin yaninda #v3dCamBar (Yon/Odakla) belirir; hedef O
-       cubuk -> ping GERCEK kamera simgesinin ustunde. Secili kamerada surukleme kamerayi tasir (sahneyi
-       DEGIL). skippable + delta-check -> kitlenme yok. */
-    body:'İşaretli çubuk seçili kameranın üstünde. Yön ile bakış noktasını değiştir ya da sahnedeki kamera simgesini sürükleyerek taşı — önizleme anında güncellenir.',
-    target:{type:'dom', sel:'#v3dCamBar'},
-    /* GOREV C — kompakt kart + hedef/PiP kacinma (kamera simgesi cubugun ALTINDA -> expandDown:90
-       'alt' konumu eledir, kart yana/uste kacar) + hedef-kaybi kurtarma (kamera secimi kapanirsa yeniden sec). */
-    compact:true, avoidSel:['#v3dPip','#v3dExtPip'], expandDown:90,
+  /* REV7 — "Açıyı ayarla" BOLUNDU: canli teshis (kullanici "adimi bir turlu gecemedim") — eski adim
+     #v3dCamBar'i hedefliyor ve check=lastCamSig (dizinin SON kamerasi) izliyordu; onbSelectFirstCam
+     cam0'i secer, kullanici cam0 yonunu degistirir ama SON kamera degismedigi icin sig sabit kalir ->
+     ADIM GECILMEZ (puppeteer: cam0 target 4.73->7.19 degisti, lastCamSig sabit). COZUM: (1) check
+     SECILI kamerayi izler (camDirSig/camPosSig, getActiveCamIdx); (2) hedef = alt dock'taki "Yön"/"Taşı"
+     dugmeleri (#v3dCamDock, ekran alt-ortasi) -> kart o dock'a capalanir, sahne ORTASINDAKI kamera/PiP/
+     cubuk HICBIR ZAMAN ORTULMEZ; (3) net eylem dili: once dock dugmesi, sonra sahneye tikla. */
+  { id:'yon-degistir', skippable:true,
+    title:'Bakış yönünü değiştir',
+    body:'Kamera seçili. Alttaki dock’ta işaretli "Yön" düğmesine bas, sonra sahnede kameranın bakacağı noktaya tıkla (kameranın koni ucunu sürükleyerek ya da tekerlekle de çevirebilirsin). Önizleme anında güncellenir.',
+    target:{type:'dom', sel:'#v3dCamDock [data-camact="aim"]'},
+    compact:true, avoidSel:['#v3dPip','#v3dExtPip'],
     ensure:function(){ onbSelectFirstCam(); },
-    baseline:function(ctx){ return ctx.lastCamSig(); },
-    check:function(ctx, base){ return ctx.camCount() > 0 && ctx.lastCamSig() !== base; } },
+    baseline:function(ctx){ return ctx.camDirSig(); },
+    check:function(ctx, base){ return ctx.camCount() > 0 && ctx.camDirSig() !== base; } },
+
+  { id:'kamera-tasi', skippable:true,
+    title:'Kamerayı taşı',
+    body:'Alttaki dock’ta işaretli "Taşı" düğmesine bas, sonra kamerayı koymak istediğin yere tıkla — ya da sahnedeki kamera simgesini doğrudan sürükle. Konum değişince önizleme de değişir.',
+    target:{type:'dom', sel:'#v3dCamDock [data-camact="move"]'},
+    compact:true, avoidSel:['#v3dPip','#v3dExtPip'],
+    ensure:function(){ onbSelectFirstCam(); },
+    baseline:function(ctx){ return ctx.camPosSig(); },
+    check:function(ctx, base){ return ctx.camCount() > 0 && ctx.camPosSig() !== base; } },
 
   { id:'lens-sec', skippable:true,
     title:'Lens seç',
@@ -1001,6 +1016,19 @@ function onbV3dVisible(){
 }
 function onbKamCams(){ const v=onbV3d(); try{ return (v && typeof v.getCameras==='function') ? (v.getCameras()||[]) : []; }catch(e){ return []; } }
 function onbKamExt(){ const v=onbV3d(); try{ return (v && typeof v.getExteriorCameras==='function') ? (v.getExteriorCameras()||[]) : []; }catch(e){ return []; } }
+/* REV7 — SECILI (aktif) kamerayi cek: yon-degistir/kamera-tasi check'leri DUZENLENEN kamerayi izlemeli.
+   getActiveCamIdx resmi getter (view3d.js:7875). Secim yoksa/gecersizse son eklenene duser (eski
+   lastCamSig davranisiyla uyum). onbSelectFirstCam adima girerken idx=0 secer -> kullanici o kamerayi
+   duzenler; eski kod son-kamerayi (dizinin sonu) izliyordu -> secili cam0 degisince sig degismiyor,
+   adim GECILEMIYORDU (canli teshis: dir target cam0'da 4.73->7.19 degisti, lastCamSig sabit kaldi). */
+function onbKamActiveCam(){
+  const c=onbKamCams(); if(!c.length) return null;
+  const v=onbV3d(); let i=-1;
+  try{ if(v && typeof v.getActiveCamIdx==='function') i=v.getActiveCamIdx(); }catch(e){}
+  if(i<0 || i>=c.length) i=c.length-1;
+  return c[i]||null;
+}
+function onbKamR2(n){ return Math.round((+n||0)*100)/100; }
 function onbKamCtx(){
   return {
     /* kamera3d check'leri cogunlukla jenerik; ISTISNA kamera-koy = HEDEFLI (tam demo
@@ -1018,6 +1046,12 @@ function onbKamCtx(){
       try{ const l=c[c.length-1], r=function(n){ return Math.round((+n||0)*100)/100; };
         return [r(l.pos.x),r(l.pos.y),r(l.pos.z),r(l.target.x),r(l.target.y),r(l.target.z)].join(','); }
       catch(e){ return ''; } },
+    /* REV7 — SECILI kamera yon (target) ve konum (pos) imzasi: yon-degistir/kamera-tasi ayri check'leri.
+       Yon degisimi (Yon dugmesi/koni-suruk/tekerlek) target'i; tasima pos'u (ve target'i) degistirir. */
+    camDirSig:function(){ const c=onbKamActiveCam(); if(!c||!c.target) return '';
+      try{ return [onbKamR2(c.target.x),onbKamR2(c.target.y),onbKamR2(c.target.z)].join(','); }catch(e){ return ''; } },
+    camPosSig:function(){ const c=onbKamActiveCam(); if(!c||!c.pos) return '';
+      try{ return [onbKamR2(c.pos.x),onbKamR2(c.pos.y),onbKamR2(c.pos.z)].join(','); }catch(e){ return ''; } },
     lensSig:function(){ try{ return onbKamCams().map(function(c){ return c.lens||24; }).join(','); }catch(e){ return ''; } },
     extMode:function(){ const v=onbV3d();
       try{ return !!(v && typeof v.isExteriorMode==='function' && v.isExteriorMode()); }catch(e){ return false; } },
@@ -1205,7 +1239,7 @@ function onbActionReadyFor(s){
 function onbRenderCard(){
   if(!onbUI || !onbUI.card || !onbTour) return;
   const s=onbTour.steps[onbIdx]; if(!s) return;
-  /* GOREV C — kompakt kart (kamera turu aci-ayarla/lens-sec): hedefi/PiP'i ortmesin diye kucuk */
+  /* GOREV C / IS1 — kompakt kart (kamera turu yon-degistir/kamera-tasi/lens-sec + balkon-ekle): hedefi/PiP'i/plani ortmesin diye kucuk */
   try{ if(onbUI.card.classList){ if(s.compact) onbUI.card.classList.add('onbCompact'); else onbUI.card.classList.remove('onbCompact'); } }catch(e){}
   const total=onbTour.steps.length, n=onbIdx+1, pct=Math.round(n/total*100);
   const ic=(typeof icon==='function') ? icon('bulb','inl') : '';
@@ -1337,20 +1371,51 @@ function onbCardAvoid(step, rect){
 /* IS 3 (harita-editor madde 7) — KART-GHOST KACINMA: cizim adiminda kart, ghost ayak izinin
    EKRAN bbox'una gore konumlanir (sentetik merkez-daire yerine) -> cizim alanini ORTMEZ.
    onbW2S + onbGhostPolys ile hesaplanir; pan/zoom otomatik izlenir. null -> ghost yok/headless. */
+/* KRITIK: W2Sx/W2Sy SVG-USER (tuval-yerel) koordinati doner; kart position:fixed => VIEWPORT
+   koordinati ister. svg.getScreenCTM ile user->client cevir (CTM yoksa geri-uyum: birebir). */
+function onbW2Client(){
+  const svgEl=onbEl('svg'); let m=null;
+  try{ if(svgEl && svgEl.getScreenCTM) m=svgEl.getScreenCTM(); }catch(e){}
+  return m
+    ? function(ux,uy){ return { x: m.a*ux + m.c*uy + m.e, y: m.b*ux + m.d*uy + m.f }; }
+    : function(ux,uy){ return { x:ux, y:uy }; };
+}
+/* IS 1 (REV7) — aktif blok ayak izinin (global pts) EKRAN bbox'u. Marker-hayaletli fullCanvasHole
+   adimlarinda (balkon-ekle/duvar-cek) kart bu bbox'u KACINSIN diye. pts yok/headless -> null. */
+function onbBlockScreenBBox(){
+  let poly=null;
+  try{ if(typeof pts!=='undefined' && Array.isArray(pts) && pts.length>=3) poly=pts; }catch(e){}
+  if(!poly) return null;
+  const conv=onbW2S(); if(!conv) return null;
+  const toC=onbW2Client();
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,any=false;
+  for(let i=0;i<poly.length;i++){ const p=toC(conv.x(poly[i].x), conv.y(poly[i].y));
+    if(!isFinite(p.x)||!isFinite(p.y)) continue; any=true;
+    if(p.x<minX)minX=p.x; if(p.y<minY)minY=p.y; if(p.x>maxX)maxX=p.x; if(p.y>maxY)maxY=p.y; }
+  if(!any) return null;
+  return {left:minX, top:minY, right:maxX, bottom:maxY, width:maxX-minX, height:maxY-minY};
+}
+/* IS 1 (REV7) — karti, verilen bolgeyi (or. plan ayak izi bbox'u) + avoidSel'leri (PiP) KACINAN
+   bos ekran kosesine oturt. 6 aday: 4 kose + ust-orta + alt-orta; en az ortusenı sec (0 ise ilk). */
+function onbPlaceCardInFreeCorner(avoid, extraAvoid){
+  if(!onbUI || !onbUI.card) return;
+  const M=12, vw=window.innerWidth, vh=window.innerHeight;
+  const w=onbUI.card.offsetWidth||300, h=onbUI.card.offsetHeight||160;
+  const mk=function(x,y){ x=Math.max(M,Math.min(x,vw-w-M)); y=Math.max(M,Math.min(y,vh-h-M)); return {left:x,top:y,right:x+w,bottom:y+h,x:x,y:y}; };
+  const cxc=(vw-w)/2;
+  const cand=[ mk(vw-w-M,M), mk(M,M), mk(vw-w-M,vh-h-M), mk(M,vh-h-M), mk(cxc,vh-h-M), mk(cxc,M) ];
+  const blockers=[avoid].concat(Array.isArray(extraAvoid)?extraAvoid:[]).filter(Boolean);
+  let best=cand[0], bestOv=Infinity;
+  for(let i=0;i<cand.length;i++){ let ov=0; for(let j=0;j<blockers.length;j++) ov+=onbRectOverlapArea(cand[i], blockers[j]);
+    if(ov<=0){ best=cand[i]; bestOv=0; break; } if(ov<bestOv){ bestOv=ov; best=cand[i]; } }
+  onbUI.card.style.left=best.x+'px'; onbUI.card.style.top=best.y+'px';
+}
 function onbGhostScreenBBox(){
   const s=onbTour && onbTour.steps[onbIdx];
   const spec=(s && s.ghost) ? s.ghost : null;
   if(!spec || onbHidden) return null;
   const conv=onbW2S(); if(!conv) return null;
-  /* KRITIK: W2Sx/W2Sy SVG-USER (tuval-yerel) koordinati doner; kart position:fixed =>
-     VIEWPORT koordinati ister. Ghost'un ciziliyor gorunmesi (svg cocuklari CTM'yi otomatik
-     uygular) ile kart konumlama farkli uzaylardaydi -> kart ~svgRect.left kadar sola kayip
-     cizim kosesini ortuyordu (kullanici bug #1). svg.getScreenCTM ile user->client cevir. */
-  const svgEl=onbEl('svg'); let m=null;
-  try{ if(svgEl && svgEl.getScreenCTM) m=svgEl.getScreenCTM(); }catch(e){}
-  const toC = m
-    ? function(ux,uy){ return { x: m.a*ux + m.c*uy + m.e, y: m.b*ux + m.d*uy + m.f }; }
-    : function(ux,uy){ return { x:ux, y:uy }; };   // CTM yoksa geri-uyum (headless/eski motor)
+  const toC=onbW2Client();
   const data=onbGhostPolys(spec);
   let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity, any=false;
   const acc=function(ux,uy){ const p=toC(ux,uy); if(!isFinite(p.x)||!isFinite(p.y)) return; any=true;
@@ -1392,9 +1457,14 @@ function onbReposition(){
   } else {
     onbUI.hole.setAttribute('width',0); onbUI.hole.setAttribute('height',0); onbUI.holeC.setAttribute('r',0);
   }
-  /* kart konumu: ghost varsa ghost bbox'unu KACIN (cizim alanini ortme); yoksa hedefe gore */
+  /* kart konumu: ghost varsa ghost bbox'unu KACIN (cizim alanini ortme); yoksa hedefe gore.
+     IS 1 (REV7): MARKER-hayaletli adimlarda (balkon-ekle/duvar-cek) ghost bbox kucuk bir isaret ->
+     eski onbPositionCard(gb) karti plan ORTASINA koyuyordu. Artik plan ayak izi (onbBlockScreenBBox)
+     + PiP'leri KACINAN bos ekran kosesine oturt. Poligon-hayaletli adimlar (blok/imkan) DEGISMEZ. */
   const gb=onbGhostScreenBBox();
-  if(gb){ onbPositionCard(gb); }
+  const isMarkerGhost = !!(s0 && s0.ghost && s0.ghost.marker);
+  if(gb && isMarkerGhost){ onbPlaceCardInFreeCorner(onbBlockScreenBBox()||gb, onbCardAvoid(s0, null)); }
+  else if(gb){ onbPositionCard(gb); }
   else if(t.kind==='dom'){ onbPositionCard(t.rect, onbCardAvoid(s0, t.rect)); }   // GOREV C: kamera adimlarinda hedef/PiP kacinma
   else if(t.kind==='canvas'){ const r=t.rect, cx=r.left+r.width/2, cy=r.top+r.height/2, rad=Math.max(40, Math.min(r.width, r.height)*0.18);
     onbPositionCard({left:cx-rad, top:cy-rad, right:cx+rad, bottom:cy+rad, width:rad*2, height:rad*2}); }

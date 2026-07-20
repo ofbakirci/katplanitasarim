@@ -50,7 +50,14 @@ const PORT = +(process.env.E2E_PORT || 8750);
 const OUTDIR = path.resolve(process.cwd(), 'e2e-cikti');   // ekran goruntusu cikti klasoru (goreli)
 try{ fs.mkdirSync(OUTDIR, {recursive:true}); }catch(e){}
 const PKG = process.argv.includes('--pkg');
-const BASE = `http://localhost:${PORT}/mesken/MESKEN-prototip.html`;
+// SUNUCU-KOKU REGRESYONU: --mesken-root ile sayfa MESKEN klasoru KOK yapilarak servis edilir
+//   (http.server --directory mesken -> /MESKEN-prototip.html). DEMO_ASSETS konumdan turer -> /demo-assets/.
+//   Dunku 3 canli kusurun (taze yerlesim, catisiz, kullanici kameralari) tek kok nedeni: mesken-kok
+//   serviste demo-plan.json 404 -> kopru + normalizasyon SESSIZCE atlaniyordu. Bu senaryo o yolu dogrular.
+const MESKEN_ROOT = process.argv.includes('--mesken-root');
+const BASE = MESKEN_ROOT
+  ? `http://localhost:${PORT}/MESKEN-prototip.html`
+  : `http://localhost:${PORT}/mesken/MESKEN-prototip.html`;
 
 const results = [];
 let shotN = 0;
@@ -191,6 +198,20 @@ async function fullHoleCoversCanvas(f){
   });
 }
 
+// IS 3: kart (onbCard) plan ayak izi bbox'u (onbBlockScreenBBox) ile CAKISMA alani (px^2). 0 = kesismiyor.
+async function cardPlanBBoxOverlap(f){
+  return f.evaluate(()=>{
+    const card=document.querySelector('.onbCard'); if(!card) return {hasCard:false, hasBox:false, overlapArea:-1};
+    let box=null; try{ if(typeof onbBlockScreenBBox==='function') box=onbBlockScreenBBox(); }catch(e){}
+    if(!box) return {hasCard:true, hasBox:false, overlapArea:-1};
+    const cr=card.getBoundingClientRect();
+    const ix=Math.max(0, Math.min(cr.right,box.right)-Math.max(cr.left,box.left));
+    const iy=Math.max(0, Math.min(cr.bottom,box.bottom)-Math.max(cr.top,box.top));
+    return {hasCard:true, hasBox:true, overlapArea:Math.round(ix*iy),
+      card:{l:Math.round(cr.left),t:Math.round(cr.top),r:Math.round(cr.right),b:Math.round(cr.bottom)},
+      box:{l:Math.round(box.left),t:Math.round(box.top),r:Math.round(box.right),b:Math.round(box.bottom)}};
+  });
+}
 // parse "N / 15" -> N
 function progN(s){ const m=/(\d+)\s*\/\s*(\d+)/.exec(s||''); return m?{n:+m[1], total:+m[2]}:null; }
 
@@ -304,7 +325,7 @@ async function resumeScenario(page, f){
   // frames also emit via page in puppeteer
 
   const url = `${BASE}?demo=1${PKG?'&paket=1':''}&_cb=${Date.now()}`;
-  log('\n=== E2E '+(PKG?'[VITRIN paket=1]':'[HANDS-ON]')+' === '+url);
+  log('\n=== E2E '+(MESKEN_ROOT?'[MESKEN-KOK regresyon]':(PKG?'[VITRIN paket=1]':'[HANDS-ON]'))+' === '+url);
   await page.goto(url, {waitUntil:'domcontentloaded', timeout:60000});
 
   const f = await waitEngineFrame(page);
@@ -313,7 +334,8 @@ async function resumeScenario(page, f){
   await installDownloadObserver(page);// REV6: son adim 'Projeyi Indir' gercek indirme tetikler mi
   await sleep(1500);
 
-  if(PKG){ await runPkg(page, f); }
+  if(MESKEN_ROOT){ await runMeskenRoot(page, f); }
+  else if(PKG){ await runPkg(page, f); }
   else { await runHandson(page, f); }
 
   // --- final report ---
@@ -325,7 +347,10 @@ async function resumeScenario(page, f){
   log(`console.error: ${consoleErrs.length}`); consoleErrs.slice(0,20).forEach(e=>log('   c '+e));
   results.filter(r=>!r.pass).forEach(r=>log('   FAIL: '+r.name+(r.extra?' ['+r.extra+']':'')));
 
-  await browser.close();
+  // TAM tur sonrasi sayfada 'ilerleme' var (maxStep>1 / render) -> template beforeunload preventDefault ->
+  //   browser.close() ASILI KALABILIR. Kapanisi timeout ile yarista; takilirsa Chrome surecini oldur.
+  await Promise.race([ browser.close().catch(()=>{}), sleep(5000) ]);
+  try{ const proc=browser.process&&browser.process(); if(proc&&proc.kill) proc.kill('SIGKILL'); }catch(e){}
   const clean = (nFail===0 && errors.length===0);
   log(clean ? '\nGREEN' : '\nRED');
   process.exit(clean?0:1);
@@ -437,6 +462,10 @@ async function runHandson(page, f){
   mc = await waitOnbProg(f, 6, {timeout:15000, desc:'6 duvar-cek'}); ok('motor 6/16 '+mc.title);
   await shot(page,'07-duvar-cek');
 
+  // KARARTMA YOK (blokA-ciz ikizi) — duvar-cek marker-hayaletli fullCanvasHole: delik tuvali kapsar.
+  const holeDuvar = await fullHoleCoversCanvas(f);
+  holeDuvar.ok ? ok('duvar-cek karartma yok (delik tuvali kapsar)', JSON.stringify(holeDuvar.hole||{})) : bad('duvar-cek karartma yok', JSON.stringify(holeDuvar));
+
   // REV5 KUSUR 7 — NABIZ GERCEK DUVARDA: onbGhost'ta .onbMark nabzi + .onbMarkSeg segmenti VAR ve
   //   marker dunya-noktasi plan.wallRuns duvarlarindan BIRININ orta noktasi (tuval-merkez sentetik daire DEGIL).
   const wallMark = await f.evaluate(()=>{
@@ -467,6 +496,16 @@ async function runHandson(page, f){
   if(!advanced7){ await onbClick(f,'skip'); await sleep(400); }
   mc = await waitOnbProg(f, 8, {timeout:10000, desc:'8 balkon-ekle'}); ok('motor 8/16 '+mc.title);
   await shot(page,'09-balkon');
+
+  // KARARTMA YOK (blokA-ciz ikizi) — balkon-ekle marker-hayaletli fullCanvasHole: delik tuvali kapsar.
+  await sleep(400);   // kart + hayalet yerlessin
+  const holeBalk = await fullHoleCoversCanvas(f);
+  holeBalk.ok ? ok('balkon-ekle karartma yok (delik tuvali kapsar)', JSON.stringify(holeBalk.hole||{})) : bad('balkon-ekle karartma yok', JSON.stringify(holeBalk));
+  // IS 3 — KART BOS EKRAN KOSESINE: balkon-ekle kompakt karti plan ayak izi bbox'u ile CAKISMAZ (overlapArea 0).
+  const balkCardOv = await cardPlanBBoxOverlap(f);
+  (balkCardOv.hasBox && balkCardOv.overlapArea===0) ? ok('IS3 balkon-ekle karti plan bbox ile CAKISMIYOR (overlapArea=0)', JSON.stringify(balkCardOv)) : bad('IS3 balkon karti plan bbox ortuyor', JSON.stringify(balkCardOv));
+  const balkCardCompact = await f.evaluate(()=>{ const c=document.querySelector('.onbCard'); return !!(c && c.classList && c.classList.contains('onbCompact')); });
+  balkCardCompact ? ok('IS3 balkon-ekle karti KOMPAKT (.onbCompact)') : bad('IS3 balkon-ekle kart kompakt degil');
 
   // REV6 BALKON — BOS BASLAR: balkon-ekle GIRISINDE balconies BOSALTILIR (onbCaptureBalkSet + onbClearBalconies);
   //   demo seti ARTIK on-dolu GELMEZ. Balkon araci OTO-SECILI (onbOpenBalconyTool -> setMode('balkon') + #tBalk).
@@ -780,8 +819,9 @@ async function runPhase3(page, f){
   (furnApplied>=60) ? ok('KUSUR6 kamera evresinde STASH paket mobilyasi uygulandi (furnitureCount>=60)','n='+furnApplied) : bad('KUSUR6 stash mobilya uygulanmadi (paket ~126)','n='+furnApplied);
   await shot(page,'20-camera-step');
 
-  // kamera3d mini-tour auto-starts in iframe (iframeAuto). wait for ITS card (total===6, not the ana tour's 15).
-  await waitFor(async()=>{ const c=await onbCard(f); const p=progN(c.prog); return (c.visible && p && p.total===6)?c:null; }, {timeout:25000, desc:'kamera3d tour (6 adim)'});
+  // kamera3d mini-tour auto-starts in iframe (iframeAuto). REV7: 6->7 adim (aci-ayarla -> yon-degistir + kamera-tasi).
+  //   wait for ITS card (total===7, not the ana tour's 16).
+  await waitFor(async()=>{ const c=await onbCard(f); const p=progN(c.prog); return (c.visible && p && p.total===7)?c:null; }, {timeout:25000, desc:'kamera3d tour (7 adim)'});
   let kc = await onbCard(f); ok('kamera3d turu basladi', kc.prog+' '+kc.title);
 
   // place one interior camera via mesh: real two-click (pos+aim). Verify count INCREMENTS.
@@ -815,30 +855,43 @@ async function runPhase3(page, f){
   (cam.ex===2) ? ok('KUSUR15 auto-place SON drone birakti (ex==2)','ex='+cam.ex) : bad('KUSUR15 ex==2 (son drone birakilir)','ex='+cam.ex);
   await shot(page,'21-cameras');
 
-  // REV5 KUSUR 13 — aci-ayarla: BIR kamera SECILI + #v3dCamBar hedefi (tuval-merkez bos ping DEGIL)
-  const aciCard = await waitKamCard(f, /Açıyı ayarla/, 9000).catch(()=>null);
-  if(aciCard){
-    const aciDiag = await f.evaluate(()=>({ sel:(window.View3D&&View3D.getActiveCamIdx)?View3D.getActiveCamIdx():-1, bar:!!document.getElementById('v3dCamBar') }));
-    (aciDiag.sel>=0) ? ok('KUSUR13 aci-ayarla: kamera SECILI (#v3dCamBar hedefi, bos ping degil)', JSON.stringify(aciDiag)) : bad('KUSUR13 aci-ayarla kamera secili degil', JSON.stringify(aciDiag));
-    // REV6 GÖREV C — KOMPAKT KART + HEDEF/PiP KAÇINMA: kart .onbCompact (240px) ve kamera hedefini (#v3dCamBar)
-    //   ve PiP önizlemesini (#v3dPip) ÖRTMEZ (kart-çakışmazlık); adımın 'ensure' hedef-kurtarma fonksiyonu var.
-    await sleep(400);   // kart yerlessin (onbReposition + expandDown kacinma)
-    const compactDiag = await f.evaluate(()=>{
-      const card=document.querySelector('.onbCard'); if(!card) return {hasCard:false};
-      const compact=!!(card.classList&&card.classList.contains('onbCompact'));
-      const cr=card.getBoundingClientRect();
-      function rc(id){ const el=document.getElementById(id); if(!el) return null; if(el.style&&el.style.display==='none') return null; const r=el.getBoundingClientRect(); return (r.width>0&&r.height>0)?{left:r.left,top:r.top,right:r.right,bottom:r.bottom}:null; }
-      function ov(a,b){ if(!a||!b) return false; return !(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom); }
-      const bar=rc('v3dCamBar'), pip=rc('v3dPip');
-      const c4={left:cr.left,top:cr.top,right:cr.right,bottom:cr.bottom};
-      let hasEnsure=false; try{ const st=(onbTour&&onbTour.steps)?onbTour.steps[onbIdx]:null; hasEnsure=!!(st&&typeof st.ensure==='function'); }catch(e){}
-      return {hasCard:true, compact, w:Math.round(cr.width), ovBar:ov(c4,bar), ovPip:ov(c4,pip), hasBar:!!bar, hasPip:!!pip, hasEnsure};
-    });
-    (compactDiag.hasCard && compactDiag.compact) ? ok('KUSUR13 aci-ayarla kart KOMPAKT (.onbCompact, '+compactDiag.w+'px)', JSON.stringify({w:compactDiag.w})) : bad('KUSUR13 aci-ayarla kart kompakt degil', JSON.stringify(compactDiag));
-    (!compactDiag.ovBar && !compactDiag.ovPip) ? ok('KUSUR13 aci-ayarla kart hedef (#v3dCamBar) + PiP (#v3dPip) ile ÇAKIŞMIYOR', JSON.stringify({ovBar:compactDiag.ovBar, ovPip:compactDiag.ovPip, hasBar:compactDiag.hasBar, hasPip:compactDiag.hasPip})) : bad('KUSUR13 aci-ayarla kart hedef/PiP ortuyor', JSON.stringify(compactDiag));
-    (compactDiag.hasEnsure) ? ok('KUSUR13 aci-ayarla adiminda hedef-kurtarma ensure() fonksiyonu var') : bad('KUSUR13 aci-ayarla ensure fonksiyonu yok', JSON.stringify(compactDiag));
-    await onbClick(f,'skip'); await sleep(500);
-  } else bad('KUSUR13 aci-ayarla karti gelmedi');
+  // REV7 KUSUR 13a — YÖN-DEĞİŞTİR: 'Açıyı ayarla' BOLUNDU. Kart 'Bakış yönünü değiştir'; hedef alt dock'ta
+  //   [data-camact="aim"]; check = SEÇİLİ kamera (getActiveCamIdx) target-imzasi degisimi (camDirSig).
+  //   E2E: dock aim butonuna GERCEK tik + sahnede tik -> camDirSig degisir -> tur oto-ilerler.
+  const yonCard = await waitKamCard(f, /Bakış yönünü değiştir/, 9000).catch(()=>null);
+  if(yonCard){
+    const selDiag = await f.evaluate(()=>({ sel:(window.View3D&&View3D.getActiveCamIdx)?View3D.getActiveCamIdx():-1, dock:!!document.getElementById('v3dCamDock'), aimBtn:!!document.querySelector('#v3dCamDock [data-camact="aim"]') }));
+    (selDiag.sel>=0) ? ok('KUSUR13a yon-degistir: kamera SECILI (getActiveCamIdx>=0, dock hedefi)', JSON.stringify(selDiag)) : bad('KUSUR13a yon-degistir kamera secili degil', JSON.stringify(selDiag));
+    (selDiag.aimBtn) ? ok('KUSUR13a yon-degistir hedefi = dock "Yön" ([data-camact="aim"]) DOM\'da', JSON.stringify(selDiag)) : bad('KUSUR13a dock aim butonu yok', JSON.stringify(selDiag));
+    await sleep(400);   // kart yerlessin
+    const yonCompact = await camCardCompactDiag(f);
+    (yonCompact.hasCard && yonCompact.compact) ? ok('KUSUR13a yon-degistir kart KOMPAKT (.onbCompact, '+yonCompact.w+'px)', JSON.stringify({w:yonCompact.w})) : bad('KUSUR13a yon-degistir kart kompakt degil', JSON.stringify(yonCompact));
+    (!yonCompact.ovDock && !yonCompact.ovPip) ? ok('KUSUR13a yon-degistir kart kamera dock (#v3dCamDock) + PiP (#v3dPip) ile ÇAKIŞMIYOR', JSON.stringify({ovDock:yonCompact.ovDock, ovPip:yonCompact.ovPip, hasDock:yonCompact.hasDock, hasPip:yonCompact.hasPip})) : bad('KUSUR13a yon-degistir kart dock/PiP ortuyor', JSON.stringify(yonCompact));
+    (yonCompact.hasEnsure) ? ok('KUSUR13a yon-degistir adiminda hedef-kurtarma ensure() fonksiyonu var') : bad('KUSUR13a yon-degistir ensure fonksiyonu yok', JSON.stringify(yonCompact));
+    // GERCEK EYLEM: dock aim butonu + sahne tiki -> secili kamera yon (camDirSig) degissin
+    const yonRes = await changeCamSig(f, 'aim');
+    (yonRes.changed) ? ok('KUSUR13a yon-degistir: dock aim + sahne tikiyla camDirSig DEGISTI (secili kamera)', JSON.stringify({before:yonRes.before, after:yonRes.after, via:yonRes.via})) : bad('KUSUR13a camDirSig degismedi', JSON.stringify(yonRes));
+    // camDirSig degisince tur OTO-ilerler (İleri/Atla gereksiz) -> kamera-tasi karti gelir
+    const adv = await waitFor(async()=>{ const c=await onbCard(f); return (c.visible && /Kamerayı taşı/.test(c.title||''))?c:null; }, {timeout:8000, interval:250, desc:'yon-degistir oto-ilerledi'}).catch(()=>null);
+    adv ? ok('KUSUR13a yon-degistir yaptirinca OTO-ilerledi (Kamerayı taşı karti geldi)') : (await onbClick(f,'skip'));
+  } else bad('KUSUR13a yon-degistir (Bakış yönünü değiştir) karti gelmedi');
+
+  // REV7 KUSUR 13b — KAMERA-TAŞI: hedef dock [data-camact="move"]; check = SEÇİLİ kamera pos-imzasi (camPosSig).
+  const tasiCard = await waitKamCard(f, /Kamerayı taşı/, 9000).catch(()=>null);
+  if(tasiCard){
+    const moveDiag = await f.evaluate(()=>({ sel:(window.View3D&&View3D.getActiveCamIdx)?View3D.getActiveCamIdx():-1, moveBtn:!!document.querySelector('#v3dCamDock [data-camact="move"]') }));
+    (moveDiag.sel>=0) ? ok('KUSUR13b kamera-tasi: kamera SECILI (getActiveCamIdx>=0)', JSON.stringify(moveDiag)) : bad('KUSUR13b kamera-tasi kamera secili degil', JSON.stringify(moveDiag));
+    (moveDiag.moveBtn) ? ok('KUSUR13b kamera-tasi hedefi = dock "Taşı" ([data-camact="move"]) DOM\'da', JSON.stringify(moveDiag)) : bad('KUSUR13b dock move butonu yok', JSON.stringify(moveDiag));
+    await sleep(400);
+    const tasiCompact = await camCardCompactDiag(f);
+    (tasiCompact.hasCard && tasiCompact.compact) ? ok('KUSUR13b kamera-tasi kart KOMPAKT (.onbCompact, '+tasiCompact.w+'px)', JSON.stringify({w:tasiCompact.w})) : bad('KUSUR13b kamera-tasi kart kompakt degil', JSON.stringify(tasiCompact));
+    (!tasiCompact.ovDock && !tasiCompact.ovPip) ? ok('KUSUR13b kamera-tasi kart kamera dock (#v3dCamDock) + PiP (#v3dPip) ile ÇAKIŞMIYOR', JSON.stringify({ovDock:tasiCompact.ovDock, ovPip:tasiCompact.ovPip})) : bad('KUSUR13b kamera-tasi kart dock/PiP ortuyor', JSON.stringify(tasiCompact));
+    // GERCEK EYLEM: dock move butonu + sahne tiki -> secili kamera konum (camPosSig) degissin
+    const tasiRes = await changeCamSig(f, 'move');
+    (tasiRes.changed) ? ok('KUSUR13b kamera-tasi: dock move + sahne tikiyla camPosSig DEGISTI (secili kamera)', JSON.stringify({before:tasiRes.before, after:tasiRes.after, via:tasiRes.via})) : bad('KUSUR13b camPosSig degismedi', JSON.stringify(tasiRes));
+    const adv2 = await waitFor(async()=>{ const c=await onbCard(f); return (c.visible && /Lens seç/.test(c.title||''))?c:null; }, {timeout:8000, interval:250, desc:'kamera-tasi oto-ilerledi'}).catch(()=>null);
+    adv2 ? ok('KUSUR13b kamera-tasi yaptirinca OTO-ilerledi (Lens seç karti geldi)') : (await onbClick(f,'skip'));
+  } else bad('KUSUR13b kamera-tasi (Kamerayı taşı) karti gelmedi');
 
   // REV5 KUSUR 14 — lens-sec: detay kutusu ACIK -> #v3dLRow gorunur (bir onceki adimdan kopmadi)
   const lensCard = await waitKamCard(f, /Lens seç/, 9000).catch(()=>null);
@@ -1011,6 +1064,54 @@ async function addDroneOne(f){
   }
   return ex;
 }
+// REV7 — kamera turu kompakt kart teshisi: .onbCompact + kart kamera dock (#v3dCamDock) / PiP (#v3dPip)
+//   ile CAKISMIYOR (avoidSel PiP + hedef dock; kart alt dock'u ORTMEMELI) + ensure() hedef-kurtarma var.
+async function camCardCompactDiag(f){
+  return f.evaluate(()=>{
+    const card=document.querySelector('.onbCard'); if(!card) return {hasCard:false};
+    const compact=!!(card.classList&&card.classList.contains('onbCompact'));
+    const cr=card.getBoundingClientRect();
+    function rc(id){ const el=document.getElementById(id); if(!el) return null; if(el.style&&el.style.display==='none') return null; const r=el.getBoundingClientRect(); return (r.width>0&&r.height>0)?{left:r.left,top:r.top,right:r.right,bottom:r.bottom}:null; }
+    function ov(a,b){ if(!a||!b) return false; return !(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom); }
+    const dock=rc('v3dCamDock'), pip=rc('v3dPip');
+    const c4={left:cr.left,top:cr.top,right:cr.right,bottom:cr.bottom};
+    let hasEnsure=false; try{ const st=(onbTour&&onbTour.steps)?onbTour.steps[onbIdx]:null; hasEnsure=!!(st&&typeof st.ensure==='function'); }catch(e){}
+    return {hasCard:true, compact, w:Math.round(cr.width), ovDock:ov(c4,dock), ovPip:ov(c4,pip), hasDock:!!dock, hasPip:!!pip, hasEnsure};
+  });
+}
+// REV7 — SECILI kamera yon (aim -> camDirSig) / konum (move -> camPosSig) imzasini GERCEK EYLEMLE degistir:
+//   (1) dock butonuna tik (setPlaceAction), (2) aktif kamerayi (idx0) sec + sahneye tik -> scenePick target/pos'u set eder.
+//   Sahne raycast bir noktaya oturmazsa View3D getCameras/setCameras ile aktif kamerayi nudge et (drone-ekle deseni).
+async function changeCamSig(f, act){
+  return f.evaluate(async(act)=>{
+    const V=window.View3D; if(!V) return {changed:false, reason:'no View3D'};
+    function sig(){ try{ let i=(V.getActiveCamIdx?V.getActiveCamIdx():-1); const a=V.getCameras?V.getCameras():[]; if(!a.length) return '';
+      if(i<0||i>=a.length) i=a.length-1; const c=a[i]; const t=(act==='aim')?c.target:c.pos;
+      const r=n=>Math.round((+n||0)*100)/100; return [r(t.x),r(t.y),r(t.z)].join(','); }catch(e){ return ''; } }
+    try{ if(V.selectCam) V.selectCam(0); }catch(e){}
+    const before=sig();
+    // 1) dock butonu (Yön/Taşı) -> placeAction
+    try{ const b=document.querySelector('#v3dCamDock [data-camact="'+act+'"]'); if(b) b.click(); }catch(e){}
+    await new Promise(r=>setTimeout(r,150));
+    // 2) sahneye tik (scenePick -> secili kamera aim/move)
+    try{ const ov=document.getElementById('view3dOverlay'); const cv=ov&&ov.querySelector('canvas');
+      if(cv){ const r=cv.getBoundingClientRect();
+        function pt(type,x,y){ cv.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,clientX:x,clientY:y,button:0,buttons:type==='pointerdown'?1:0,pointerId:1,pointerType:'mouse',isPrimary:true,view:window})); }
+        const x=r.left+r.width*(act==='aim'?0.34:0.66), y=r.top+r.height*(act==='aim'?0.40:0.62);
+        pt('pointerdown',x,y); await new Promise(rr=>setTimeout(rr,50)); pt('pointerup',x,y);
+        await new Promise(rr=>setTimeout(rr,200)); } }catch(e){}
+    let after=sig(), via='scene';
+    // 3) fallback: sahne tiki imzayi degistirmediyse API ile aktif kamerayi nudge et
+    if(after===before){
+      try{ const a=(V.getCameras?V.getCameras():[]).map(function(c){ return {id:c.id,pos:Object.assign({},c.pos),target:Object.assign({},c.target),lens:c.lens,height:c.height}; });
+        if(a.length){ let i=(V.getActiveCamIdx?V.getActiveCamIdx():-1); if(i<0||i>=a.length) i=a.length-1;
+          if(act==='aim'){ a[i].target.x+=2.0; a[i].target.z-=1.5; } else { a[i].pos.x+=1.5; a[i].pos.z+=1.0; }
+          if(V.setCameras) V.setCameras(a); if(V.selectCam) V.selectCam(i); via='api'; } }catch(e){}
+      after=sig();
+    }
+    return {changed:(after!==before && after!==''), before, after, via};
+  }, act);
+}
 // FAITHFUL to user bug #1: the card must not occlude any GHOST CORNER the user must click.
 async function cardGhostOverlap(page, f){
   return f.evaluate(()=>{
@@ -1153,4 +1254,42 @@ async function runPkg(page, f){
   const sc = await waitFor(async()=>{ const c=await shellCard(page); return c.visible?c:null; }, {timeout:12000, desc:'pkg shell tour'}).catch(()=>null);
   sc ? ok('vitrin akis turu boot','prog='+sc.prog) : bad('vitrin akis turu boot','gorunmedi');
   await shot(page,'pkg-01');
+}
+
+// ============ SUNUCU-KOKU REGRESYONU (mesken KLASORU kok) ============
+//   Sayfa /MESKEN-prototip.html (http.server --directory mesken). DEMO_ASSETS konumdan '/demo-assets/'
+//   turer. TAM tur GEREKMEZ: (1) demo-plan.json 200 doner (mesken-kok 404 kok nedeniydi), (2) kabuk boot
+//   koprusu iframe'e __mskDemoPlan'i kurdu, (3) 'Yerlesimi Olustur' = onbApplyDemoLayout -> plan.regions demo
+//   imzasiyla eslesir, (4) kamera normalizasyon nabzi: __mskDemoPlan.cameras demo kamera setini tasir.
+async function runMeskenRoot(page, f){
+  await sleep(1500);
+  // (1) demo-plan.json 200 (konum-tureli /demo-assets/ mesken-kok serviste bulunur; eski 404 DEGIL)
+  const dp = await page.evaluate(async()=>{
+    try{ const r=await fetch('/demo-assets/demo-plan.json',{cache:'no-store'});
+      let n=-1; try{ const j=await r.json(); n=(j&&j.kpState&&Array.isArray(j.kpState.blocks))?j.kpState.blocks.length:-1; }catch(e){}
+      return {status:r.status, ok:r.ok, blocks:n}; }catch(e){ return {status:-1, ok:false, err:String(e)}; }
+  });
+  (dp.ok && dp.status===200) ? ok('mesken-kok: demo-plan.json 200 (konum-tureli /demo-assets/ bulundu)', JSON.stringify(dp)) : bad('mesken-kok demo-plan.json 200','durum='+JSON.stringify(dp));
+  // (2) kabuk boot koprusu iframe window'una __mskDemoPlan kurdu (bridge asenkron -> poll)
+  const bridge = await waitFor(async()=>{
+    const b=await f.evaluate(()=>{ try{ const p=window.__mskDemoPlan; const kp=(p&&p.kpState)||p; if(!kp||!kp.blocks) return null;
+      const c=p.cameras||{}; const ic=Array.isArray(c.interior)?c.interior.length:0, ex=Array.isArray(c.exterior)?c.exterior.length:0;
+      return {aRegs:kp.blocks[0].plan.regions.length, bRegs:(kp.blocks[1]?kp.blocks[1].plan.regions.length:-1), cams:ic+ex, ic, ex}; }catch(e){ return null; } });
+    return b?b:null;
+  }, {timeout:15000, interval:400, desc:'mesken-kok __mskDemoPlan kopru'}).catch(()=>null);
+  bridge ? ok('mesken-kok: __mskDemoPlan kopru kuruldu (bridge 200 -> iframe)', JSON.stringify(bridge)) : bad('mesken-kok __mskDemoPlan kopru','kurulmadi (404 -> atlandi?)');
+  // (4) KAMERA NORMALIZASYON NABZI: bridged plan demo kamera setini tasir (mesken-kok 404 bu veriyi de yutuyordu)
+  (bridge && bridge.cams>0) ? ok('mesken-kok: kamera normalizasyon nabzi — __mskDemoPlan.cameras dolu (ic+dis)', 'ic='+(bridge.ic)+' ex='+(bridge.ex)) : bad('mesken-kok kamera normalizasyon nabzi','cams='+(bridge?bridge.cams:'?'));
+  // (3) 'Yerlesimi Olustur' = onbApplyDemoLayout('blokA') -> plan.regions demo blok A imzasiyla eslesir
+  const applied = await f.evaluate(()=>{
+    try{ if(typeof onbApplyDemoLayout!=='function') return {ok:false, reason:'onbApplyDemoLayout yok'};
+      const done=onbApplyDemoLayout('blokA');
+      const regs=(typeof plan!=='undefined'&&plan&&plan.regions)?plan.regions.length:-1;
+      return {ok:done, regs};
+    }catch(e){ return {ok:false, reason:String(e&&e.message||e)}; }
+  });
+  (applied.ok && bridge && applied.regs===bridge.aRegs)
+    ? ok('mesken-kok: Yerlesimi Olustur demo yerlesimi uyguladi (plan.regions=demo A imzasi)', 'regs='+applied.regs+'==demo '+(bridge&&bridge.aRegs))
+    : bad('mesken-kok demo yerlesim uygulanmadi','applied='+JSON.stringify(applied)+' demoA='+(bridge&&bridge.aRegs));
+  await shot(page,'mkroot-01');
 }

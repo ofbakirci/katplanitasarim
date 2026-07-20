@@ -58,7 +58,7 @@ const FULL_BASES = {5:0, 6:0, 7:0, 9:1, 12:0, 14:'0|konut'};
 /* KAMERA3D ctx stub'u */
 function kamCtx(over){
   const c={
-    camUI:()=>false, camCount:()=>0, lastCamSig:()=>'', lensSig:()=>'',
+    camUI:()=>false, camCount:()=>0, lastCamSig:()=>'', camDirSig:()=>'', camPosSig:()=>'', lensSig:()=>'',
     extMode:()=>false, extCount:()=>0, extRenderClicked:()=>false
   };
   return Object.assign(c, over||{});
@@ -76,14 +76,15 @@ const asserts = `
       return k.iframeAuto===true && k.zBoost===true && k.watch===true && typeof k.visible==='function'; })());
   T('registry: ana iframeAuto/zBoost/watch kapali', (function(){ const a=onbTourById('ana');
       return a.iframeAuto===false && a.zBoost===false && a.watch===false && a.visible===null; })());
-  T('VERSION=5 (REV6) / KAM_VERSION=4', ONB.VERSION===5 && ONB.KAM_VERSION===4);
+  T('VERSION=5 (REV6) / KAM_VERSION=5 (REV7)', ONB.VERSION===5 && ONB.KAM_VERSION===5);
   T('ana 16 adim (blokB-yerlesim eklendi)', ONB_STEPS.length===16);
-  T('kamera3d 6 adim', ONB_KAM_STEPS.length===6);
+  T('kamera3d 7 adim (REV7: aci-ayarla -> yon-degistir + kamera-tasi)', ONB_KAM_STEPS.length===7);
   const allIds=ONB_STEPS.map(s=>s.id).concat(ONB_KAM_STEPS.map(s=>s.id));
   T('tum adim id benzersiz (turlar arasi dahil)', new Set(allIds).size===allIds.length);
   T('ana id sirasi (blokB-ciz -> blokB-yerlesim -> imkan-koy)', ONB_STEPS.map(s=>s.id).join(',')==='pro-mod,parsel-sekme,parsel-getir,blokA-ciz,yerlesim,duvar-cek,kapi-pencere,balkon-ekle,site-ac,blok-ekle,blokB-ciz,blokB-yerlesim,imkan-koy,kat-ayri,kat-gez,export');
   T('eski id\\'ler kalkti (sinir-ciz/oda-duzenle/blok-b-ciz/cekme-yol)', !ONB_STEPS.find(s=>['sinir-ciz','oda-duzenle','blok-b-ciz','cekme-yol'].indexOf(s.id)>=0));
-  T('kamera3d id sirasi', ONB_KAM_STEPS.map(s=>s.id).join(',')==='kamera-koy,aci-ayarla,lens-sec,drone-gec,drone-ekle,render-isaret');
+  T('kamera3d id sirasi (REV7)', ONB_KAM_STEPS.map(s=>s.id).join(',')==='kamera-koy,yon-degistir,kamera-tasi,lens-sec,drone-gec,drone-ekle,render-isaret');
+  T('eski kamera3d id\\'si kalkti (aci-ayarla)', !ONB_KAM_STEPS.find(s=>s.id==='aci-ayarla'));
   T('tum check fonksiyon', ONB_STEPS.concat(ONB_KAM_STEPS).every(s=>typeof s.check==='function'));
   T('tum title/body dolu (body string YA DA fonksiyon: balkon-ekle dinamik)', ONB_STEPS.concat(ONB_KAM_STEPS).every(s=>typeof s.title==='string' && s.title && (typeof s.body==='function' ? true : (typeof s.body==='string' && !!s.body))));
   /* target obje YA DA fonksiyon (site-ac akilli hedef) -> coz + gecerli */
@@ -98,9 +99,12 @@ const asserts = `
   T('skippable isaretli (parsel-getir/kapi-pencere/balkon-ekle/site-ac/blok-ekle/blokB-ciz/imkan-koy)', step('parsel-getir').skippable && step('kapi-pencere').skippable && step('balkon-ekle').skippable && step('site-ac').skippable && step('blok-ekle').skippable && step('blokB-ciz').skippable && step('imkan-koy').skippable);
   T('cizim/temel adimlar skippable degil (blokA-ciz/yerlesim/duvar-cek/export/pro-mod/parsel-sekme)', step('blokA-ciz').skippable===false && step('yerlesim').skippable===false && step('duvar-cek').skippable===false && step('export').skippable===false && step('pro-mod').skippable===false && step('parsel-sekme').skippable===false);
   T('needsPro parsel/site/kat-ayri adimlarinda', step('parsel-sekme').needsPro && step('parsel-getir').needsPro && step('site-ac').needsPro && step('kat-ayri').needsPro);
-  T('kamera3d cogu skippable (5/6)', ONB_KAM_STEPS.filter(s=>s.skippable).length===5);
+  T('kamera3d cogu skippable (6/7)', ONB_KAM_STEPS.filter(s=>s.skippable).length===6);
   T('render-isaret Bitir action', typeof kstep('render-isaret').action.run==='function' && kstep('render-isaret').action.label==='Bitir');
-  T('aci-ayarla hedefi #v3dCamBar (REV5: kamera secili -> cubuk simgede)', kstep('aci-ayarla').target.type==='dom' && kstep('aci-ayarla').target.sel==='#v3dCamBar');
+  T('yon-degistir hedefi dock "Yön" (#v3dCamDock [data-camact="aim"]) — kamera/PiP ortmez', kstep('yon-degistir').target.type==='dom' && kstep('yon-degistir').target.sel==='#v3dCamDock [data-camact="aim"]');
+  T('kamera-tasi hedefi dock "Taşı" (#v3dCamDock [data-camact="move"])', kstep('kamera-tasi').target.type==='dom' && kstep('kamera-tasi').target.sel==='#v3dCamDock [data-camact="move"]');
+  T('yon-degistir + kamera-tasi kompakt kart + PiP avoidSel', kstep('yon-degistir').compact===true && kstep('kamera-tasi').compact===true && Array.isArray(kstep('yon-degistir').avoidSel) && kstep('yon-degistir').avoidSel.indexOf('#v3dPip')>=0);
+  T('yon-degistir/kamera-tasi ensure (hedef-kurtarma) fonksiyon', typeof kstep('yon-degistir').ensure==='function' && typeof kstep('kamera-tasi').ensure==='function');
   T('lens-sec hedefi #v3dLRow (REV5: detay kutusu ac)', kstep('lens-sec').target.type==='dom' && kstep('lens-sec').target.sel==='#v3dLRow');
   /* pro-mod giris-saglanmis (Pro zaten acik) uyarlanabilir metin (bodyDone) */
   T('pro-mod bodyDone var + "zaten açık" + İleri', typeof step('pro-mod').bodyDone==='string' && step('pro-mod').bodyDone.indexOf('zaten açık')>=0 && step('pro-mod').bodyDone.indexOf('İleri')>=0);
@@ -270,19 +274,26 @@ const asserts = `
     && kstep('kamera-koy').check(kamCtx({camCount:()=>1, extCount:()=>3}))===false);
   T('kamera-koy baseline getter', kstep('kamera-koy').baseline(kamCtx({camCount:()=>2}))===2);
   T('kamera-koy action: Kalan kameralari otomatik yerlestir', typeof kstep('kamera-koy').action.run==='function' && kstep('kamera-koy').action.label==='Kalan kameraları otomatik yerleştir');
-  T('aci-ayarla: sig degisti + kamera var', kstep('aci-ayarla').check(kamCtx({camCount:()=>1,lastCamSig:()=>'1,2,3,4,5,6'}),'0,0,0,0,0,0')===true);
-  T('aci-ayarla: kamera yoksa false', kstep('aci-ayarla').check(kamCtx({camCount:()=>0,lastCamSig:()=>'x'}),'y')===false);
-  T('aci-ayarla: sig ayni -> false', kstep('aci-ayarla').check(kamCtx({camCount:()=>1,lastCamSig:()=>'a'}),'a')===false);
+  /* REV7 — yon-degistir: SECILI kamera yon (camDirSig) delta; eski lastCamSig (son kamera) DEGIL */
+  T('yon-degistir: dir sig degisti + kamera var', kstep('yon-degistir').check(kamCtx({camCount:()=>1,camDirSig:()=>'4.7,0,8.8'}),'4.7,0,0.5')===true);
+  T('yon-degistir: kamera yoksa false', kstep('yon-degistir').check(kamCtx({camCount:()=>0,camDirSig:()=>'x'}),'y')===false);
+  T('yon-degistir: dir sig ayni -> false', kstep('yon-degistir').check(kamCtx({camCount:()=>1,camDirSig:()=>'a'}),'a')===false);
+  T('yon-degistir baseline camDirSig', kstep('yon-degistir').baseline(kamCtx({camDirSig:()=>'d0'}))==='d0');
+  /* REV7 — kamera-tasi: SECILI kamera konum (camPosSig) delta */
+  T('kamera-tasi: pos sig degisti + kamera var', kstep('kamera-tasi').check(kamCtx({camCount:()=>1,camPosSig:()=>'3.5,1.6,9.9'}),'3.5,1.6,3.1')===true);
+  T('kamera-tasi: kamera yoksa false', kstep('kamera-tasi').check(kamCtx({camCount:()=>0,camPosSig:()=>'x'}),'y')===false);
+  T('kamera-tasi: pos sig ayni -> false', kstep('kamera-tasi').check(kamCtx({camCount:()=>1,camPosSig:()=>'p'}),'p')===false);
+  T('kamera-tasi baseline camPosSig', kstep('kamera-tasi').baseline(kamCtx({camPosSig:()=>'p0'}))==='p0');
   T('lens-sec: lensSig degisti', kstep('lens-sec').check(kamCtx({lensSig:()=>'24,35'}),'24,24')===true && kstep('lens-sec').check(kamCtx({lensSig:()=>'24,24'}),'24,24')===false);
   T('drone-gec: extMode', kstep('drone-gec').check(kamCtx({extMode:()=>true}))===true && kstep('drone-gec').check(kamCtx())===false);
   T('drone-ekle: REV5 baseline-delta (extCount>base; kullanici 1 drone ekler)', typeof kstep('drone-ekle').baseline==='function' && kstep('drone-ekle').baseline(kamCtx({extCount:()=>2}))===2 && kstep('drone-ekle').check(kamCtx({extCount:()=>3}),2)===true && kstep('drone-ekle').check(kamCtx({extCount:()=>2}),2)===false);
   T('render-isaret: extRenderClicked', kstep('render-isaret').check(kamCtx({extRenderClicked:()=>true}))===true && kstep('render-isaret').check(kamCtx())===false);
   T('kam computeTarget: bos -> 0', ONB.computeTarget(ONB_KAM_STEPS, kamCtx(), {})===0);
-  T('kam computeTarget: tumu -> 6 (REV5: drone-ekle baseline delta)', ONB.computeTarget(ONB_KAM_STEPS,
-      kamCtx({camCount:()=>7, lastCamSig:()=>'s', lensSig:()=>'l', extMode:()=>true, extCount:()=>3, extRenderClicked:()=>true}),
-      {0:0, 1:'eski', 2:'eskiLens', 4:2})===6);   // 4:drone-ekle giris-tabani (extCount 3>2 -> saglandi)
+  T('kam computeTarget: tumu -> 7 (REV7: 7 adim; dir/pos/lens delta + drone-ekle baseline delta)', ONB.computeTarget(ONB_KAM_STEPS,
+      kamCtx({camCount:()=>7, camDirSig:()=>'d1', camPosSig:()=>'p1', lensSig:()=>'l', extMode:()=>true, extCount:()=>3, extRenderClicked:()=>true}),
+      {0:0, 1:'d0', 2:'p0', 3:'l0', 5:2})===7);   // 1:yon 2:tasi 3:lens giris-tabanlari (sig degisti) · 5:drone-ekle (extCount 3>2)
   (function(){ const c=onbKamCtx();
-    T('canli kamCtx headless guvenli', c.camUI()===false && c.camCount()===0 && c.lastCamSig()==='' && c.extMode()===false && c.extCount()===0);
+    T('canli kamCtx headless guvenli', c.camUI()===false && c.camCount()===0 && c.camDirSig()==='' && c.camPosSig()==='' && c.extMode()===false && c.extCount()===0);
   })();
 
   /* (11) watcher karari — iframe-bypass dahil (saf) */
@@ -293,9 +304,9 @@ const asserts = `
   T('watch: active tur varken null', onbWatchDecision(kamT, env({active:true}), {status:null,v:0})===null);
   T('watch: 3B gorunmezken null', onbWatchDecision(kamT, env({visible:false}), {status:null,v:0})===null);
   T('watch: camUI kapaliyken null', onbWatchDecision(kamT, env({camUI:false}), {status:null,v:0})===null);
-  T('watch: done -> null (bir kez)', onbWatchDecision(kamT, env(), {status:'done',v:4})===null);
-  T('watch: dismissed -> null', onbWatchDecision(kamT, env(), {status:'dismissed',v:4})===null);
-  T('watch: active kayit -> resume (3B yeniden acildi)', onbWatchDecision(kamT, env(), {status:'active',v:4})==='resume');
+  T('watch: done -> null (bir kez)', onbWatchDecision(kamT, env(), {status:'done',v:ONB.KAM_VERSION})===null);
+  T('watch: dismissed -> null', onbWatchDecision(kamT, env(), {status:'dismissed',v:ONB.KAM_VERSION})===null);
+  T('watch: active kayit -> resume (3B yeniden acildi)', onbWatchDecision(kamT, env(), {status:'active',v:ONB.KAM_VERSION})==='resume');
   T('watch: eski surum done -> start (yeniden gezdir)', onbWatchDecision(kamT, env(), {status:'done',v:1})==='start');
   T('watch: watch=false tur -> null', onbWatchDecision(anaT, env(), {status:null,v:0})===null);
   T('watch: iframeAuto=false hipotetik tur iframede null', onbWatchDecision({watch:true,iframeAuto:false,version:1}, env({inIframe:true}), {status:null,v:0})===null);
@@ -524,19 +535,21 @@ const asserts = `
     global.balconies=saved;
   })();
 
-  /* GOREV C — kamera turu adimlarinda kompakt kart + hedef/PiP kacinma + hedef-kaybi kurtarma */
-  T('C aci-ayarla compact + ensure + avoidSel(#v3dPip) + expandDown', kstep('aci-ayarla').compact===true && typeof kstep('aci-ayarla').ensure==='function' && Array.isArray(kstep('aci-ayarla').avoidSel) && kstep('aci-ayarla').avoidSel.indexOf('#v3dPip')>=0 && kstep('aci-ayarla').expandDown>0);
+  /* GOREV C / REV7 — kamera turu adimlarinda kompakt kart + hedef/PiP kacinma + hedef-kaybi kurtarma */
+  T('C yon-degistir/kamera-tasi compact + ensure + avoidSel(#v3dPip)', kstep('yon-degistir').compact===true && typeof kstep('yon-degistir').ensure==='function' && Array.isArray(kstep('yon-degistir').avoidSel) && kstep('yon-degistir').avoidSel.indexOf('#v3dPip')>=0 && kstep('kamera-tasi').compact===true && typeof kstep('kamera-tasi').ensure==='function');
+  T('C REV7 kamera adimlari expandDown KULLANMAZ (kart dock butonuna capalanir, kamera ustune degil)', kstep('yon-degistir').expandDown===undefined && kstep('kamera-tasi').expandDown===undefined);
   T('C lens-sec compact + ensure + avoidSel', kstep('lens-sec').compact===true && typeof kstep('lens-sec').ensure==='function' && Array.isArray(kstep('lens-sec').avoidSel));
-  T('C kamera-koy/cizim adimlarinda compact YOK', !kstep('kamera-koy').compact && !step('balkon-ekle').compact && !step('imkan-koy').compact);
-  T('C ensure headless throw ETMEZ (View3D yok -> guard)', (function(){ try{ kstep('aci-ayarla').ensure(); kstep('lens-sec').ensure(); return true; }catch(e){ return false; } })());
+  T('IS1 balkon-ekle KOMPAKT (plani ortmesin)', step('balkon-ekle').compact===true);
+  T('C kamera-koy/imkan-koy/cizim adimlarinda compact YOK', !kstep('kamera-koy').compact && !step('imkan-koy').compact && !step('blokA-ciz').compact);
+  T('C ensure headless throw ETMEZ (View3D yok -> guard)', (function(){ try{ kstep('yon-degistir').ensure(); kstep('kamera-tasi').ensure(); kstep('lens-sec').ensure(); return true; }catch(e){ return false; } })());
   /* onbRectOverlapArea + cardCandidates + cardAvoid saf yardimcilari */
   T('C rectOverlapArea: ortusme alani (25)', ONB.rectOverlapArea({left:0,top:0,right:10,bottom:10},{left:5,top:5,right:15,bottom:15})===25);
   T('C rectOverlapArea: ortusme yok -> 0', ONB.rectOverlapArea({left:0,top:0,right:10,bottom:10},{left:20,top:20,right:30,bottom:30})===0);
   T('C rectOverlapArea: {x,y,w,h} normalize (25)', ONB.rectOverlapArea({x:0,y:0,w:10,h:10},{x:5,y:5,w:10,h:10})===25);
   T('C cardCandidates: 4 aday (alt/ust/sag/sol) + viewport-clamp', (function(){ var c=ONB.cardCandidates({left:100,top:100,right:140,bottom:120,width:40,height:20}, 240, 120, 14, 12, 1280, 800);
       return c.length===4 && c.every(function(k){ return typeof k.x==='number' && typeof k.y==='number' && k.left>=12-0.001 && k.right<=1280-12+0.001 && k.top>=12-0.001 && k.bottom<=800-12+0.001; }); })());
-  T('C cardAvoid: kamera adimi (expandDown) -> hedefin asagi genisletilmis rect\\'i', (function(){ var r={left:100,top:100,right:200,bottom:130}; var a=ONB.cardAvoid(kstep('aci-ayarla'), r);
-      return Array.isArray(a) && a.length>=1 && a[0].bottom===130+kstep('aci-ayarla').expandDown && a[0].top===100; })());
+  T('C cardAvoid: expandDown\\'lu adim -> hedefin asagi genisletilmis rect\\'i (sentetik)', (function(){ var r={left:100,top:100,right:200,bottom:130}; var a=ONB.cardAvoid({avoidSel:['#v3dPip'], expandDown:90}, r);
+      return Array.isArray(a) && a.length>=1 && a[0].bottom===130+90 && a[0].top===100; })());
   T('C cardAvoid: avoid konfigsiz adim -> null (eski davranis korunur)', ONB.cardAvoid(step('balkon-ekle'), {left:0,top:0,right:10,bottom:10})===null);
   /* export kancalari (yeni) */
   T('C GOREV A/C export\\'lari', typeof ONB.balconyPlaced==='function' && typeof ONB.remainingBalconies==='function' && typeof ONB.captureBalkSet==='function' && typeof ONB.placeRemainingBalconies==='function' && typeof ONB.demoBalkCount==='function' && typeof ONB.rectOverlapArea==='function' && typeof ONB.cardAvoid==='function');
