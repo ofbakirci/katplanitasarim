@@ -6,7 +6,13 @@
    surer. Beklenen: TUM assert'ler gecti, 0 pageerror, 0 console.error (temiz cikis kodu 0).
    Gercek tiklar: DOM = el.click(); tuval = mousedown/mouseup dispatch (client koord ghost DOM'dan).
 
-   REV3 YENI ASSERT'LER (impl raporu 7 kalem):
+   REV4 YENI ASSERT'LER (kullanicinin 3 sikayeti):
+     (KUSUR1) kamera evresi kabuk karti iframe PiP (sol-alt onizleme) ile KESISMIYOR (rect assert).
+     (KUSUR2) dose3d/malzeme3d ARTIK spotlight'li + yaptirmali: delik iframe araç butonunda ([data-grp]),
+              furnitureEditCount/materialEditCount DELTA>0 -> tur oto-ilerler.
+     (KUSUR3) "Yerlesimi Olustur" motor taze-uretimi DEGIL demo blok yerlesimi uygular (plan.regions == demo imzasi).
+
+   REV3 ASSERT'LER (impl raporu 7 kalem):
      (a) kabuk kamera evresi ATLANMADI — 'Kamera koy' karti gorundu + kullanici tiki olmadan render'a gecilmedi.
      (b) angleNudge/extNudge dialoglari hands-on turda HIC gorunmedi (flowTourActive suppress; MutationObserver).
      (c) 3B evresinde doseme tadi — dose3d ('Mobilyayi dene') + malzeme3d ('Ic malzeme') kabuk kartlari gorundu.
@@ -95,6 +101,22 @@ async function shellClickNext(page){
 async function shellState(page){ return page.evaluate(()=>{ try{ return window.__msk && window.__msk.tour ? window.__msk.tour.getState() : null; }catch(e){ return null; } }); }
 async function engStep(page){ return page.evaluate(()=>{ try{ return (window.__msk&&window.__msk.state) ? {step:(window.__msk&&window.__msk.state).step, maxStep:(window.__msk&&window.__msk.state).maxStep} : null; }catch(e){ return null; } }); }
 async function clickParent(page, sel){ return page.evaluate(s=>{ const el=document.querySelector(s); if(el){ el.click(); return true; } return false; }, sel); }
+// REV4: kabuk tur spotlight deligi (#mskTourHole) parent rect'i (overlay 'on' iken)
+async function shellHoleRect(page){ return page.evaluate(()=>{ const h=document.getElementById('mskTourHole'), ov=document.getElementById('mskTourOv'); if(!h||!ov||!ov.classList.contains('on')) return null; const r=h.getBoundingClientRect(); return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}; }); }
+// REV4: kabuk tur karti (#mskTourCard) parent rect'i (overlay 'on' iken)
+async function shellCardRect(page){ return page.evaluate(()=>{ const c=document.getElementById('mskTourCard'), ov=document.getElementById('mskTourOv'); if(!c||!ov||!ov.classList.contains('on')) return null; const r=c.getBoundingClientRect(); return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}; }); }
+// REV4: iframe-ici elemanin PARENT koordinatindaki rect'i (iframe ofsetiyle)
+async function iframeElemRectParent(page, sel){ return page.evaluate((s)=>{ const fr=document.getElementById('engineFrame'); if(!fr) return null; const d=fr.contentDocument; if(!d) return null; const el=d.querySelector(s); if(!el||!el.getBoundingClientRect) return null; const er=el.getBoundingClientRect(); if(er.width<=0&&er.height<=0) return null; const f0=fr.getBoundingClientRect(); return {left:f0.left+er.left,top:f0.top+er.top,right:f0.left+er.right,bottom:f0.top+er.bottom,width:er.width,height:er.height}; }, sel); }
+// REV4 KUSUR 1: iframe 3B PiP (sol-alt onizleme) PARENT rect'i (birlesik bbox; gorunurse)
+async function iframePipRectParent(page){ return page.evaluate(()=>{ const fr=document.getElementById('engineFrame'); if(!fr) return null; const d=fr.contentDocument; if(!d) return null; const f0=fr.getBoundingClientRect(); let out=null; ['v3dPip','v3dExtPip'].forEach(id=>{ const p=d.getElementById(id); if(!p) return; if(p.style&&p.style.display==='none') return; const r=p.getBoundingClientRect(); if(r.width<=0||r.height<=0) return; const rr={left:f0.left+r.left,top:f0.top+r.top,right:f0.left+r.right,bottom:f0.top+r.bottom}; out=out?{left:Math.min(out.left,rr.left),top:Math.min(out.top,rr.top),right:Math.max(out.right,rr.right),bottom:Math.max(out.bottom,rr.bottom)}:rr; }); return out; }); }
+function rectsOverlap(a,b){ if(!a||!b) return false; return !(a.right<=b.left||a.left>=b.right||a.bottom<=b.top||a.top>=b.bottom); }
+// REV4 KUSUR 2: spotlight deligi hedef butonu KAPSIYOR mu (buton merkezi delik icinde)
+function spotlightCovers(hole, btn){
+  if(!hole||!btn) return {covers:false, hasHole:!!hole, hasBtn:!!btn};
+  const bcx=(btn.left+btn.right)/2, bcy=(btn.top+btn.bottom)/2;
+  const covers = hole.width>10 && hole.height>10 && bcx>=hole.left-6 && bcx<=hole.right+6 && bcy>=hole.top-6 && bcy<=hole.bottom+6;
+  return {covers, holeW:Math.round(hole.width), btnC:{x:Math.round(bcx),y:Math.round(bcy)}};
+}
 
 // --- motor (iframe) onboarding card helpers ---
 async function onbCard(f){
@@ -342,10 +364,33 @@ async function runHandson(page, f){
   await resumeScenario(page, f);
   await shot(page,'06b-resume');
 
-  // yerlesim: click Yerleşimi Oluştur (#genBtn)
+  // REV4 KUSUR 3: demo-plan kopru kuruldu mu (kabuk boot -> iframe.__mskDemoPlan) + beklenen A imzasi.
+  const bridgeA = await f.evaluate(()=>{ try{ const p=window.__mskDemoPlan; const kp=(p&&p.kpState)||p; if(!kp||!kp.blocks) return {ok:false}; return {ok:true, aRegs:kp.blocks[0].plan.regions.length, bRegs:kp.blocks[1].plan.regions.length}; }catch(e){ return {ok:false, err:String(e)}; } });
+  bridgeA.ok ? ok('KUSUR3 demo-plan kopru kuruldu (__mskDemoPlan)', 'aRegs='+bridgeA.aRegs+' bRegs='+bridgeA.bRegs) : bad('KUSUR3 demo-plan kopru','yok='+JSON.stringify(bridgeA));
+  // yerlesim: click Yerleşimi Oluştur (#genBtn) — REV4: onbGenBtnCapture demo yerlesimi uygular (motor gen DEGIL)
   await engClick(f, '#genBtn'); await sleep(1500);
+  // REV4 KUSUR 3: uygulanan plan DEMO blok A imzasiyla eslesir (regions == demo, motor taze-uretimi DEGIL)
+  const planA = await f.evaluate(()=>{ try{ return { regs:(typeof plan!=='undefined'&&plan&&plan.regions)?plan.regions.length:-1, units:(typeof plan!=='undefined'&&plan&&plan.unitObjs)?plan.unitObjs.length:-1 }; }catch(e){ return {regs:-2}; } });
+  (bridgeA.ok && planA.regs===bridgeA.aRegs) ? ok('KUSUR3 Blok A demo yerlesim uygulandi (regions=demo, motor DEGIL)', 'regs='+planA.regs+'==demo '+bridgeA.aRegs) : bad('KUSUR3 Blok A demo yerlesim','plan='+JSON.stringify(planA)+' demoA='+(bridgeA.aRegs));
   mc = await waitOnbProg(f, 6, {timeout:15000, desc:'6 duvar-cek'}); ok('motor 6/16 '+mc.title);
   await shot(page,'07-duvar-cek');
+
+  // REV5 KUSUR 7 — NABIZ GERCEK DUVARDA: onbGhost'ta .onbMark nabzi + .onbMarkSeg segmenti VAR ve
+  //   marker dunya-noktasi plan.wallRuns duvarlarindan BIRININ orta noktasi (tuval-merkez sentetik daire DEGIL).
+  const wallMark = await f.evaluate(()=>{
+    try{
+      const m=(typeof onbWallMarkerWorld==='function')?onbWallMarkerWorld():null;
+      if(!m) return {ok:false, reason:'marker yok'};
+      let match=false, best=1e9;
+      for(const rn of plan.wallRuns){ const s=wallSeg(rn); const mx=(s.x1+s.x2)/2, my=(s.y1+s.y2)/2;
+        const d=Math.abs(mx-m.x)+Math.abs(my-m.y); if(d<best) best=d; if(d<0.02){ match=true; break; } }
+      const g=document.getElementById('onbGhost');
+      const hasMark=!!(g && g.querySelector('.onbMark')), hasSeg=!!(g && g.querySelector('.onbMarkSeg'));
+      return {ok:match&&hasMark, match, hasMark, hasSeg, best:+best.toFixed(3), m:{x:+m.x.toFixed(2),y:+m.y.toFixed(2)}};
+    }catch(e){ return {ok:false, reason:String(e&&e.message||e)}; }
+  });
+  wallMark.ok ? ok('KUSUR7 duvar-cek nabzi GERCEK plan duvarinda (tuval-merkez degil)', JSON.stringify(wallMark))
+             : bad('KUSUR7 duvar-cek nabzi plan duvarinda degil', JSON.stringify(wallMark));
 
   // duvar-cek: drag a wall
   const dragged = await dragSomeWall(f);
@@ -360,6 +405,22 @@ async function runHandson(page, f){
   if(!advanced7){ await onbClick(f,'skip'); await sleep(400); }
   mc = await waitOnbProg(f, 8, {timeout:10000, desc:'8 balkon-ekle'}); ok('motor 8/16 '+mc.title);
   await shot(page,'09-balkon');
+
+  // REV5 KUSUR 8 — DEMO-KONUM NABZI: onbGhost'ta .onbMark nabzi VAR ve marker dunya-noktasi demo blok A'nin
+  //   ILK balkon kenarinin (ONB_TARGETS.balkonlar[0]) konumu (rastgele degil; kullaniciyi ornek yere yonlendirir).
+  const balkMark = await f.evaluate(()=>{
+    try{
+      const m=(typeof onbBalconyMarkerWorld==='function')?onbBalconyMarkerWorld():null;
+      if(!m) return {ok:false, reason:'marker yok'};
+      const g=document.getElementById('onbGhost');
+      const hasMark=!!(g && g.querySelector('.onbMark')), hasSeg=!!(g && g.querySelector('.onbMarkSeg'));
+      // dunya-noktasi sonlu + segmentli (demo kenar) olmali
+      const finite=isFinite(m.x)&&isFinite(m.y)&&Array.isArray(m.seg)&&m.seg.length===2;
+      return {ok:hasMark&&finite, hasMark, hasSeg, finite, m:{x:+m.x.toFixed(2),y:+m.y.toFixed(2)}};
+    }catch(e){ return {ok:false, reason:String(e&&e.message||e)}; }
+  });
+  balkMark.ok ? ok('KUSUR8 balkon-ekle demo-konum nabzi gorunuyor (kenar isaretli)', JSON.stringify(balkMark))
+             : bad('KUSUR8 balkon-ekle demo-konum nabzi yok', JSON.stringify(balkMark));
 
   // balkon-ekle: add one balcony (click near a facade)
   const balk = await addBalcony(f);
@@ -405,14 +466,31 @@ async function runHandson(page, f){
   // aktif blok B, plan henuz yok (giriste)
   const bBefore = await f.evaluate(()=>{ try{ return { active:(typeof activeBlock!=='undefined'?activeBlock:'?'), hasPlan:(typeof plan!=='undefined'&&!!plan) }; }catch(e){ return {err:String(e)}; } });
   log('   [blokB pre-gen] '+JSON.stringify(bBefore));
-  // click Yerleşimi Oluştur for block B
+  // click Yerleşimi Oluştur for block B — REV4: onbGenBtnCapture demo blok B yerlesimini uygular
   await engClick(f, '#genBtn'); await sleep(1600);
   const bPlanned = await f.evaluate(()=>{ try{ return (typeof plan!=='undefined'&&!!plan); }catch(e){ return false; } });
   bPlanned ? ok('FIX2 Blok B planli (Yerlesimi Olustur -> plan!=null)') : bad('FIX2 Blok B planli','plan yok');
+  // REV4 KUSUR 3: Blok B plani DEMO blok B imzasiyla eslesir (regions == demo)
+  const planB = await f.evaluate(()=>{ try{ return (typeof plan!=='undefined'&&plan&&plan.regions)?plan.regions.length:-1; }catch(e){ return -2; } });
+  (bridgeA.ok && planB===bridgeA.bRegs) ? ok('KUSUR3 Blok B demo yerlesim uygulandi (regions=demo)', 'regs='+planB+'==demo '+bridgeA.bRegs) : bad('KUSUR3 Blok B demo yerlesim','regs='+planB+' demoB='+(bridgeA.bRegs));
   mc = await waitOnbProg(f, 13, {timeout:12000, desc:'13 imkan-koy'}).catch(()=>null);
   if(mc){ ok('motor 13/16 '+mc.title); }
   else { const c=await onbCard(f); bad('13/16 imkan-koy','kart='+c.prog); }
   await shot(page,'14-imkan');
+
+  // REV5 KUSUR 9 — IMKAN ARACI + HAVUZ OTO-SEC: imkan-koy girisinde #tAmenity OTOMATIK aktif (amenityBar acik)
+  //   + Havuz tipi SECILI. Kullanici araci/tipi aramaz; hayaletin uzerinden dogrudan cizer.
+  const amenAuto = await f.evaluate(()=>{
+    try{ const t=document.getElementById('tAmenity'); const toolOn=!!(t&&t.classList&&t.classList.contains('on'));
+      const modeAm=(typeof mode!=='undefined' && mode==='amenity');
+      const bar=document.getElementById('amenityBar'); const barVis=!!(bar && bar.style.display!=='none');
+      const pool=document.querySelector('#amenityBar [data-am="pool"]'); const poolOn=!!(pool && pool.classList && pool.classList.contains('active'));
+      return {toolOn, modeAm, barVis, poolOn};
+    }catch(e){ return {err:String(e&&e.message||e)}; }
+  });
+  ((amenAuto.toolOn||amenAuto.modeAm) && amenAuto.barVis && amenAuto.poolOn)
+    ? ok('KUSUR9 imkan araci OTO-aktif + Havuz tipi secili (giriste)', JSON.stringify(amenAuto))
+    : bad('KUSUR9 imkan araci/havuz oto-secilmedi', JSON.stringify(amenAuto));
 
   // (d) SIRA: giriste (havuz cizilmeden) 'Kalan imkanlari otomatik yerlestir' aksiyonu KARTTA YOK.
   const cardPre = await onbCard(f);
@@ -495,27 +573,71 @@ async function runPhase3(page, f){
   // units>0 after demo-plan load
   const units = await f.evaluate(()=>{ try{ const m=window.buildFloorplanMap&&window.buildFloorplanMap(); return m&&m.units?m.units.length:0; }catch(e){ return -1; } });
   (units>0) ? ok('demo-plan yuklendi units>0','units='+units) : bad('demo-plan units>0','units='+units);
+
+  // REV5 KUSUR 6 — MOBİLYA SADAKATİ: büyük normalizasyon paket mobilyasını da yükler (demo-plan.json furniture/store).
+  //   mesh hazır olunca View3D.furnitureCount() paket setine yakın olmalı (auto-furnish'e düşmez). 0 ise LIE.
+  const furn = await waitFor(async()=>{
+    const n = await f.evaluate(()=>{ try{ const V=window.View3D; return (V&&V.furnitureCount)?V.furnitureCount():0; }catch(e){ return 0; } });
+    return n>0 ? n : null;
+  }, {timeout:12000, interval:500, desc:'furniture yukleme'}).catch(()=>0);
+  (furn>=60) ? ok('KUSUR6 normalizasyon paket mobilyasini yukledi (furnitureCount)','n='+furn)
+             : bad('KUSUR6 mobilya yuklenmedi / az (paket ~126)','n='+furn);
   await shot(page,'18-3d');
 
-  // shell tour resume: card returns (in3d) -> İleri ile in3d/dose3d/malzeme3d -> kamera (check adimi, İleri yok).
-  //   (c) DOSEME TADI: dose3d ('Mobilyayi dene') + malzeme3d ('Ic malzeme') kartlari akista gorunur.
+  // shell tour resume: card returns (in3d) -> İleri ile in3d, sonra REV4 KUSUR 2: dose3d/malzeme3d
+  //   ARTIK spotlight'li + yaptirmali (salt metin degil). Spotlight iframe araç butonunda; edit sinyali
+  //   (furnitureEditCount/materialEditCount) degisince tur oto-ilerler.
   await sleep(1400);
   let guard=0; const seenTitles=[];
-  while(guard++<10){
+  let doseSpot=null, matSpot=null, doseAdvanced=false, matAdvanced=false;
+  while(guard++<16){
     const s=await engStep(page);
+    if(!(s && s.step===2)) break;
     const sc=await shellCard(page);
-    if(sc.visible && sc.title && seenTitles[seenTitles.length-1]!==sc.title) seenTitles.push(sc.title);
-    if(s && s.step===2 && sc.visible){
-      const clickedNext = await shellClickNext(page);
-      if(!clickedNext) break;      // kamera karti = check adimi -> "Adimi yapin" (İleri yok) -> dur
-      await sleep(700);
-    } else break;
+    if(!sc.visible) break;
+    if(sc.title && seenTitles[seenTitles.length-1]!==sc.title) seenTitles.push(sc.title);
+    const title=sc.title||'';
+    if(/Mobilyay/i.test(title)){
+      // KUSUR 2: spotlight deligi iframe Mobilya rail butonunu kapsiyor mu
+      await sleep(550);
+      const hole=await shellHoleRect(page), btn=await iframeElemRectParent(page,'[data-grp="furniture"]');
+      doseSpot=spotlightCovers(hole, btn);
+      // yaptirma: mobilya duzenlemesi -> furnitureEditCount artar -> sync oto-ilerler (autoFurnishAll furnSnapshot cagirir)
+      const before=await f.evaluate(()=>{ try{ return window.View3D.furnitureEditCount(); }catch(e){ return -1; } });
+      await f.evaluate(()=>{ try{ window.View3D.setFurnUI&&window.View3D.setFurnUI(true); window.View3D.autoFurnishAll&&window.View3D.autoFurnishAll(); }catch(e){} });
+      const after=await f.evaluate(()=>{ try{ return window.View3D.furnitureEditCount(); }catch(e){ return -1; } });
+      doseSpot.editDelta=(after>before); doseSpot.before=before; doseSpot.after=after;
+      doseAdvanced=await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && !/Mobilyay/i.test(c.title||''))?true:null; },{timeout:6000,desc:'dose3d oto-ilerledi'}).catch(()=>false);
+      continue;
+    }
+    if(/(İç|Ic)\s*malzeme/i.test(title)){
+      await sleep(550);
+      const hole=await shellHoleRect(page), btn=await iframeElemRectParent(page,'[data-grp="material"]');
+      matSpot=spotlightCovers(hole, btn);
+      const before=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } });
+      await f.evaluate(()=>{ try{ const V=window.View3D; const m=V.getMap&&V.getMap(); let rid=null; const u=m&&m.units&&m.units[0]; if(u&&u.rooms&&u.rooms[0]) rid=u.rooms[0].id; else if(m&&m.common_areas&&m.common_areas[0]) rid=m.common_areas[0].id; if(rid&&V.selectMatRoom) V.selectMatRoom(rid); if(V.applyMaterial) V.applyMaterial('floor','parke_mese'); }catch(e){} });
+      const after=await f.evaluate(()=>{ try{ return window.View3D.materialEditCount(); }catch(e){ return -1; } });
+      matSpot.editDelta=(after>before); matSpot.before=before; matSpot.after=after;
+      matAdvanced=await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && !/(İç|Ic)\s*malzeme/i.test(c.title||''))?true:null; },{timeout:6000,desc:'malzeme3d oto-ilerledi'}).catch(()=>false);
+      continue;
+    }
+    // diger step-2 karti (in3d): İleri
+    const clickedNext=await shellClickNext(page);
+    if(!clickedNext) break;      // kamera karti = check adimi -> "Adimi yapin" (İleri yok) -> dur
+    await sleep(700);
   }
   await shot(page,'19-shell-resume');
   log('   [kabuk kart dizisi] '+JSON.stringify(seenTitles));
-  // (c) doseme tadi kartlari gorundu mu
+  // (c) doseme tadi kartlari gorundu mu (REV3 assert korunur)
   const sawDose = seenTitles.some(t=>/Mobilyay/i.test(t)), sawMat = seenTitles.some(t=>/(İç|Ic)\s*malzeme/i.test(t));
   (sawDose && sawMat) ? ok('(c) 3B doseme tadi: dose3d + malzeme3d kartlari gorundu', seenTitles.join(' > ')) : bad('(c) doseme tadi kartlari','sawDose='+sawDose+' sawMat='+sawMat+' dizi='+JSON.stringify(seenTitles));
+  // REV4 KUSUR 2: dose3d spotlight iframe Mobilya butonunda + edit sinyali degisti + oto-ilerledi
+  (doseSpot&&doseSpot.covers) ? ok('KUSUR2 dose3d spotlight iframe Mobilya butonunda', JSON.stringify(doseSpot)) : bad('KUSUR2 dose3d spotlight buton', JSON.stringify(doseSpot));
+  (doseSpot&&doseSpot.editDelta) ? ok('KUSUR2 dose3d mobilya sinyali degisti (furnitureEditCount++)', 'n='+(doseSpot&&doseSpot.before)+'->'+(doseSpot&&doseSpot.after)) : bad('KUSUR2 dose3d mobilya sinyali','delta yok '+JSON.stringify(doseSpot));
+  doseAdvanced ? ok('KUSUR2 dose3d yaptirinca oto-ilerledi (yaptirma)') : bad('KUSUR2 dose3d oto-ilerleme','ilerlemedi');
+  (matSpot&&matSpot.covers) ? ok('KUSUR2 malzeme3d spotlight iframe Ic Malzeme butonunda', JSON.stringify(matSpot)) : bad('KUSUR2 malzeme3d spotlight buton', JSON.stringify(matSpot));
+  (matSpot&&matSpot.editDelta) ? ok('KUSUR2 malzeme3d malzeme sinyali degisti (materialEditCount++)', 'n='+(matSpot&&matSpot.before)+'->'+(matSpot&&matSpot.after)) : bad('KUSUR2 malzeme3d malzeme sinyali','delta yok '+JSON.stringify(matSpot));
+  matAdvanced ? ok('KUSUR2 malzeme3d yaptirinca oto-ilerledi (yaptirma)') : bad('KUSUR2 malzeme3d oto-ilerleme','ilerlemedi');
   // (a) part1: kabuk 'Kamera koy' karti gorundu (atlanmadi) ve render'a (step>=4) DUSMEDI.
   const kcard = await shellCard(page); const sCam = await engStep(page);
   (kcard.visible && /Kamera koy/.test(kcard.title||'') && sCam && sCam.step<4)
@@ -543,12 +665,70 @@ async function runPhase3(page, f){
   const cam1 = await getCamCounts(f);
   (cam1.ic > camBefore.ic) ? ok('mesh tikiyla +1 ic kamera (gercek yerlestirme)','ic='+camBefore.ic+'->'+cam1.ic) : bad('mesh tikiyla +1 kamera','ic='+camBefore.ic+'->'+cam1.ic+' diag='+JSON.stringify(placeDiag));
 
-  // auto-fill remaining cameras
+  // REV4 KUSUR 1: kamera secilince iframe PiP (sol-alt onizleme) gorunur; kabuk 'Kamera koy' karti
+  //   onunla ÇAKIŞMAMALI (eski: kart sol-alt placeCorner -> PiP viewport'unu kapatiyordu).
+  await sleep(700);   // shell placeCorner tik (300ms poll) PiP'i gorup kacinsin
+  const pipRect = await iframePipRectParent(page);
+  const camCardR = await shellCardRect(page);
+  const camCardTitle = (await shellCard(page)).title || '';
+  if(pipRect && camCardR){
+    const overlap = rectsOverlap(camCardR, pipRect);
+    (!overlap) ? ok('KUSUR1 kamera evresi karti PiP viewport ile KESISMIYOR', 'card='+JSON.stringify({l:Math.round(camCardR.left),t:Math.round(camCardR.top)})+' pip='+JSON.stringify({l:Math.round(pipRect.left),t:Math.round(pipRect.top)})) : bad('KUSUR1 kamera karti PiP ile KESISIYOR', 'card='+JSON.stringify(camCardR)+' pip='+JSON.stringify(pipRect));
+    (/Kamera koy/.test(camCardTitle)) ? ok('KUSUR1 kesisim testi kamera evresi kartinda dogrulandi', camCardTitle) : log('   [not] kamera karti basligi='+camCardTitle);
+  } else {
+    bad('KUSUR1 PiP/kart rect okunamadi', 'pip='+JSON.stringify(pipRect)+' card='+JSON.stringify(camCardR));
+  }
+
+  // auto-fill remaining cameras (REV5 KUSUR 15: aksiyon SON drone'u BIRAKIR -> ex=2)
   await onbClick(f,'act'); await sleep(1500);
   const cam = await getCamCounts(f);
   (cam.ic===7) ? ok('getCameras==7','ic='+cam.ic) : bad('getCameras==7','ic='+cam.ic);
-  (cam.ex===3) ? ok('ext==3','ex='+cam.ex) : bad('ext==3','ex='+cam.ex);
+  (cam.ex===2) ? ok('KUSUR15 auto-place SON drone birakti (ex==2)','ex='+cam.ex) : bad('KUSUR15 ex==2 (son drone birakilir)','ex='+cam.ex);
   await shot(page,'21-cameras');
+
+  // REV5 KUSUR 13 — aci-ayarla: BIR kamera SECILI + #v3dCamBar hedefi (tuval-merkez bos ping DEGIL)
+  const aciCard = await waitKamCard(f, /Açıyı ayarla/, 9000).catch(()=>null);
+  if(aciCard){
+    const aciDiag = await f.evaluate(()=>({ sel:(window.View3D&&View3D.getActiveCamIdx)?View3D.getActiveCamIdx():-1, bar:!!document.getElementById('v3dCamBar') }));
+    (aciDiag.sel>=0) ? ok('KUSUR13 aci-ayarla: kamera SECILI (#v3dCamBar hedefi, bos ping degil)', JSON.stringify(aciDiag)) : bad('KUSUR13 aci-ayarla kamera secili degil', JSON.stringify(aciDiag));
+    await onbClick(f,'skip'); await sleep(500);
+  } else bad('KUSUR13 aci-ayarla karti gelmedi');
+
+  // REV5 KUSUR 14 — lens-sec: detay kutusu ACIK -> #v3dLRow gorunur (bir onceki adimdan kopmadi)
+  const lensCard = await waitKamCard(f, /Lens seç/, 9000).catch(()=>null);
+  if(lensCard){
+    // detay kutusu ASENKRON acilir (onbOpenCamDetail retry 120/350ms) -> gorunur olana dek poll
+    const lrow = await waitFor(async()=>{
+      const r = await f.evaluate(()=>{ const el=document.getElementById('v3dLRow'); if(!el) return {exists:false}; const rc=el.getBoundingClientRect(); return {exists:true, vis:(rc.width>0&&rc.height>0)}; });
+      return (r.exists && r.vis) ? r : null;
+    }, {timeout:6000, interval:250, desc:'#v3dLRow gorunur'}).catch(()=>null);
+    lrow ? ok('KUSUR14 lens-sec: detay kutusu acik (#v3dLRow gorunur)', JSON.stringify(lrow)) : bad('KUSUR14 #v3dLRow gorunmedi (kutu kapali)', JSON.stringify(await f.evaluate(()=>({exists:!!document.getElementById('v3dLRow')}))));
+    await onbClick(f,'skip'); await sleep(500);
+  } else bad('KUSUR14 lens-sec karti gelmedi');
+
+  // REV5 KUSUR 2 — drone-gec: Drone araci -> dis mod + blok gorunumu 'Tumu'
+  const droneCard = await waitKamCard(f, /Drone moduna geç/, 9000).catch(()=>null);
+  if(droneCard){ await engClick(f, '[data-grp="drone"]'); await sleep(1000); }
+  const extView = await f.evaluate(()=>({ mode:(window.View3D&&View3D.isExteriorMode)?View3D.isExteriorMode():false, view:(window.View3D&&View3D.getExtBlockView)?View3D.getExtBlockView():null }));
+  (extView.mode && extView.view==='all') ? ok('KUSUR2 drone evresinde blok gorunumu Tumu', JSON.stringify(extView)) : bad('KUSUR2 drone gorunumu Tumu degil', JSON.stringify(extView));
+
+  // REV5 KUSUR 15 — drone-ekle "zaten tamamlanmis" DEMEZ (eyleme bekler) + kullanici 1 drone ekler -> ex=3
+  const droneAddCard = await waitKamCard(f, /Drone kamerası ekle/, 9000).catch(()=>null);
+  if(droneAddCard){
+    const gated = await f.evaluate(()=>{ const c=document.querySelector('.onbCard'); return !!(c && /\bİleri\b/.test(c.textContent||'')); });
+    (!gated) ? ok('KUSUR15 drone-ekle EYLEME bekler (zaten-tamam DEMEZ)') : bad('KUSUR15 drone-ekle giris-gated (zaten tamam)');
+    const exAfter = await addDroneOne(f);
+    (exAfter>=3) ? ok('KUSUR15 kullanici 1 drone ekledi (ex 2->'+exAfter+')') : bad('KUSUR15 drone eklenemedi','ex='+exAfter);
+  } else bad('KUSUR15 drone-ekle karti gelmedi');
+
+  // REV5 KUSUR 3 — render-isaret IFRAME'DE BITIS KARTI: 'Render Kadrajlari' yonlendirir (Dis Render adimi YOK)
+  const finCard = await waitKamCard(f, /Tur tamam|Dış Render/, 9000).catch(()=>null);
+  if(finCard){
+    const fin = await f.evaluate(()=>{ const c=document.querySelector('.onbCard'); const t=c?c.textContent||'':''; return { title:(document.querySelector('.onbTitle span')||{}).textContent||'', rk:/Render Kadrajları/.test(t), kabuk:/kabuk/.test(t) }; });
+    (fin.rk && /Tur tamam/.test(fin.title)) ? ok('KUSUR3 iframe render-isaret = bitis karti (Render Kadrajlari yonlendirir)', JSON.stringify(fin)) : bad('KUSUR3 render-isaret bitis-yonlendirmesi yok', JSON.stringify(fin));
+    try{ await onbClick(f,'next'); }catch(e){} await sleep(400);   // Bitir/İleri -> onbFinish
+  } else log('   [not] render-isaret karti gelmedi (tur erken bitmis olabilir)');
+  await shot(page,'21b-drone-finish');
 
   // (a) part2: kameralar yerlesti ama render'a (step 4) HENUZ gecilmedi — kullanici CTA tiki bekleniyor.
   const sPreRender = await engStep(page);
@@ -560,6 +740,14 @@ async function runPhase3(page, f){
   await waitFor(async()=>{ const s=await engStep(page); return (s&&s.step>=4)?s:null; }, {timeout:20000, desc:'render step>=4'});
   ok('(a) render kadraj galerisi (step 4) — CTA tiki ile gecildi');
   await shot(page,'22-render-gallery');
+
+  // REV5 KUSUR 4a — ÜRET BİTMEDEN DEKORE KARTI YOK: step 4 girisinde kabuk turu 'Kareleri üret' kartinda,
+  //   'Döşe adımı' (Dekore) DEĞİL. (render check = üretim bitti; üretilmeden dekore'ye gecmez.)
+  const preGenCard = await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && /Kareleri üret/.test(c.title||''))?c:null; }, {timeout:8000, interval:300, desc:'Kareleri üret karti'}).catch(()=>null);
+  if(preGenCard){
+    const notDekore = !/Döşe adımı|Dekore/.test(preGenCard.title||'');
+    (notDekore) ? ok('KUSUR4a Üret bitmeden Dekore karti YOK (kart=Kareleri üret)', preGenCard.title) : bad('KUSUR4a Dekore karti erken cikti', preGenCard.title);
+  } else log('   [not] Kareleri üret karti gelmedi (kart='+((await shellCard(page)).title||'')+')');
 
   // gallery: Üret -> onay dialog -> DEMO interception
   const genClicked = await clickRenderGenerate(page);
@@ -603,10 +791,36 @@ async function runPhase3(page, f){
   const cardImgOK = eInfo.card && eInfo.card.nat===1600 && eInfo.card.size>=300000;
   (camCard && cardImgOK) ? ok('(e) karta dusen cam img naturalWidth==1600 + 300KB+', (camCard.res)+' nat='+eInfo.card.nat+' size='+eInfo.card.size) : bad('(e) karta dusen cam img 1600px/300KB','card='+JSON.stringify(eInfo.card)+' url='+(camCard?camCard.res:'yok'));
 
+  // REV5 KUSUR 17 — TUR AKTIFKEN ÜRETİM SONU OTO-GEÇİŞ YOK: üretim bitti ama step HALA 4 (adim-5'e atlaMAdi).
+  const sAfterGen = await engStep(page);
+  (sAfterGen && sAfterGen.step===4) ? ok('KUSUR17 uretim bitti ama oto-gecis YOK (step=4)','step='+sAfterGen.step) : bad('KUSUR17 uretim sonu oto-gecti','step='+JSON.stringify(sAfterGen));
+
+  // REV5 KUSUR 16 — stale "Render adımı/goRender" karti YOK: step 4'te kabuk turu 'Kareleri üret' (render) kartinda.
+  const rgCard = await shellCard(page);
+  (/Kareleri üret|Önce \/ Sonra|Döşe adımı/.test(rgCard.title||'')) ? ok('KUSUR16 step 4 karti Üret/Önce-Sonra/Dekore (stale "Render adımı" YOK)', rgCard.title||'') : log('   [not] step4 kart basligi='+ (rgCard.title||''));
+
+  // REV5 KUSUR 4b — ÖNCE/SONRA SÜRGÜSÜNÜ KULLANDIRT: baRange'i kaydir -> state.baSlid true -> tur 'Dekore Et' kartina gecer.
+  const slid = await page.evaluate(()=>{ try{ const r=document.getElementById('baRange'); if(!r) return {ok:false, reason:'baRange yok'};
+    r.value='82'; r.dispatchEvent(new Event('input',{bubbles:true}));
+    return {ok:true, baSlid:!!(window.__msk&&window.__msk.state&&window.__msk.state.baSlid)}; }catch(e){ return {ok:false, reason:String(e&&e.message||e)}; } });
+  (slid.ok && slid.baSlid) ? ok('KUSUR4b Önce/Sonra sürgüsü kullanildi (state.baSlid)', JSON.stringify(slid)) : bad('KUSUR4b sürgü kullanilamadi', JSON.stringify(slid));
+  // tur 'Dekore Et' (Döşe adımı) kartina gecmeli — #ctaBtn hedefli
+  const dekoreCard = await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && /Döşe adımı/.test(c.title||''))?c:null; }, {timeout:8000, interval:300, desc:'Dekore Et karti'}).catch(()=>null);
+  dekoreCard ? ok('KUSUR17 sürgü sonrasi kabuk turu Dekore Et (Döşe adımı) kartinda — #ctaBtn highlight', dekoreCard.title) : log('   [not] Dekore Et karti gelmedi (kart='+((await shellCard(page)).title||'')+')');
+
   await clickParent(page, '#ctaBtn'); await sleep(1000);
   const step5 = await waitFor(async()=>{ const s=await engStep(page); return (s&&s.step>=5)?s:null; }, {timeout:15000, desc:'dose step5'}).catch(()=>null);
   step5 ? ok('Döşe adimi (step 5)') : bad('Döşe step5', 'kalindi');
   await shot(page,'24-dose');
+
+  // REV5 KUSUR 5 — DÖŞE STEPPER'INDA İKİ NOKTA DA DOLU: adim-5 duo noktalari (iç + dış) render sonrasi ikisi de 'done'.
+  const dots5 = await page.evaluate(()=>{
+    try{ const steps=[...document.querySelectorAll('#stepper .step')]; const b=steps[4]; if(!b) return {ok:false, reason:'step5 yok'};
+      const din=b.querySelector('.duo .in'), dex=b.querySelector('.duo .ex');
+      const inDone=!!(din&&din.classList.contains('done')), exDone=!!(dex&&dex.classList.contains('done'));
+      return {ok:inDone&&exDone, inDone, exDone}; }catch(e){ return {ok:false, reason:String(e&&e.message||e)}; }
+  });
+  (dots5.ok) ? ok('KUSUR5 döşe adiminda İKİ nokta da dolu (iç+dış)', JSON.stringify(dots5)) : bad('KUSUR5 döşe noktalarindan biri bos', JSON.stringify(dots5));
   // marketplace panel present
   const mkt = await page.evaluate(()=>!!document.getElementById('mktCtx') || !!document.querySelector('.mkt-row'));
   mkt ? ok('pazaryeri paneli') : bad('pazaryeri paneli','yok');
@@ -617,6 +831,30 @@ async function runPhase3(page, f){
 }
 
 // ============ helpers needing engine internals ============
+// REV5: kamera3d turunun kartini basligiyla bekle (iframe icindeki onbCard).
+async function waitKamCard(f, re, timeout){
+  return waitFor(async()=>{ const c=await onbCard(f); return (c.visible && re.test(c.title||''))?c:null; }, {timeout:timeout||8000, interval:250, desc:'kam kart '+re});
+}
+// REV5 KUSUR 15: bir drone ekle — once GERCEK "+ Drone Ekle" + mesh tik; olmazsa View3D API fallback (ex=3).
+async function addDroneOne(f){
+  try{ await engClick(f, '[data-v3d="extadd"]'); await sleep(400); }catch(e){}
+  try{ await clickMeshCenter(f); await sleep(700); }catch(e){}
+  let ex = (await getCamCounts(f)).ex;
+  if(ex<3){
+    // fallback: eksik drone'u API ile ekle (tur check'i extCount>base poll ile yakalar -> adim ilerler)
+    ex = await f.evaluate(()=>{
+      try{ const V=window.View3D; if(!V) return -1;
+        const K=(typeof ONB_TARGETS!=='undefined'&&ONB_TARGETS&&ONB_TARGETS.kameralar)?ONB_TARGETS.kameralar:null;
+        if(!K||!Array.isArray(K.drone)) return (V.getExteriorCameras()||[]).length;
+        const slim=K.drone.map(function(c){ const o={}; for(const k in c){ if(/^__/.test(k)) continue; o[k]=c[k]; } return o; });
+        V.setExteriorMode(true); V.setExteriorCameras(slim); V.setExtBlockView&&V.setExtBlockView('all'); V.setExteriorMode(false);
+        return (V.getExteriorCameras()||[]).length;
+      }catch(e){ return -1; }
+    });
+    await sleep(600);
+  }
+  return ex;
+}
 // FAITHFUL to user bug #1: the card must not occlude any GHOST CORNER the user must click.
 async function cardGhostOverlap(page, f){
   return f.evaluate(()=>{

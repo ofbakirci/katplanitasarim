@@ -33,8 +33,8 @@
    - EMOJI YASAK: ikon gerekirse icons.js icon() (typeof-guard'li) ya da duz metin. */
 
 /* ---- senaryo surumleri: adimlar degisince ARTIR -> done/dismissed kullanici yeniden gezer ---- */
-const ONB_VERSION = 3;        // 'ana' turu (v3: sabah-testi rev — 16 adim: BLOK-FARKINDA daire karmasi + Blok B yerlesimi ayri adim + Daireler sekmesi + export paket-odakli + cizim karartisiz; done/dismissed ziyaretci yeniden gezer)
-const ONB_KAM_VERSION = 2;    // 'kamera3d' turu (v2: kamera-koy oto-yerlestir aksiyonu + drone-ekle mutlak check)
+const ONB_VERSION = 4;        // 'ana' turu (v4 REV5: duvar-cek nabiz gercek duvarda + balkon-ekle demo-konum nabzi + imkan araci/havuz oto-sec + export son kart '3B'ye geç')
+const ONB_KAM_VERSION = 3;    // 'kamera3d' turu (v3 REV5: aci-ayarla kamera-sec+#v3dCamBar hedefi + lens-sec detay-kutu ac + drone 'Tumu' gorunum + drone-ekle delta-check + iframe'de dis-render adimi bitis-kartina donusur)
 
 /* ================= DEMO PAKET HEDEFLERI (ONB_TARGETS) =================
    v2 vizyonu: "paketi vereceğim, onboarding onu kullanıcıya elle çizdirtecek —
@@ -167,7 +167,7 @@ function onbImkanOzet(){
    spec.amenities:true -> ONB_TARGETS.imkanlar dikdortgenleri. onbDrawGhosts bunu
    W2Sx/W2Sy ile tuvale cizer; headless test dogrudan cagirir (DOM'suz). */
 function onbGhostPolys(spec){
-  const out={ polys:[], rects:[] };
+  const out={ polys:[], rects:[], markers:[] };
   if(!spec || typeof ONB_TARGETS!=='object' || !ONB_TARGETS) return out;
   if(Array.isArray(spec.blocks)){
     for(let i=0;i<spec.blocks.length;i++){
@@ -178,7 +178,57 @@ function onbGhostPolys(spec){
   if(spec.amenities && Array.isArray(ONB_TARGETS.imkanlar)){
     for(let i=0;i<ONB_TARGETS.imkanlar.length;i++) out.rects.push(ONB_TARGETS.imkanlar[i]);
   }
+  /* REV5 KUSUR 7/8 — NABIZ ISARETI: tek dunya-noktasi (+ opsiyonel segment) hedefi. duvar-cek
+     (marker:'wall') GERCEK plan duvarindan (plan.wallRuns), balkon-ekle (marker:'balcony')
+     demo blok kenarindan (SAF) turer -> tuval-merkez sentetik daire yerine dogru yeri isaret eder. */
+  if(spec.marker){ const m=onbMarkerWorld(spec.marker); if(m) out.markers.push(m); }
   return out;
+}
+/* marker cozucu (kind='wall'|'balcony'). wall = motor plan verisi (tarayici, typeof-guard);
+   balcony = ONB_TARGETS geometrisi (SAF, headless test edilebilir). {x,y,seg?:[{x,y},{x,y}]}. */
+function onbMarkerWorld(kind){
+  if(kind==='balcony') return onbBalconyMarkerWorld();
+  if(kind==='wall') return onbWallMarkerWorld();
+  return null;
+}
+/* AKTIF BLOGUN (blok A) ILK demo balkonunun dunya-konumu — kenar ei orta noktasi + depth/2 disari.
+   balkBase mantiginin SAF ikizi (motorun global 'pts'/'pip'ine dokunmaz; centroid ile disari yonu). */
+function onbBalconyMarkerWorld(){
+  try{
+    const g=(typeof ONB_TARGETS!=='undefined'&&ONB_TARGETS)?ONB_TARGETS.blokA:null;
+    const bs=(typeof ONB_TARGETS!=='undefined'&&ONB_TARGETS)?ONB_TARGETS.balkonlar:null;
+    if(!g||!Array.isArray(g.pts)||g.pts.length<3||!Array.isArray(bs)||!bs.length) return null;
+    const P=g.pts, b=bs[0];
+    const A=P[b.ei], B=P[(b.ei+1)%P.length]; if(!A||!B) return null;
+    const L=Math.hypot(B.x-A.x,B.y-A.y)||1, ux=(B.x-A.x)/L, uy=(B.y-A.y)/L;
+    let nx=-uy, ny=ux;
+    let cx=0,cy=0; for(let i=0;i<P.length;i++){ cx+=P[i].x; cy+=P[i].y; } cx/=P.length; cy/=P.length;
+    const mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+    if((mx-cx)*nx+(my-cy)*ny < 0){ nx=-nx; ny=-ny; }         // disariyi (centroid'den uzaga) sec
+    const t=(b.t0+b.t1)/2, d=(b.depth||2)/2;
+    return { x:A.x+ux*t+nx*d, y:A.y+uy*t+ny*d,
+             seg:[{x:A.x+ux*b.t0+nx*d, y:A.y+uy*b.t0+ny*d},{x:A.x+ux*b.t1+nx*d, y:A.y+uy*b.t1+ny*d}] };
+  }catch(e){ return null; }
+}
+/* GERCEK bir surukleN­ebilir ic duvarin orta noktasi (plan.wallRuns). Cekirdek (merdiven/asansor/
+   yangin/teknik) sinirlarini ATLAR; iki oda arasi en uzun kenari secer (deterministik). Tarayici-only
+   (plan/wallSeg motor globali); headless'te plan yok -> null (E2E gercek tarayicida dogrular). */
+function onbWallMarkerWorld(){
+  try{
+    if(typeof plan==='undefined'||!plan||!Array.isArray(plan.wallRuns)||typeof wallSeg!=='function') return null;
+    const CORE={merdiven:1,yangin:1,asansor:1,teknik:1};
+    let best=null,bestLen=-1,bestAny=null,bestAnyLen=-1;
+    for(let i=0;i<plan.wallRuns.length;i++){
+      const rn=plan.wallRuns[i], s=wallSeg(rn); if(!s) continue;
+      const len=Math.hypot(s.x2-s.x1,s.y2-s.y1);
+      if(len>bestAnyLen){ bestAnyLen=len; bestAny=s; }
+      const ra=plan.regions&&plan.regions[rn.a], rb=plan.regions&&plan.regions[rn.b];
+      if(!ra||!rb||CORE[ra.type]||CORE[rb.type]) continue;   // cekirdek duvari degil, iki oda arasi
+      if(len>bestLen){ bestLen=len; best=s; }
+    }
+    const s=best||bestAny; if(!s) return null;
+    return { x:(s.x1+s.x2)/2, y:(s.y1+s.y2)/2, seg:[{x:s.x1,y:s.y1},{x:s.x2,y:s.y2}] };
+  }catch(e){ return null; }
 }
 
 /* ================= NORMALIZASYON — SAF cozuculer (DOM/motor YOK -> headless test) =================
@@ -267,6 +317,49 @@ function onbOpenCameraTool(){
     if(b && b.classList && !b.classList.contains('on') && b.click) b.click();
   }catch(e){}
 }
+/* REV5 KUSUR 9 — IMKAN ARACI + HAVUZ SECTIR: imkan-koy girisinde site imkanlari aracini AC (#tAmenity ->
+   amenityBar acilir) + Havuz tipini SEC (data-am="pool"). Boylece kullanici araci/tipi aramaz; hayaletin
+   uzerinden dogrudan cizer. Rev3'te fullCanvasHole spotlight'i #tAmenity'den aldigi icin ping gorunmuyordu
+   -> arac artik OTO-AKTIF (dock 'on') + hayalet yonlendirir. Zaten aciksa/secili ise no-op. */
+function onbOpenAmenityTool(){
+  try{ if(typeof setMode==='function' && (typeof mode==='undefined' || mode!=='amenity')) setMode('amenity'); }catch(e){}
+  try{ const b=onbSel('#tAmenity'); if(b && b.classList && !b.classList.contains('on') && b.click && (typeof mode==='undefined'||mode!=='amenity')) b.click(); }catch(e){}
+  const pickPool=function(){
+    try{ if(typeof setAmenityType==='function'){ setAmenityType('pool'); return true; } }catch(e){}
+    try{ const p=onbSel('#amenityBar button[data-am="pool"]'); if(p && p.click){ p.click(); return true; } }catch(e){}
+    return false;
+  };
+  if(!pickPool()){ try{ if(typeof setTimeout==='function') setTimeout(pickPool, 150); }catch(e){} }
+}
+/* REV5 KUSUR 2 — DRONE EVRESI 'TUMU': dis moda gecilince blok gorunumu tek-blok default'unda kalmasin.
+   setExtBlockView('all') dis mod ACIKken uygulanir (kapaliyken no-op guard). drone-gec/drone-ekle girisinde cagirilir. */
+function onbSetDroneAllView(){
+  try{ const v=onbV3d();
+    if(v && typeof v.setExtBlockView==='function' && typeof v.isExteriorMode==='function' && v.isExteriorMode())
+      v.setExtBlockView('all');
+  }catch(e){}
+  /* dis mod bu an henuz acik degilse (drone-gec: kullanici Drone'a yeni gecti) kisa gecikmeyle tekrar dene */
+  try{ if(typeof setTimeout==='function') setTimeout(function(){ try{ const v=onbV3d();
+    if(v && typeof v.setExtBlockView==='function' && typeof v.isExteriorMode==='function' && v.isExteriorMode())
+      v.setExtBlockView('all'); }catch(e){} }, 250); }catch(e){}
+}
+/* REV5 KUSUR 13/14 — KAMERA SEC + DETAY KUTUSU AC: aci-ayarla/lens-sec girisinde BIR kamerayi secer
+   (View3D.selectCam -> #v3dCamBar kamera simgesinin ustunde belirir, surukleme kamerayi tasir), lens-sec'te
+   ayrica dock detay katmanini acar (#v3dCamDock .sum tiki -> #v3dLRow gorunur). Kamera yoksa/secilemezse no-op. */
+function onbSelectFirstCam(){
+  try{ const v=onbV3d(); if(v && typeof v.selectCam==='function' && onbKamCams().length>0) v.selectCam(0); }catch(e){}
+}
+function onbOpenCamDetail(){
+  const tryOpen=function(){
+    try{ const dk=onbSel('#v3dCamDock .dk'); const sum=onbSel('#v3dCamDock .sum');
+      if(dk && sum && !(dk.classList && dk.classList.contains('detopen')) && sum.click){ sum.click(); return true; }
+      return !!(dk && dk.classList && dk.classList.contains('detopen'));   // zaten acik
+    }catch(e){ return false; }
+  };
+  if(tryOpen()) return;
+  /* dock renderCamDock ile ASENKRON kurulabilir -> kisa gecikmelerle tekrar dene (idempotent) */
+  try{ if(typeof setTimeout==='function'){ setTimeout(tryOpen, 120); setTimeout(tryOpen, 350); } }catch(e){}
+}
 /* KAT/EXPORT BAGLAMI: kat-ayri'ya girerken aktif blok BLOK B (yalnizca sinir cizili,
    plansiz) olabilir -> kat seridi bos, #svgBtn pasif, export takilir. Yerlesimi OLAN
    bloga (ornekte Blok A) gec ki kat-ayri/kat-gez/export gercek bir plan uzerinde issin.
@@ -312,6 +405,62 @@ function onbSetDemoUnits(which){
   try{ if(typeof resetCuts==='function') resetCuts(); }catch(e){}
   try{ if(typeof plan!=='undefined' && plan && typeof safeGen==='function') safeGen(); }catch(e){}
 }
+/* ── REV4 KUSUR 3: "Yerlesimi Olustur" -> motor taze-uretimi DEGIL, demo paketinin GERCEK
+   (elle rotuslanmis) blok yerlesimi. Kabuk boot'ta demo-plan.json'u iframe window'una
+   __mskDemoPlan={kpState:{blocks[]},cameras} olarak koyar (prototip.template initEngine ->
+   demoBridgePlanToEngine). Kopru yoksa (standalone/file:/// bozuk) motor uretimine DUSER. ── */
+function onbDemoWrap(){
+  try{ var p=(typeof window!=='undefined')?window.__mskDemoPlan:null;
+    return (p && p.kpState) ? p.kpState : (p||null); }catch(e){ return null; }
+}
+/* which='blokA'|'blokB' -> demo kpState.blocks[idx] (site wrap). Tek-blok plan (site kapali)
+   -> yalniz blokA icin kok state. Yoksa null. */
+function onbDemoBlockState(which){
+  const kp=onbDemoWrap(); if(!kp) return null;
+  const arr=kp.blocks;
+  if(Array.isArray(arr) && arr.length){
+    let idx=(which==='blokB')?1:0; if(idx>=arr.length) idx=arr.length-1;
+    return arr[idx]||null;
+  }
+  return (which==='blokB')?null:kp;   // site kapali tek-blok plan
+}
+/* Aktif bloga demo yerlesimini uygula: restoreState ile o blogun GERCEK layout'u (kat-ayri +
+   katlar + oda dagilimi) globallere yuklenir; keepBlocks+keepFloors -> canli blocks dizisi +
+   parsel + amenity KORUNUR (site baglami/imkanlar silinmez). saveActiveBlock ile blocks[i]'e sabitlenir.
+   Basari=true; kopru yok / restore patladi -> false (cagiran motor uretimine duser). */
+function onbApplyDemoLayout(which){
+  const raw=onbDemoBlockState(which); if(!raw) return false;
+  if(typeof restoreState!=='function') return false;
+  try{
+    // Demo blok TAM proje snapshot'i (kat-ayri + bodrum + katlar). Tur bu adimda TEK KAT baglaminda
+    //   (kat-ayri henuz gelmedi) -> katlari/bodrumu SIYIR, yalniz o katin GERCEK oda/daire yerlesimini
+    //   (plan+pts+specs+cuts+kapi/pencere/balkon) uygula. Tam bina 1->2 buyuk normalizasyonda gelir.
+    const st={}; for(const k in raw){ if(Object.prototype.hasOwnProperty.call(raw,k)) st[k]=raw[k]; }
+    st.katAyri=false; st.floors=null; st.activeFloor=0;
+    st.ui=Object.assign({}, raw.ui||{}, {bodrumSayisi:'0'});   // bodrum turun ilerki adimina birakilir
+    // keepBlocks:true -> canli blocks dizisi + parsel + amenity KORUNUR; keepFloors YOK -> villaFloors
+    //   null'a + katAyri checkbox false'a resetlenir (tek-kat baglami; kat-ayri turun ilerki adiminda).
+    restoreState(st, {keepBlocks:true, fit:false});
+    try{ if(typeof saveActiveBlock==='function') saveActiveBlock(); }catch(e){}
+    try{ if(typeof fitView==='function') fitView(); }catch(e){}
+    try{ if(typeof render==='function') render(); }catch(e){}
+    return true;
+  }catch(e){ try{ console.info('[onb] demo yerlesim uygulanamadi:', e&&e.message||e); }catch(_){} return false; }
+}
+/* genBtn capture-tik: yerlesim adimlarinda demo yerlesimini uygula + motor taze-uretimini bastir.
+   Basarisizsa dokunma -> planner.js generateWithHistory (fallback) normal calisir. */
+function onbGenBtnCapture(ev){
+  try{
+    if(!onbActive || !onbTour) return;
+    const s=onbTour.steps[onbIdx]; if(!s) return;
+    if(s.id!=='yerlesim' && s.id!=='blokB-yerlesim') return;
+    const which=(s.id==='blokB-yerlesim')?'blokB':'blokA';
+    if(onbApplyDemoLayout(which)){
+      ev.preventDefault(); ev.stopImmediatePropagation();   // demo layout uygulandi -> motor gen BASTIRILIR
+      onbToast('Örnek projenin gerçek yerleşimini uyguladım');
+    }
+  }catch(e){}
+}
 /* aktif blogun balkonlarini demo setle tamamla (global balconies) */
 function onbSetDemoBalconies(){
   const b=onbDemoBalconies(); if(!b.length) return;
@@ -336,10 +485,15 @@ function onbPlaceDemoCameras(){
   const v=onbV3d(); if(!v) return;
   const K=ONB_TARGETS && ONB_TARGETS.kameralar; if(!K) return;
   try{ if(typeof v.setCameras==='function' && Array.isArray(K.ic)) v.setCameras(onbSlimCams(K.ic)); }catch(e){}
+  /* REV5 KUSUR 15 — BIR DRONE'U KULLANICIYA BIRAK: eski aksiyon 3 drone'u da koyup drone-ekle adimini
+     "zaten tamamlanmis" yapiyordu. Artik SON drone'u BIRAKIYORUZ (2 otomatik) -> drone-ekle adimi gercekten
+     bir drone eklettirir. step3Go DEMO_KAM normalizasyonu render evresinde TAM seti (3 drone) garanti eder
+     (id eslesmesi bozulmaz), yani eksik drone yalnizca tur-ici etkilesim icin. */
   try{ if(Array.isArray(K.drone) && K.drone.length && typeof v.setExteriorMode==='function' && typeof v.setExteriorCameras==='function'){
-    v.setExteriorMode(true); v.setExteriorCameras(onbSlimCams(K.drone)); v.setExteriorMode(false);
+    const keep=(K.drone.length>1) ? K.drone.slice(0, K.drone.length-1) : K.drone;   // sonuncuyu birak
+    v.setExteriorMode(true); v.setExteriorCameras(onbSlimCams(keep)); v.setExteriorMode(false);
   } }catch(e){}
-  onbToast('Kalan kameraları yerleştirdim');
+  onbToast('Kalan kameraları yerleştirdim (son drone’u sana bıraktım)');
 }
 
 /* ================= ANA TUR — 16 adim =================
@@ -407,8 +561,12 @@ const ONB_STEPS = [
   { id:'duvar-cek', needsPro:false, skippable:false,
     title:'Bir duvarı çek',
     /* SADELESTI (eski oda-duzenle): TEK duvar cektir. "duvari tut, cek" -> gerisini motor
-       mevzuata uygun kurdu; nihai amac ML ile otomatiklestirmek (yatirim/otomasyon vurgusu). */
-    body:'Tuvalde bir duvarı tut ve çek — gerisini motor mevzuata uygun kurdu. Bu kadar. Nihai amaç: bunu ML ile tümüyle otomatikleştirmek.',
+       mevzuata uygun kurdu; nihai amac ML ile otomatiklestirmek (yatirim/otomasyon vurgusu).
+       REV5 KUSUR 7 — NABIZ GERCEK DUVARDA: eski tuval-merkez sentetik daire yerine, planin GERCEK
+       bir ic duvarini (plan.wallRuns'tan iki oda arasi en uzun kenar) isaret eder. fullCanvasHole ->
+       tuval karartisiz, nabiz parlak; ghost:{marker:'wall'} onbDrawGhosts ile o kenarin ustune cizilir. */
+    ghost:{ marker:'wall' }, fullCanvasHole:true,
+    body:'Tuvalde işaretli duvarı tut ve çek — gerisini motor mevzuata uygun kurar. Bu kadar. Nihai amaç: bunu ML ile tümüyle otomatikleştirmek.',
     target:{type:'canvas'},
     baseline:function(ctx){ return ctx.editCount(); },
     check:function(ctx, base){ return ctx.editCount() > (base||0); } },
@@ -424,8 +582,13 @@ const ONB_STEPS = [
   { id:'balkon-ekle', needsPro:false, skippable:true,
     title:'Balkon ekle',
     /* BIR balkon ekletir; kalanini site-ac gecisinde onbSetDemoBalconies tamamlar
-       (aktif blogun balconies := demo 5 kayit). check jenerik: base'e gore buyume. */
-    body:'Balkon aracını seç, bir dış duvara balkon ekle — bir tane yeter, kalanını ben tamamlarım. Örnek projede '+ONB_TARGETS.balkon+' balkon var.',
+       (aktif blogun balconies := demo 5 kayit). check jenerik: base'e gore buyume.
+       REV5 KUSUR 8 — DEMO-KONUM NUDGE: eski adim kullaniciyi rastgele kenara birakiyordu; normalizasyonla
+       gelen set "ben buraya koymadim" sasirtiyordu. ghost:{marker:'balcony'} demo balkonlarindan BIRININ
+       kenarini (ei orta noktasi + depth) dunya koordinatinda isaret eder -> kullanici oraya ekler, set
+       sasirtmaz. Baska kenara eklerse de adim gecer (zorlama yok); nudge yalnizca yonlendirir. */
+    ghost:{ marker:'balcony' }, fullCanvasHole:true,
+    body:'Balkon aracını seç, işaretli kenara balkon ekle (örnekteki yerlerden biri) — bir tane yeter, kalanını ben tamamlarım. Örnek projede '+ONB_TARGETS.balkon+' balkon var.',
     target:{type:'dom', sel:'#tBalk'},
     baseline:function(ctx){ return ctx.balconyCount(); },
     check:function(ctx, base){ return ctx.balconyCount() > (base||0); } },
@@ -504,13 +667,14 @@ const ONB_STEPS = [
 
   { id:'export', needsPro:false, skippable:false,
     title:'Planı dışa aktar',
-    /* IFRAME (Mesken kabugu): SVG indir/yukle GEREKMEZ — proje paket olarak saklanir (kullanici:
-       "paket aktarma olmali"). Hedefsiz bitis karti + Bitir (onbFinish). target FONKSIYON: iframe'de
-       {type:'none'} (hedef yok, karartma yok), standalone KPTA'da #svgBtn AYNEN. bodyIframe finish
-       metni. action iframe'de gorunur (actionIframeOnly) -> standalone davranis (exportClicked ile
-       oto-bitis) DEGISMEZ. */
+    /* REV5 KUSUR 10 — MESKEN AKISINDA SON KART "3B'YE GEC": iframe'de basliktan itibaren yon 3B'dir
+       (kullanici: "16/16 hala 'Planı dışa aktar' diyor"). titleIframe + bodyIframe -> sag alttaki "3B
+       Görüntüle" CTA'sina yonlendirir (kabuk-butonu iframe'den spotlight'lanamaz; kabuk turu devralinca
+       go3d adimi #ctaBtn'i highlight'lar); "Paket İndir" ikincil cumle. STANDALONE KPTA'da #svgBtn + SVG
+       dili AYNEN. action iframe'de Bitir (actionIframeOnly). */
+    titleIframe:'3B’ye geç',
     body:'Hazır! Planı SVG olarak indir ya da daha sonra "İçe aktar" ile geri yükle.',
-    bodyIframe:'Projen hazır. Kabuğun üstündeki Paket İndir projeyi tek dosya olarak saklar. Sağ alttaki 3B Görüntüle ile akışa devam et.',
+    bodyIframe:'Yerleşim hazır. Sağ alttaki "3B Görüntüle" düğmesiyle projeyi 3B dollhouse olarak aç — akış turu kabukta devam eder. (İstersen üstteki "Paket İndir" ile projeyi tek dosya olarak da saklarsın.)',
     target:function(){ return onbInIframe() ? {type:'none'} : {type:'dom', sel:'#svgBtn'}; },
     action:{ label:'Bitir', run:function(){ onbFinish(); } }, actionIframeOnly:true,
     check:function(ctx){ return ctx.exportClicked(); } }
@@ -527,9 +691,13 @@ function onbStepEnter(id){
     case 'site-ac':   onbOpenBinaTab(); onbSetDemoBalconies(); break;                         // Bina sekmesi + balkonlar demo set
     case 'blokB-ciz': onbFit(); break;                                                        // blok B hayaleti tam gorunur
     case 'blokB-yerlesim': onbSnapBlock('blokB'); onbSetDemoUnits('blokB'); onbOpenDaireTab(); break;  // blok B -> demo ayak izi + B karmasi + Daireler sekmesi
-    case 'imkan-koy': onbFit(); break;                                                        // blok B artik planli (blokB-yerlesim) -> yalniz kadraj + imkan hayaletleri
+    case 'imkan-koy': onbFit(); onbOpenAmenityTool(); break;                                  // blok B planli -> kadraj + imkan hayaletleri + KUSUR 9: imkan araci ac + Havuz sec
     case 'kat-ayri':  onbExitAmenityMode(); onbFocusBuiltBlock(); onbOpenBinaTab(); break;    // amenity modundan cik + planli bloga gec (guard; iki blok da planli) + Bina sekmesi
-    case 'kamera-koy': onbOpenCameraTool(); break;                                            // kamera3d: raydan Kamera aracini ac (dock + Ekle gorunur)
+    case 'kamera-koy': onbOpenCameraTool(); break;                                            // kamera3d: raydan Kamera aracini ac (dock + Yerlestir gorunur)
+    case 'aci-ayarla': onbOpenCameraTool(); onbSelectFirstCam(); break;                       // KUSUR 13: kamera araci acik + sec -> #v3dCamBar simgede belirir, surukleme kamerayi tasir
+    case 'lens-sec':   onbOpenCameraTool(); onbSelectFirstCam(); onbOpenCamDetail(); break;   // KUSUR 14: kamera araci + sec + detay kutusu ac -> #v3dLRow gorunur
+    case 'drone-gec':  onbSetDroneAllView(); break;                                           // KUSUR 2: dis moda gecince 'Tumu' blok gorunumu
+    case 'drone-ekle': onbSetDroneAllView(); break;                                           // KUSUR 2: dis mod acik -> 'Tumu' garanti
   }
 }
 /* target FONKSIYON olabilir (site-ac akilli hedef) -> {type,sel} coz. SAF (ctx alir). */
@@ -548,61 +716,82 @@ const ONB_KAM_STEPS = [
     /* BIR tat: bir ic kamera koy. AKSIYON "Kalan kameralari otomatik yerlestir" -> demo
        kamera seti (7 ic + 3 drone) View3D'ye iner; sonraki drone adimlari giriste-saglanmis
        olup İleri-kapili gecilir. Render'da id eslesmesi garantili (DEMO_MODE cam{N}.jpg). */
-    body:'Kamera aracı raydan açıldı. Dock\'taki Ekle ile plana bir iç kamera koy — tıkladığın nokta kameranın yeri olur. Örnek projede '+ONB_TARGETS.kamera.ic+' iç kamera var; kalanını tek düğmeyle tamamlarım.',
+    /* REV5 KUSUR 12 — "Yerlestir" DOGRU HEDEF: kamera hic yokken Dock'taki YESIL "Yerleştir" (#v3dPlaceBtn)
+       ile "Ekle" ayni isi yapar (ikisi de yeni kamera hayaleti baslatir); "Yerleştir" birincil/belirgin
+       dugme oldugundan onu isaret ederiz. (Kamera secilince "Yerleştir" -> "Düzenle" olur, "Ekle" yeni
+       kamera koymaya devam eder — fark yalnizca secim varken anlamli.) */
+    body:'Kamera aracı raydan açıldı. Dock\'taki yeşil "Yerleştir" ile plana bir iç kamera koy: önce konuma, sonra bakış yönüne tıkla. Örnek projede '+ONB_TARGETS.kamera.ic+' iç kamera var; kalanını tek düğmeyle tamamlarım.',
     target:{type:'dom', sel:'#v3dPlaceBtn'},
     action:{ label:'Kalan kameraları otomatik yerleştir', run:function(){ onbPlaceDemoCameras(); } },
     baseline:function(ctx){ return ctx.camCount(); },
-    /* HEDEFLI (imkan-koy deseni): TEK kamera koymak adimi GECIRMEZ — aksi halde tur
-       "Kalan kameralari otomatik yerlestir" aksiyonu tiklanmadan ilerler ve demo kamera
-       seti (7 ic + 3 drone, render id-eslesmesi) HIC uygulanmaz. Tam demo seti (ic+drone)
-       yerlesene dek adim durur; aksiyonu tiklamak sart. ONB_TARGETS yoksa jenerik (>base). */
+    /* HEDEFLI (imkan-koy deseni): TEK kamera koymak adimi GECIRMEZ — aksiyon "Kalan kameralari otomatik
+       yerlestir" tiklanmadan ilerlemesin. REV5 KUSUR 15: aksiyon SON drone'u birakir (2/3) -> esik
+       extN-1; kalan drone drone-ekle'de kullaniciya ekletilir. ONB_TARGETS yoksa jenerik (>base). */
     check:function(ctx, base){
       var K=(typeof ONB_TARGETS!=='undefined'&&ONB_TARGETS)?ONB_TARGETS.kameralar:null;
       if(K && Array.isArray(K.ic)){
         var icN=K.ic.length||1, exN=Array.isArray(K.drone)?K.drone.length:0;
-        return ctx.camCount()>=icN && ctx.extCount()>=exN;
+        var exNeed=Math.max(0, exN-1);   // aksiyon son drone'u birakir
+        return ctx.camCount()>=icN && ctx.extCount()>=exNeed;
       }
       return ctx.camCount() > (base||0);
     } },
 
   { id:'aci-ayarla', skippable:true,
     title:'Açıyı ayarla',
-    body:'Kamerayı sürükleyerek taşı ya da Yön ile bakış noktasını değiştir — önizleme anında güncellenir.',
-    target:{type:'canvas', sel:'#view3dOverlay canvas'},
+    /* REV5 KUSUR 1+13 — BOS PING/KITLENME GIDERILDI: eski adim tuval-MERKEZINE ping atiyordu (secili
+       kamera yoktu -> surukleme sahneyi donduruyor, "anlamsiz"). Artik onbStepEnter BIR kamerayi SECER
+       (View3D.selectCam) + odaklar -> secili kameranin yaninda #v3dCamBar (Yon/Odakla) belirir; hedef O
+       cubuk -> ping GERCEK kamera simgesinin ustunde. Secili kamerada surukleme kamerayi tasir (sahneyi
+       DEGIL). skippable + delta-check -> kitlenme yok. */
+    body:'İşaretli çubuk seçili kameranın üstünde. Yön ile bakış noktasını değiştir ya da sahnedeki kamera simgesini sürükleyerek taşı — önizleme anında güncellenir.',
+    target:{type:'dom', sel:'#v3dCamBar'},
     baseline:function(ctx){ return ctx.lastCamSig(); },
     check:function(ctx, base){ return ctx.camCount() > 0 && ctx.lastCamSig() !== base; } },
 
   { id:'lens-sec', skippable:true,
     title:'Lens seç',
-    body:'16-24-35-50 mm lensler görüş açısını değiştirir: küçük sayı geniş açı, büyük sayı yakın plan.',
+    /* REV5 KUSUR 1+14 — LENS KUTUSU ACIK GELIR: eski adim #v3dLRow'u hedefliyordu ama detay kutusu KAPALI
+       oldugundan satir gorunmuyordu ("bir onceki adimda kopuyor"). onbStepEnter kamerayi secer + dock detay
+       katmanini ACAR (#v3dCamDock .sum) -> #v3dLRow gorunur, hedef dolu. skippable + lensSig delta -> kitlenme yok. */
+    body:'Kamera detay kutusu açık. 16-24-35-50 mm lensler görüş açısını değiştirir: küçük sayı geniş açı, büyük sayı yakın plan. İşaretli satırdan bir lens seç.',
     target:{type:'dom', sel:'#v3dLRow'},
     baseline:function(ctx){ return ctx.lensSig(); },
     check:function(ctx, base){ return ctx.lensSig() !== base; } },
 
   { id:'drone-gec', skippable:true,
     title:'Drone moduna geç',
-    body:'Dış çekim için raydan Drone aracına geç — sahne dış cepheye döner.',
+    /* REV5 KUSUR 2: drone evresine gecerken blok gorunumu 'Tumu' kurulur (onbStepEnter -> onbSetDroneAllView;
+       extMode acilinca uygulanir). Boylece drone sahnesi tek-blok default'unda kalmaz. */
+    body:'Dış çekim için raydan Drone aracına geç — sahne dış cepheye döner, tüm bloklar görünür.',
     target:{type:'dom', sel:'[data-grp="drone"]'},
     check:function(ctx){ return ctx.extMode(); } },
 
   { id:'drone-ekle', skippable:true,
     title:'Drone kamerası ekle',
-    /* MUTLAK check (>=1): "Kalan kameralari otomatik yerlestir" aksiyonu drone'lari onceden
-       koyduysa bu adim giriste-saglanmis olur -> İleri-kapili gecilir (onbGate). Elle yolda
-       0->1 drone eklenince yine gecer. */
-    body:'"+ Drone Ekle" ile binanın etrafına dış kamera yerleştir. Örnek projede '+ONB_TARGETS.kamera.drone+' drone açısı var.',
+    /* REV5 KUSUR 15 — "ZATEN TAMAMLANMIS" DEMESIN: kamera-koy aksiyonu 2/3 drone koydu, SON'unu birakti;
+       baseline=giris drone sayisi (2), check DELTA (>base) -> kullanici gercekten BIR drone eklemeli.
+       Hedef "+ Drone Ekle" dugmesi (dolu, bos ping degil). step3Go DEMO_KAM tam seti render'da garanti eder. */
+    body:'İşaretli "+ Drone Ekle" ile binanın etrafına bir dış kamera daha yerleştir (örnekteki konumlardan birine yakın). Örnek projede '+ONB_TARGETS.kamera.drone+' drone açısı var.',
     target:{type:'dom', sel:'[data-v3d="extadd"]'},
-    check:function(ctx){ return ctx.extCount() >= 1; } },
+    baseline:function(ctx){ return ctx.extCount(); },
+    check:function(ctx, base){ return ctx.extCount() > (base||0); } },
 
   { id:'render-isaret', skippable:false,
     title:'Dış Render',
-    /* ana KPTA'da mevcut metin AYNEN; gomulu mesken prototipinde (onbInIframe) akis
-       turu kabukta surer -> bodyIframe dali onbStepBody ile secilir. */
+    /* REV5 KUSUR 3 — IFRAME'DE DIS-RENDER ADIMI KALKAR: Mesken akisinda drone gorselleri Render adiminda
+       uretilir; 3B icindeki "Dis Render" dugmesi anlamsiz (kullanici "7/12'de tikandi"). IFRAME'de bu adim
+       BITIS kartina donusur: hedef yok, check giriste TRUE -> Bitir/İleri hemen; "Sağ alttaki Render
+       Kadrajlari'na bas" yonlendirir, akis turu kabukta surer. STANDALONE KPTA'da mevcut davranis (Dis
+       Render dugmesi + extRenderClicked) AYNEN. */
+    titleIframe:'Tur tamam',
     body:'Hazır! Dış Render düğmesi yerleştirdiğin drone açılarından görsel üretir. İstediğin zaman buradan devam edebilirsin.',
-    bodyIframe:'Sağ alttaki \'Render Kadrajları\' düğmesiyle Render adımına geç — akış turu kabukta devam eder.',
-    target:{type:'dom', sel:'[data-v3d="extrender"]'},
+    bodyIframe:'3B içi tur tamam. Sağ alttaki \'Render Kadrajları\' düğmesiyle Render adımına geç — akış turu kabukta devam eder ve drone görselleri orada üretilir.',
+    target:function(){ return onbInIframe() ? {type:'none'} : {type:'dom', sel:'[data-v3d="extrender"]'}; },
     action:{ label:'Bitir', run:function(){ onbFinish(); } },
-    check:function(ctx){ return ctx.extRenderClicked(); } }
+    /* IFRAME: check FALSE -> giris-gated DEGIL -> kart bodyIframe'i (Render Kadrajlari yonlendirmesi) + Bitir
+       dugmesini gosterir (gated olsa jenerik "zaten tamamlanmis" metni body'yi gizlerdi). STANDALONE: extRenderClicked AYNEN. */
+    check:function(ctx){ return onbInIframe() ? false : ctx.extRenderClicked(); } }
 ];
 
 /* ================= TUR REGISTRY =================
@@ -877,6 +1066,9 @@ function onbBuildUI(){
   if(!onbWired){ onbWired=true;
     window.addEventListener('resize', function(){ if(onbActive) onbReposition(); });
     window.addEventListener('scroll', function(){ if(onbActive) onbReposition(); }, {passive:true, capture:true});
+    /* REV4 KUSUR 3: yerlesim adimlarinda "Yerlesimi Olustur" -> demo yerlesim (capture, motor gen'i bastirir) */
+    try{ var _gb=(typeof document!=='undefined')&&document.getElementById('genBtn');
+      if(_gb) _gb.addEventListener('click', onbGenBtnCapture, true); }catch(e){}
   }
 }
 function onbTeardown(){ onbGhostRemove(); if(onbUI){ try{ onbUI.svg.remove(); onbUI.card.remove(); }catch(e){} onbUI=null; } }
@@ -908,6 +1100,12 @@ function onbCardClick(e){
 function onbStepBody(step, inIframe){
   if(step && inIframe && step.bodyIframe) return step.bodyIframe;
   return (step && step.body) || '';
+}
+/* REV5 KUSUR 10: gomulu iframe baglaminda alternatif BASLIK (step.titleIframe) varsa onu (export ->
+   "3B'ye geç"), yoksa standart step.title. SAF (arg olarak inIframe alir). */
+function onbStepTitle(step, inIframe){
+  if(step && inIframe && step.titleIframe) return step.titleIframe;
+  return (step && step.title) || '';
 }
 /* IS 5 — AKSIYON DUGMESI GORUNURLUK KAPISI: aksiyonu (or. imkan-koy "Kalan imkanlari otomatik
    yerlestir") render etmeli miyiz? label + actionIframeOnly kosulu + actionAfterFirst (ilk eylem
@@ -949,7 +1147,7 @@ function onbRenderCard(){
      ilerleme cubugu=.progBar>i, kapat=24x24 ikon-buton (.onbClose, absolute kose). */
   onbUI.card.innerHTML =
       '<button type="button" class="onbClose" data-onb="close" aria-label="Turu kapat" title="Turu kapat">×</button>'
-    + '<h3 class="onbTitle">'+ic+'<span>'+onbEsc(s.title)+'</span></h3>'
+    + '<h3 class="onbTitle">'+ic+'<span>'+onbEsc(onbStepTitle(s, onbInIframe()))+'</span></h3>'
     + '<p class="onbText">'+text+'</p>'
     + '<div class="prog">'+n+' / '+total+'</div>'
     + '<div class="progBar"><i style="width:'+pct+'%"></i></div>'
@@ -1023,6 +1221,9 @@ function onbGhostScreenBBox(){
     for(let j=0;j<p.length;j++){ acc(conv.x(p[j].x), conv.y(p[j].y)); } }
   for(let i=0;i<data.rects.length;i++){ const a=data.rects[i];
     acc(conv.x(a.x), conv.y(a.y)); acc(conv.x(a.x+a.w), conv.y(a.y+a.h)); }
+  const MK=(data.markers||[]);
+  for(let i=0;i<MK.length;i++){ const m=MK[i]; acc(conv.x(m.x), conv.y(m.y));
+    if(m.seg) for(let j=0;j<m.seg.length;j++) acc(conv.x(m.seg[j].x), conv.y(m.seg[j].y)); }
   if(!any) return null;
   return {left:minX, top:minY, right:maxX, bottom:maxY, width:maxX-minX, height:maxY-minY};
 }
@@ -1090,7 +1291,7 @@ function onbDrawGhosts(){
   const conv=onbW2S(), svgEl=onbEl('svg');
   if(!conv || !svgEl){ onbGhostRemove(); return; }          // motor/tuval yok (headless) -> ghost yok
   const data=onbGhostPolys(spec);
-  if(!data.polys.length && !data.rects.length){ onbGhostRemove(); return; }
+  if(!data.polys.length && !data.rects.length && !(data.markers&&data.markers.length)){ onbGhostRemove(); return; }
   let g=onbEl('onbGhost');
   if(!g){ try{ g=document.createElementNS(ONB_SVGNS,'g'); g.setAttribute('id','onbGhost'); g.setAttribute('pointer-events','none'); }catch(e){ return; } }
   try{ svgEl.appendChild(g); }catch(e){ return; }            // render() sildiyse en uste geri ekle
@@ -1114,6 +1315,20 @@ function onbDrawGhosts(){
     out+='<rect x="'+R(rx)+'" y="'+R(ry)+'" width="'+R(rw)+'" height="'+R(rh)+'" rx="3" fill="rgba(179,90,46,0.05)" stroke="'+ONB_GHOST_STROKE+'" stroke-width="1.6" stroke-dasharray="6 4"/>';
     const lbl=ONB_GHOST_LBL[a.type]||'';
     if(lbl) out+='<text x="'+R(rx+rw/2)+'" y="'+R(ry+rh/2)+'" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="'+ONB_GHOST_STROKE+'" fill-opacity="0.8">'+onbEsc(lbl)+'</text>';
+  }
+  /* REV5 KUSUR 7/8 — NABIZ: hedef duvar/kenar segmenti (kalin cizgi) + genisleyen halka (SMIL).
+     Tuval-merkez sentetik daire yerine GERCEK yeri isaret eder; pan/zoom otomatik izlenir. */
+  const M=(data.markers||[]);
+  for(let i=0;i<M.length;i++){ const m=M[i];
+    const X=R(Wx(m.x)), Y=R(Wy(m.y));
+    if(m.seg && m.seg.length===2){
+      const x1=R(Wx(m.seg[0].x)), y1=R(Wy(m.seg[0].y)), x2=R(Wx(m.seg[1].x)), y2=R(Wy(m.seg[1].y));
+      out+='<line class="onbMarkSeg" x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+ONB_GHOST_STROKE+'" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.7"/>';
+    }
+    out+='<circle class="onbMark" cx="'+X+'" cy="'+Y+'" r="7" fill="'+ONB_GHOST_STROKE+'" fill-opacity="0.9"/>';
+    out+='<circle cx="'+X+'" cy="'+Y+'" r="7" fill="none" stroke="'+ONB_GHOST_STROKE+'" stroke-width="2.4">'
+       + '<animate attributeName="r" values="7;22;7" dur="1.5s" repeatCount="indefinite"/>'
+       + '<animate attributeName="stroke-opacity" values="0.85;0;0.85" dur="1.5s" repeatCount="indefinite"/></circle>';
   }
   g.innerHTML=out;
 }

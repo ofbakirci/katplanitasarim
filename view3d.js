@@ -264,6 +264,9 @@
   //   Kalıcılık: window.__kptaMaterials (persistMaterials yazar, io.js buildFloorplanMap okur; furniture ikizi).
   //   SEÇİLMEMİŞ oda (kayıt yok / null preset) → ESKİ renk-kodlu görünüm (M4: varsayılan sıfır değişim).
   let matUIEnabled=false, matSelRoom=null, materialOverrides={}, lastMatHint='';
+  // REV4 KUSUR 2: gozlemlenebilir KULLANICI malzeme-uygulama sayaci (furnEditCount ikizi).
+  //   applyMaterial/resetRoomMaterial/applyMaterialsByType artirir; kabuk turu malzeme3d adimi delta okur.
+  let matEditCount=0;
   // katalog + TR karşılıkları (UI tip seçici + prompt cümlesi)
   const FURN_TR = {
     sofa_2:'İkili Kanepe', sofa_3:'Üçlü Kanepe', sectional_l:'Köşe Kanepe', armchair:'Koltuk', pouf:'Puf',
@@ -5280,8 +5283,12 @@
   /* ── MOBİLYA modsuz sürükle-bırak (spec UX P0-P2): mobilyaya bas-sürükle-bırak; geçersizde kırmızı+geri al;
      tekerlek/R döndür (15° snap); duvara snap; Del sil; Ctrl+D çoğalt. Kamera yalnız sürükle sırasında kilitlenir. */
   let furnDrag=null, furnGroundPlane=null, furnPersistT=null, furnUndo=[];
+  // REV4 KUSUR 2: gozlemlenebilir KULLANICI mobilya-etkilesim sayaci. furnSnapshot HER gercek
+  //   duzenlemeden (ekle/tasi/cogalt/sil/oto-dose) ONCE cagrilir -> user-edit choke point.
+  //   Kabuk turu (dose3d adimi) baseline yakalar, delta>0 = "kullanici mobilyaya dokundu".
+  let furnEditCount=0;
   // mobilya geri-al: yıkıcı/taşıma işleminden ÖNCE tüm odaların furniture'ını anlık kopyala
-  function furnSnapshot(){ const map=scene&&scene.__map; if(!map) return; const snap={};
+  function furnSnapshot(){ furnEditCount++; const map=scene&&scene.__map; if(!map) return; const snap={};
     furnAllRooms(map).forEach(function(r){ snap[r.id]=(r.furniture||[]).map(function(f){ return JSON.parse(JSON.stringify(f)); }); });
     furnUndo.push(snap); if(furnUndo.length>25) furnUndo.shift(); }
   function furnUndoPop(){ const map=scene&&scene.__map; if(!map||!furnUndo.length){ setFurnHint('Geri alınacak işlem yok'); return; }
@@ -6581,6 +6588,7 @@
   // seçili oda → swatch uygula: yalnız O ODANIN zemin/duvar malzemesini değiştirir (M3), sahneyi tazeler (M4).
   function applyMaterial(slot, key){
     if(!matSelRoom){ setMatHint('Önce bir oda seç (mesh\'te odaya tıkla).'); return; }
+    matEditCount++;   // REV4 KUSUR 2: kullanici malzeme-uygulama sinyali
     const cur=materialOverrides[matSelRoom]||{floor:null,wall:null};
     cur[slot]=(cur[slot]===key?null:key);   // aynı swatch'a tekrar tıkla = kaldır (renk-koda dön)
     materialOverrides[matSelRoom]=cur;
@@ -6592,6 +6600,7 @@
   }
   function resetRoomMaterial(){
     if(!matSelRoom){ setMatHint('Önce bir oda seç.'); return; }
+    matEditCount++;   // REV4 KUSUR 2: kullanici malzeme sinyali (sifirlama da bir uygulama)
     delete materialOverrides[matSelRoom];
     persistMaterials(); rebuildKeepView(); renderMatDock();
     setMatHint('Oda renk-kodlu varsayılana döndürüldü.');
@@ -6605,6 +6614,7 @@
     bathroom:'seramik_beyaz', wc:'seramik_beyaz', kitchen:'seramik_bej' };
   function applyMaterialsByType(){
     const map=scene&&scene.__map; if(!map){ setMatHint('Plan yok.'); return; }
+    matEditCount++;   // REV4 KUSUR 2: kullanici malzeme sinyali (toplu tur-bazli atama)
     let n=0;
     furnAllRooms(map).forEach(function(r){
       const floor=MAT_FLOOR_BY_KIND[roomKind(r)]; if(!floor) return;              // eşleşmeyen tip → dokunma
@@ -7859,6 +7869,10 @@
     fpvSnapDataURL:fpvSnapDataURL,   // B1 teşhis: FPV göz-hizası tek-kare (pencere-altı bant reprodüksiyonu)
     setPlaceMode:setPlaceMode, getCameras:getCameras, setCameras:setCameras, exportCameras:exportCameras,
     clearCams:clearCams, deriveShowcaseCameras:deriveShowcaseCameras,
+    // REV5 KUSUR 13/14: onboarding kamera evresi bir kamerayi programatik SECER (aci-ayarla/lens-sec) ->
+    //   #v3dCamBar kamera simgesinde belirir + surukleme kamerayi tasir; detay kutusu #v3dCamDock .sum ile acilir.
+    selectCam:function(i){ try{ selectCam(i|0); }catch(e){} },
+    getActiveCamIdx:function(){ return activeCamIdx; },
     // K2: kadraj galerisi thumbnail'leri (KREDİSİZ yerel viewport render'ı — iç kameralar + drone'lar).
     snapCameraThumbs:snapCameraThumbs, snapExtCameraThumbs:snapExtCameraThumbs,
     // KAMERA-S2: iç-mekân render yöntemi oku/yaz ('snapshot'=Sadık · 'prompt'=Yaratıcı · 'both'). exportCameras şeması DEĞİŞMEZ.
@@ -7938,6 +7952,15 @@
     getFacadePresets:function(){ return FACADE_PRESETS.map(function(p){ return { key:p.key, name:p.name }; }); },
     // resmi bayrak: kamera yerleştirme UI'ı açık mı (openPlace/openCompare akışı) — onboarding kamera3d tetiği buna bakar
     isCamUIEnabled:function(){ return !!camUIEnabled; },
+    // REV4 KUSUR 2: kabuk akis turu dose3d/malzeme3d adimlarinin "yaptirma" check'leri icin resmi
+    //   gozlemlenebilir sayaclar (isCamUIEnabled deseni; monkey-patch yok). Baseline yakala -> delta>0.
+    furnitureEditCount:function(){ return furnEditCount; },
+    materialEditCount:function(){ return matEditCount; },
+    // toplam mobilya adedi (opsiyonel ikinci sinyal — demo doseli gelir, ekleme adedi artirir)
+    furnitureCount:function(){ return (furnList&&furnList.length)||0; },
+    // rail arac gruplari acik mi (dose3d/malzeme3d hedef butonu overlay'de var mi kontrolu)
+    isFurnUIEnabled:function(){ return !!furnUIEnabled; },
+    isMatUIEnabled:function(){ return !!matUIEnabled; },
     // A1: dış↔iç mod değişimini prototip'e bildir (strand segmenti iki yönlü senkron). isExterior bool döner.
     setExteriorModeCallback:function(fn){ extModeCallback=(typeof fn==='function')?fn:null; },
     // İŞ 5b: GENERİK görünüm-kilidi tetikleyicisi (view3d "plan boyama" kavramını bilmez — salt callback).

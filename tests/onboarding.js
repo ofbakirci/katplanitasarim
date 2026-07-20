@@ -76,7 +76,7 @@ const asserts = `
       return k.iframeAuto===true && k.zBoost===true && k.watch===true && typeof k.visible==='function'; })());
   T('registry: ana iframeAuto/zBoost/watch kapali', (function(){ const a=onbTourById('ana');
       return a.iframeAuto===false && a.zBoost===false && a.watch===false && a.visible===null; })());
-  T('VERSION=3 (sabah-testi rev) / KAM_VERSION=2', ONB.VERSION===3 && ONB.KAM_VERSION===2);
+  T('VERSION=4 (REV5) / KAM_VERSION=3', ONB.VERSION===4 && ONB.KAM_VERSION===3);
   T('ana 16 adim (blokB-yerlesim eklendi)', ONB_STEPS.length===16);
   T('kamera3d 6 adim', ONB_KAM_STEPS.length===6);
   const allIds=ONB_STEPS.map(s=>s.id).concat(ONB_KAM_STEPS.map(s=>s.id));
@@ -100,7 +100,8 @@ const asserts = `
   T('needsPro parsel/site/kat-ayri adimlarinda', step('parsel-sekme').needsPro && step('parsel-getir').needsPro && step('site-ac').needsPro && step('kat-ayri').needsPro);
   T('kamera3d cogu skippable (5/6)', ONB_KAM_STEPS.filter(s=>s.skippable).length===5);
   T('render-isaret Bitir action', typeof kstep('render-isaret').action.run==='function' && kstep('render-isaret').action.label==='Bitir');
-  T('aci-ayarla canvas hedefi 3B tuval', kstep('aci-ayarla').target.type==='canvas' && kstep('aci-ayarla').target.sel==='#view3dOverlay canvas');
+  T('aci-ayarla hedefi #v3dCamBar (REV5: kamera secili -> cubuk simgede)', kstep('aci-ayarla').target.type==='dom' && kstep('aci-ayarla').target.sel==='#v3dCamBar');
+  T('lens-sec hedefi #v3dLRow (REV5: detay kutusu ac)', kstep('lens-sec').target.type==='dom' && kstep('lens-sec').target.sel==='#v3dLRow');
   /* pro-mod giris-saglanmis (Pro zaten acik) uyarlanabilir metin (bodyDone) */
   T('pro-mod bodyDone var + "zaten açık" + İleri', typeof step('pro-mod').bodyDone==='string' && step('pro-mod').bodyDone.indexOf('zaten açık')>=0 && step('pro-mod').bodyDone.indexOf('İleri')>=0);
   T('pro-mod bodyDone emoji yok', !/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}]/u.test(step('pro-mod').bodyDone));
@@ -121,7 +122,11 @@ const asserts = `
   /* duvar-cek (eski oda-duzenle): TEK duvar cektir; ML/otomasyon vurgusu */
   T('duvar-cek title', step('duvar-cek').title.indexOf('duvar')>=0);
   T('duvar-cek canvas hedefi', step('duvar-cek').target.type==='canvas');
-  T('duvar-cek body: tek duvar + ML/otomatik vurgusu', step('duvar-cek').body.indexOf('bir duvarı')>=0 && (step('duvar-cek').body.indexOf('ML')>=0 || step('duvar-cek').body.indexOf('otomat')>=0));
+  T('duvar-cek body: isaretli duvar + ML/otomatik vurgusu', step('duvar-cek').body.indexOf('işaretli duvarı')>=0 && (step('duvar-cek').body.indexOf('ML')>=0 || step('duvar-cek').body.indexOf('otomat')>=0));
+  T('duvar-cek REV5 ghost marker=wall + fullCanvasHole', step('duvar-cek').ghost && step('duvar-cek').ghost.marker==='wall' && step('duvar-cek').fullCanvasHole===true);
+  T('balkon-ekle REV5 ghost marker=balcony + fullCanvasHole', step('balkon-ekle').ghost && step('balkon-ekle').ghost.marker==='balcony' && step('balkon-ekle').fullCanvasHole===true);
+  T('onbGhostPolys marker=balcony -> markers 1 (SAF, dunya nokta+seg)', (function(){ const r=onbGhostPolys({marker:'balcony'}); return Array.isArray(r.markers) && r.markers.length===1 && typeof r.markers[0].x==='number' && Array.isArray(r.markers[0].seg) && r.markers[0].seg.length===2; })());
+  T('onbGhostPolys marker=wall headless -> markers 0 (plan yok)', (function(){ const r=onbGhostPolys({marker:'wall'}); return Array.isArray(r.markers) && r.markers.length===0; })());
   T('duvar-cek check: editCount>base', step('duvar-cek').check(baseCtx({editCount:()=>3}),2)===true && step('duvar-cek').check(baseCtx({editCount:()=>2}),2)===false);
   T('duvar-cek baseline getter', step('duvar-cek').baseline(baseCtx({editCount:()=>7}))===7);
 
@@ -187,7 +192,7 @@ const asserts = `
   T('done+eski surum (v2) -> start (16-adim revizyonu yeniden gezdirir)', ONB.decideStart({status:'done',v:2}, false, 3)==='start');
   T('dismissed+ayni surum -> idle', ONB.decideStart({status:'dismissed',v:3}, false, 3)==='idle');
   T('durum yok -> start', ONB.decideStart({status:null,v:0}, false, 3)==='start');
-  T('ver verilmezse ONB_VERSION(3) varsayilir', ONB.decideStart({status:'done',v:3}, false)==='idle');
+  T('ver verilmezse ONB_VERSION(4) varsayilir', ONB.decideStart({status:'done',v:4}, false)==='idle');
 
   /* (6) localStorage tur-kapsamli anahtarlar + legacy migrasyon */
   const ana=onbTourById('ana'), kam=onbTourById('kamera3d');
@@ -267,12 +272,12 @@ const asserts = `
   T('aci-ayarla: sig ayni -> false', kstep('aci-ayarla').check(kamCtx({camCount:()=>1,lastCamSig:()=>'a'}),'a')===false);
   T('lens-sec: lensSig degisti', kstep('lens-sec').check(kamCtx({lensSig:()=>'24,35'}),'24,24')===true && kstep('lens-sec').check(kamCtx({lensSig:()=>'24,24'}),'24,24')===false);
   T('drone-gec: extMode', kstep('drone-gec').check(kamCtx({extMode:()=>true}))===true && kstep('drone-gec').check(kamCtx())===false);
-  T('drone-ekle: MUTLAK extCount>=1 (baseline yok)', kstep('drone-ekle').check(kamCtx({extCount:()=>1}))===true && kstep('drone-ekle').check(kamCtx({extCount:()=>0}))===false && !kstep('drone-ekle').baseline);
+  T('drone-ekle: REV5 baseline-delta (extCount>base; kullanici 1 drone ekler)', typeof kstep('drone-ekle').baseline==='function' && kstep('drone-ekle').baseline(kamCtx({extCount:()=>2}))===2 && kstep('drone-ekle').check(kamCtx({extCount:()=>3}),2)===true && kstep('drone-ekle').check(kamCtx({extCount:()=>2}),2)===false);
   T('render-isaret: extRenderClicked', kstep('render-isaret').check(kamCtx({extRenderClicked:()=>true}))===true && kstep('render-isaret').check(kamCtx())===false);
   T('kam computeTarget: bos -> 0', ONB.computeTarget(ONB_KAM_STEPS, kamCtx(), {})===0);
-  T('kam computeTarget: tumu -> 6', ONB.computeTarget(ONB_KAM_STEPS,
+  T('kam computeTarget: tumu -> 6 (REV5: drone-ekle baseline delta)', ONB.computeTarget(ONB_KAM_STEPS,
       kamCtx({camCount:()=>7, lastCamSig:()=>'s', lensSig:()=>'l', extMode:()=>true, extCount:()=>3, extRenderClicked:()=>true}),
-      {0:0, 1:'eski', 2:'eskiLens'})===6);
+      {0:0, 1:'eski', 2:'eskiLens', 4:2})===6);   // 4:drone-ekle giris-tabani (extCount 3>2 -> saglandi)
   (function(){ const c=onbKamCtx();
     T('canli kamCtx headless guvenli', c.camUI()===false && c.camCount()===0 && c.lastCamSig()==='' && c.extMode()===false && c.extCount()===0);
   })();
@@ -285,9 +290,9 @@ const asserts = `
   T('watch: active tur varken null', onbWatchDecision(kamT, env({active:true}), {status:null,v:0})===null);
   T('watch: 3B gorunmezken null', onbWatchDecision(kamT, env({visible:false}), {status:null,v:0})===null);
   T('watch: camUI kapaliyken null', onbWatchDecision(kamT, env({camUI:false}), {status:null,v:0})===null);
-  T('watch: done -> null (bir kez)', onbWatchDecision(kamT, env(), {status:'done',v:2})===null);
-  T('watch: dismissed -> null', onbWatchDecision(kamT, env(), {status:'dismissed',v:2})===null);
-  T('watch: active kayit -> resume (3B yeniden acildi)', onbWatchDecision(kamT, env(), {status:'active',v:2})==='resume');
+  T('watch: done -> null (bir kez)', onbWatchDecision(kamT, env(), {status:'done',v:3})===null);
+  T('watch: dismissed -> null', onbWatchDecision(kamT, env(), {status:'dismissed',v:3})===null);
+  T('watch: active kayit -> resume (3B yeniden acildi)', onbWatchDecision(kamT, env(), {status:'active',v:3})==='resume');
   T('watch: eski surum done -> start (yeniden gezdir)', onbWatchDecision(kamT, env(), {status:'done',v:1})==='start');
   T('watch: watch=false tur -> null', onbWatchDecision(anaT, env(), {status:null,v:0})===null);
   T('watch: iframeAuto=false hipotetik tur iframede null', onbWatchDecision({watch:true,iframeAuto:false,version:1}, env({inIframe:true}), {status:null,v:0})===null);

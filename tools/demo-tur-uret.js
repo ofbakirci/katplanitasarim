@@ -137,11 +137,20 @@ function buildBlob(pkg) {
   };
 }
 
-// ---- (b) demo-plan.json: render'siz TAM kpState (amenities pts'li) + slim kameralar ----
+// ---- (b) demo-plan.json: render'siz TAM kpState (amenities pts'li) + slim kameralar + MOBİLYA ----
+// REV5 KUSUR 6 — MOBİLYA SADAKATİ: demo-plan.json artık furniture (düz liste) + furnitureStore (WRAPPED,
+//   kat-ayrı meta korunur) + materialStore de taşır. Böylece hands-on büyük normalizasyon (demoHandsonNormalize)
+//   importPlanText ÖNCESİ store'ları __kptaFurniture/__kptaMaterials'a kurar → "Önce" kadrajı paket render'ıyla
+//   AYNI mobilyayı gösterir (önce/sonra sadakat şovu makul olur). Paketten OLDUĞU GİBİ kopyalanır (export
+//   zaten furnitureStore'u pkgWrapFurnitureStore ile sarmış, materialStore düz).
 function buildPlan(pkg) {
   const ks = JSON.parse(JSON.stringify(pkg.kpState)); // derin kopya (kaynak paketi kirletme)
   convertAmenitiesEverywhere(ks);
-  return { kpState: ks, cameras: slimCameras(pkg) };
+  const plan = { kpState: ks, cameras: slimCameras(pkg) };
+  if (Array.isArray(pkg.furniture) && pkg.furniture.length) plan.furniture = JSON.parse(JSON.stringify(pkg.furniture));
+  if (pkg.furnitureStore) plan.furnitureStore = JSON.parse(JSON.stringify(pkg.furnitureStore));
+  if (pkg.materialStore) plan.materialStore = JSON.parse(JSON.stringify(pkg.materialStore));
+  return plan;
 }
 
 // ---- base64 data-uri -> Buffer ----
