@@ -76,7 +76,7 @@ const asserts = `
       return k.iframeAuto===true && k.zBoost===true && k.watch===true && typeof k.visible==='function'; })());
   T('registry: ana iframeAuto/zBoost/watch kapali', (function(){ const a=onbTourById('ana');
       return a.iframeAuto===false && a.zBoost===false && a.watch===false && a.visible===null; })());
-  T('VERSION=5 (REV6) / KAM_VERSION=6 (REV8)', ONB.VERSION===5 && ONB.KAM_VERSION===6);
+  T('VERSION=5 (REV6) / KAM_VERSION=7 (REV9)', ONB.VERSION===5 && ONB.KAM_VERSION===7);
   T('ana 16 adim (blokB-yerlesim eklendi)', ONB_STEPS.length===16);
   T('kamera3d 7 adim (REV7: aci-ayarla -> yon-degistir + kamera-tasi)', ONB_KAM_STEPS.length===7);
   const allIds=ONB_STEPS.map(s=>s.id).concat(ONB_KAM_STEPS.map(s=>s.id));
@@ -110,6 +110,13 @@ const asserts = `
   /* REV8 (IS 2/b): rebaseKey=camSelSig -> secim degisince taban resetlenir (kamera tikina yanlis ilerleme yok) */
   T('REV8 yon-degistir/kamera-tasi rebaseKey=camSelSig', typeof kstep('yon-degistir').rebaseKey==='function' && typeof kstep('kamera-tasi').rebaseKey==='function'
      && kstep('yon-degistir').rebaseKey(kamCtx({camSelSig:()=>'2'}))==='2' && kstep('kamera-tasi').rebaseKey(kamCtx({camSelSig:()=>'0'}))==='0');
+  /* REV9 (a): kart govdesindeki <b> kalin render — onbEscB YALNIZ <b>/</b> geri acar, diger etiketleri kacar (XSS-guvenli) */
+  T('REV9 onbEscB: <b> render + diger etiket kacik + & kacik', onbEscB('a <b>x</b> <i>y</i> & <z')==='a <b>x</b> &lt;i&gt;y&lt;/i&gt; &amp; &lt;z');
+  T('REV9 onbEscB bos/null guard', onbEscB(null)==='' && onbEscB(undefined)==='');
+  /* REV9 (a): yon-degistir/kamera-tasi govdesi <b> ile buton adini kalin gosterir + sade "düğme yanar" dili; kacak duz-metin etiket YOK */
+  T('REV9 yon-degistir govde <b>"Yön"</b> + "düğme yanar" + sadelesti', kstep('yon-degistir').body.indexOf('<b>"Yön"</b>')>=0 && kstep('yon-degistir').body.indexOf('düğme yanar')>=0);
+  T('REV9 kamera-tasi govde <b>"Taşı"</b> + "düğme yanar"', kstep('kamera-tasi').body.indexOf('<b>"Taşı"</b>')>=0 && kstep('kamera-tasi').body.indexOf('düğme yanar')>=0);
+  T('REV9 kamera adim govdelerinde <b> DISINDA kacak HTML etiketi yok', ONB_KAM_STEPS.every(s=>typeof s.body!=='string' || s.body.replace(/<\\/?b>/g,'').indexOf('<')<0));
   T('lens-sec hedefi #v3dLRow (REV5: detay kutusu ac)', kstep('lens-sec').target.type==='dom' && kstep('lens-sec').target.sel==='#v3dLRow');
   /* pro-mod giris-saglanmis (Pro zaten acik) uyarlanabilir metin (bodyDone) */
   T('pro-mod bodyDone var + "zaten açık" + İleri', typeof step('pro-mod').bodyDone==='string' && step('pro-mod').bodyDone.indexOf('zaten açık')>=0 && step('pro-mod').bodyDone.indexOf('İleri')>=0);

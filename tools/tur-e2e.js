@@ -1746,21 +1746,29 @@ async function runPkg(page, f){
   (s5.vtstrip===0) ? ok('REV7 adim-5: "VİDEO TURLAR" seridi (.vtstrip) KALKTI','n='+s5.vtstrip) : bad('REV7 adim-5 vtstrip kalkmadi','n='+s5.vtstrip);
   (s5.hasExpD && s5.hasExpS && s5.soonD && s5.soonS) ? ok('REV7 adim-5: #expTourDaire/#expTourSite pasif-gorunumlu (.soon) butonlar VAR', JSON.stringify(s5)) : bad('REV7 adim-5 expTour butonlari','durum='+JSON.stringify(s5));
   (s5.chgN>=1 && !s5.chgDisabled) ? ok('REV7 adim-5: pazaryeri .mkt-chg AKTIF (disabled DEGIL)','n='+s5.chgN) : bad('REV7 adim-5 mkt-chg aktif','durum='+JSON.stringify(s5));
-  // (iv) ilk urunde Değiştir -> alternatif listesi (data-mkalts="0") gorunur (hidden kalkti) + buton .open
+  // (iv) ilk urunde Değiştir -> alternatif listesi. REV13 KOK-FIX GUARD: eski test yalniz hasAttribute('hidden')
+  //   bakiyordu -> .mkt-alts{display:flex} author kurali [hidden]'i EZDIGI icin panel HEP ACIK gelse bile YESIL
+  //   kaliyordu (kullanici sikayeti). Artik COMPUTED display olculur: BASTA none, Değiştir'de flex, tekrar none.
+  //   Ayrica Değiştir TOAST ATMAMALI (sadece ac/kapa); toast yalniz alternatif tikinda.
   const altOpen = await page.evaluate(()=>{
     try{ const host=document.getElementById('mktCtx'); if(!host) return {ok:false, reason:'no mktCtx'};
       const chg=host.querySelector('.mkt-chg[data-mkchg]'); if(!chg) return {ok:false, reason:'no mkt-chg'};
       const idx=chg.getAttribute('data-mkchg');
-      const panelBefore=host.querySelector('[data-mkalts="'+idx+'"]'); const hiddenBefore=!!(panelBefore&&panelBefore.hasAttribute('hidden'));
-      chg.click();
-      const panelAfter=host.querySelector('[data-mkalts="'+idx+'"]');
-      const hiddenAfter=!!(panelAfter&&panelAfter.hasAttribute('hidden'));
-      const alts=panelAfter?panelAfter.querySelectorAll('.mkt-alt').length:0;
-      const btnOpen=!!(chg.classList&&chg.classList.contains('open'));
-      return {ok:(hiddenBefore && !hiddenAfter && alts>0), hiddenBefore, hiddenAfter, alts, btnOpen};
+      const panel=host.querySelector('[data-mkalts="'+idx+'"]');
+      const disp=()=>panel?getComputedStyle(panel).display:'?';
+      const toastNow=()=>{ const t=[...document.body.children].find(el=>el.tagName==='DIV'&&/999px/.test(el.style.borderRadius||'')); return t?t.textContent:null; };
+      const clearToast=()=>{ [...document.body.children].forEach(el=>{ if(el.tagName==='DIV'&&/999px/.test(el.style.borderRadius||'')) el.remove(); }); };
+      const dispInitial=disp(), hiddenBefore=!!panel.hasAttribute('hidden');
+      clearToast(); chg.click();                               // AÇ
+      const dispOpen=disp(), hiddenAfter=!!panel.hasAttribute('hidden'), toastOnOpen=toastNow();
+      const alts=panel.querySelectorAll('.mkt-alt').length, btnOpen=!!(chg.classList&&chg.classList.contains('open'));
+      chg.click();                                             // KAPA
+      const dispClose=disp();
+      return {ok:(dispInitial==='none' && hiddenBefore && dispOpen==='flex' && !hiddenAfter && !toastOnOpen && dispClose==='none' && alts>0),
+              dispInitial, dispOpen, dispClose, toastOnOpen, alts, btnOpen};
     }catch(e){ return {ok:false, reason:String(e)}; }
   });
-  (altOpen.ok && altOpen.btnOpen) ? ok('REV7 adim-5: ilk urunde "Değiştir" alternatif listesini ACTI (hidden kalkti, .open)', JSON.stringify(altOpen)) : bad('REV7 adim-5 Değiştir alternatif acmadi', JSON.stringify(altOpen));
+  (altOpen.ok && altOpen.btnOpen) ? ok('REV13 adim-5: "Değiştir" panel BASTA KAPALI(none)->AC(flex,TOAST YOK)->KAPA(none)', JSON.stringify(altOpen)) : bad('REV13 adim-5 Değiştir ac/kapa+toast davranisi', JSON.stringify(altOpen));
   // (v) alternatif tiki SECIMI DEGISTIRMEZ: fnSelId (secili render karti) tik oncesi==sonrasi (salt toast).
   const altPick = await page.evaluate(()=>{
     try{ const st=(window.__msk&&window.__msk.state)||{}; const before=st.fnSelId||null;

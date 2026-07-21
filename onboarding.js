@@ -34,7 +34,7 @@
 
 /* ---- senaryo surumleri: adimlar degisince ARTIR -> done/dismissed kullanici yeniden gezer ---- */
 const ONB_VERSION = 5;        // 'ana' turu (v5 REV6: balkon-ekle BOS baslar -> demo set yakalanir + bir balkon ekletip 'Kalan balkonlari otomatik yerlestir' aksiyonu + #tBalk araci oto-sec; site-ac TAMAMLAMA semantigi (uzerine yazmaz))
-const ONB_KAM_VERSION = 6;    // 'kamera3d' turu (v6 REV8: yon-degistir/kamera-tasi CANLI 3 kusur — (a) iki-asamali net dil (Yon dugmesi=aim modu, SONRA sahne tiki) + sceneHole (dock deligi+tuval aydinlik); (b) rebaseKey=camSelSig: kamera SECIMI degisince taban resetlenir, adim ILERLEMEZ (yalniz gercek yon/konum degisimi); (c) SECILI kamera vurgusu — View3D.setCamHighlightBoost nabiz halkasi + buyuk marker)
+const ONB_KAM_VERSION = 7;    // 'kamera3d' turu (v7 REV9: yon-degistir CANLI 2 kusur — (a) kart govdesindeki <b> etiketleri DUZ METIN gorunuyordu (onbEsc hepsini kaciyordu) -> onbEscB ile yalniz <b> kalin render; adim metinleri iki-kisa-adim sadelestirildi. (b) "Yon" dugmesi YANMIYOR/spotlight isaret etmiyor algisi: dom-hedef deliginin GORUNUR nabiz HALKASI yoktu (holeC r=0) -> #onbRing eklendi (accent pulsing ring, dom hedefi cevreler) + dock .ib.on armed durumu guclendirildi (ring+glow). v6 REV8: iki-asamali dil + sceneHole + rebaseKey=camSelSig + setCamHighlightBoost)
 
 /* ================= DEMO PAKET HEDEFLERI (ONB_TARGETS) =================
    v2 vizyonu: "paketi vereceğim, onboarding onu kullanıcıya elle çizdirtecek —
@@ -887,7 +887,7 @@ const ONB_KAM_STEPS = [
      degisiminde ilerler. */
   { id:'yon-degistir', skippable:true,
     title:'Bakış yönünü değiştir',
-    body:'Kamera seçili. İki adım: 1) Alttaki dock’ta işaretli <b>"Yön"</b> düğmesine bas (düğme yanar) — bu bakış-noktası kilidini açar, yönü tek başına değiştirmez. 2) Sahnede kameranın bakacağı noktaya tıkla — önizleme anında döner. (Koni ucunu sürükleyerek ya da tekerlekle de çevirebilirsin.)',
+    body:'İki adım: 1) İşaretli <b>"Yön"</b> düğmesine bas — düğme yanar. 2) Sahnede kameranın bakacağı noktaya tıkla — önizleme döner.',
     target:{type:'dom', sel:'#v3dCamDock [data-camact="aim"]'},
     compact:true, avoidSel:['#v3dPip','#v3dExtPip'], sceneHole:true,
     ensure:function(){ onbSelectFirstCam(); },
@@ -897,7 +897,7 @@ const ONB_KAM_STEPS = [
 
   { id:'kamera-tasi', skippable:true,
     title:'Kamerayı taşı',
-    body:'İki adım: 1) Alttaki dock’ta işaretli <b>"Taşı"</b> düğmesine bas (düğme yanar). 2) Kamerayı koymak istediğin yere sahnede tıkla — ya da sahnedeki kamera simgesini doğrudan sürükle. Konum değişince önizleme de değişir.',
+    body:'İki adım: 1) İşaretli <b>"Taşı"</b> düğmesine bas — düğme yanar. 2) Kamerayı koymak istediğin yere sahnede tıkla (ya da kamera simgesini sürükle).',
     target:{type:'dom', sel:'#v3dCamDock [data-camact="move"]'},
     compact:true, avoidSel:['#v3dPip','#v3dExtPip'], sceneHole:true,
     ensure:function(){ onbSelectFirstCam(); },
@@ -1034,6 +1034,10 @@ function onbSel(sel){ try{ return (typeof document!=='undefined' && document.que
 function onbHasBodyClass(c){ try{ return !!(document.body && document.body.classList && document.body.classList.contains(c)); }catch(e){ return false; } }
 function onbVisible(el){ try{ const r=el.getBoundingClientRect(); return r.width>0 && r.height>0; }catch(e){ return false; } }
 function onbEsc(s){ return String(s==null?'':s).replace(/[&<>]/g, c=> c==='&'?'&amp;' : c==='<'?'&lt;' : '&gt;'); }
+/* Kart GOVDESI icin: once TAMAMEN kac (XSS-guvenli; dis metin girmez ama disiplin), sonra YALNIZ <b>/</b>
+   etiketlerini geri ac -> ic sabit metindeki kalin vurgu render olur ('düğme yanar' vb.). Diger tum
+   etiketler kacik kalir. Kamera adim metinleri (yon-degistir/kamera-tasi) <b>"Yön"</b> icerir. */
+function onbEscB(s){ return onbEsc(s).replace(/&lt;(\/?)b&gt;/g, '<$1b>'); }
 
 function onbDoorWinCount(){
   if(typeof editHistory==='undefined' || !editHistory || !editHistory.length) return 0;
@@ -1253,10 +1257,16 @@ function onbBuildUI(){
   mask.appendChild(bg); mask.appendChild(hole); mask.appendChild(hole2); mask.appendChild(holeC); defs.appendChild(mask);
   const dim=document.createElementNS(NS,'rect'); dim.setAttribute('id','onbDim'); dim.setAttribute('x',0); dim.setAttribute('y',0);
   dim.setAttribute('fill','var(--scrim)'); dim.setAttribute('mask','url(#onbHoleMask)');
-  svg.appendChild(defs); svg.appendChild(dim);
+  /* REV9 — GORUNUR NABIZ HALKASI: dom-hedef adimlarinda (or. yon-degistir "Yön" dugmesi) hedef
+     butonu net gorunur bir accent halkayla isaretle. Eski durumda dom hedefi YALNIZ maske-deligiydi
+     (holeC r=0) -> zayif scrim uzerinde spotlight fark edilmiyordu ("hedef sembolüne yönlendirmiyor").
+     dim'in USTUNE (mask'siz) cizilir -> her zaman gorunur. pointer-events:none (tik gecirir). */
+  const ring=document.createElementNS(NS,'rect'); ring.setAttribute('id','onbRing'); ring.setAttribute('class','onbRing');
+  ring.setAttribute('fill','none'); ring.setAttribute('rx',10); ring.setAttribute('width',0); ring.setAttribute('height',0);
+  svg.appendChild(defs); svg.appendChild(dim); svg.appendChild(ring);
   const card=document.createElement('div'); card.className='onbCard';
   document.body.appendChild(svg); document.body.appendChild(card);
-  onbUI={svg:svg, bg:bg, hole:hole, hole2:hole2, holeC:holeC, dim:dim, card:card};
+  onbUI={svg:svg, bg:bg, hole:hole, hole2:hole2, holeC:holeC, dim:dim, ring:ring, card:card};
   card.addEventListener('click', onbCardClick);
   if(!onbWired){ onbWired=true;
     window.addEventListener('resize', function(){ if(onbActive) onbReposition(); });
@@ -1350,8 +1360,8 @@ function onbRenderCard(){
   const text = onbPaused
     ? 'Bu adım Profesyonel modda çalışır. Devam etmek için Profesyonel moda geç.'
     : gated
-      ? onbEsc(s.bodyDone || 'Bu adım zaten tamamlanmış görünüyor — İleri ile devam et.')
-      : onbEsc(onbStepBody(s, onbInIframe()));
+      ? onbEscB(s.bodyDone || 'Bu adım zaten tamamlanmış görünüyor — İleri ile devam et.')
+      : onbEscB(onbStepBody(s, onbInIframe()));
   /* CSS sozlesmesi (styles.css): baslik=h3, metin=p, sayac=.prog,
      ilerleme cubugu=.progBar>i, kapat=24x24 ikon-buton (.onbClose, absolute kose). */
   onbUI.card.innerHTML =
@@ -1543,20 +1553,25 @@ function onbReposition(){
   /* spotlight delik: hedef DOM/canvas — ghost olsa da hedef (or. #tDraw dugmesi) isaretlenir.
      FIX 5: fullCanvasHole -> delik TUM tuval (cvRect); araclar da tuval icinde oldugundan
      ayrica isaretlemeye gerek yok (circle r=0). cvRect yoksa normal hedef mantigina duser. */
+  /* REV9 — nabiz halkasi yalniz DOM-hedef (buton) adimlarinda gorunur; fullCanvasHole/canvas/none'da gizli. */
+  const showRing=function(r){ if(!onbUI.ring) return; const pad=5;
+    onbUI.ring.setAttribute('x', r.left-pad); onbUI.ring.setAttribute('y', r.top-pad);
+    onbUI.ring.setAttribute('width', Math.max(0, r.width+pad*2)); onbUI.ring.setAttribute('height', Math.max(0, r.height+pad*2)); };
+  const hideRing=function(){ if(onbUI.ring){ onbUI.ring.setAttribute('width',0); onbUI.ring.setAttribute('height',0); } };
   if(cvRect){ const pad=2;
     onbUI.hole.setAttribute('x', cvRect.left-pad); onbUI.hole.setAttribute('y', cvRect.top-pad);
     onbUI.hole.setAttribute('width', Math.max(0, cvRect.width+pad*2)); onbUI.hole.setAttribute('height', Math.max(0, cvRect.height+pad*2));
-    onbUI.holeC.setAttribute('r', 0);
+    onbUI.holeC.setAttribute('r', 0); hideRing();
   } else if(t.kind==='dom'){ const r=t.rect, pad=6;
     onbUI.hole.setAttribute('x', r.left-pad); onbUI.hole.setAttribute('y', r.top-pad);
     onbUI.hole.setAttribute('width', Math.max(0, r.width+pad*2)); onbUI.hole.setAttribute('height', Math.max(0, r.height+pad*2));
-    onbUI.holeC.setAttribute('r', 0);
+    onbUI.holeC.setAttribute('r', 0); showRing(r);
   } else if(t.kind==='canvas'){ const r=t.rect;
     const cx=r.left+r.width/2, cy=r.top+r.height/2, rad=Math.max(40, Math.min(r.width, r.height)*0.18);
     onbUI.holeC.setAttribute('cx',cx); onbUI.holeC.setAttribute('cy',cy); onbUI.holeC.setAttribute('r',rad);
-    onbUI.hole.setAttribute('width',0); onbUI.hole.setAttribute('height',0);
+    onbUI.hole.setAttribute('width',0); onbUI.hole.setAttribute('height',0); hideRing();
   } else {
-    onbUI.hole.setAttribute('width',0); onbUI.hole.setAttribute('height',0); onbUI.holeC.setAttribute('r',0);
+    onbUI.hole.setAttribute('width',0); onbUI.hole.setAttribute('height',0); onbUI.holeC.setAttribute('r',0); hideRing();
   }
   /* kart konumu: ghost varsa ghost bbox'unu KACIN (cizim alanini ortme); yoksa hedefe gore.
      IS 1 (REV7): MARKER-hayaletli adimlarda (balkon-ekle/duvar-cek) ghost bbox kucuk bir isaret ->

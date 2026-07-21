@@ -1015,7 +1015,12 @@
       '#v3dCamDock .seg button.green.on{background:'+U.ok+';color:'+U.onOk+'}'+
       // ikon eylem düğmeleri (Yön/Taşı/Odakla/Sil) — kompakt kare
       '#v3dCamDock .ib{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:'+U.chip2+';color:'+U.ink+';border:0;border-radius:'+U.rMd+';cursor:pointer;font-family:inherit;padding:0}'+
-      '#v3dCamDock .ib:hover{filter:brightness(1.15)}#v3dCamDock .ib.on{background:'+U.active+';color:'+U.onAcc+'}#v3dCamDock .ib.danger{background:'+U.bad+';color:'+U.onBad+'}'+
+      '#v3dCamDock .ib:hover{filter:brightness(1.15)}'+
+      // ARMED (aim/move aktif): eski durumda yalniz arka-plan degisiyordu (kucuk ikon butonda fark edilmiyordu).
+      //   Belirgin "yaniyor" hissi: parlak accent zemin + accent halka (box-shadow ring) + disa glow. placeAction
+      //   degisince (aim'den cikinca / kamera secilince) updateCamDock '.on'u kaldirir -> tur disinda da dogru soner.
+      '#v3dCamDock .ib.on{background:'+U.active+';color:'+U.onAcc+';box-shadow:0 0 0 2px '+U.acc+',0 0 10px 1px '+U.active+'}'+
+      '#v3dCamDock .ib.danger{background:'+U.bad+';color:'+U.onBad+'}'+
       // seçili kamera ÖZET çipi — tıkla → detay aç/kapa
       '#v3dCamDock .sum{display:inline-flex;align-items:center;gap:6px;background:'+U.chip+';border:1px solid '+U.lineSoft+';color:'+U.ink+';border-radius:'+U.r9+';padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}'+
       '#v3dCamDock .sum:hover{border-color:'+U.accSoft+'}#v3dCamDock .dk.detopen .sum{background:'+U.acc+';color:'+U.onAcc+';border-color:'+U.acc+'}'+

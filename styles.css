@@ -527,6 +527,10 @@
   .onbCard .onbNext:hover{background:var(--acc-hover); border-color:var(--acc-hover); color:#fff;}
   @keyframes onbPulse{0%{transform:scale(1); opacity:.85;} 70%{transform:scale(2.2); opacity:0;} 100%{transform:scale(2.2); opacity:0;}}
   .onbPulse{transform-origin:center; transform-box:fill-box; animation:onbPulse 1.6s ease-out infinite; fill:var(--acc); opacity:.85;}
+  /* REV9 — GORUNUR NABIZ HALKASI (dom-hedef adimlari, or. "Yön" dugmesi): dim'in ustunde, accent stroke +
+     nabiz. Butonu net isaret eder (eski zayif maske-deligi yerine). pointer-events yok (tik gecirir). */
+  @keyframes onbRingPulse{0%{stroke-opacity:.95; stroke-width:3;} 60%{stroke-opacity:.35; stroke-width:5;} 100%{stroke-opacity:.95; stroke-width:3;}}
+  #onbRing.onbRing{fill:none; stroke:var(--acc); stroke-width:3; pointer-events:none; animation:onbRingPulse 1.4s ease-in-out infinite; filter:drop-shadow(0 0 6px var(--acc));}
   /* GOREV C — kamera turu KOMPAKT kart (aci-ayarla/lens-sec): hedefi/PiP'i ortmesin diye kucuk */
   .onbCard.onbCompact{max-width:240px; width:min(240px,calc(100vw - 24px)); padding:10px 12px; font-size:12px; line-height:1.45;}
   .onbCard.onbCompact h3{font-size:12.5px; margin-bottom:5px;}
