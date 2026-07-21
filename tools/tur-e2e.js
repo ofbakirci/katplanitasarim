@@ -999,6 +999,93 @@ async function runPhase3(page, f){
       geziSpot.after=after; geziSpot.entered=(after>base); geziSpot.walkingNow=walkingNow;
       // FPV'den cik (walkOn kalirsa sonraki kamera evresine sizmasin) — ayni buton toggle-off
       if(walkingNow){ await f.evaluate(()=>{ try{ const b=document.querySelector('#v3dRail button[data-grp="walk"]'); if(b) b.click(); }catch(e){} }); await sleep(300); }
+      // ================= GERCEK KULLANICI YOLU (BUGUNKU KOK REGRESYON BEKCISI) =================
+      //   Yukaridaki rail-butonu testi walkEnterCount imzasini API tikiyla dogrular; bu EK test bugunku
+      //   kokun (view3d.js enterWalk canvas tabindex+focus) canli regresyon bekcisidir:
+      //     (1) odagi ANA belgedeki bir ogeye ver (tur akisinin gercegi: kart/dugme odakta, iframe DEGIL),
+      //     (2) #v3dPegman'i GERCEK CDP fare suruklemesiyle daireye birak -> enterWalk canvas.focus() odagi
+      //         iframe'e ceker,
+      //     (3) page.keyboard ile GERCEK 'w' bas -> walkKeyDown (iframe window) tetiklenir -> walkStep,
+      //     (4) View3D.walkMoved()===true.
+      //   Fix reverte edilirse odak parent'ta kalir, W keydown iframe'e ULASMAZ -> walkMoved false -> KIRMIZI.
+      let realPath={done:false};
+      try{
+        // gezinti adimina girildiginde enterWalkContext ic gorunume gecirir; bu ana kadar kart oto-ilerlemis
+        //   olabilecegi icin ic gorunumu YENIDEN garanti et (pegman bina icine birakilabilsin).
+        await f.evaluate(()=>{ try{ window.View3D.enterWalkContext&&window.View3D.enterWalkContext(); }catch(e){} }); await sleep(700);
+        // (1) odagi ANA belgeye ver (gercek tur akisi: kart/dugme odakta; iframe DEGIL)
+        const focusInfo=await page.evaluate(()=>{
+          let el=document.querySelector('#mskTourCard button, header button, button')||document.body;
+          try{ if(el===document.body) el.tabIndex=-1; el.focus(); }catch(e){}
+          const a=document.activeElement; return { tag:a?a.tagName:null, isIframe:!!(a&&a.tagName==='IFRAME') };
+        });
+        realPath.focusParent=!focusInfo.isIframe; realPath.focusTag=focusInfo.tag;
+        // (2) pegman GRAB noktasi + sahne (daire ici) hedefi PARENT-uzayi koordinatlari. Kabuk tur karti
+        //   (#mskTourCard) sag-altta pegman'i KISMEN ortebilir -> pegman icinde TOP-LEVEL hit-test'i motor
+        //   iframe'ine (#engineFrame) dusen (kartla ortulmemis) bir noktayi tara ve grab noktasi yap.
+        const geo=await page.evaluate(()=>{
+          const fr=document.getElementById('engineFrame'); if(!fr||!fr.contentDocument) return null;
+          const peg=fr.contentDocument.querySelector('#v3dPegman'); if(!peg) return null;
+          const pr=peg.getBoundingClientRect(); if(pr.width<=0&&pr.height<=0) return null;
+          const f0=fr.getBoundingClientRect();
+          const pl=f0.left+pr.left, pt=f0.top+pr.top, pw=pr.width, ph=pr.height;
+          // pegman icinde ust->alt, orta->kenar tarayarak KARTLA ORTULMEMIS (elementFromPoint===iframe) nokta bul
+          let grabX=pl+pw/2, grabY=pt+ph/2, uncovered=false, cover=null;
+          const ys=[pt+2, pt+ph*0.2, pt+ph*0.35, pt+ph*0.5, pt+ph*0.7, pt+ph-2];
+          const xs=[pl+pw/2, pl+pw*0.3, pl+pw*0.7, pl+2, pl+pw-2];
+          for(const gy of ys){ for(const gx of xs){ const el=document.elementFromPoint(gx,gy); if(el===fr){ grabX=gx; grabY=gy; uncovered=true; break; } if(!cover&&el) cover={tag:el.tagName,cls:el.className||null}; } if(uncovered) break; }
+          return { pegX:grabX, pegY:grabY, uncovered, cover,
+                   scX:f0.left+f0.width/2, scY:f0.top+f0.height*0.6, fw:f0.width, fh:f0.height, fl:f0.left, ft:f0.top };
+        });
+        realPath.hasPeg=!!geo;
+        realPath.geo=geo;
+        // kart pegman'i TAMAMEN ortuyorsa (uncovered=false) kabuk kartini DARALT (pill'e in) -> pegman serbest kalir
+        if(geo && !geo.uncovered){
+          await page.evaluate(()=>{ const b=document.querySelector('#mskTourCard [data-act="collapse"]'); if(b) b.click(); }); await sleep(400);
+          const geo2=await page.evaluate(()=>{
+            const fr=document.getElementById('engineFrame'); if(!fr||!fr.contentDocument) return null;
+            const peg=fr.contentDocument.querySelector('#v3dPegman'); if(!peg) return null;
+            const pr=peg.getBoundingClientRect(); const f0=fr.getBoundingClientRect();
+            const pl=f0.left+pr.left, pt=f0.top+pr.top, pw=pr.width, ph=pr.height; let gx=pl+pw/2, gy=pt+ph/2, unc=false;
+            const ys=[pt+2,pt+ph*0.3,pt+ph*0.5,pt+ph-2]; for(const y of ys){ const el=document.elementFromPoint(pl+pw/2,y); if(el===fr){ gx=pl+pw/2; gy=y; unc=true; break; } }
+            return { pegX:gx, pegY:gy, uncovered:unc, scX:f0.left+f0.width/2, scY:f0.top+f0.height*0.6, fw:f0.width, fh:f0.height, fl:f0.left, ft:f0.top };
+          });
+          if(geo2){ realPath.collapsedCard=true; realPath.geo=geo2; Object.assign(geo, geo2); }
+        }
+        const dragTo=async(tx,ty,steps)=>{
+          await page.mouse.move(geo.pegX, geo.pegY); await page.mouse.down();
+          for(let i=1;i<=steps;i++){ await page.mouse.move(geo.pegX+(tx-geo.pegX)*i/steps, geo.pegY+(ty-geo.pegY)*i/steps); await sleep(20); }
+          await page.mouse.up(); await sleep(600);
+          return await f.evaluate(()=>{ try{ return !!window.View3D.isWalking(); }catch(e){ return false; } });
+        };
+        if(geo){
+          // (3) GERCEK fare suruklemesi: pegman -> sahne merkezi (bir dairenin ici). Gecersiz birakma olursa
+          //   sahne icinde birkac alternatif noktayi dene (kadraja gore oda ici degisken).
+          realPath.dropped=await dragTo(geo.scX, geo.scY, 12);
+          if(!realPath.dropped){
+            const alts=[[geo.scX,geo.scY-geo.fh*0.12],[geo.scX-geo.fw*0.12,geo.scY],[geo.scX+geo.fw*0.12,geo.scY],[geo.scX,geo.scY+geo.fh*0.1],[geo.fl+geo.fw*0.42,geo.ft+geo.fh*0.55]];
+            for(const [tx,ty] of alts){ if(realPath.dropped) break; realPath.dropped=await dragTo(tx,ty,8); }
+          }
+          // (4) odak fiilen iframe'e cekildi mi (fix'in birincil etkisi; kanit olarak kaydet)
+          realPath.activeAfterDrop=await page.evaluate(()=>{ const a=document.activeElement; return a?a.tagName:null; });
+          // (5) GERCEK 'w' tusu (page.keyboard) -> odakli iframe canvas'ina gider -> walkKeyDown -> walkStep
+          if(realPath.dropped){
+            await page.keyboard.down('w'); await sleep(500);
+            realPath.walkMoved=await f.evaluate(()=>{ try{ return !!window.View3D.walkMoved(); }catch(e){ return false; } });
+            await page.keyboard.up('w');
+          }
+        }
+        realPath.done=true;
+      }catch(e){ realPath.err=String(e); }
+      // real-path FPV acik kalmis olabilir -> cik (sonraki kamera evresine sizmasin)
+      const rpWalk=await f.evaluate(()=>{ try{ return !!window.View3D.isWalking(); }catch(e){ return false; } });
+      if(rpWalk){ await page.keyboard.press('Escape'); await sleep(300);
+        const rpW2=await f.evaluate(()=>{ try{ return !!window.View3D.isWalking(); }catch(e){ return false; } });
+        if(rpW2){ await f.evaluate(()=>{ try{ const b=document.querySelector('#v3dRail button[data-grp="walk"]'); if(b) b.click(); }catch(e){} }); await sleep(200); } }
+      // pegman'i serbestlemek icin kart daraltildiysa GERI AC (kart daraltık kalırsa sonraki kamera karti bos okunur)
+      if(realPath.collapsedCard){ await page.evaluate(()=>{ const b=document.querySelector('#mskTourCard [data-act="expand"]'); if(b) b.click(); }); await sleep(300); }
+      geziSpot.real=realPath;
+      // ======================================================================================
       geziAdvanced=await waitFor(async()=>{ const c=await shellCard(page); return (c.visible && !/İçeride yürü|yürü/i.test(c.title||''))?true:null; },{timeout:6000,desc:'gezinti oto-ilerledi'}).catch(()=>false);
       if(!geziAdvanced){ await shellClickNext(page); await sleep(500); }   // yaptirma olmazsa İleri kacisi
       continue;
@@ -1030,6 +1117,17 @@ async function runPhase3(page, f){
   (geziSpot && geziSpot.ctx && geziSpot.ctx.hasEWC && geziSpot.ctx.ext===false)
     ? ok('IS3 gezinti girisinde enterWalkContext: IC gorunume gecti (exteriorMode false) + Blok/site baglami', JSON.stringify(geziSpot.ctx))
     : bad('IS3 gezinti girisinde ic goruntu/enterWalkContext saglanmadi', JSON.stringify(geziSpot&&geziSpot.ctx));
+  // BUGUNKU KOK — GERCEK KULLANICI YOLU (rail-butonu testinin YANINDA): odak ANA belgede iken pegman GERCEK
+  //   CDP fare suruklemesiyle daireye birakildi -> enterWalk canvas.focus() odagi iframe'e cekti -> GERCEK 'w'
+  //   tusu walkKeyDown'a ULASTI -> walkMoved===true. view3d.js enterWalk canvas tabindex+focus fix'i geri
+  //   alinirsa (odak parent'ta kalir, W iframe'e gitmez) bu assert KIRMIZI yanar = regresyon bekcisi.
+  if(geziSpot && geziSpot.real && geziSpot.real.done){
+    const rp=geziSpot.real;
+    (rp.focusParent) ? ok('IS3 real-path: odak GERCEKTEN ana belgede (iframe DEGIL) — tur akisi kosulu', 'aktif='+rp.focusTag) : bad('IS3 real-path odak parent kurulamadi', JSON.stringify(rp));
+    (rp.hasPeg) ? ok('IS3 real-path: pegman (#v3dPegman) ic gorunumde gorunur/suruklenebilir') : bad('IS3 real-path pegman gorunmedi', JSON.stringify(rp));
+    (rp.dropped) ? ok('IS3 real-path: pegman GERCEK fare suruklemesiyle daireye birakildi -> FPV aktif (isWalking)') : bad('IS3 real-path pegman drop FPV baslatmadi', JSON.stringify(rp));
+    (rp.walkMoved===true) ? ok('IS3 real-path: GERCEK w tusu (page.keyboard) walkKeyDown\'a ULASTI -> walkMoved===true (KOK: enterWalk canvas odak fix)', 'aktifDrop='+rp.activeAfterDrop) : bad('IS3 real-path GERCEK w ile walkMoved (KOK REGRESYONU: enterWalk canvas odak fix?)', JSON.stringify(rp));
+  } else bad('IS3 real-path testi kosulmadi', JSON.stringify(geziSpot&&geziSpot.real));
   // REV6 KUSUR 2: dose3d engineHole (iframe seffaf) + #mskTourRing hedef Mobilya butonunu sariyor + bos sahne +
   //   Otomatik Döşe sinyali degisti (furnitureEditCount++) + oto-ilerledi.
   (doseSpot&&doseSpot.engHole) ? ok('KUSUR2 dose3d engineHole: motor iframe SEFFAF (delik 3B sahneyi kapsar)', JSON.stringify(doseSpot&&doseSpot.engInfo)) : bad('KUSUR2 dose3d engineHole iframe seffaf', JSON.stringify(doseSpot&&doseSpot.engInfo));

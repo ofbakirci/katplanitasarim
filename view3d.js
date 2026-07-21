@@ -4736,6 +4736,14 @@
     window.addEventListener('keyup', walkKeyUp, true);
     document.addEventListener('pointerlockchange', walkLockChange);
     document.addEventListener('mousemove', walkMouseMove);
+    // KLAVYE ODAĞI: WASD dinleyicileri bu (iframe) window'una bağlı. Motor GÖMÜLÜ iframe'de (kabuk turu)
+    //   çalışırken klavye odağı ANA belgede (tur kartı/İleri düğmesi) kalabilir → WASD keydown iframe'e
+    //   HİÇ ulaşmaz (FPV'ye girilir ama yürünmez). Pegman'ı doğrudan tıklayan kullanıcıda iframe odağı zaten
+    //   gelir; tur akışında GELMEZ. Ayrıca pointer-lock gömülü iframe'de (allow="pointer-lock" yok) reddedilince
+    //   otomatik-odak da yok. Çözüm: tuvali odaklanabilir yap + odakla → belge odağı iframe'e ÇEKİLİR (canlı
+    //   kanıt: parent düğme odaktayken WASD ölü; canvas.focus() sonrası WASD canlı). requestPointerLock'tan ÖNCE
+    //   (kilit gelirse zaten odak sorunu yok; gelmezse birincil yol budur).
+    try{ if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','-1'); el.focus({preventScroll:true}); }catch(e){}
     // pointer-lock isteği modern Chromium'da PROMISE döndürür; kullanıcı-jesti olmayan/headless
     // ortamda reddi NORMALDIR (FPV klavye-yürüyüş pointer-lock'suz da çalışır). try/catch yalnız
     // senkron fırlatmayı yakalar → promise reddi 'unhandled rejection' olur (e2e pageerror). Sessizce yut.
