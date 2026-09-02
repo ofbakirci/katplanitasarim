@@ -30,53 +30,31 @@
        türetildiği için başka dosya/satır dokunulmaz. Örnek açık-tema değerleri altta yorumlu.
      Not: mesh MALZEME renkleri (matWall/FMAT/zemin) sahne fiziği — UI kromu DEĞİL, buraya alınmadı. */
   const UIPAL = {
-    // — vurgu (terrakota ailesi, koyu-zemin) —
-    acc:'#DB8A5E',            // --acc-on-dark: ana vurgu (aktif rail, primer buton zemini, slider)
-    accHover:'#E39C74',       // vurgunun açık türevi (hover)
-    onAcc:'#241a12',          // vurgu üstü metin (koyu terrakota-siyah, okunur kontrast)
-    accSoft:'rgba(219,138,94,.55)',   // vurgu yumuşak kenarlık (hover ipucu)
-    // — durum renkleri (adım-1 --ok/--bad koyu-zemin uyarlaması) —
-    ok:'#5FA36E',             // --ok #4C8C5A ailesinin koyu-zemin tonu (onay/yeşil)
-    onOk:'#0f1a12',
-    bad:'#C0492B',            // --bad ailesi (sil/tehlike)
-    onBad:'#f4e3de',
-    active:'#D9793B',         // aktif-eylem turuncu (terrakotaya yaklaştırıldı, eski #e0843a)
-    // — mürekkep / metin —
-    ink:'#ECE7DF',            // ana açık metin (panel üstü)
-    inkDim:'#D8CFC2',         // ikincil metin
-    inkAcc:'#E7C7A8',         // rail/pegman ikon tonu (sıcak açık terrakota)
-    // — panel zeminleri (sıcak siyah — #211E1B ailesi) —
-    panel:'rgba(33,30,27,.95)',       // ana panel/rail/çekmece zemini
-    panelSolid:'#211E1B',
-    dock:'rgba(30,27,24,.96)',        // alt dock (biraz daha opak)
-    bar:'rgba(30,27,24,.97)',         // yüzen mini çubuk
-    chip:'#2b2723',                   // dock içi çip/buton zemini
-    chip2:'#332e28',                  // dock içi ikincil buton (biraz açık)
-    field:'#282420',                  // textarea/input zemini
-    fieldBd:'#443d35',                // input kenarlığı
-    // — çizgiler / cam üstü ince kenar —
-    line:'rgba(255,255,255,.10)',
-    lineSoft:'rgba(255,255,255,.14)',
-    hoverFill:'rgba(255,255,255,.08)',
-    scene:'#171512',                  // sahne (WebGL clear dışı overlay) arka planı — sıcak koyu
-    // — token skalası (adım-1 --r-*) —
-    rXl:'16px', rLg:'12px', rMd:'8px', rSm:'6px', r9:'9px', r10:'10px', r7:'7px', r14:'14px',
-    // — gölge (hafifletildi: 0 14px 40px .5 → 0 10px 32px .35) —
-    shadow:'0 10px 32px rgba(0,0,0,.35)',
-    shadowSm:'0 8px 22px rgba(0,0,0,.30)',
-    shadowLb:'0 20px 60px rgba(0,0,0,.5)',
-    // — blur (8-9px → 4-5px) —
-    blur:'blur(5px)', blurSm:'blur(4px)'
-    /* ——— AÇIK TEMA ÖRNEĞİ (yorumlu — yarın açık panel istenirse UIPAL'i bununla değiştir) ———
+    /* AÇIK TEMA (2026-09-02 tasarım tazeleme): 3B adımı artık adım-1 / kabuk ile AYNI açık dil — koyu sahne ↔
+       açık kabuk sert geçişi kalktı (üstteki 'koyu' açıklaması tarihî). Değerler styles.css token'larının
+       birebiri (--acc / --ink / --line / --r-*). RENDER GİRDİSİ SADAKATİ: nano'ya giden snapshot'lar
+       (snapDataURL / snapCameraDataURL / snapExtCameraDataURL) ekran zeminini DEĞİL `sceneCapture` koyusunu
+       kullanır (withCaptureBg) → kanıtlı img2img girdisi tema değişiminden etkilenmez. Koyu değerler altta. */
     acc:'#B35A2E', accHover:'#9A4A22', onAcc:'#ffffff', accSoft:'rgba(179,90,46,.45)',
     ok:'#4C8C5A', onOk:'#ffffff', bad:'#C0492B', onBad:'#ffffff', active:'#B35A2E',
     ink:'#26231F', inkDim:'#5b544a', inkAcc:'#8a5230',
     panel:'rgba(255,255,255,.96)', panelSolid:'#FFFFFF', dock:'rgba(255,255,255,.97)',
     bar:'rgba(255,255,255,.98)', chip:'#F0E9DF', chip2:'#E7DECF', field:'#FFFFFF', fieldBd:'#D8D2C8',
     line:'rgba(38,35,31,.12)', lineSoft:'rgba(38,35,31,.18)', hoverFill:'rgba(38,35,31,.06)',
-    scene:'#EDE9E1', rXl:'16px', rLg:'12px', rMd:'8px', rSm:'6px', r9:'9px', r10:'10px', r7:'7px', r14:'14px',
+    scene:'#EDE9E1',                  // EKRAN sahnesi (WebGL clear + sis + overlay zemini) — sıcak açık gri
+    sceneCapture:'#171512',           // nano SNAPSHOT zemini (eski koyu — kanıtlı render girdisi, DEĞİŞTİRME)
+    rXl:'16px', rLg:'12px', rMd:'8px', rSm:'6px', r9:'8px', r10:'10px', r7:'6px', r14:'16px',   // merdiven 16/12/10/8/6
     shadow:'0 8px 26px rgba(28,26,22,.12)', shadowSm:'0 6px 18px rgba(28,26,22,.10)', shadowLb:'0 18px 50px rgba(28,26,22,.22)',
-    blur:'blur(5px)', blurSm:'blur(4px)' */
+    blur:'blur(5px)', blurSm:'blur(4px)'
+    /* ——— KOYU TEMA (2026-07 → 2026-09-02 arası aktifti; geri dönüş için) ———
+    acc:'#DB8A5E', accHover:'#E39C74', onAcc:'#241a12', accSoft:'rgba(219,138,94,.55)',
+    ok:'#5FA36E', onOk:'#0f1a12', bad:'#C0492B', onBad:'#f4e3de', active:'#D9793B',
+    ink:'#ECE7DF', inkDim:'#D8CFC2', inkAcc:'#E7C7A8',
+    panel:'rgba(33,30,27,.95)', panelSolid:'#211E1B', dock:'rgba(30,27,24,.96)', bar:'rgba(30,27,24,.97)',
+    chip:'#2b2723', chip2:'#332e28', field:'#282420', fieldBd:'#443d35',
+    line:'rgba(255,255,255,.10)', lineSoft:'rgba(255,255,255,.14)', hoverFill:'rgba(255,255,255,.08)',
+    scene:'#171512', r9:'9px', r7:'7px', r14:'14px',
+    shadow:'0 10px 32px rgba(0,0,0,.35)', shadowSm:'0 8px 22px rgba(0,0,0,.30)', shadowLb:'0 20px 60px rgba(0,0,0,.5)' */
   };
 
   let overlay, host, status, scene, cam, renderer, controls, raf, roofOn=false, lblOn=true;
@@ -944,7 +922,7 @@
           '<span id="v3dPipTitle" style="font-weight:700;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Kamera görüşü</span>'+
           '<span style="display:flex;gap:3px;flex:none">'+
             '<button data-v3d="pipbig" id="v3dPipBig" title="Büyüt / küçült" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.inkDim+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('fit',13)+'</button>'+
-            '<button data-v3d="pipclose" title="Önizlemeyi kapat" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.onBad+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('close',13)+'</button>'+
+            '<button data-v3d="pipclose" title="Önizlemeyi kapat" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.bad+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('close',13)+'</button>'+
           '</span>'+
         '</div>'+
         // gövde: ŞEFFAF pencere (16:9) — arkasındaki WebGL canvas'a scissor pass ile o kamera görüntüsü çizilir.
@@ -964,7 +942,7 @@
       '<div id="v3dExtPip" style="position:absolute;left:14px;bottom:60px;z-index:5;display:none;width:'+PIP_W+'px;background:transparent;border:1px solid '+UIPAL.lineSoft+';border-radius:'+UIPAL.r10+';box-shadow:'+UIPAL.shadow+';overflow:hidden;font:11px/1.3 system-ui,sans-serif;color:'+UIPAL.ink+'">'+
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 6px 5px 9px;background:'+UIPAL.dock+';backdrop-filter:'+UIPAL.blurSm+'">'+
           '<span style="font-weight:700;font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Drone görüşü</span>'+
-          '<button data-v3d="extpipclose" title="Önizlemeyi kapat" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.onBad+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('close',13)+'</button>'+
+          '<button data-v3d="extpipclose" title="Önizlemeyi kapat" style="width:22px;height:22px;border:0;border-radius:'+UIPAL.rSm+';background:'+UIPAL.hoverFill+';color:'+UIPAL.bad+';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0">'+ic('close',13)+'</button>'+
         '</div>'+
         '<div id="v3dExtPipBody" style="width:100%;height:'+Math.round(PIP_W*9/16)+'px;background:transparent;pointer-events:none"></div>'+
       '</div>';
@@ -3945,6 +3923,20 @@
   }
   // DIŞ sahne 1440×810 snapshot — snapCameraDataURL disiplini (BİREBİR geri) ama exteriorGroup sahnesi,
   //   çatı DOKUNULMAZ (kabuk dış cephe), İÇ gizmoları + DIŞ gizmoları gizlenir.
+  // AÇIK TEMA + RENDER GİRDİSİ SADAKATİ (2026-09-02): ekran sahnesi açık zemin (UIPAL.scene); nano'ya giden
+  //   snapshot'lar KANITLI koyu zeminle (UIPAL.sceneCapture) alınır — img2img girdisi tema değişiminden etkilenmez.
+  //   useCapture=false (uiBg: galeri thumbnail'i, ekranda gösterilir) → ekran zemini. try/finally BİREBİR geri.
+  function withCaptureBg(useCapture, fn){
+    if(!useCapture || !scene) return fn();
+    const savBg=scene.background, savFog=(scene.fog&&scene.fog.color)?scene.fog.color.clone():null;
+    try{
+      const hex=parseInt(String(UIPAL.sceneCapture||UIPAL.scene).replace('#',''),16);
+      scene.background=new THREE.Color(hex); if(scene.fog) scene.fog.color.setHex(hex);
+      return fn();
+    } finally {
+      scene.background=savBg; if(scene.fog && savFog) scene.fog.color.copy(savFog);
+    }
+  }
   function snapExtCameraDataURL(which, opts){
     if(!renderer||!scene||!cam||!exteriorGroup) return null;
     const c=(typeof which==='number')?extCams[which]:which;
@@ -3964,8 +3956,7 @@
       cam.position.set(c.pos.x,c.pos.y,c.pos.z);
       cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
       cam.fov=lensToFov(c.lens); cam.aspect=OW/OH; cam.updateProjectionMatrix();
-      renderer.render(scene,cam);
-      url=renderer.domElement.toDataURL('image/png');
+      url=withCaptureBg(!(opts&&opts.uiBg), function(){ renderer.render(scene,cam); return renderer.domElement.toDataURL('image/png'); });
     } finally {
       renderer.setPixelRatio(savPR); renderer.setSize(savedSize.x,savedSize.y,false);
       cam.aspect=savAspect;
@@ -4195,8 +4186,7 @@
         fitView(true);                                       // yön aynı, mesafe+merkez 4:3 için baştan (inset'siz)
       }
       labs.forEach(function(s){ if(s.userData&&s.userData.en) setLabelText(s,s.userData.en); });
-      renderer.render(scene,cam);
-      url=renderer.domElement.toDataURL('image/png');
+      url=withCaptureBg(!opts.uiBg, function(){ renderer.render(scene,cam); return renderer.domElement.toDataURL('image/png'); });
     } finally {
       labs.forEach(function(s){ if(s.userData&&s.userData.tr) setLabelText(s,s.userData.tr); });
       if(fg && prevVis!==null) fg.visible=prevVis;           // görünürlüğü geri yükle (non-destructive)
@@ -4247,8 +4237,7 @@
       cam.position.set(c.pos.x,c.pos.y,c.pos.z);
       cam.lookAt(c.target.x,(c.target.y!=null?c.target.y:0.5),c.target.z);
       cam.fov=lensToFov(c.lens); cam.aspect=OW/OH; cam.updateProjectionMatrix();
-      renderer.render(scene,cam);
-      url=renderer.domElement.toDataURL('image/png');
+      url=withCaptureBg(!(opts&&opts.uiBg), function(){ renderer.render(scene,cam); return renderer.domElement.toDataURL('image/png'); });
     } finally {
       renderer.setPixelRatio(savPR); renderer.setSize(savedSize.x,savedSize.y,false);  // BİREBİR geri (hata olsa bile)
       cam.aspect=savAspect;
@@ -5762,14 +5751,14 @@
   function snapCameraThumbs(){
     const out=[];
     camList.forEach(function(c,i){ if(!camCtxMatch(c)) return;
-      out.push({ id:'cam'+(i+1), idx:i, kind:'interior', thumb:snapCameraDataURL(c,{w:THUMB_W,h:THUMB_H}) }); });
+      out.push({ id:'cam'+(i+1), idx:i, kind:'interior', thumb:snapCameraDataURL(c,{w:THUMB_W,h:THUMB_H,uiBg:true}) }); });
     return out;
   }
   function snapExtCameraThumbs(){
     if(!exteriorMode || !exteriorGroup) return [];
     const out=[];
     extCams.forEach(function(c,i){ if(!extCtxMatch(c)) return;   // İş D2: gizmo/export ile AYNI blok-filtre (id/idx sabit)
-      out.push({ id:'ext'+(i+1), idx:i, kind:'exterior', thumb:snapExtCameraDataURL(c,{w:THUMB_W,h:THUMB_H}) }); });
+      out.push({ id:'ext'+(i+1), idx:i, kind:'exterior', thumb:snapExtCameraDataURL(c,{w:THUMB_W,h:THUMB_H,uiBg:true}) }); });
     return out;
   }
   // getCameras: İŞ 1b — DIŞA API, MEVCUT davranış (TAM liste, bağlam-filtresiz) korunur; mesken paket
@@ -7764,7 +7753,7 @@
         renderer.setPixelRatio(Math.min(devicePixelRatio,2));
         renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
         host.appendChild(renderer.domElement);
-        // SUNUM-4C T1: sahne arka planı/sis UIPAL.scene'den (sıcak koyu #171512). WebGL clear rengi = overlay bg ile aynı aile.
+        // SUNUM-4C T1: sahne arka planı/sis UIPAL.scene'den (açık tema #EDE9E1; nano snapshot'ları withCaptureBg ile sceneCapture koyusunda). WebGL clear = overlay bg.
         const _sceneHex=parseInt(UIPAL.scene.replace('#',''),16);
         scene=new THREE.Scene(); scene.background=new THREE.Color(_sceneHex);
         scene.fog=new THREE.Fog(_sceneHex,60,150);
